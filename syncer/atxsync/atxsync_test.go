@@ -97,7 +97,7 @@ func TestDownload(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			logger := zaptest.NewLogger(t)
-			db := statesql.InMemory()
+			db := statesql.InMemoryTest(t)
 			ctrl := gomock.NewController(t)
 			fetcher := mocks.NewMockAtxFetcher(ctrl)
 			for _, atx := range tc.existing {

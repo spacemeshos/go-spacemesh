@@ -58,7 +58,7 @@ func createMesh(tb testing.TB, db sql.StateDatabase) {
 }
 
 func TestAdminService_Checkpoint(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	createMesh(t, db)
 	svc := NewAdminService(db, t.TempDir(), nil)
 	cfg, cleanup := launchServer(t, svc)
@@ -95,7 +95,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 }
 
 func TestAdminService_CheckpointError(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	svc := NewAdminService(db, t.TempDir(), nil)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
@@ -112,7 +112,7 @@ func TestAdminService_CheckpointError(t *testing.T) {
 }
 
 func TestAdminService_Recovery(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	recoveryCalled := atomic.Bool{}
 	svc := NewAdminService(db, t.TempDir(), nil)
 	svc.recover = func() { recoveryCalled.Store(true) }
@@ -134,7 +134,7 @@ func TestAdminService_PeerInfo(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	p := NewMockpeers(ctrl)
 
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	svc := NewAdminService(db, t.TempDir(), p)
 
 	cfg, cleanup := launchServer(t, svc)

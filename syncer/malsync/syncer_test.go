@@ -149,8 +149,8 @@ type tester struct {
 }
 
 func newTester(tb testing.TB, cfg Config) *tester {
-	localdb := localsql.InMemory()
-	db := statesql.InMemory()
+	localdb := localsql.InMemoryTest(tb)
+	db := statesql.InMemoryTest(tb)
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	clock := clockwork.NewFakeClock()

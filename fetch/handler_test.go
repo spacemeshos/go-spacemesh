@@ -31,10 +31,11 @@ type testHandler struct {
 	cdb *datastore.CachedDB
 }
 
-func createTestHandler(t testing.TB, opts ...sql.Opt) *testHandler {
-	lg := zaptest.NewLogger(t)
-	db := statesql.InMemory(opts...)
+func createTestHandler(tb testing.TB, opts ...sql.Opt) *testHandler {
+	lg := zaptest.NewLogger(tb)
+	db := statesql.InMemoryTest(tb, opts...)
 	cdb := datastore.NewCachedDB(db, lg)
+	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 	return &testHandler{
 		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
 		db:      db,
@@ -66,19 +67,19 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 }
 
 func createOpinions(
-	t *testing.T,
+	tb testing.TB,
 	db *datastore.CachedDB,
 	lid types.LayerID,
 	genCert bool,
 ) (types.BlockID, types.Hash32) {
-	_, blks := createLayer(t, db, lid)
+	_, blks := createLayer(tb, db, lid)
 	certified := types.EmptyBlockID
 	if genCert {
 		certified = blks[0]
-		require.NoError(t, certificates.Add(db, lid, &types.Certificate{BlockID: certified}))
+		require.NoError(tb, certificates.Add(db, lid, &types.Certificate{BlockID: certified}))
 	}
 	aggHash := types.RandomHash()
-	require.NoError(t, layers.SetMeshHash(db, lid.Sub(1), aggHash))
+	require.NoError(tb, layers.SetMeshHash(db, lid.Sub(1), aggHash))
 	return certified, aggHash
 }
 
@@ -261,7 +262,8 @@ func TestHandleMeshHashReq(t *testing.T) {
 	}
 }
 
-func newAtx(t *testing.T, published types.EpochID) *types.ActivationTx {
+func newAtx(tb testing.TB, published types.EpochID) *types.ActivationTx {
+	tb.Helper()
 	atx := &types.ActivationTx{
 		PublishEpoch: published,
 		NumUnits:     2,
@@ -337,46 +339,46 @@ func TestHandleEpochInfoReq(t *testing.T) {
 }
 
 func testHandleEpochInfoReqWithQueryCache(
-	t *testing.T,
+	tb testing.TB,
 	getInfo func(th *testHandler, req []byte, ed *EpochData),
 ) {
-	th := createTestHandler(t, sql.WithQueryCache(true))
-	require.True(t, th.cdb.Database.IsCached())
-	require.True(t, sql.IsCached(th.cdb))
+	th := createTestHandler(tb, sql.WithQueryCache(true))
+	require.True(tb, th.cdb.Database.IsCached())
+	require.True(tb, sql.IsCached(th.cdb))
 	epoch := types.EpochID(11)
 	var expected EpochData
 
 	for i := 0; i < 10; i++ {
-		vatx := newAtx(t, epoch)
-		require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
+		vatx := newAtx(tb, epoch)
+		require.NoError(tb, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 		atxs.AtxAdded(th.cdb, vatx)
 		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 	}
 
-	require.Equal(t, 20, th.cdb.Database.QueryCount())
+	require.Equal(tb, 20, th.cdb.Database.QueryCount())
 	epochBytes, err := codec.Encode(epoch)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	var got EpochData
 	for i := 0; i < 3; i++ {
 		getInfo(th, epochBytes, &got)
-		require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
-		require.Equal(t, 21, th.cdb.Database.QueryCount(), "query count @ i = %d", i)
+		require.ElementsMatch(tb, expected.AtxIDs, got.AtxIDs)
+		require.Equal(tb, 21, th.cdb.Database.QueryCount(), "query count @ i = %d", i)
 	}
 
 	// Add another ATX which should be appended to the cached slice
-	vatx := newAtx(t, epoch)
-	require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
+	vatx := newAtx(tb, epoch)
+	require.NoError(tb, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
 	atxs.AtxAdded(th.cdb, vatx)
 	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
-	require.Equal(t, 23, th.cdb.Database.QueryCount())
+	require.Equal(tb, 23, th.cdb.Database.QueryCount())
 
 	getInfo(th, epochBytes, &got)
-	require.ElementsMatch(t, expected.AtxIDs, got.AtxIDs)
+	require.ElementsMatch(tb, expected.AtxIDs, got.AtxIDs)
 	// The query count is not incremented as the slice is still
 	// cached and the new atx is just appended to it, even though
 	// the response is re-serialized.
-	require.Equal(t, 23, th.cdb.Database.QueryCount())
+	require.Equal(tb, 23, th.cdb.Database.QueryCount())
 }
 
 func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {

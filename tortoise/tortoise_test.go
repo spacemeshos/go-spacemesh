@@ -55,7 +55,7 @@ var (
 func TestLayerPatterns(t *testing.T) {
 	const size = 10 // more blocks means a longer test
 	t.Run("Good", func(t *testing.T) {
-		s := sim.New(sim.WithLayerSize(size))
+		s := sim.New(t, sim.WithLayerSize(size))
 		s.Setup()
 
 		cfg := defaultTestConfig()
@@ -82,7 +82,7 @@ func TestLayerPatterns(t *testing.T) {
 	})
 
 	t.Run("HealAfterBad", func(t *testing.T) {
-		s := sim.New(sim.WithLayerSize(size))
+		s := sim.New(t, sim.WithLayerSize(size))
 		s.Setup()
 
 		cfg := defaultTestConfig()
@@ -119,7 +119,7 @@ func TestLayerPatterns(t *testing.T) {
 	})
 
 	t.Run("HealAfterBadGoodBadGoodBad", func(t *testing.T) {
-		s := sim.New(sim.WithLayerSize(size))
+		s := sim.New(t, sim.WithLayerSize(size))
 		s.Setup()
 
 		cfg := defaultTestConfig()
@@ -152,7 +152,7 @@ func TestLayerPatterns(t *testing.T) {
 
 func TestAbstainsInMiddle(t *testing.T) {
 	const size = 4
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(size),
 	)
 	s.Setup(sim.WithSetupMinerRange(size, size))
@@ -193,7 +193,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 
 func TestAbstainLateBlock(t *testing.T) {
 	const size = 4
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(size),
 	)
 	s.Setup(sim.WithSetupMinerRange(size, size))
@@ -234,7 +234,7 @@ func TestEncodeAbstainVotesForZdist(t *testing.T) {
 		size  = 4
 		zdist = 3
 	)
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()
@@ -280,7 +280,7 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	const (
 		size = 4
 	)
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()
@@ -461,7 +461,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
-				db     = statesql.InMemory()
+				db     = statesql.InMemoryTest(t)
 				epochs = map[types.EpochID]*epochInfo{}
 				first  = tc.target.Add(1).GetEpoch()
 			)
@@ -505,7 +505,7 @@ func extractAtxsData(db sql.Executor, target types.EpochID) (uint64, uint64, err
 func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	// increase layer size reduce test flakiness
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()
@@ -555,7 +555,7 @@ func TestLongTermination(t *testing.T) {
 			skip  = 1 // skipping layer generated at this position
 			limit = hdist
 		)
-		s := sim.New(sim.WithLayerSize(size))
+		s := sim.New(t, sim.WithLayerSize(size))
 		s.Setup()
 
 		cfg := defaultTestConfig()
@@ -602,7 +602,7 @@ func TestLongTermination(t *testing.T) {
 			skip  = 1 // skipping layer generated at this position
 			limit = hdist - 1
 		)
-		s := sim.New(sim.WithLayerSize(size))
+		s := sim.New(t, sim.WithLayerSize(size))
 		s.Setup(sim.WithSetupMinerRange(4, 4))
 
 		cfg := defaultTestConfig()
@@ -658,7 +658,7 @@ func TestLongTermination(t *testing.T) {
 			skip  = 1 // skipping layer generated at this position
 			limit = hdist
 		)
-		s := sim.New(sim.WithLayerSize(size))
+		s := sim.New(t, sim.WithLayerSize(size))
 		s.Setup()
 
 		cfg := defaultTestConfig()
@@ -707,7 +707,7 @@ func TestLongTermination(t *testing.T) {
 
 func benchmarkLayersHandling(b *testing.B, opts ...sim.NextOpt) {
 	const size = 30
-	s := sim.New(
+	s := sim.New(b,
 		sim.WithLayerSize(size),
 		sim.WithPath(b.TempDir()),
 	)
@@ -741,7 +741,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 
 func benchmarkBaseBallot(b *testing.B, opts ...sim.NextOpt) {
 	const size = 30
-	s := sim.New(
+	s := sim.New(b,
 		sim.WithLayerSize(size),
 		sim.WithPath(b.TempDir()),
 	)
@@ -808,7 +808,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 }
 
 func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
-	s := sim.New()
+	s := sim.New(t)
 	s.Setup()
 	simState := s.GetState(0)
 	cfg := defaultTestConfig()
@@ -833,7 +833,7 @@ func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
 
 func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 	t.Run("AllNotDecoded", func(t *testing.T) {
-		s := sim.New()
+		s := sim.New(t)
 		s.Setup()
 		cfg := defaultTestConfig()
 		tortoise := tortoiseFromSimState(
@@ -856,7 +856,7 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 			size       = 20
 			breakpoint = 18
 		)
-		s := sim.New(sim.WithLayerSize(size))
+		s := sim.New(t, sim.WithLayerSize(size))
 		s.Setup()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
@@ -884,7 +884,7 @@ func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
 
 func TestDecodeVotes(t *testing.T) {
 	t.Run("without block in state", func(t *testing.T) {
-		s := sim.New()
+		s := sim.New(t)
 		s.Setup()
 		cfg := defaultTestConfig()
 		tortoise := tortoiseFromSimState(
@@ -1051,7 +1051,7 @@ func TestOnBeacon(t *testing.T) {
 }
 
 func TestBaseBallotGenesis(t *testing.T) {
-	s := sim.New()
+	s := sim.New(t)
 	cfg := defaultTestConfig()
 	tortoise := tortoiseFromSimState(t, s.GetState(0), WithConfig(cfg),
 		WithLogger(zaptest.NewLogger(t)))
@@ -1093,7 +1093,7 @@ func ensureBaseAndExceptionsFromLayer(
 
 func TestBaseBallotEvictedBlock(t *testing.T) {
 	const size = 12
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(size),
 	)
 	s.Setup()
@@ -1178,7 +1178,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			const size = 10
-			s := sim.New(
+			s := sim.New(t,
 				sim.WithLayerSize(size),
 			)
 			s.Setup()
@@ -1274,7 +1274,7 @@ func TestWeakCoinVoting(t *testing.T) {
 		size  = 4
 		hdist = 2
 	)
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(size),
 	)
 	s.Setup(
@@ -1329,7 +1329,7 @@ func TestWeakCoinVoting(t *testing.T) {
 
 func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	const size = 10
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(size),
 	)
 	s.Setup()
@@ -1448,7 +1448,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			s := sim.New(
+			s := sim.New(t,
 				sim.WithLayerSize(size),
 			)
 			s.Setup(sim.WithSetupUnitsRange(1, 1))
@@ -1635,7 +1635,7 @@ func TestComputeBallotWeight(t *testing.T) {
 
 func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	const size = 8
-	s1 := sim.New(
+	s1 := sim.New(t,
 		sim.WithLayerSize(size),
 		sim.WithStates(2),
 		sim.WithLogger(zaptest.NewLogger(t)),
@@ -1747,7 +1747,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 
 func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	const size = 8
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(size),
 	)
 	// change weight to be atleast the same as size
@@ -1793,7 +1793,7 @@ func abstainVoting(_ *rand.Rand, layers []*types.Layer, _ int) sim.Voting {
 
 func TestAbstainVotingVerifyingMode(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()
@@ -1850,7 +1850,7 @@ func addAgainst(vote types.Vote) sim.VotesGenerator {
 
 func TestLateBaseBallot(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup(sim.WithSetupUnitsRange(2, 2))
 
 	cfg := defaultTestConfig()
@@ -1893,7 +1893,7 @@ func TestLateBaseBallot(t *testing.T) {
 
 func TestLateBlock(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup(sim.WithSetupUnitsRange(2, 2))
 
 	cfg := defaultTestConfig()
@@ -1936,7 +1936,7 @@ func TestLateBlock(t *testing.T) {
 
 func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()
@@ -1973,7 +1973,7 @@ func TestStateManagement(t *testing.T) {
 	cfg.Zdist = hdist
 	cfg.WindowSize = window
 
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(size),
 	)
 	s.Setup()
@@ -2025,7 +2025,7 @@ func TestFutureHeight(t *testing.T) {
 	cfg.Zdist = cfg.Hdist
 	cfg.LayerSize = 10
 	t.Run("hare from future", func(t *testing.T) {
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		s.Setup()
@@ -2053,7 +2053,7 @@ func TestFutureHeight(t *testing.T) {
 
 			smeshers = 7
 		)
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(smeshers),
 		)
 		s.Setup(
@@ -2077,7 +2077,7 @@ func TestFutureHeight(t *testing.T) {
 		require.Equal(t, types.GetEffectiveGenesis().String(), tortoise.LatestComplete().String())
 	})
 	t.Run("median above slow smeshers", func(t *testing.T) {
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		const (
@@ -2107,7 +2107,7 @@ func TestFutureHeight(t *testing.T) {
 		require.Equal(t, last.Sub(2), tortoise.LatestComplete())
 	})
 	t.Run("empty layers with slow smeshers", func(t *testing.T) {
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		const (
@@ -2142,7 +2142,7 @@ func testEmptyLayers(t *testing.T, hdist int) {
 	// skipping layers 9, 10
 	skipFrom, skipTo := 1, 3
 
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(cfg.LayerSize),
 	)
 	s.Setup(
@@ -2194,7 +2194,7 @@ func TestSwitchMode(t *testing.T) {
 		cfg.Zdist = 2
 		cfg.Hdist = 2
 
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		s.Setup(
@@ -2224,7 +2224,7 @@ func TestSwitchMode(t *testing.T) {
 		cfg.Zdist = 2
 		cfg.Hdist = 2
 
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		s.Setup(
@@ -2258,7 +2258,7 @@ func TestSwitchMode(t *testing.T) {
 		cfg.Zdist = 2
 		cfg.Hdist = 2
 
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		s.Setup(
@@ -2300,7 +2300,7 @@ func TestSwitchMode(t *testing.T) {
 		cfg.Zdist = 2
 		cfg.Hdist = 2
 
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		s.Setup(
@@ -2378,7 +2378,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 
 	t.Run("empty layers after genesis", func(t *testing.T) {
 		const distance = 3
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		s.Setup(
@@ -2424,7 +2424,7 @@ func TestOnBallotComputeOpinion(t *testing.T) {
 	})
 	t.Run("against abstain support", func(t *testing.T) {
 		const distance = 3
-		s := sim.New(
+		s := sim.New(t,
 			sim.WithLayerSize(cfg.LayerSize),
 		)
 		s.Setup(
@@ -2500,7 +2500,7 @@ func TestOnHareOutput(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			s := sim.New(
+			s := sim.New(t,
 				sim.WithLayerSize(cfg.LayerSize),
 			)
 			s.Setup(
@@ -2529,7 +2529,7 @@ func TestDecodeExceptions(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(cfg.LayerSize),
 	)
 	s.Setup(
@@ -2619,7 +2619,7 @@ func TestCountOnBallot(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(cfg.LayerSize),
 	)
 	s.Setup(
@@ -2666,7 +2666,7 @@ func TestOnBallotBeforeTallyVotes(t *testing.T) {
 	cfg.Zdist = cfg.Hdist
 	cfg.LayerSize = size
 
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(cfg.LayerSize),
 	)
 	s.Setup(
@@ -2695,7 +2695,7 @@ func TestNonTerminatedLayers(t *testing.T) {
 	cfg.Zdist = 3
 	cfg.LayerSize = size
 
-	s := sim.New(
+	s := sim.New(t,
 		sim.WithLayerSize(cfg.LayerSize),
 	)
 	s.Setup(
@@ -2902,7 +2902,7 @@ func TestEncodeVotes(t *testing.T) {
 func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 	t.Run("encode", func(t *testing.T) {
 		cfg := defaultTestConfig()
-		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+		s := sim.New(t, sim.WithLayerSize(cfg.LayerSize))
 		s.Setup()
 		tortoise := tortoiseFromSimState(t,
 			s.GetState(0),
@@ -2922,7 +2922,7 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 	})
 	t.Run("decode", func(t *testing.T) {
 		cfg := defaultTestConfig()
-		s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+		s := sim.New(t, sim.WithLayerSize(cfg.LayerSize))
 		s.Setup()
 		tortoise := tortoiseFromSimState(t,
 			s.GetState(0),
@@ -2979,7 +2979,7 @@ func BenchmarkOnBallot(b *testing.B) {
 		layerSize = 50
 		window    = 2000
 	)
-	s := sim.New(
+	s := sim.New(b,
 		sim.WithLayerSize(layerSize),
 		sim.WithPath(b.TempDir()),
 	)
@@ -3045,7 +3045,7 @@ func TestMultipleTargets(t *testing.T) {
 	cfg.LayerSize = size
 	cfg.Hdist = 2
 	cfg.Zdist = 1
-	s := sim.New(sim.WithLayerSize(cfg.LayerSize))
+	s := sim.New(t, sim.WithLayerSize(cfg.LayerSize))
 	s.Setup(sim.WithSetupMinerRange(size, size))
 	tortoise := tortoiseFromSimState(t,
 		s.GetState(0),

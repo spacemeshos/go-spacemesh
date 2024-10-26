@@ -60,7 +60,7 @@ func filterTxs(txs []types.TransactionWithResult, filter ResultsFilter) []types.
 }
 
 func TestIterateResults(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	gen := fixture.NewTransactionResultGenerator()
 	txs := make([]types.TransactionWithResult, 100)
