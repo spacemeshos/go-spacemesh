@@ -508,8 +508,7 @@ func parse(
 	}
 
 	var (
-		isSpawn         bool
-		templateAddress core.Address
+		isSpawn bool
 	)
 
 	// There are three cases to consider:
@@ -539,7 +538,7 @@ func parse(
 		if ctx.PrincipalHandler == nil {
 			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, principalAccount.TemplateAddress)
 		}
-		templateAddress = *principalAccount.TemplateAddress
+		ctx.Header.TemplateAddress = *principalAccount.TemplateAddress
 	} else {
 		// case 3: principal account exists but is not spawned
 		// go ahead and assume it's a self-spawn for a Wallet template
@@ -547,7 +546,7 @@ func parse(
 		if ctx.PrincipalHandler == nil {
 			return nil, nil, fmt.Errorf("%w: wallet template missing", core.ErrInternal)
 		}
-		templateAddress = wallet.TemplateAddress
+		ctx.Header.TemplateAddress = wallet.TemplateAddress
 		isSpawn = true
 	}
 
@@ -560,8 +559,8 @@ func parse(
 
 	// in case of a self-spawn, we need to check that the calculated principal matches.
 	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
-	if isSpawn && core.ComputePrincipal(templateAddress, output.Payload) != principal {
-		return nil, nil, fmt.Errorf("%w: calculated spawn principal does not match %s", core.ErrMalformed, principal)
+	if isSpawn && core.ComputePrincipal(ctx.Header.TemplateAddress, output.Payload) != principal {
+		return nil, nil, fmt.Errorf("%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
 	}
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
@@ -575,7 +574,6 @@ func parse(
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
 
 	ctx.Header.Principal = principal
-	ctx.Header.TemplateAddress = templateAddress
 	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce

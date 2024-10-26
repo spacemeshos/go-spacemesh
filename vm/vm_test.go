@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
@@ -48,7 +49,6 @@ type testAccount interface {
 
 	baseGas() int
 	loadGas() int
-	execGas() int
 }
 
 type singlesigAccount struct {
@@ -87,8 +87,9 @@ func (a *singlesigAccount) loadGas() int {
 	return int(wallet.LoadGas())
 }
 
-func (a *singlesigAccount) execGas() int {
-	return int(wallet.ExecGas())
+type testTemplate struct {
+	address core.Address
+	state   []byte
 }
 
 type tester struct {
@@ -97,9 +98,10 @@ type tester struct {
 
 	rng *rand.Rand
 
-	accounts []testAccount
-	nonces   []core.Nonce
-	balances []uint64
+	templates []testTemplate
+	accounts  []testAccount
+	nonces    []core.Nonce
+	balances  []uint64
 }
 
 func (t *tester) persistent() *tester {
@@ -122,6 +124,11 @@ func (t *tester) addAccount(account testAccount, balance uint64) {
 	t.balances = append(t.balances, balance)
 }
 
+func (t *tester) addWalletTemplate() *tester {
+	t.templates = append(t.templates, testTemplate{address: wallet.TemplateAddress, state: walletProgram.PROGRAM})
+	return t
+}
+
 func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
@@ -136,6 +143,16 @@ func (t *tester) applyGenesis() *tester {
 }
 
 func (t *tester) applyGenesisWithBalance() *tester {
+	templates := make([]core.Account, len(t.templates))
+	for i := range templates {
+		templates[i] = core.Account{
+			Address: t.templates[i].address,
+			State:   t.templates[i].state,
+			// templates contain their own template address
+			TemplateAddress: &t.templates[i].address,
+		}
+	}
+	require.NoError(t, t.VM.ApplyGenesis(templates))
 	accounts := make([]core.Account, len(t.accounts))
 	for i := range accounts {
 		accounts[i] = core.Account{
@@ -225,7 +242,6 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 func (t *tester) estimateSpawnGas(principal, target int) int {
 	tx := t.accounts[principal].spawn(0)
 	gas := t.accounts[principal].baseGas() +
-		t.accounts[target].execGas() +
 		int(core.TxDataGas(len(tx)))
 	if principal != target {
 		gas += t.accounts[principal].loadGas()
@@ -237,7 +253,6 @@ func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) i
 	tx := t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce)
 	return t.accounts[principal].baseGas() +
 		t.accounts[principal].loadGas() +
-		t.accounts[principal].execGas() +
 		int(core.TxDataGas(len(tx)))
 }
 
@@ -1185,7 +1200,6 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 }
 
 func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTester func(t *testing.T) *tester) {
-	t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	runTestCases(t,
 		singleWalletTestCases(defaultGasPrice, template, genTester(t)),
@@ -1204,6 +1218,7 @@ func TestWallets(t *testing.T) {
 	t.Run("SingleSig", func(t *testing.T) {
 		testWallet(t, defaultGasPrice, wallet.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
+				addWalletTemplate().
 				addSingleSig(funded).
 				applyGenesisWithBalance().
 				addSingleSig(total - funded)
@@ -1212,7 +1227,6 @@ func TestWallets(t *testing.T) {
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
-	// t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	skipped, _, err := tt.Apply(types.GetEffectiveGenesis(), notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
@@ -1319,7 +1333,6 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 }
 
 func TestValidation(t *testing.T) {
-	// t.Skip("TODO: new wallet SDK")
 	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).
@@ -1435,7 +1448,6 @@ func TestBeforeEffectiveGenesis(t *testing.T) {
 }
 
 func TestStateHashFromUpdatedAccounts(t *testing.T) {
-	t.Skip("TODO: new wallet SDK")
 	tt := newTester(t).addSingleSig(10).applyGenesis()
 
 	root, err := tt.GetStateRoot()
