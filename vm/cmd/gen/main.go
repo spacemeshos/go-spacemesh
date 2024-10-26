@@ -12,6 +12,7 @@ import (
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/jedib0t/go-pretty/v6/table"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/vm/host"

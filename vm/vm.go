@@ -507,9 +507,7 @@ func parse(
 		LayerID:          lid,
 	}
 
-	var (
-		isSpawn bool
-	)
+	var isSpawn bool
 
 	// There are three cases to consider:
 	// 1. Principal account does not exist at all (and has no balance). In this case, we can fail
@@ -560,7 +558,8 @@ func parse(
 	// in case of a self-spawn, we need to check that the calculated principal matches.
 	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
 	if isSpawn && core.ComputePrincipal(ctx.Header.TemplateAddress, output.Payload) != principal {
-		return nil, nil, fmt.Errorf("%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
+		return nil, nil, fmt.Errorf(
+			"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
 	}
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
