@@ -21,12 +21,12 @@ func WithReceived(received time.Time) MeshTransactionOption {
 }
 
 func createMeshTX(
-	t *testing.T,
+	tb testing.TB,
 	signer *signing.EdSigner,
 	lid types.LayerID,
 	opts ...MeshTransactionOption,
 ) *types.MeshTransaction {
-	t.Helper()
+	tb.Helper()
 	nonce := uint64(223)
 	amount := uint64(rand.Int())
 	tx := wallet.Spend(signer.PrivateKey(), types.Address{1, 2, 3}, amount, nonce)

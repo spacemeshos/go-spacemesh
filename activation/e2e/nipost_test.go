@@ -136,7 +136,7 @@ func initPost(
 
 	logger := zaptest.NewLogger(tb)
 	syncer := syncedSyncer(tb)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	mgr, err := activation.NewPostSetupManager(cfg, logger, db, atxsdata.New(), golden, syncer, nil)
 	require.NoError(tb, err)
 
@@ -157,8 +157,8 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := statesql.InMemory()
-	localDb := localsql.InMemory()
+	db := statesql.InMemoryTest(t)
+	localDb := localsql.InMemoryTest(t)
 
 	opts := testPostSetupOpts(t)
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
@@ -204,7 +204,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 
 	idStates := activation.NewIdentityStateStorage()
 
-	localDB := localsql.InMemory()
+	localDB := localsql.InMemoryTest(t)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -255,7 +255,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	opts := testPostSetupOpts(t)
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
@@ -299,7 +299,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
 
-	localDB := localsql.InMemory()
+	localDB := localsql.InMemoryTest(t)
 	idStates := activation.NewIdentityStateStorage()
 
 	nb, err := activation.NewNIPostBuilder(

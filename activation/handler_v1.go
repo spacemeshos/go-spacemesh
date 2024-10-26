@@ -171,91 +171,120 @@ func (h *HandlerV1) commitment(atx *wire.ActivationTxV1) (types.ATXID, error) {
 
 func (h *HandlerV1) syntacticallyValidateDeps(
 	ctx context.Context,
-	atx *wire.ActivationTxV1,
-) (leaves uint64, effectiveNumUnits uint32, proof *mwire.MalfeasanceProof, err error) {
-	commitmentATX, err := h.commitment(atx)
+	watx *wire.ActivationTxV1,
+	received time.Time,
+) (*types.ActivationTx, *mwire.MalfeasanceProof, error) {
+	commitmentATX, err := h.commitment(watx)
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("commitment atx for %s not found: %w", atx.SmesherID, err)
+		return nil, nil, fmt.Errorf("commitment atx for %s not found: %w", watx.SmesherID, err)
 	}
 
-	if atx.PrevATXID == types.EmptyATXID {
-		if err := h.nipostValidator.InitialNIPostChallengeV1(&atx.NIPostChallengeV1, h.cdb, h.goldenATXID); err != nil {
-			return 0, 0, nil, err
+	var effectiveNumUnits uint32
+	var vrfNonce uint64
+	if watx.PrevATXID == types.EmptyATXID {
+		err := h.nipostValidator.InitialNIPostChallengeV1(&watx.NIPostChallengeV1, h.cdb, h.goldenATXID)
+		if err != nil {
+			return nil, nil, err
 		}
-		effectiveNumUnits = atx.NumUnits
+		effectiveNumUnits = watx.NumUnits
+		vrfNonce = *watx.VRFNonce
 	} else {
-		previous, err := atxs.Get(h.cdb, atx.PrevATXID)
+		previous, err := atxs.Get(h.cdb, watx.PrevATXID)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("fetching previous atx %s: %w", atx.PrevATXID, err)
+			return nil, nil, fmt.Errorf("fetching previous atx %s: %w", watx.PrevATXID, err)
 		}
-		if err := h.validateNonInitialAtx(ctx, atx, previous, commitmentATX); err != nil {
-			return 0, 0, nil, err
-		}
-		prevUnits, err := atxs.Units(h.cdb, atx.PrevATXID, atx.SmesherID)
+		vrfNonce, err = h.validateNonInitialAtx(ctx, watx, previous, commitmentATX)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("fetching previous atx units: %w", err)
+			return nil, nil, err
 		}
-		effectiveNumUnits = min(prevUnits, atx.NumUnits)
+		prevUnits, err := atxs.Units(h.cdb, watx.PrevATXID, watx.SmesherID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("fetching previous atx units: %w", err)
+		}
+		effectiveNumUnits = min(prevUnits, watx.NumUnits)
 	}
 
-	err = h.nipostValidator.PositioningAtx(atx.PositioningATXID, h.cdb, h.goldenATXID, atx.PublishEpoch)
+	err = h.nipostValidator.PositioningAtx(watx.PositioningATXID, h.cdb, h.goldenATXID, watx.PublishEpoch)
 	if err != nil {
-		return 0, 0, nil, err
+		return nil, nil, err
 	}
 
-	expectedChallengeHash := atx.NIPostChallengeV1.Hash()
+	expectedChallengeHash := watx.NIPostChallengeV1.Hash()
 	h.logger.Debug("validating nipost",
 		log.ZContext(ctx),
 		zap.Stringer("expected_challenge_hash", expectedChallengeHash),
-		zap.Stringer("atx_id", atx.ID()),
+		zap.Stringer("atx_id", watx.ID()),
 	)
 
-	leaves, err = h.nipostValidator.NIPost(
+	leaves, err := h.nipostValidator.NIPost(
 		ctx,
-		atx.SmesherID,
+		watx.SmesherID,
 		commitmentATX,
-		wire.NiPostFromWireV1(atx.NIPost),
+		wire.NiPostFromWireV1(watx.NIPost),
 		expectedChallengeHash,
-		atx.NumUnits,
+		watx.NumUnits,
 		PostSubset([]byte(h.local)), // use the local peer ID as seed for random subset
 	)
 	var invalidIdx *verifying.ErrInvalidIndex
 	if errors.As(err, &invalidIdx) {
 		h.logger.Debug("ATX with invalid post index",
 			log.ZContext(ctx),
-			zap.Stringer("atx_id", atx.ID()),
+			zap.Stringer("atx_id", watx.ID()),
 			zap.Int("index", invalidIdx.Index),
 		)
-		malicious, err := identities.IsMalicious(h.cdb, atx.SmesherID)
+		malicious, err := identities.IsMalicious(h.cdb, watx.SmesherID)
 		if err != nil {
-			return 0, 0, nil, fmt.Errorf("check if smesher is malicious: %w", err)
+			return nil, nil, fmt.Errorf("check if smesher is malicious: %w", err)
 		}
 		if malicious {
-			return 0, 0, nil, fmt.Errorf("smesher %s is known malfeasant", atx.SmesherID.ShortString())
+			return nil, nil, fmt.Errorf("smesher %s is known malfeasant", watx.SmesherID.ShortString())
 		}
 		proof := &mwire.MalfeasanceProof{
-			Layer: atx.PublishEpoch.FirstLayer(),
+			Layer: watx.PublishEpoch.FirstLayer(),
 			Proof: mwire.Proof{
 				Type: mwire.InvalidPostIndex,
 				Data: &mwire.InvalidPostIndexProof{
-					Atx:        *atx,
+					Atx:        *watx,
 					InvalidIdx: uint32(invalidIdx.Index),
 				},
 			},
 		}
 		encodedProof := codec.MustEncode(proof)
-		if err := identities.SetMalicious(h.cdb, atx.SmesherID, encodedProof, time.Now()); err != nil {
-			return 0, 0, nil, fmt.Errorf("adding malfeasance proof: %w", err)
+		if err := identities.SetMalicious(h.cdb, watx.SmesherID, encodedProof, time.Now()); err != nil {
+			return nil, nil, fmt.Errorf("adding malfeasance proof: %w", err)
 		}
-		h.cdb.CacheMalfeasanceProof(atx.SmesherID, encodedProof)
-		h.tortoise.OnMalfeasance(atx.SmesherID)
-		return 0, 0, proof, nil
+		h.cdb.CacheMalfeasanceProof(watx.SmesherID, encodedProof)
+		h.tortoise.OnMalfeasance(watx.SmesherID)
+		return nil, proof, nil
 	}
 	if err != nil {
-		return 0, 0, nil, fmt.Errorf("validating nipost: %w", err)
+		return nil, nil, fmt.Errorf("validating nipost: %w", err)
 	}
 
-	return leaves, effectiveNumUnits, nil, err
+	var baseTickHeight uint64
+	if watx.PositioningATXID != h.goldenATXID {
+		posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
+		}
+		baseTickHeight = posAtx.TickHeight()
+	}
+
+	atx := wire.ActivationTxFromWireV1(watx)
+	if h.nipostValidator.IsVerifyingFullPost() {
+		atx.SetValidity(types.Valid)
+	}
+	atx.SetReceived(received)
+	atx.VRFNonce = types.VRFPostIndex(vrfNonce)
+	atx.NumUnits = effectiveNumUnits
+	atx.BaseTickHeight = baseTickHeight
+	atx.TickCount = leaves / h.tickSize
+	hi, weight := bits.Mul64(uint64(atx.NumUnits), atx.TickCount)
+	if hi != 0 {
+		return nil, nil, errors.New("atx weight would overflow uint64")
+	}
+	atx.Weight = weight
+	return atx, nil, nil
 }
 
 func (h *HandlerV1) validateNonInitialAtx(
@@ -263,9 +292,9 @@ func (h *HandlerV1) validateNonInitialAtx(
 	atx *wire.ActivationTxV1,
 	previous *types.ActivationTx,
 	commitment types.ATXID,
-) error {
+) (uint64, error) {
 	if err := h.nipostValidator.NIPostChallengeV1(&atx.NIPostChallengeV1, previous, atx.SmesherID); err != nil {
-		return err
+		return 0, err
 	}
 
 	vrfNonce := atx.VRFNonce
@@ -290,11 +319,10 @@ func (h *HandlerV1) validateNonInitialAtx(
 			atx.NumUnits,
 		)
 		if err != nil {
-			return fmt.Errorf("invalid vrf nonce: %w", err)
+			return 0, fmt.Errorf("invalid vrf nonce: %w", err)
 		}
 	}
-
-	return nil
+	return *vrfNonce, nil
 }
 
 // cacheAtx caches the atx in the atxsdata cache.
@@ -540,7 +568,8 @@ func (h *HandlerV1) processATX(
 		zap.Stringer("smesherID", watx.SmesherID),
 	)
 
-	if err := h.syntacticallyValidate(ctx, watx); err != nil {
+	err := h.syntacticallyValidate(ctx, watx)
+	if err != nil {
 		return nil, fmt.Errorf("%w: validating atx %s: %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 
@@ -550,36 +579,13 @@ func (h *HandlerV1) processATX(
 		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
 	}
 
-	leaves, effectiveNumUnits, proof, err := h.syntacticallyValidateDeps(ctx, watx)
+	atx, proof, err := h.syntacticallyValidateDeps(ctx, watx, received)
 	if err != nil {
 		return nil, fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 	if proof != nil {
 		return proof, nil
 	}
-
-	var baseTickHeight uint64
-	if watx.PositioningATXID != h.goldenATXID {
-		posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
-		}
-		baseTickHeight = posAtx.TickHeight()
-	}
-
-	atx := wire.ActivationTxFromWireV1(watx)
-	if h.nipostValidator.IsVerifyingFullPost() {
-		atx.SetValidity(types.Valid)
-	}
-	atx.SetReceived(received)
-	atx.NumUnits = effectiveNumUnits
-	atx.BaseTickHeight = baseTickHeight
-	atx.TickCount = leaves / h.tickSize
-	hi, weight := bits.Mul64(uint64(atx.NumUnits), atx.TickCount)
-	if hi != 0 {
-		return nil, errors.New("atx weight would overflow uint64")
-	}
-	atx.Weight = weight
 
 	proof, err = h.storeAtx(ctx, atx, watx)
 	if err != nil {

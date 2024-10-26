@@ -18,46 +18,45 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 //go:embed checkpointdata.json
 var checkpointdata string
 
-func query(t *testing.T, ctx context.Context, update string) []byte {
-	return queryUrl(t, ctx, fmt.Sprintf("http://localhost:%d/%s", port, update))
+func query(tb testing.TB, ctx context.Context, update string) []byte {
+	return queryUrl(tb, ctx, fmt.Sprintf("http://localhost:%d/%s", port, update))
 }
 
-func queryCheckpoint(t *testing.T, ctx context.Context) []byte {
-	return queryUrl(t, ctx, fmt.Sprintf("http://localhost:%d/checkpoint", port))
+func queryCheckpoint(tb testing.TB, ctx context.Context) []byte {
+	return queryUrl(tb, ctx, fmt.Sprintf("http://localhost:%d/checkpoint", port))
 }
 
-func queryUrl(t *testing.T, ctx context.Context, url string) []byte {
+func queryUrl(tb testing.TB, ctx context.Context, url string) []byte {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	resp, err := (&http.Client{}).Do(req)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	defer resp.Body.Close()
 	got, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return got
 }
 
-func updateCheckpoint(t *testing.T, ctx context.Context, data string) {
+func updateCheckpoint(tb testing.TB, ctx context.Context, data string) {
 	endpoint := fmt.Sprintf("http://localhost:%d/updateCheckpoint", port)
 	formData := url.Values{"checkpoint": []string{data}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(formData.Encode()))
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := (&http.Client{}).Do(req)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	resp.Body.Close()
 }
 
 func TestServer(t *testing.T) {
-	db := statesql.InMemory()
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
+	db := statesql.InMemoryTest(t)
+	cfg, cleanup := launchServer(t, db)
 	t.Cleanup(cleanup)
 
 	fs := afero.NewMemMapFs()

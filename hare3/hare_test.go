@@ -509,24 +509,24 @@ type testTracer struct {
 	sent        chan *Message
 }
 
-func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
+func waitForChan[T any](tb testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
 	var value T
 	select {
 	case <-time.After(timeout):
 		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
-		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+		tb.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case value = <-ch:
 	}
 	return value
 }
 
-func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
+func sendWithTimeout[T any](tb testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
 	select {
 	case <-time.After(timeout):
 		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
-		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+		tb.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case ch <- value:
 	}
 }
@@ -894,7 +894,7 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := statesql.InMemory()
+			db := statesql.InMemoryTest(t)
 			atxsdata := atxsdata.New()
 			proposals := store.New()
 			hare := New(

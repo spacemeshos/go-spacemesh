@@ -11,7 +11,7 @@ import (
 )
 
 func TestAddingCertificates(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	nodeId := types.RandomNodeID()
 
 	expCert := certifier.PoetCert{Data: []byte("data"), Signature: []byte("sig")}
@@ -33,7 +33,7 @@ func TestAddingCertificates(t *testing.T) {
 }
 
 func TestOverwritingCertificates(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	nodeId := types.RandomNodeID()
 
 	expCert := certifier.PoetCert{Data: []byte("data"), Signature: []byte("sig")}

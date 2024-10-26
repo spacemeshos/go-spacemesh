@@ -11,7 +11,7 @@ import (
 )
 
 func Test_AddPoetRegistration(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	nodeID := types.RandomNodeID()
 	reg1 := PoETRegistration{
@@ -55,7 +55,7 @@ func Test_AddPoetRegistration(t *testing.T) {
 }
 
 func Test_AddPoetRegistration_NoDuplicates(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	nodeID := types.RandomNodeID()
 	reg := PoETRegistration{
@@ -82,7 +82,7 @@ func Test_AddPoetRegistration_NoDuplicates(t *testing.T) {
 }
 
 func Test_UpdatePoetRegistrations(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	nodeID := types.RandomNodeID()
 	challengeHash := types.RandomHash()

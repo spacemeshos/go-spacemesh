@@ -21,9 +21,7 @@ func TestTracer(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "tortoise.trace")
 	const size = 12
-	s := sim.New(
-		sim.WithLayerSize(size),
-	)
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()

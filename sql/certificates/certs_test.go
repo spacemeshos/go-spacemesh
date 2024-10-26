@@ -45,7 +45,7 @@ func makeCert(lid types.LayerID, bid types.BlockID) *types.Certificate {
 }
 
 func TestCertificates(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid := types.LayerID(10)
 
 	got, err := Get(db, lid)
@@ -95,7 +95,7 @@ func TestCertificates(t *testing.T) {
 }
 
 func TestHareOutput(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid := types.LayerID(10)
 
 	ho, err := GetHareOutput(db, lid)
@@ -133,7 +133,7 @@ func TestHareOutput(t *testing.T) {
 }
 
 func TestCertifiedBlock(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	lyrBlocks := map[types.LayerID]types.BlockID{
 		types.LayerID(layersPerEpoch - 1):   {1},                // epoch 0
@@ -162,7 +162,7 @@ func TestCertifiedBlock(t *testing.T) {
 }
 
 func TestDeleteCert(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	require.NoError(t, Add(db, types.LayerID(2), &types.Certificate{BlockID: types.BlockID{2}}))
 	require.NoError(t, Add(db, types.LayerID(3), &types.Certificate{BlockID: types.BlockID{3}}))
 	require.NoError(t, Add(db, types.LayerID(4), &types.Certificate{BlockID: types.BlockID{4}}))
@@ -178,7 +178,7 @@ func TestDeleteCert(t *testing.T) {
 }
 
 func TestFirstInEpoch(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	lyrBlocks := map[types.LayerID]types.BlockID{
 		types.LayerID(layersPerEpoch - 1):   {1},                // epoch 0

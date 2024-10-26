@@ -46,7 +46,7 @@ func TestSmeshingIdentitiesServices(t *testing.T) {
 	)
 
 	midentityStates := NewMockidentityState(gomock.NewController(t))
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	ctx := context.Background()
 
 	configuredPoets := map[string]struct{}{

@@ -16,7 +16,7 @@ import (
 // fakeConduit is a fake Conduit for testing purposes that connects two
 // RangeSetReconcilers together without any network connection.
 type fakeConduit struct {
-	t    *testing.T
+	tb   testing.TB
 	msgs []rangesync.SyncMessage
 	resp []rangesync.SyncMessage
 	rec  []rangesync.SyncMessage
@@ -53,10 +53,10 @@ func (fc *fakeConduit) Send(msg rangesync.SyncMessage) error {
 	return nil
 }
 
-func makeSet(t *testing.T, items string) *rangesync.DumbSet {
+func makeSet(tb testing.TB, items string) *rangesync.DumbSet {
 	var s rangesync.DumbSet
 	for _, c := range []byte(items) {
-		require.NoError(t, s.Receive(rangesync.KeyBytes{c}))
+		require.NoError(tb, s.Receive(rangesync.KeyBytes{c}))
 	}
 	return &s
 }
@@ -79,76 +79,76 @@ func setStr(os rangesync.OrderedSet) string {
 // now.
 var showMessages = false
 
-func dumpRangeMessages(t *testing.T, msgs []rangesync.SyncMessage, fmt string, args ...any) {
+func dumpRangeMessages(tb testing.TB, msgs []rangesync.SyncMessage, fmt string, args ...any) {
 	if !showMessages {
 		return
 	}
-	t.Logf(fmt, args...)
+	tb.Logf(fmt, args...)
 	for _, m := range msgs {
-		t.Logf("  %s", m)
+		tb.Logf("  %s", m)
 	}
 }
 
 func runSync(
-	t *testing.T,
+	tb testing.TB,
 	syncA, syncB *rangesync.RangeSetReconciler,
 	x, y rangesync.KeyBytes,
 	maxRounds int,
 ) (nRounds, nMsg, nItems int) {
-	fc := &fakeConduit{t: t}
-	require.NoError(t, syncA.Initiate(fc, x, y))
+	fc := &fakeConduit{tb: tb}
+	require.NoError(tb, syncA.Initiate(fc, x, y))
 	return doRunSync(fc, syncA, syncB, maxRounds)
 }
 
 func doRunSync(fc *fakeConduit, syncA, syncB *rangesync.RangeSetReconciler, maxRounds int) (nRounds, nMsg, nItems int) {
 	var i int
 	aDone, bDone := false, false
-	dumpRangeMessages(fc.t, fc.resp, "A %q -> B %q (init):",
+	dumpRangeMessages(fc.tb, fc.resp, "A %q -> B %q (init):",
 		setStr(syncA.Set()),
 		setStr(syncB.Set()))
-	dumpRangeMessages(fc.t, fc.resp, "A -> B (init):")
+	dumpRangeMessages(fc.tb, fc.resp, "A -> B (init):")
 	for i = 0; ; i++ {
 		if i == maxRounds {
-			require.FailNow(fc.t, "too many rounds", "didn't reconcile in %d rounds", i)
+			require.FailNow(fc.tb, "too many rounds", "didn't reconcile in %d rounds", i)
 		}
 		fc.gotoResponse()
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		var err error
 		bDone, err = syncB.DoRound(rangesync.Sender{fc})
-		require.NoError(fc.t, err)
+		require.NoError(fc.tb, err)
 		// a party should never send anything in response to the "done" message
-		require.False(fc.t, aDone && !bDone, "A is done but B after that is not")
-		dumpRangeMessages(fc.t, fc.resp, "B %q -> A %q:",
+		require.False(fc.tb, aDone && !bDone, "A is done but B after that is not")
+		dumpRangeMessages(fc.tb, fc.resp, "B %q -> A %q:",
 			setStr(syncA.Set()),
 			setStr(syncB.Set()))
-		dumpRangeMessages(fc.t, fc.resp, "B -> A:")
+		dumpRangeMessages(fc.tb, fc.resp, "B -> A:")
 		if aDone && bDone {
-			require.Empty(fc.t, fc.resp, "got messages from B in response to done msg from A")
+			require.Empty(fc.tb, fc.resp, "got messages from B in response to done msg from A")
 			break
 		}
 		fc.gotoResponse()
 		nMsg += len(fc.msgs)
 		nItems += fc.numItems()
 		aDone, err = syncA.DoRound(rangesync.Sender{fc})
-		require.NoError(fc.t, err)
-		dumpRangeMessages(fc.t, fc.msgs, "A %q --> B %q:",
+		require.NoError(fc.tb, err)
+		dumpRangeMessages(fc.tb, fc.msgs, "A %q --> B %q:",
 			setStr(syncA.Set()),
 			setStr(syncB.Set()))
-		dumpRangeMessages(fc.t, fc.resp, "A -> B:")
-		require.False(fc.t, bDone && !aDone, "B is done but A after that is not")
+		dumpRangeMessages(fc.tb, fc.resp, "A -> B:")
+		require.False(fc.tb, bDone && !aDone, "B is done but A after that is not")
 		if aDone && bDone {
-			require.Empty(fc.t, fc.resp, "got messages from A in response to done msg from B")
+			require.Empty(fc.tb, fc.resp, "got messages from A in response to done msg from B")
 			break
 		}
 	}
 	return i + 1, nMsg, nItems
 }
 
-func runProbe(t *testing.T, from, to *rangesync.RangeSetReconciler, x, y rangesync.KeyBytes) rangesync.ProbeResult {
-	fc := &fakeConduit{t: t}
+func runProbe(tb testing.TB, from, to *rangesync.RangeSetReconciler, x, y rangesync.KeyBytes) rangesync.ProbeResult {
+	fc := &fakeConduit{tb: tb}
 	info, err := from.InitiateProbe(fc, x, y)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return doRunProbe(fc, from, to, info)
 }
 
@@ -157,15 +157,15 @@ func doRunProbe(
 	from, to *rangesync.RangeSetReconciler,
 	info rangesync.RangeInfo,
 ) rangesync.ProbeResult {
-	require.NotEmpty(fc.t, fc.resp, "empty initial round")
+	require.NotEmpty(fc.tb, fc.resp, "empty initial round")
 	fc.gotoResponse()
 	done, err := to.DoRound(rangesync.Sender{fc})
-	require.True(fc.t, done)
-	require.NoError(fc.t, err)
+	require.True(fc.tb, done)
+	require.NoError(fc.tb, err)
 	fc.gotoResponse()
 	pr, err := from.HandleProbeResponse(fc, info)
-	require.NoError(fc.t, err)
-	require.Nil(fc.t, fc.resp, "got messages from Probe in response to done msg")
+	require.NoError(fc.tb, err)
+	require.Nil(fc.tb, fc.resp, "got messages from Probe in response to done msg")
 	return pr
 }
 
@@ -395,7 +395,7 @@ type hashSyncTestConfig struct {
 }
 
 type hashSyncTester struct {
-	t            *testing.T
+	tb           testing.TB
 	src          []rangesync.KeyBytes
 	setA, setB   rangesync.OrderedSet
 	opts         []rangesync.RangeSetReconcilerOption
@@ -403,10 +403,10 @@ type hashSyncTester struct {
 	numSpecificB int
 }
 
-func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
-	t.Helper()
+func newHashSyncTester(tb testing.TB, cfg hashSyncTestConfig) *hashSyncTester {
+	tb.Helper()
 	st := &hashSyncTester{
-		t:   t,
+		tb:  tb,
 		src: make([]rangesync.KeyBytes, cfg.numTestHashes),
 		opts: []rangesync.RangeSetReconcilerOption{
 			rangesync.WithMaxSendRange(cfg.maxSendRange),
@@ -423,14 +423,14 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 	sliceA := st.src[:cfg.numTestHashes-st.numSpecificB]
 	st.setA = rangesync.NewDumbSet(!cfg.allowReAdd)
 	for _, h := range sliceA {
-		require.NoError(t, st.setA.Receive(h))
+		require.NoError(tb, st.setA.Receive(h))
 	}
 
 	sliceB := slices.Clone(st.src[:cfg.numTestHashes-st.numSpecificB-st.numSpecificA])
 	sliceB = append(sliceB, st.src[cfg.numTestHashes-st.numSpecificB:]...)
 	st.setB = rangesync.NewDumbSet(!cfg.allowReAdd)
 	for _, h := range sliceB {
-		require.NoError(t, st.setB.Receive(h))
+		require.NoError(tb, st.setB.Receive(h))
 	}
 
 	slices.SortFunc(st.src, func(a, b rangesync.KeyBytes) int {
@@ -442,11 +442,11 @@ func newHashSyncTester(t *testing.T, cfg hashSyncTestConfig) *hashSyncTester {
 
 func (st *hashSyncTester) verify(setA, setB rangesync.OrderedSet) {
 	itemsA, err := setA.Items().Collect()
-	require.NoError(st.t, err)
+	require.NoError(st.tb, err)
 	itemsB, err := setB.Items().Collect()
-	require.NoError(st.t, err)
-	require.Equal(st.t, itemsA, itemsB)
-	require.Equal(st.t, st.src, itemsA)
+	require.NoError(st.tb, err)
+	require.Equal(st.tb, itemsA, itemsB)
+	require.Equal(st.tb, st.src, itemsA)
 }
 
 func TestSyncHash(t *testing.T) {
@@ -510,7 +510,7 @@ func TestDeferredAdd(t *testing.T) {
 	sync := func(setA, setB rangesync.OrderedSet) {
 		syncA := rangesync.NewRangeSetReconciler(setA, opts...)
 		syncB := rangesync.NewRangeSetReconciler(setB, opts...)
-		fc := &fakeConduit{t: t}
+		fc := &fakeConduit{tb: t}
 		require.NoError(t, syncA.Initiate(fc, nil, nil))
 		nRounds, nMsg, nItems := doRunSync(fc, syncA, syncB, 100)
 		numSpecific := st.numSpecificA + st.numSpecificB

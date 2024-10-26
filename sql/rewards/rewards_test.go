@@ -14,7 +14,7 @@ import (
 )
 
 func TestRewards(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	var part uint64 = math.MaxUint64 / 2
 	lyrReward := part / 2
@@ -210,9 +210,7 @@ func Test_0008Migration_EmptyDBIsNoOp(t *testing.T) {
 	schema.Migrations = schema.Migrations[:7]
 
 	// apply previous migrations
-	db := statesql.InMemory(
-		sql.WithDatabaseSchema(schema),
-	)
+	db := statesql.InMemoryTest(t, sql.WithDatabaseSchema(schema))
 
 	// verify that the DB is empty
 	_, err = db.Exec("select count(*) from rewards;", func(stmt *sql.Statement) {
@@ -245,7 +243,8 @@ func Test_0008Migration(t *testing.T) {
 	schema.Migrations = schema.Migrations[:7]
 
 	// apply previous migrations
-	db := statesql.InMemory(
+	db := statesql.InMemoryTest(
+		t,
 		sql.WithDatabaseSchema(schema),
 		sql.WithForceMigrations(true),
 		sql.WithAllowSchemaDrift(true),
