@@ -704,7 +704,8 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 
 	tab := newTestBuilder(t, 1,
 		WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}),
-		WithIdentityStates(idStates))
+		WithIdentityStates(idStates),
+	)
 	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
@@ -741,7 +742,14 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX_ValidatingInitialPostTimeout(t *testing.T) {
-	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	ctrl := gomock.NewController(t)
+	idStates := NewMockIdentityStates(ctrl)
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+
+	tab := newTestBuilder(t, 1,
+		WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}),
+		WithIdentityStates(idStates),
+	)
 	sig := maps.Values(tab.signers)[0]
 
 	posEpoch := postGenesisEpoch
