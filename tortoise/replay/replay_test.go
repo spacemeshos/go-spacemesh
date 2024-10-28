@@ -50,6 +50,7 @@ func TestReplayMainnet(t *testing.T) {
 
 	db, err := statesql.Open(fmt.Sprintf("file:%s?mode=ro", *dbpath))
 	require.NoError(t, err)
+	defer db.Close()
 
 	applied, err := layers.GetLastApplied(db)
 	require.NoError(t, err)

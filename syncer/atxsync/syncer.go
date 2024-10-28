@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	"go.uber.org/zap"
@@ -107,9 +108,10 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloa
 		return fmt.Errorf("failed to get last request time for epoch %v: %w", publish, err)
 	}
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
-	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !lastSuccess.After(downloadUntil))
+	immediate := len(state) == 0 || errors.Is(err, sql.ErrNotFound) || !lastSuccess.After(downloadUntil)
 	if !immediate && total == downloaded {
-		s.logger.Debug("sync for epoch was completed before",
+		s.logger.Debug(
+			"sync for epoch was completed before",
 			log.ZContext(parent),
 			zap.Uint32("epoch_id", publish.Uint32()),
 		)
@@ -150,22 +152,24 @@ func (s *Syncer) downloadEpochInfo(
 ) error {
 	interval := s.cfg.EpochInfoInterval
 	if immediate {
-		interval = 0
+		interval = 1 * time.Second // not really immediate, to avoid an endless loop that doesn't wait between requests
 	}
+
 	for {
-		if interval != 0 {
-			s.logger.Debug(
-				"waiting between epoch info requests",
-				zap.Uint32("epoch_id", publish.Uint32()),
-				zap.Duration("duration", interval),
-			)
-		}
+		// randomize interval to avoid sync spikes
+		minWait := time.Duration(float64(interval) * 0.9)
+		maxWait := time.Duration(float64(interval) * 1.1)
+		wait := minWait + rand.N(maxWait-minWait+1)
+		s.logger.Debug(
+			"waiting between epoch info requests",
+			zap.Uint32("epoch_id", publish.Uint32()),
+			zap.Duration("duration", wait),
+		)
+
 		select {
 		case <-ctx.Done():
 			return nil
-		// TODO(dshulyak) this has to be randomized in a followup
-		// when sync will be schedulled in advance, in order to smooth out request rate across the network
-		case <-time.After(interval):
+		case <-time.After(wait):
 		}
 
 		peers := s.fetcher.SelectBestShuffled(s.cfg.EpochInfoPeers)

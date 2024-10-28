@@ -158,7 +158,7 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	atxProvider := grpcserver.NewMockatxProvider(ctrl)
 	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
 
-	smesher, proof := grpcserver.BallotMalfeasance(t, statesql.InMemory())
+	smesher, proof := grpcserver.BallotMalfeasance(t, statesql.InMemoryTest(t))
 	previous := types.RandomATXID()
 	id := types.RandomATXID()
 	atx := types.ActivationTx{

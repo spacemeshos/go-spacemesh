@@ -297,7 +297,7 @@ func (rsr *RangeSetReconciler) handleFingerprint(
 				zap.Float64("diff", 1-pr.Sim),
 				zap.Float64("maxDiff", rsr.maxDiff))
 			if _, err := rsr.sendItems(s, info.Count, info.Items, nil); err != nil {
-				return false, err
+				return false, fmt.Errorf("send items: %w", err)
 			}
 			return false, s.SendRangeContents(x, y, info.Count)
 		}
@@ -363,7 +363,7 @@ func (rsr *RangeSetReconciler) handleRecent(
 		// Do not send back recent items that were received
 		var err error
 		if nSent, err = rsr.sendItems(s, count, sr, receivedKeys); err != nil {
-			return err
+			return fmt.Errorf("send items: %w", err)
 		}
 	}
 	// Following the items, we send Recent message with zero time.
@@ -444,7 +444,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 				zap.Int("receivedCount", len(receivedKeys)))
 			nSent, err := rsr.sendItems(s, info.Count, info.Items, receivedKeys)
 			if err != nil {
-				return false, err
+				return false, fmt.Errorf("send items: %w", err)
 			}
 			rsr.log.Debug("handleMessage: sent items", zap.Int("count", nSent))
 			return false, nil

@@ -42,7 +42,7 @@ func Test_AddChallenge(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db := localsql.InMemory()
+			db := localsql.InMemoryTest(t)
 
 			nodeID := types.RandomNodeID()
 			err := AddChallenge(db, nodeID, tc.ch)
@@ -64,7 +64,7 @@ func Test_AddChallenge(t *testing.T) {
 }
 
 func Test_AddChallenge_NoDuplicates(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	ch1 := &types.NIPostChallenge{
 		PublishEpoch:   4,
@@ -97,7 +97,7 @@ func Test_AddChallenge_NoDuplicates(t *testing.T) {
 }
 
 func Test_UpdateChallenge(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	commitmentATX := types.RandomATXID()
 	ch := &types.NIPostChallenge{
@@ -125,7 +125,7 @@ func Test_UpdateChallenge(t *testing.T) {
 }
 
 func Test_UpdatePoetProofRef(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	commitmentATX := types.RandomATXID()
 	ch := &types.NIPostChallenge{
@@ -158,7 +158,7 @@ func Test_UpdatePoetProofRef(t *testing.T) {
 }
 
 func Test_PoetProofRef_NotSet(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	commitmentATX := types.RandomATXID()
 	ch := &types.NIPostChallenge{
