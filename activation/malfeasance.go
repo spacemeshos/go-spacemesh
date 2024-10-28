@@ -152,8 +152,8 @@ func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.Proof
 	}
 	post := (*shared.Proof)(atx.NIPost.Post)
 	meta := &shared.ProofMetadata{
-		NodeId:          atx.SmesherID[:],
-		CommitmentAtxId: commitmentAtx[:],
+		NodeId:          atx.SmesherID.Bytes(),
+		CommitmentAtxId: commitmentAtx.Bytes(),
 		NumUnits:        atx.NumUnits,
 		Challenge:       atx.NIPost.PostMetadata.Challenge,
 		LabelsPerUnit:   atx.NIPost.PostMetadata.LabelsPerUnit,

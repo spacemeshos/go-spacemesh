@@ -16,7 +16,7 @@ const (
 	PublishEpochIndex MerkleTreeIndex = iota
 	PositioningATXIndex
 	CoinbaseIndex
-	InitialPostIndex
+	InitialPostsRootIndex
 	PreviousATXsRootIndex
 	NIPostsRootIndex
 	VRFNonceIndex
@@ -28,7 +28,7 @@ type InitialPostTreeIndex uint64
 
 const (
 	CommitmentATXIndex InitialPostTreeIndex = iota
-	InitialPostRootIndex
+	InitialPostIndex
 )
 
 type NiPostTreeIndex uint64
@@ -37,6 +37,16 @@ const (
 	MembershipIndex NiPostTreeIndex = iota
 	ChallengeIndex
 	PostsRootIndex
+)
+
+type SuPostV2Index uint64
+
+const (
+	MarriageIndex SuPostV2Index = iota
+	PrevATXIndex
+	MembershipLeafIndex
+	PostIndex
+	NumUnitsIndex
 )
 
 // ProofType is an identifier for the type of proof that is encoded in the ATXProof.
@@ -72,5 +82,7 @@ type ATXProof struct {
 type Proof interface {
 	scale.Encodable
 
+	// TODO(mafa): adjust interface to receive a context and a new validator service for validation
+	// (of signatures and post). Provider should be malfeasance service in activation package.
 	Valid(edVerifier *signing.EdVerifier) (types.NodeID, error)
 }

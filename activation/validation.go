@@ -41,6 +41,7 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 }
 
 type validatorOptions struct {
+	postIdx        *int
 	postSubsetSeed []byte
 	prioritized    bool
 }
@@ -50,6 +51,14 @@ type validatorOptions struct {
 func PostSubset(seed []byte) validatorOption {
 	return func(o *validatorOptions) {
 		o.postSubsetSeed = seed
+	}
+}
+
+// PostIndex configures the validator to validate only the POST index at the given `idx`.
+func PostIndex(idx int) validatorOption {
+	return func(o *validatorOptions) {
+		o.postIdx = new(int)
+		*o.postIdx = idx
 	}
 }
 
@@ -204,6 +213,9 @@ func (v *Validator) Post(
 	}
 
 	verifyOpts := []verifying.OptionFunc{verifying.WithLabelScryptParams(v.scrypt)}
+	if options.postIdx != nil {
+		verifyOpts = append(verifyOpts, verifying.SelectedIndex(*options.postIdx))
+	}
 	if options.postSubsetSeed != nil {
 		verifyOpts = append(verifyOpts, verifying.Subset(v.cfg.K3, options.postSubsetSeed))
 	}
@@ -234,6 +246,19 @@ func (v *Validator) PostV2(
 		Challenge:     challenge,
 		LabelsPerUnit: v.cfg.LabelsPerUnit,
 	}, numUnits, opts...)
+}
+
+func (v *Validator) PostV2Idx(
+	ctx context.Context,
+	nodeId types.NodeID,
+	commitmentAtxId types.ATXID,
+	post *types.Post,
+	challenge []byte,
+	numUnits uint32,
+	idx int,
+) error {
+	// TODO(mafa): this should be in the malfeasance handler with a dependency on the validator
+	return v.PostV2(ctx, nodeId, commitmentAtxId, post, challenge, numUnits, PostIndex(idx))
 }
 
 func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
