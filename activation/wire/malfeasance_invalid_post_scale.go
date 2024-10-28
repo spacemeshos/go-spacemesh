@@ -10,7 +10,7 @@ import (
 
 func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.InvalidPost.EncodeScale(enc)
+		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
@@ -23,12 +23,19 @@ func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error
 		}
 		total += n
 	}
+	{
+		n, err := t.InvalidPost.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
 func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.InvalidPost.DecodeScale(dec)
+		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
 		if err != nil {
 			return total, err
 		}
@@ -36,6 +43,13 @@ func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error
 	}
 	{
 		n, err := t.Commitment.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.InvalidPost.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -74,14 +88,7 @@ func (t *CommitmentProof) EncodeScale(enc *scale.Encoder) (total int, err error)
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Proof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.CommitmentATXProof, 32)
 		if err != nil {
 			return total, err
 		}
@@ -133,14 +140,7 @@ func (t *CommitmentProof) DecodeScale(dec *scale.Decoder) (total int, err error)
 			return total, err
 		}
 		total += n
-		t.Proof = field
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
+		t.CommitmentATXProof = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Signature[:])
@@ -196,7 +196,63 @@ func (t *InvalidATXPostProof) EncodeScale(enc *scale.Encoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.PostsProof, 32)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PostsRootProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SubPostRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact64(enc, uint64(t.SubPostRootIndex))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.SubPostRootProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.Post.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PostProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.NumUnits))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NumUnitsProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.InvalidPostIndex))
 		if err != nil {
 			return total, err
 		}
@@ -270,7 +326,69 @@ func (t *InvalidATXPostProof) DecodeScale(dec *scale.Decoder) (total int, err er
 			return total, err
 		}
 		total += n
-		t.PostsProof = field
+		t.PostsRootProof = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SubPostRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact64(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.SubPostRootIndex = uint64(field)
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.SubPostRootProof = field
+	}
+	{
+		n, err := t.Post.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.PostProof = field
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NumUnits = uint32(field)
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NumUnitsProof = field
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.InvalidPostIndex = uint32(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])

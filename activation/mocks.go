@@ -632,6 +632,44 @@ func (c *MocknipostValidatorPostV2Call) DoAndReturn(f func(context.Context, type
 	return c
 }
 
+// PostV2Idx mocks base method.
+func (m *MocknipostValidator) PostV2Idx(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *types.Post, challenge []byte, numUnits uint32, idx int) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PostV2Idx", ctx, smesherID, commitment, post, challenge, numUnits, idx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PostV2Idx indicates an expected call of PostV2Idx.
+func (mr *MocknipostValidatorMockRecorder) PostV2Idx(ctx, smesherID, commitment, post, challenge, numUnits, idx any) *MocknipostValidatorPostV2IdxCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostV2Idx", reflect.TypeOf((*MocknipostValidator)(nil).PostV2Idx), ctx, smesherID, commitment, post, challenge, numUnits, idx)
+	return &MocknipostValidatorPostV2IdxCall{Call: call}
+}
+
+// MocknipostValidatorPostV2IdxCall wrap *gomock.Call
+type MocknipostValidatorPostV2IdxCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocknipostValidatorPostV2IdxCall) Return(arg0 error) *MocknipostValidatorPostV2IdxCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocknipostValidatorPostV2IdxCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, int) error) *MocknipostValidatorPostV2IdxCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocknipostValidatorPostV2IdxCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, int) error) *MocknipostValidatorPostV2IdxCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // VRFNonce mocks base method.
 func (m *MocknipostValidator) VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce, labelsPerUnit uint64, numUnits uint32) error {
 	m.ctrl.T.Helper()
