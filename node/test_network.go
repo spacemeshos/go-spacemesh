@@ -21,7 +21,7 @@ import (
 )
 
 // NewTestNetwork creates a network of fully connected nodes.
-func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*TestApp {
+func NewTestNetwork(tb testing.TB, conf config.Config, l log.Log, size int) []*TestApp {
 	// We need to set this global state
 	types.SetLayersPerEpoch(conf.LayersPerEpoch)
 	types.SetNetworkHRP(conf.NetworkHRP) // set to generate coinbase
@@ -43,31 +43,31 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 		// Copy config, services don't modify their config, so we just need to
 		// be careful here when we modify any pointer values in the config.
 		c := conf
-		dir := t.TempDir()
+		dir := tb.TempDir()
 		c.DataDirParent = dir
 		c.SMESHING.Opts.DataDir = dir
 		c.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte(strconv.Itoa(i))).String()
 
 		c.FileLock = filepath.Join(c.DataDirParent, "LOCK")
 
-		app := NewApp(t, &c, l)
+		app := NewApp(tb, &c, l)
 		g.Go(func() error {
 			err := app.Start(grpContext)
 			if err != nil && !errors.Is(err, context.Canceled) {
-				t.Logf("failed to start instance %d: %v", i, err)
+				tb.Logf("failed to start instance %d: %v", i, err)
 			}
 			return err
 		})
 		<-app.Started()
 		err := app.beaconProtocol.UpdateBeacon(bootstrapEpoch, bootstrapBeacon)
-		require.NoError(t, err, "failed to bootstrap beacon for node %q", i)
+		require.NoError(tb, err, "failed to bootstrap beacon for node %q", i)
 
 		conn, err := grpc.NewClient(
 			app.grpcPublicServer.BoundAddress,
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
 		)
-		require.NoError(t, err)
-		t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+		require.NoError(tb, err)
+		tb.Cleanup(func() { assert.NoError(tb, conn.Close()) })
 		apps = append(apps, &TestApp{app, conn})
 	}
 
@@ -76,7 +76,7 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 	// internally calls Cleanup to delete the dir. By calling Cleanup here
 	// we ensure that the apps have been shut-down before attempting to delete
 	// the temp dirs.
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		cancel()
 		// Wait for nodes to shutdown
 		g.Wait()
@@ -95,23 +95,23 @@ func NewTestNetwork(t *testing.T, conf config.Config, l log.Log, size int) []*Te
 				ID:    apps[j].Host().ID(),
 				Addrs: apps[j].Host().Addrs(),
 			})
-			require.NoError(t, err)
+			require.NoError(tb, err)
 		}
 	}
 	return apps
 }
 
-func NewApp(t *testing.T, conf *config.Config, l log.Log) *App {
+func NewApp(tb testing.TB, conf *config.Config, l log.Log) *App {
 	app := New(
 		WithConfig(conf),
 		WithLog(l),
 	)
 
 	err := app.Initialize()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	err = app.NewIdentity()
-	require.NoError(t, err, "could not create identity")
+	require.NoError(tb, err, "could not create identity")
 
 	return app
 }

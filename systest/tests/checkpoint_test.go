@@ -32,6 +32,7 @@ func reuseCluster(tctx *testcontext.Context, restoreLayer uint32) (*cluster.Clus
 	)
 }
 
+// TestCheckpoint tests the checkpoint mechanism.
 func TestCheckpoint(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
@@ -180,7 +181,7 @@ func TestCheckpoint(t *testing.T) {
 	ensureSmeshing(t, tctx, cl, lastEpoch)
 }
 
-func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) {
+func ensureSmeshing(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, stop uint32) {
 	numSmeshers := cl.Total() - cl.Bootnodes()
 	createdCh := make(chan *pb.Proposal, numSmeshers)
 	eg, _ := errgroup.WithContext(tctx)
@@ -205,7 +206,7 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 			return true, nil
 		})
 	}
-	require.NoError(t, eg.Wait())
+	require.NoError(tb, eg.Wait())
 	close(createdCh)
 
 	uniqueSmeshers := map[types.NodeID]struct{}{}
@@ -213,7 +214,7 @@ func ensureSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster
 		uniqueSmeshers[types.BytesToNodeID(proposal.Smesher.Id)] = struct{}{}
 	}
 	require.Lenf(
-		t,
+		tb,
 		uniqueSmeshers,
 		numSmeshers,
 		"not all miners are smeshing, expected %d, got %d",

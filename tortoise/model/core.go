@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -29,8 +31,9 @@ const (
 	units     = 10
 )
 
-func newCore(rng *rand.Rand, id string, logger *zap.Logger) *core {
-	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
+func newCore(tb testing.TB, rng *rand.Rand, id string, logger *zap.Logger) *core {
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), logger)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	if err != nil {
 		panic(err)

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -15,6 +16,31 @@ import (
 	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 )
+
+func Test_ConReturnedToPool(t *testing.T) {
+	db := InMemory(
+		WithLogger(zaptest.NewLogger(t)),
+		WithConnections(1),
+		WithDatabaseSchema(&Schema{
+			Script: `CREATE TABLE testing1 (
+				id varchar primary key,
+				field int
+			);`,
+		}),
+		WithNoCheckSchemaDrift(),
+	)
+
+	require.Panics(t, func() {
+		db.Exec("select 1", nil, func(stmt *Statement) bool {
+			panic("decoder panic")
+		})
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	con := db.pool.Get(ctx)
+	require.NotNil(t, con, "connection was not returned")
+}
 
 func Test_Transaction_Isolation(t *testing.T) {
 	db := InMemory(
@@ -169,14 +195,14 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-func execSQL(t *testing.T, db Executor, sql string, col int) (result string) {
+func execSQL(tb testing.TB, db Executor, sql string, col int) (result string) {
 	_, err := db.Exec(sql, nil, func(stmt *Statement) bool {
 		if col >= 0 {
 			result = stmt.ColumnText(col)
 		}
 		return true
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return result
 }
 

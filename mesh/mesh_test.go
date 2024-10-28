@@ -46,16 +46,18 @@ type testMesh struct {
 	mockTortoise *smocks.MockTortoise
 }
 
-func createTestMesh(t *testing.T) *testMesh {
-	t.Helper()
+func createTestMesh(tb testing.TB) *testMesh {
+	tb.Helper()
 	types.SetLayersPerEpoch(3)
-	lg := zaptest.NewLogger(t)
-	db := statesql.InMemoryTest(t)
+	lg := zaptest.NewLogger(tb)
+	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(tb)
+	cdb := datastore.NewCachedDB(db, lg)
+	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 	tm := &testMesh{
 		db:           db,
-		cdb:          datastore.NewCachedDB(db, lg),
+		cdb:          cdb,
 		atxsdata:     atxsdata,
 		mockVM:       mocks.NewMockvmState(ctrl),
 		mockState:    mocks.NewMockconservativeState(ctrl),
@@ -63,29 +65,29 @@ func createTestMesh(t *testing.T) *testMesh {
 	}
 	exec := NewExecutor(db, atxsdata, tm.mockVM, tm.mockState, lg)
 	msh, err := NewMesh(db, atxsdata, tm.mockTortoise, exec, tm.mockState, lg)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		msh.Start(ctx)
 		close(done)
 	}()
-	t.Cleanup(func() { <-done })
-	t.Cleanup(cancel)
+	tb.Cleanup(func() { <-done })
+	tb.Cleanup(cancel)
 	gLid := types.GetEffectiveGenesis()
-	checkLastAppliedInDB(t, msh, gLid)
-	checkProcessedInDB(t, msh, gLid)
+	checkLastAppliedInDB(tb, msh, gLid)
+	checkProcessedInDB(tb, msh, gLid)
 	tm.Mesh = msh
 	return tm
 }
 
 func genTx(
-	t testing.TB,
+	tb testing.TB,
 	signer *signing.EdSigner,
 	dest types.Address,
 	amount, nonce, price uint64,
 ) types.Transaction {
-	t.Helper()
+	tb.Helper()
 	raw := wallet.Spend(signer.PrivateKey(), dest, amount, nonce)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
@@ -99,29 +101,29 @@ func genTx(
 	return tx
 }
 
-func CreateAndSaveTxs(t testing.TB, db sql.Executor, numOfTxs int) []types.TransactionID {
-	t.Helper()
+func CreateAndSaveTxs(tb testing.TB, db sql.Executor, numOfTxs int) []types.TransactionID {
+	tb.Helper()
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
 		addr := types.GenerateAddress([]byte("1"))
 		signer, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		tx := genTx(t, signer, addr, 1, 10, 100)
-		require.NoError(t, transactions.Add(db, &tx, time.Now()))
+		require.NoError(tb, err)
+		tx := genTx(tb, signer, addr, 1, 10, 100)
+		require.NoError(tb, transactions.Add(db, &tx, time.Now()))
 		txIDs = append(txIDs, tx.ID)
 	}
 	return txIDs
 }
 
 func createBlock(
-	t testing.TB,
+	tb testing.TB,
 	db sql.Executor,
 	mesh *Mesh,
 	layerID types.LayerID,
 	nodeID types.NodeID,
 ) *types.Block {
-	t.Helper()
-	txIDs := CreateAndSaveTxs(t, db, numTXs)
+	tb.Helper()
+	txIDs := CreateAndSaveTxs(tb, db, numTXs)
 	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
@@ -129,21 +131,21 @@ func createBlock(
 		},
 	}
 	b.Initialize()
-	require.NoError(t, blocks.Add(mesh.cdb, b))
+	require.NoError(tb, blocks.Add(mesh.cdb, b))
 	return b
 }
 
 func createLayerBlocks(
-	t *testing.T,
+	tb testing.TB,
 	db sql.Executor,
 	mesh *Mesh,
 	lyrID types.LayerID,
 ) []*types.Block {
-	t.Helper()
+	tb.Helper()
 	blks := make([]*types.Block, 0, numBlocks)
 	for i := 0; i < numBlocks; i++ {
 		nodeID := types.NodeID{byte(i)}
-		blk := createBlock(t, db, mesh, lyrID, nodeID)
+		blk := createBlock(tb, db, mesh, lyrID, nodeID)
 		blks = append(blks, blk)
 	}
 	return blks
@@ -174,18 +176,18 @@ func createLayerBallots(tb testing.TB, mesh *Mesh, lyrID types.LayerID) []*types
 	return blts
 }
 
-func checkLastAppliedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
-	t.Helper()
+func checkLastAppliedInDB(tb testing.TB, mesh *Mesh, expected types.LayerID) {
+	tb.Helper()
 	lid, err := layers.GetLastApplied(mesh.cdb)
-	require.NoError(t, err)
-	require.Equal(t, expected, lid)
+	require.NoError(tb, err)
+	require.Equal(tb, expected, lid)
 }
 
-func checkProcessedInDB(t *testing.T, mesh *Mesh, expected types.LayerID) {
-	t.Helper()
+func checkProcessedInDB(tb testing.TB, mesh *Mesh, expected types.LayerID) {
+	tb.Helper()
 	lid, err := layers.GetProcessed(mesh.cdb)
-	require.NoError(t, err)
-	require.Equal(t, expected, lid)
+	require.NoError(tb, err)
+	require.Equal(tb, expected, lid)
 }
 
 func TestMesh_FromGenesis(t *testing.T) {
@@ -782,7 +784,7 @@ func TestProcessLayer(t *testing.T) {
 	}
 }
 
-func ensuresDatabaseConsistent(t *testing.T, db sql.Executor, results []result.Layer) {
+func ensuresDatabaseConsistent(tb testing.TB, db sql.Executor, results []result.Layer) {
 	for _, layer := range results {
 		for _, rst := range layer.Blocks {
 			if !rst.Data {

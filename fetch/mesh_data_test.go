@@ -76,8 +76,8 @@ const (
 	numMalicious = 11
 )
 
-func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{}) {
-	t.Helper()
+func startTestLoop(tb testing.TB, f *Fetch, eg *errgroup.Group, stop chan struct{}) {
+	tb.Helper()
 	eg.Go(func() error {
 		for {
 			select {
@@ -86,7 +86,7 @@ func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{
 			default:
 				f.mu.Lock()
 				for h, req := range f.unprocessed {
-					require.NoError(t, req.validator(req.ctx, types.Hash32{}, p2p.NoPeer, []byte{}))
+					require.NoError(tb, req.validator(req.ctx, types.Hash32{}, p2p.NoPeer, []byte{}))
 					close(req.promise.completed)
 					delete(f.unprocessed, h)
 				}
@@ -96,8 +96,8 @@ func startTestLoop(t *testing.T, f *Fetch, eg *errgroup.Group, stop chan struct{
 	})
 }
 
-func generateMaliciousIDs(t *testing.T) []types.NodeID {
-	t.Helper()
+func generateMaliciousIDs(tb testing.TB) []types.NodeID {
+	tb.Helper()
 	malIDs := make([]types.NodeID, numMalicious)
 	for i := range malIDs {
 		malIDs[i] = types.RandomNodeID()
@@ -105,8 +105,8 @@ func generateMaliciousIDs(t *testing.T) []types.NodeID {
 	return malIDs
 }
 
-func generateLayerContent(t *testing.T) []byte {
-	t.Helper()
+func generateLayerContent(tb testing.TB) []byte {
+	tb.Helper()
 	ballotIDs := make([]types.BallotID, 0, numBallots)
 	for i := 0; i < numBallots; i++ {
 		ballotIDs = append(ballotIDs, types.RandomBallotID())
@@ -128,14 +128,14 @@ func TestFetch_getHashes(t *testing.T) {
 	hashes := types.BlockIDsToHashes(blockIDs)
 	peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
 
-	newFetcher := func(t testing.TB) *testFetch {
-		f := createFetch(t)
+	newFetcher := func(tb testing.TB) *testFetch {
+		f := createFetch(tb)
 		f.cfg.QueueSize = 3
 		f.cfg.BatchSize = 2
 		f.cfg.MaxRetriesForRequest = 0
 		f.cfg.Streaming = false
 		f.Start()
-		t.Cleanup(f.Stop)
+		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
 			f.peers.Add(peer)
 		}
@@ -240,14 +240,14 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 	hashes := types.BlockIDsToHashes(blockIDs)
 	peers := []p2p.Peer{p2p.Peer("buddy 0"), p2p.Peer("buddy 1")}
 
-	newFetcher := func(t testing.TB) *testFetch {
-		f := createFetch(t)
+	newFetcher := func(tb testing.TB) *testFetch {
+		f := createFetch(tb)
 		f.cfg.QueueSize = 3
 		f.cfg.BatchSize = 2
 		f.cfg.MaxRetriesForRequest = 0
 		f.cfg.Streaming = true
 		f.Start()
-		t.Cleanup(f.Stop)
+		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
 			f.peers.Add(peer)
 		}
@@ -704,13 +704,13 @@ func TestFetch_GetLayerData(t *testing.T) {
 	})
 }
 
-func generateEpochData(t *testing.T) (*EpochData, []byte) {
-	t.Helper()
+func generateEpochData(tb testing.TB) (*EpochData, []byte) {
+	tb.Helper()
 	ed := &EpochData{
 		AtxIDs: types.RandomActiveSet(11),
 	}
 	data, err := codec.Encode(ed)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return ed, data
 }
 
@@ -999,7 +999,8 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.QueueSize = 1000
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
-			cdb := datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t))
+			cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+			t.Cleanup(func() { require.NoError(t, cdb.Close()) })
 			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
