@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	core "github.com/spacemeshos/go-spacemesh/vm/core"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -75,6 +76,44 @@ func (c *MockVMHostExecuteCall) Do(f func(types.LayerID, int64, types.Address, t
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockVMHostExecuteCall) DoAndReturn(f func(types.LayerID, int64, types.Address, types.Address, []byte, uint64, []byte) ([]byte, int64, error)) *MockVMHostExecuteCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithTemporaryCache mocks base method.
+func (m *MockVMHost) WithTemporaryCache(arg0 core.AccountUpdater) core.VMHost {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithTemporaryCache", arg0)
+	ret0, _ := ret[0].(core.VMHost)
+	return ret0
+}
+
+// WithTemporaryCache indicates an expected call of WithTemporaryCache.
+func (mr *MockVMHostMockRecorder) WithTemporaryCache(arg0 any) *MockVMHostWithTemporaryCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithTemporaryCache", reflect.TypeOf((*MockVMHost)(nil).WithTemporaryCache), arg0)
+	return &MockVMHostWithTemporaryCacheCall{Call: call}
+}
+
+// MockVMHostWithTemporaryCacheCall wrap *gomock.Call
+type MockVMHostWithTemporaryCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockVMHostWithTemporaryCacheCall) Return(arg0 core.VMHost) *MockVMHostWithTemporaryCacheCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockVMHostWithTemporaryCacheCall) Do(f func(core.AccountUpdater) core.VMHost) *MockVMHostWithTemporaryCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockVMHostWithTemporaryCacheCall) DoAndReturn(f func(core.AccountUpdater) core.VMHost) *MockVMHostWithTemporaryCacheCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

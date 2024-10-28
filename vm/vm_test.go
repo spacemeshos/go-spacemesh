@@ -1448,7 +1448,7 @@ func TestBeforeEffectiveGenesis(t *testing.T) {
 }
 
 func TestStateHashFromUpdatedAccounts(t *testing.T) {
-	tt := newTester(t).addSingleSig(10).applyGenesis()
+	tt := newTester(t).addWalletTemplate().addSingleSig(10).applyGenesis()
 
 	root, err := tt.GetStateRoot()
 	require.NoError(t, err)

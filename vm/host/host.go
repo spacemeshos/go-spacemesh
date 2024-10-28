@@ -12,7 +12,6 @@ import (
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
@@ -53,17 +52,6 @@ type Host struct {
 	dynamicContext core.DynamicContext
 }
 
-// Instantiates a partially-functional VM host that can execute simplistic transactions
-// that do not rely on context or state.
-func NewHostLightweight(host core.Host) (*Host, error) {
-	vm, err := athcon.Load(AthenaLibPath())
-	if err != nil {
-		return nil, fmt.Errorf("loading Athena VM: %w", err)
-	}
-	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()})
-	return &Host{vm, host, cache, cache, core.StaticContext{}, core.DynamicContext{}}, nil
-}
-
 // Load the VM from the shared library and returns an instance of a Host.
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
@@ -71,13 +59,25 @@ func NewHost(
 	host core.Host,
 	loader core.AccountLoader,
 	updater core.AccountUpdater,
-	staticContext core.StaticContext,
-	dynamicContext core.DynamicContext,
 ) (*Host, error) {
 	vm, err := athcon.Load(AthenaLibPath())
 	if err != nil {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}
+
+	// Construct the context
+	staticContext := core.StaticContext{
+		// Athena does not currently allow proxied calls, so by definition the principal is the
+		// same as the destination, for now. See https://github.com/athenavm/athena/issues/174.
+		Principal:   host.Principal(),
+		Destination: host.Principal(),
+		Nonce:       host.Nonce(),
+	}
+	dynamicContext := core.DynamicContext{
+		Template: host.TemplateAddress(),
+		Callee:   host.Principal(),
+	}
+
 	return &Host{vm, host, loader, updater, staticContext, dynamicContext}, nil
 }
 

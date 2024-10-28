@@ -31,6 +31,7 @@ type Context struct {
 	}
 	Header Header
 	Args   scale.Encodable
+	Spawn  bool
 
 	// consumed is in gas units and will be used
 	consumed uint64
@@ -51,6 +52,11 @@ func (c *Context) Principal() Address {
 // Nonce returns the transaction nonce.
 func (c *Context) Nonce() uint64 {
 	return c.ParseOutput.Nonce
+}
+
+// Nonce returns the transaction nonce.
+func (c *Context) Payload() []byte {
+	return c.ParseOutput.Payload
 }
 
 // TemplateAddress returns the address of the principal account template.
@@ -84,6 +90,11 @@ func (c *Context) Template() Template {
 // Handler of the principal account.
 func (c *Context) Handler() Handler {
 	return c.PrincipalHandler
+}
+
+// IsSpawn returns whether the transaction is a spawn transaction.
+func (c *Context) IsSpawn() bool {
+	return c.Spawn
 }
 
 // Transfer amount to the address after validation passes.

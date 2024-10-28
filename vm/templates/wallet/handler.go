@@ -67,21 +67,8 @@ func (*handler) Exec(
 		return []byte{}, 0, errors.New("template account state is empty")
 	}
 
-	// Construct the context
-	staticContext := core.StaticContext{
-		// Athena does not currently allow proxied calls, so by definition the principal is the
-		// same as the destination, for now. See https://github.com/athenavm/athena/issues/174.
-		Principal:   host.Principal(),
-		Destination: host.Principal(),
-		Nonce:       host.Nonce(),
-	}
-	dynamicContext := core.DynamicContext{
-		Template: host.TemplateAddress(),
-		Callee:   host.Principal(),
-	}
-
 	// Instantiate the VM
-	vmhost, err := vmhost.NewHost(host, loader, updater, staticContext, dynamicContext)
+	vmhost, err := vmhost.NewHost(host, loader, updater)
 	if err != nil {
 		return []byte{}, 0, err
 	}

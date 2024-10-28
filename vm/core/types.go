@@ -59,7 +59,7 @@ type Template interface {
 	// LoadGas is a cost to load account from disk.
 	LoadGas() uint64
 	// Verify security of the transaction.
-	Verify(Host, []byte, *scale.Decoder) bool
+	Verify([]byte, *scale.Decoder) bool
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/loader.go github.com/spacemeshos/go-spacemesh/vm/core AccountLoader
@@ -98,6 +98,7 @@ type Host interface {
 
 	Principal() Address
 	Nonce() uint64
+	Payload() []byte
 	TemplateAddress() Address
 	MaxGas() uint64
 	Handler() Handler
@@ -105,6 +106,7 @@ type Host interface {
 	Layer() LayerID
 	GetGenesisID() Hash20
 	Balance() uint64
+	IsSpawn() bool
 }
 
 // static context is fixed for the lifetime of one transaction.

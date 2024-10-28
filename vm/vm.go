@@ -507,8 +507,6 @@ func parse(
 		LayerID:          lid,
 	}
 
-	var isSpawn bool
-
 	// There are three cases to consider:
 	// 1. Principal account does not exist at all (and has no balance). In this case, we can fail
 	// the tx immediately.
@@ -545,7 +543,7 @@ func parse(
 			return nil, nil, fmt.Errorf("%w: wallet template missing", core.ErrInternal)
 		}
 		ctx.Header.TemplateAddress = wallet.TemplateAddress
-		isSpawn = true
+		ctx.Spawn = true
 	}
 
 	// now that we have a template handler, go ahead and parse the tx
@@ -557,7 +555,7 @@ func parse(
 
 	// in case of a self-spawn, we need to check that the calculated principal matches.
 	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
-	if isSpawn && core.ComputePrincipal(ctx.Header.TemplateAddress, output.Payload) != principal {
+	if ctx.Spawn && core.ComputePrincipal(ctx.Header.TemplateAddress, output.Payload) != principal {
 		return nil, nil, fmt.Errorf(
 			"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
 	}
@@ -586,5 +584,5 @@ func parse(
 }
 
 func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
-	return ctx.PrincipalTemplate.Verify(ctx, raw, dec)
+	return ctx.PrincipalTemplate.Verify(raw, dec)
 }

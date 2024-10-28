@@ -8,7 +8,6 @@ import (
 )
 
 func TestRewards(t *testing.T) {
-	t.Skip("TODO: athena gas arithmetic")
 	t.Parallel()
 	genTester := func(t *testing.T) *tester {
 		return newTester(t).

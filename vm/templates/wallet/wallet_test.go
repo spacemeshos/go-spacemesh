@@ -24,7 +24,7 @@ func FuzzVerify(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		wallet := Wallet{}
 		dec := scale.NewDecoder(bytes.NewReader(data))
-		wallet.Verify(&core.Context{}, data, dec)
+		wallet.Verify(data, dec)
 	})
 }
 
@@ -170,10 +170,10 @@ func TestVerify(t *testing.T) {
 
 	t.Run("Invalid", func(t *testing.T) {
 		buf64 := types.EdSignature{}
-		require.False(t, wallet.Verify(mockHost, buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
+		require.False(t, wallet.Verify(buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
 	})
 	t.Run("Empty", func(t *testing.T) {
-		require.False(t, wallet.Verify(mockHost, nil, scale.NewDecoder(bytes.NewBuffer(nil))))
+		require.False(t, wallet.Verify(nil, scale.NewDecoder(bytes.NewBuffer(nil))))
 	})
 	t.Run("Valid", func(t *testing.T) {
 		msg := []byte{1, 2, 3}
@@ -181,7 +181,7 @@ func TestVerify(t *testing.T) {
 		sig := ed25519.Sign(privkeyBytes, msg)
 		require.True(
 			t,
-			wallet.Verify(mockHost, append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))),
+			wallet.Verify(append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))),
 		)
 	})
 }

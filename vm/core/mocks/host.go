@@ -192,6 +192,44 @@ func (c *MockHostHandlerCall) DoAndReturn(f func() core.Handler) *MockHostHandle
 	return c
 }
 
+// IsSpawn mocks base method.
+func (m *MockHost) IsSpawn() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSpawn")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSpawn indicates an expected call of IsSpawn.
+func (mr *MockHostMockRecorder) IsSpawn() *MockHostIsSpawnCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSpawn", reflect.TypeOf((*MockHost)(nil).IsSpawn))
+	return &MockHostIsSpawnCall{Call: call}
+}
+
+// MockHostIsSpawnCall wrap *gomock.Call
+type MockHostIsSpawnCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostIsSpawnCall) Return(arg0 bool) *MockHostIsSpawnCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostIsSpawnCall) Do(f func() bool) *MockHostIsSpawnCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostIsSpawnCall) DoAndReturn(f func() bool) *MockHostIsSpawnCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Layer mocks base method.
 func (m *MockHost) Layer() types.LayerID {
 	m.ctrl.T.Helper()
