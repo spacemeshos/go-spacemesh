@@ -523,6 +523,7 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 						h.log.Error("hare4 grind reconstruct proposals error", zap.Error(err))
 					} else {
 						grindOk.Store(true)
+						requestCompactGrindRecoverCounter.Inc()
 						break
 					}
 				}
@@ -534,10 +535,12 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 			if err != nil {
 				for !grindFail.Load() {
 					if grindOk.Load() {
+						requestCompactGrindRecover2Counter.Inc()
 						goto SORT
 					}
 					time.Sleep(50 * time.Millisecond)
 					if time.Since(start) > 2*time.Second {
+						requestCompactGrindFailCounter.Inc()
 						break
 					}
 				}

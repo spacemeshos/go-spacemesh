@@ -73,6 +73,23 @@ var (
 		"request_compact_error_count",
 		"number of errors got when requesting compact proposals from peer",
 	)
+
+	requestCompactGrindFailCounter = metrics.NewSimpleCounter(
+		namespace,
+		"request_compact_grind_fail",
+		"number of times that we failed when grinding on the results again",
+	)
+	requestCompactGrindRecoverCounter = metrics.NewSimpleCounter(
+		namespace,
+		"request_compact_grind_recover",
+		"number of times that we recovered when grinding on the results again",
+	)
+	requestCompactGrindRecover2Counter = metrics.NewSimpleCounter(
+		namespace,
+		"request_compact_grind_recover2",
+		"number of times that we recovered when grinding on the results again",
+	)
+
 	requestCompactHandlerCounter = metrics.NewSimpleCounter(
 		namespace,
 		"request_compact_handler_count",
