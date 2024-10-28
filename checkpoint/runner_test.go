@@ -153,14 +153,14 @@ var allAccounts = []*types.Account{
 	},
 }
 
-func expectedCheckpoint(t testing.TB, snapshot types.LayerID, numAtxs int, miners []miner) *types.Checkpoint {
-	t.Helper()
+func expectedCheckpoint(tb testing.TB, snapshot types.LayerID, numAtxs int, miners []miner) *types.Checkpoint {
+	tb.Helper()
 
 	request, err := json.Marshal(&pb.CheckpointStreamRequest{
 		SnapshotLayer: uint32(snapshot),
 		NumAtxs:       uint32(numAtxs),
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	result := &types.Checkpoint{
 		Command: fmt.Sprintf(checkpoint.CommandString, request),
@@ -171,7 +171,7 @@ func expectedCheckpoint(t testing.TB, snapshot types.LayerID, numAtxs int, miner
 	}
 
 	if numAtxs < 2 {
-		require.Fail(t, "numEpochs must be at least 2")
+		require.Fail(tb, "numEpochs must be at least 2")
 	}
 
 	atxData := make([]types.AtxSnapshot, 0, numAtxs*len(miners))
@@ -263,23 +263,23 @@ func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 	}
 }
 
-func createMesh(t testing.TB, db sql.StateDatabase, miners []miner, accts []*types.Account) {
-	t.Helper()
+func createMesh(tb testing.TB, db sql.StateDatabase, miners []miner, accts []*types.Account) {
+	tb.Helper()
 	for _, miner := range miners {
 		for _, atx := range miner.atxs {
-			require.NoError(t, atxs.Add(db, atx.ActivationTx, types.AtxBlob{}))
+			require.NoError(tb, atxs.Add(db, atx.ActivationTx, types.AtxBlob{}))
 			require.NoError(
-				t,
+				tb,
 				atxs.SetPost(db, atx.ID(), atx.previous, 0, atx.SmesherID, atx.NumUnits, atx.PublishEpoch),
 			)
 		}
 		if proof := miner.malfeasanceProof; len(proof) > 0 {
-			require.NoError(t, identities.SetMalicious(db, miner.atxs[0].SmesherID, proof, time.Now()))
+			require.NoError(tb, identities.SetMalicious(db, miner.atxs[0].SmesherID, proof, time.Now()))
 		}
 	}
 
 	for _, it := range accts {
-		require.NoError(t, accounts.Update(db, it))
+		require.NoError(tb, accounts.Update(db, it))
 	}
 }
 
@@ -313,7 +313,7 @@ func TestRunner_Generate(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
-			db := statesql.InMemory()
+			db := statesql.InMemoryTest(t)
 			snapshot := types.LayerID(5)
 			createMesh(t, db, tc.miners, tc.accts)
 
@@ -349,7 +349,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 	t.Parallel()
 	t.Run("no commitment atx", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		snapshot := types.LayerID(5)
 
 		atx := newAtx(types.ATXID{13}, nil, 2, 1, 11, types.RandomNodeID().Bytes())
@@ -363,7 +363,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 	})
 	t.Run("no atxs", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		snapshot := types.LayerID(5)
 		createMesh(t, db, nil, allAccounts)
 
@@ -376,7 +376,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 	})
 	t.Run("no accounts", func(t *testing.T) {
 		t.Parallel()
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		snapshot := types.LayerID(5)
 		createMesh(t, db, allMiners, nil)
 
@@ -391,7 +391,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 
 func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
 	t.Parallel()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	require.NoError(t, accounts.Update(db, &types.Account{Address: types.Address{1, 1}}))
 

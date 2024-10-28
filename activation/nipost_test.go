@@ -24,8 +24,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
-func defaultPoetServiceMock(t *testing.T, ctrl *gomock.Controller, address string) *MockPoetService {
-	t.Helper()
+func defaultPoetServiceMock(tb testing.TB, ctrl *gomock.Controller, address string) *MockPoetService {
+	tb.Helper()
 	poet := NewMockPoetService(ctrl)
 	poet.EXPECT().
 		Submit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -83,7 +83,7 @@ func newTestNIPostBuilder(tb testing.TB) *testNIPostBuilder {
 		observedLogs: observedLogs,
 		eventSub:     sub.Out(),
 
-		mDb:          localsql.InMemory(),
+		mDb:          localsql.InMemoryTest(tb),
 		mPostService: NewMockpostService(ctrl),
 		mPostClient:  NewMockPostClient(ctrl),
 		mLogger:      logger,
@@ -335,7 +335,7 @@ func Test_NIPostBuilder_ResetState(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	mclock := defaultLayerClockMock(ctrl)
 
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	nb, err := NewNIPostBuilder(
 		db,
@@ -397,7 +397,7 @@ func Test_NIPostBuilder_WithMocks(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		postService,
 		zaptest.NewLogger(t),
 		PoetConfig{},
@@ -433,7 +433,7 @@ func TestPostSetup(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		postService,
 		zaptest.NewLogger(t),
 		PoetConfig{},
@@ -451,7 +451,7 @@ func TestPostSetup(t *testing.T) {
 
 func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	t.Parallel()
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -603,7 +603,7 @@ func TestNIPostBuilder_ManyPoETs_SubmittingChallenge_DeadlineReached(t *testing.
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		postService,
 		zaptest.NewLogger(t),
 		poetCfg,
@@ -663,7 +663,7 @@ func TestNIPostBuilder_ManyPoETs_AllFinished(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		postService,
 		zaptest.NewLogger(t),
 		PoetConfig{},
@@ -704,7 +704,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			localsql.InMemory(),
+			localsql.InMemoryTest(t),
 			postService,
 			zaptest.NewLogger(t),
 			poetCfg,
@@ -746,7 +746,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			localsql.InMemory(),
+			localsql.InMemoryTest(t),
 			postService,
 			zaptest.NewLogger(t),
 			poetCfg,
@@ -774,7 +774,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			localsql.InMemory(),
+			localsql.InMemoryTest(t),
 			postService,
 			zaptest.NewLogger(t),
 			poetCfg,
@@ -800,7 +800,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			localsql.InMemory(),
+			localsql.InMemoryTest(t),
 			postService,
 			zaptest.NewLogger(t),
 			poetCfg,
@@ -837,7 +837,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 	)
 
 	t.Run("1 poet deleted BEFORE round started -> continue with submitted registration", func(t *testing.T) {
-		db := localsql.InMemory()
+		db := localsql.InMemoryTest(t)
 		ctrl := gomock.NewController(t)
 
 		poet := NewMockPoetService(ctrl)
@@ -887,7 +887,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 	})
 
 	t.Run("1 poet added BEFORE round started -> register to missing poet", func(t *testing.T) {
-		db := localsql.InMemory()
+		db := localsql.InMemoryTest(t)
 		ctrl := gomock.NewController(t)
 
 		poetProver := NewMockPoetService(ctrl)
@@ -934,7 +934,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 	})
 
 	t.Run("completely changed poet service BEFORE round started -> register new poet", func(t *testing.T) {
-		db := localsql.InMemory()
+		db := localsql.InMemoryTest(t)
 		ctrl := gomock.NewController(t)
 
 		addedPoetProver := NewMockPoetService(ctrl)
@@ -977,7 +977,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 
 	t.Run("1 poet added AFTER round started -> too late to register to added poet",
 		func(t *testing.T) {
-			db := localsql.InMemory()
+			db := localsql.InMemoryTest(t)
 			ctrl := gomock.NewController(t)
 
 			poetProver := NewMockPoetService(ctrl)
@@ -1021,7 +1021,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 
 	t.Run("1 poet removed AFTER round started -> too late to register to added poet",
 		func(t *testing.T) {
-			db := localsql.InMemory()
+			db := localsql.InMemoryTest(t)
 			ctrl := gomock.NewController(t)
 
 			poetProver := NewMockPoetService(ctrl)
@@ -1071,7 +1071,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 
 	t.Run("completely changed poet service AFTER round started -> fail, too late to register again",
 		func(t *testing.T) {
-			db := localsql.InMemory()
+			db := localsql.InMemoryTest(t)
 			ctrl := gomock.NewController(t)
 
 			poetProver := NewMockPoetService(ctrl)
@@ -1140,7 +1140,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		postService := NewMockpostService(ctrl)
 
 		nb, err := NewNIPostBuilder(
-			localsql.InMemory(),
+			localsql.InMemoryTest(t),
 			postService,
 			zaptest.NewLogger(t),
 			PoetConfig{},
@@ -1167,7 +1167,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			}).AnyTimes()
 		postService := NewMockpostService(ctrl)
 
-		db := localsql.InMemory()
+		db := localsql.InMemoryTest(t)
 		nb, err := NewNIPostBuilder(
 			db,
 			postService,
@@ -1209,7 +1209,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 			}).AnyTimes()
 		postService := NewMockpostService(ctrl)
 
-		db := localsql.InMemory()
+		db := localsql.InMemoryTest(t)
 		nb, err := NewNIPostBuilder(
 			db,
 			postService,
@@ -1292,7 +1292,7 @@ func TestNIPoSTBuilder_Continues_After_Interrupted(t *testing.T) {
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		postService,
 		zaptest.NewLogger(t),
 		poetCfg,
@@ -1428,7 +1428,7 @@ func TestNIPostBuilder_Mainnet_Poet_Workaround(t *testing.T) {
 			postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 
 			nb, err := NewNIPostBuilder(
-				localsql.InMemory(),
+				localsql.InMemoryTest(t),
 				postService,
 				zaptest.NewLogger(t),
 				poetCfg,
@@ -1497,7 +1497,7 @@ func TestNIPostBuilder_Close(t *testing.T) {
 			return nil, nil, ctx.Err()
 		})
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		NewMockpostService(ctrl),
 		zaptest.NewLogger(t),
 		PoetConfig{},
@@ -1534,7 +1534,7 @@ func TestNIPostBuilderProof_WithBadInitialPost(t *testing.T) {
 	postService := NewMockpostService(ctrl)
 	postService.EXPECT().Client(sig.NodeID()).Return(postClient, nil)
 	nb, err := NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		postService,
 		zaptest.NewLogger(t),
 		PoetConfig{},

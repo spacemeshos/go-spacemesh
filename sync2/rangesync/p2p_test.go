@@ -33,7 +33,7 @@ type clientServerTester struct {
 }
 
 func newClientServerTester(
-	t *testing.T,
+	tb testing.TB,
 	set rangesync.OrderedSet,
 	getRequester getRequesterFunc,
 	opts []rangesync.RangeSetReconcilerOption,
@@ -43,11 +43,11 @@ func newClientServerTester(
 		cst clientServerTester
 		srv rangesync.Requester
 	)
-	d := rangesync.NewDispatcher(zaptest.NewLogger(t))
+	d := rangesync.NewDispatcher(zaptest.NewLogger(tb))
 	cst.pss = rangesync.NewPairwiseSetSyncer(nil, "test", opts, conduitOpts)
 	cst.pss.Register(d, set)
 	srv, cst.srvPeerID = getRequester("srv", d.Dispatch)
-	ctx := runRequester(t, srv)
+	ctx := runRequester(tb, srv)
 	cst.client, _ = getRequester("client", nil, srv)
 	return &cst, ctx
 }
@@ -63,14 +63,14 @@ func fakeRequesterGetter(t *testing.T) getRequesterFunc {
 	}
 }
 
-func p2pRequesterGetter(t *testing.T) getRequesterFunc {
+func p2pRequesterGetter(tb testing.TB) getRequesterFunc {
 	mesh, err := mocknet.FullMeshConnected(2)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	proto := "itest"
 	opts := []server.Opt{
 		server.WithRequestSizeLimit(100_000_000),
 		server.WithTimeout(10 * time.Second),
-		server.WithLog(zaptest.NewLogger(t)),
+		server.WithLog(zaptest.NewLogger(tb)),
 	}
 	return func(
 		name string,
@@ -81,7 +81,7 @@ func p2pRequesterGetter(t *testing.T) getRequesterFunc {
 			return server.New(mesh.Hosts()[0], proto, handler, opts...), mesh.Hosts()[0].ID()
 		}
 		s := server.New(mesh.Hosts()[1], proto, handler, opts...)
-		require.Eventually(t, func() bool {
+		require.Eventually(tb, func() bool {
 			for _, h := range mesh.Hosts()[0:] {
 				if len(h.Mux().Protocols()) == 0 {
 					return false

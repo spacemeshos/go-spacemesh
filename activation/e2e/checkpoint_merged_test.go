@@ -45,6 +45,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	cfg := testPostConfig()
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	localDB := localsql.InMemoryTest(t)
 
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
@@ -283,14 +284,15 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	// 4. Spawn new ATX handler and builder using the new DB
 	poetDb, err = activation.NewPoetDb(newDB, logger.Named("poetDb"))
 	require.NoError(t, err)
-	cdb = datastore.NewCachedDB(newDB, logger)
+	newCdb := datastore.NewCachedDB(newDB, logger)
+	t.Cleanup(func() { assert.NoError(t, newCdb.Close()) })
 
 	poetSvc = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
 	atxHdlr = activation.NewHandler(
 		"local",
-		cdb,
+		newCdb,
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		clock,

@@ -122,10 +122,10 @@ func TestAddress_ReservedBytesOnTop(t *testing.T) {
 	}
 }
 
-func checkAddressesEqual(t *testing.T, addrA, addrB types.Address) {
-	require.Equal(t, addrA.Bytes(), addrB.Bytes())
-	require.Equal(t, addrA.String(), addrB.String())
-	require.Equal(t, addrA.IsEmpty(), addrB.IsEmpty())
+func checkAddressesEqual(tb testing.TB, addrA, addrB types.Address) {
+	require.Equal(tb, addrA.Bytes(), addrB.Bytes())
+	require.Equal(tb, addrA.String(), addrB.String())
+	require.Equal(tb, addrA.IsEmpty(), addrB.IsEmpty())
 }
 
 func FuzzAddressConsistency(f *testing.F) {

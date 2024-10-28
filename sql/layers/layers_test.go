@@ -21,7 +21,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestWeakCoin(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid := types.LayerID(10)
 
 	_, err := GetWeakCoin(db, lid)
@@ -39,7 +39,7 @@ func TestWeakCoin(t *testing.T) {
 }
 
 func TestAppliedBlock(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid := types.LayerID(10)
 
 	_, err := GetApplied(db, lid)
@@ -68,7 +68,7 @@ func TestAppliedBlock(t *testing.T) {
 }
 
 func TestFirstAppliedInEpoch(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	blks := map[types.LayerID]types.BlockID{
 		types.EpochID(1).FirstLayer():     {1},
 		types.EpochID(2).FirstLayer():     types.EmptyBlockID,
@@ -108,7 +108,7 @@ func TestFirstAppliedInEpoch(t *testing.T) {
 }
 
 func TestUnsetAppliedFrom(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid := types.LayerID(10)
 	last := lid.Add(99)
 	for i := lid; !i.After(last); i = i.Add(1) {
@@ -124,7 +124,7 @@ func TestUnsetAppliedFrom(t *testing.T) {
 }
 
 func TestStateHash(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	layers := []uint32{9, 10, 8, 7}
 	hashes := []types.Hash32{{1}, {2}, {3}, {4}}
 	for i := range layers {
@@ -148,7 +148,7 @@ func TestStateHash(t *testing.T) {
 }
 
 func TestSetHashes(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	_, err := GetAggregatedHash(db, types.LayerID(11))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
@@ -179,7 +179,7 @@ func TestSetHashes(t *testing.T) {
 }
 
 func TestProcessed(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid, err := GetProcessed(db)
 	require.NoError(t, err)
 	require.Equal(t, types.LayerID(0), lid)
@@ -194,7 +194,7 @@ func TestProcessed(t *testing.T) {
 }
 
 func TestGetAggHashes(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	hashes := make(map[types.LayerID]types.Hash32)
 

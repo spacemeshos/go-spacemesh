@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/post/verifying"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -35,6 +36,7 @@ type v1TestHandler struct {
 func newV1TestHandler(tb testing.TB, goldenATXID types.ATXID) *v1TestHandler {
 	lg := zaptest.NewLogger(tb)
 	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	mocks := newTestHandlerMocks(tb, goldenATXID)
 	return &v1TestHandler{
 		HandlerV1: &HandlerV1{

@@ -91,10 +91,10 @@ func fullMockSet(tb testing.TB) *mockSet {
 	}
 }
 
-func createTestHandler(t *testing.T) *testHandler {
+func createTestHandler(tb testing.TB) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
-	ms := fullMockSet(t)
-	db := statesql.InMemory()
+	ms := fullMockSet(tb)
+	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
 		ballot, err := ballots.Get(db, id)
@@ -128,7 +128,7 @@ func createTestHandler(t *testing.T) *testHandler {
 			ms.md,
 			ms.mvrf,
 			ms.mclock,
-			WithLogger(zaptest.NewLogger(t)),
+			WithLogger(zaptest.NewLogger(tb)),
 			WithConfig(Config{
 				LayerSize:      layerAvgSize,
 				LayersPerEpoch: layersPerEpoch,
@@ -142,8 +142,8 @@ func createTestHandler(t *testing.T) *testHandler {
 	}
 }
 
-func createTestHandlerNoopDecoder(t *testing.T) *testHandler {
-	th := createTestHandler(t)
+func createTestHandlerNoopDecoder(tb testing.TB) *testHandler {
+	th := createTestHandler(tb)
 	th.mockSet.decodeAnyBallots()
 	th.mockSet.setCurrentLayer(100*types.LayerID(types.GetLayersPerEpoch()) + 1)
 	return th
@@ -209,8 +209,8 @@ func withProposalLayer(layer types.LayerID) createProposalOpt {
 	}
 }
 
-func createProposal(t *testing.T, opts ...any) *types.Proposal {
-	t.Helper()
+func createProposal(tb testing.TB, opts ...any) *types.Proposal {
+	tb.Helper()
 	b := types.RandomBallot()
 	b.Layer = 10000
 	p := &types.Proposal{
@@ -228,16 +228,17 @@ func createProposal(t *testing.T, opts ...any) *types.Proposal {
 		}
 	}
 	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
 	p.Ballot.SmesherID = signer.NodeID()
 	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
 	p.SmesherID = signer.NodeID()
-	require.NoError(t, p.Initialize())
+	require.NoError(tb, p.Initialize())
 	return p
 }
 
-func createAtx(t *testing.T, db sql.StateDatabase, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
+func createAtx(tb testing.TB, db sql.StateDatabase, epoch types.EpochID, atxID types.ATXID, nodeID types.NodeID) {
+	tb.Helper()
 	atx := &types.ActivationTx{
 		PublishEpoch: epoch,
 		NumUnits:     1,
@@ -246,16 +247,16 @@ func createAtx(t *testing.T, db sql.StateDatabase, epoch types.EpochID, atxID ty
 	}
 	atx.SetID(atxID)
 	atx.SetReceived(time.Now())
-	require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+	require.NoError(tb, atxs.Add(db, atx, types.AtxBlob{}))
 }
 
-func createBallot(t *testing.T, opts ...createBallotOpt) *types.Ballot {
-	t.Helper()
+func createBallot(tb testing.TB, opts ...createBallotOpt) *types.Ballot {
+	tb.Helper()
 	b := types.RandomBallot()
 	for _, opt := range opts {
 		opt(b)
 	}
-	return signAndInit(t, b)
+	return signAndInit(tb, b)
 }
 
 func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
@@ -268,8 +269,8 @@ func signAndInit(tb testing.TB, b *types.Ballot) *types.Ballot {
 	return b
 }
 
-func createRefBallot(t *testing.T, actives types.ATXIDList) *types.Ballot {
-	t.Helper()
+func createRefBallot(tb testing.TB, actives types.ATXIDList) *types.Ballot {
+	tb.Helper()
 	b := types.RandomBallot()
 	b.RefBallot = types.EmptyBallotID
 	b.EpochData = &types.EpochData{
@@ -1390,8 +1391,12 @@ func TestHandleActiveSet(t *testing.T) {
 	}
 }
 
-func gproposal(t *testing.T, signer *signing.EdSigner, atxid types.ATXID,
-	layer types.LayerID, edata *types.EpochData,
+func gproposal(
+	tb testing.TB,
+	signer *signing.EdSigner,
+	atxid types.ATXID,
+	layer types.LayerID,
+	edata *types.EpochData,
 ) *types.Proposal {
 	p := types.Proposal{}
 	p.Layer = layer
@@ -1404,12 +1409,12 @@ func gproposal(t *testing.T, signer *signing.EdSigner, atxid types.ATXID,
 	if edata != nil {
 		p.SetBeacon(edata.Beacon)
 	}
-	require.NoError(t, p.Initialize())
+	require.NoError(tb, p.Initialize())
 	return &p
 }
 
 type asTestHandler struct {
-	*testing.T
+	testing.TB
 	*testHandler
 	lid     types.LayerID
 	set     types.ATXIDList
@@ -1419,13 +1424,13 @@ type asTestHandler struct {
 	contCh  chan error
 }
 
-func createASTestHandler(t *testing.T) *asTestHandler {
+func createASTestHandler(tb testing.TB) *asTestHandler {
 	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	th := &asTestHandler{
-		T:           t,
-		testHandler: createTestHandler(t),
+		TB:          tb,
+		testHandler: createTestHandler(tb),
 		lid:         types.LayerID(20),
 		set:         types.ATXIDList{{1}, {2}, {3}},
 		pid:         p2p.Peer("any"),
@@ -1433,11 +1438,11 @@ func createASTestHandler(t *testing.T) *asTestHandler {
 		contCh:      make(chan error),
 	}
 	th.p = []*types.Proposal{
-		gproposal(t, signer, types.ATXID{1}, th.lid, &types.EpochData{
+		gproposal(tb, signer, types.ATXID{1}, th.lid, &types.EpochData{
 			ActiveSetHash: th.set.Hash(),
 			Beacon:        types.Beacon{1},
 		}),
-		gproposal(t, signer, types.ATXID{2}, th.lid, &types.EpochData{
+		gproposal(tb, signer, types.ATXID{2}, th.lid, &types.EpochData{
 			ActiveSetHash: th.set.Hash(),
 			Beacon:        types.Beacon{1},
 		}),

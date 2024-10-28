@@ -91,10 +91,7 @@ func naiveFPFunc(items []KeyBytes) Fingerprint {
 
 func realFPFunc(items []KeyBytes) Fingerprint {
 	hasher := hash.GetHasher()
-	defer func() {
-		hasher.Reset()
-		hash.PutHasher(hasher)
-	}()
+	defer hash.PutHasher(hasher)
 	for _, h := range items {
 		hasher.Write(h[:])
 	}
