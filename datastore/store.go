@@ -351,7 +351,7 @@ func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 	case TXDB:
 		return transactions.Has(bs.DB, types.TransactionID(types.BytesToHash(key)))
 	case POETDB:
-		return poets.Has(bs.DB, types.PoetProofRef(key))
+		return poets.Has(bs.DB, types.ByteToPoetProofRef(key))
 	case Malfeasance:
 		return identities.IsMalicious(bs.DB, types.BytesToNodeID(key))
 	case ActiveSet:
