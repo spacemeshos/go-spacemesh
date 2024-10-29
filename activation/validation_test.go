@@ -543,7 +543,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedID(signer.NodeID()))
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedIDs(signer.NodeID()))
 		require.NoError(t, err)
 	})
 

@@ -19,6 +19,8 @@ import (
 
 //go:generate mockgen -typed -package=activation -destination=./mocks.go -source=./interface.go
 
+var ErrNotFound = errors.New("not found")
+
 type AtxReceiver interface {
 	OnAtx(*types.ActivationTx)
 }
@@ -106,6 +108,22 @@ type malfeasancePublisher interface {
 
 type atxProvider interface {
 	GetAtx(id types.ATXID) (*types.ActivationTx, error)
+}
+
+// AtxService provides ATXs needed by the ATX Builder.
+type AtxService interface {
+	// Get ATX with given ID
+	//
+	// Returns ErrNotFound if couldn't get the ATX.
+	Atx(ctx context.Context, id types.ATXID) (*types.ActivationTx, error)
+	// Get the last ATX of the given identitity.
+	//
+	// Returns ErrNotFound if couldn't get the ATX.
+	LastATX(ctx context.Context, nodeID types.NodeID) (*types.ActivationTx, error)
+	// PositioningATX returns atx id with the highest tick height.
+	//
+	// The maxPublish epoch is the maximum publish epoch of the returned ATX.
+	PositioningATX(ctx context.Context, maxPublish types.EpochID) (types.ATXID, error)
 }
 
 // PostSetupProvider defines the functionality required for Post setup.
