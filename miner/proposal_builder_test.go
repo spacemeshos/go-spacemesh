@@ -3,7 +3,6 @@ package miner
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/rand"
@@ -1271,20 +1270,4 @@ func BenchmarkDoubleCache(b *testing.B) {
 	fmt.Println("stack:", m.StackInuse)
 
 	require.Equal(b, types.EmptyATXID, found)
-}
-
-func BenchmarkDB(b *testing.B) {
-	db, err := statesql.Open("file:state.sql")
-	require.NoError(b, err)
-	defer db.Close()
-
-	bytes, err := hex.DecodeString("00003ce28800fadd692c522f7b1db219f675b49108aec7f818e2c4fd935573f6")
-	require.NoError(b, err)
-	nodeID := types.BytesToNodeID(bytes)
-	var found types.ATXID
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		found, _ = atxs.GetByEpochAndNodeID(db, 30, nodeID)
-	}
-	require.NotEqual(b, types.EmptyATXID, found)
 }
