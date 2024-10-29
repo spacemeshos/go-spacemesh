@@ -1221,6 +1221,7 @@ func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.Acti
 type MockAtxService struct {
 	ctrl     *gomock.Controller
 	recorder *MockAtxServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockAtxServiceMockRecorder is the mock recorder for MockAtxService.
