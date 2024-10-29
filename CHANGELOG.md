@@ -2,6 +2,54 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Unreleased
+
+### Improvements
+
+* [#6408](https://github.com/spacemeshos/go-spacemesh/pull/6408) Prevent empty DB connection pool by freeing connections
+  upon errors during DB operations. This mostly fixes issues when a node is under heavy load from the API.
+
+* [#6417](https://github.com/spacemeshos/go-spacemesh/pull/6417) Fix initial post being deleted when the node is
+  restarted or times out before the first ATX is published.
+
+## v1.7.6
+
+### Upgrade information
+
+The previous version of go-spacemesh introduced a bug into the code that handles incoming ATXs. This bug would cause
+the node to store invalid data in the database and could lead to a node disagreeing about the state of the network with
+other nodes. This version fixes the bug. If you are running v1.7.5 you should upgrade to v1.7.6 as soon as possible and
+rebuild your `state.db`, either via quicksync, from a backup from before you upgraded or by full syncing from genesis.
+
+### Improvements
+
+* [#6398](https://github.com/spacemeshos/go-spacemesh/pull/6398) Fixed a bug where the node would store invalid
+  information about ATXs in the database.
+
+## v1.7.5
+
+### Upgrade information
+
+New event types introduced in the API of the node, see [API #382](https://github.com/spacemeshos/api/pull/382) and 2
+previously existing events where renamed. Old events were marked as deprecated. Please update your automations to use
+new event types.
+
+### Improvements
+
+* [#6378](https://github.com/spacemeshos/go-spacemesh/pull/6387) Improved handling of malicious identities. This reduces
+  the number of DB queries needed during ATX validation.
+
+* [#6386](https://github.com/spacemeshos/go-spacemesh/pull/6386) The API of the node now has its own DB connection pool
+  to reduce the load on the main DB connection pool.
+
+* [#6387](https://github.com/spacemeshos/go-spacemesh/pull/6387) Fix an issue were in rare cases invalid proofs for
+  malicious identities were created.
+
+* [#6393](https://github.com/spacemeshos/go-spacemesh/pull/6393) Further improved proposal building process to avoid
+  late proposals in 1:N setups and during cyclegap.
+
+* [#6382](https://github.com/spacemeshos/go-spacemesh/pull/6382) Improve visibility around poet registrations in events.
+
 ## v1.7.4
 
 ### Improvements

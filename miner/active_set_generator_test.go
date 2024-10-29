@@ -66,8 +66,8 @@ func unixPtr(sec, nsec int64) *time.Time {
 
 func newTesterActiveSetGenerator(tb testing.TB, cfg config) *testerActiveSetGenerator {
 	var (
-		db        = statesql.InMemory()
-		localdb   = localsql.InMemory()
+		db        = statesql.InMemoryTest(tb)
+		localdb   = localsql.InMemoryTest(tb)
 		atxsdata  = atxsdata.New()
 		ctrl      = gomock.NewController(tb)
 		clock     = mocks.NewMocklayerClock(ctrl)
@@ -168,7 +168,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
 			malfeasent: []identity{
-				gidentity(types.NodeID{3}, time.Unix(29, 0)),
+				testIdentity(types.NodeID{3}, time.Unix(29, 0)),
 			},
 			epochStart:     unixPtr(30, 0),
 			networkDelay:   2 * time.Second,
@@ -184,7 +184,7 @@ func TestActiveSetGenerate(t *testing.T) {
 				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
 			malfeasent: []identity{
-				gidentity(types.NodeID{3}, time.Unix(31, 0)),
+				testIdentity(types.NodeID{3}, time.Unix(31, 0)),
 			},
 			epochStart:     unixPtr(30, 0),
 			networkDelay:   2 * time.Second,

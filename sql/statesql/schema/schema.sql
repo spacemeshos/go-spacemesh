@@ -1,4 +1,4 @@
-PRAGMA user_version = 24;
+PRAGMA user_version = 25;
 CREATE TABLE accounts
 (
     address        CHAR(24),

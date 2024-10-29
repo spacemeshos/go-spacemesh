@@ -33,8 +33,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func syncedSyncer(t testing.TB) *activation.Mocksyncer {
-	syncer := activation.NewMocksyncer(gomock.NewController(t))
+func syncedSyncer(tb testing.TB) *activation.Mocksyncer {
+	syncer := activation.NewMocksyncer(gomock.NewController(tb))
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		synced := make(chan struct{})
 		close(synced)
@@ -61,8 +61,8 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := statesql.InMemory()
-	localDB := localsql.InMemory()
+	db := statesql.InMemoryTest(t)
+	localDB := localsql.InMemoryTest(t)
 
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)

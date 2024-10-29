@@ -165,6 +165,7 @@ type batchResult struct {
 }
 
 type db interface {
-	WithTx(context.Context, func(sql.Transaction) error) error
 	sql.Executor
+
+	WithTx(context.Context, func(sql.Transaction) error) error
 }

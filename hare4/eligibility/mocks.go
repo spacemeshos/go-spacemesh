@@ -22,6 +22,7 @@ import (
 type MockactiveSetCache struct {
 	ctrl     *gomock.Controller
 	recorder *MockactiveSetCacheMockRecorder
+	isgomock struct{}
 }
 
 // MockactiveSetCacheMockRecorder is the mock recorder for MockactiveSetCache.
@@ -122,6 +123,7 @@ func (c *MockactiveSetCacheGetCall) DoAndReturn(f func(types.EpochID) (*cachedAc
 type MockvrfVerifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockvrfVerifierMockRecorder
+	isgomock struct{}
 }
 
 // MockvrfVerifierMockRecorder is the mock recorder for MockvrfVerifier.
@@ -183,6 +185,7 @@ func (c *MockvrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, typ
 type MockRolacle struct {
 	ctrl     *gomock.Controller
 	recorder *MockRolacleMockRecorder
+	isgomock struct{}
 }
 
 // MockRolacleMockRecorder is the mock recorder for MockRolacle.

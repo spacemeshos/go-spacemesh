@@ -37,16 +37,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func constructMerkleProof(t testing.TB, members []types.Hash32, ids map[uint64]bool) wire.MerkleProofV2 {
-	t.Helper()
+const (
+	testTickSize = 1
+)
+
+func constructMerkleProof(tb testing.TB, members []types.Hash32, ids map[uint64]bool) wire.MerkleProofV2 {
+	tb.Helper()
 
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(ids).
 		WithHashFunc(shared.HashMembershipTreeNode).
 		Build()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	for _, member := range members {
-		require.NoError(t, tree.AddLeaf(member[:]))
+		require.NoError(tb, tree.AddLeaf(member[:]))
 	}
 	nodes := tree.Proof()
 	nodesH32 := make([]types.Hash32, 0, len(nodes))
@@ -136,7 +140,7 @@ func createSoloAtx(publish types.EpochID, prev, pos types.ATXID, nipost *nipost.
 }
 
 func createMerged(
-	t testing.TB,
+	tb testing.TB,
 	niposts []nipostData,
 	publish types.EpochID,
 	marriage, positioning types.ATXID,
@@ -158,7 +162,7 @@ func createMerged(
 	// Append PoSTs for all IDs
 	for i, nipost := range niposts {
 		idx := slices.IndexFunc(previous, func(a types.ATXID) bool { return a == nipost.previous })
-		require.NotEqual(t, -1, idx)
+		require.NotEqual(tb, -1, idx)
 		atx.NiPosts[0].Posts = append(atx.NiPosts[0].Posts, wire.SubPostV2{
 			MarriageIndex:       uint32(i),
 			PrevATXIndex:        uint32(idx),
@@ -170,16 +174,16 @@ func createMerged(
 	return atx
 }
 
-func signers(t testing.TB, keysHex []string) []*signing.EdSigner {
-	t.Helper()
+func signers(tb testing.TB, keysHex []string) []*signing.EdSigner {
+	tb.Helper()
 
 	signers := make([]*signing.EdSigner, 0, len(keysHex))
 	for _, k := range keysHex {
 		key, err := hex.DecodeString(k)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		sig, err := signing.NewEdSigner(signing.WithPrivateKey(key))
-		require.NoError(t, err)
+		require.NoError(tb, err)
 		signers = append(signers, sig)
 	}
 	return signers
@@ -207,6 +211,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	cfg := testPostConfig()
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	localDB := localsql.InMemoryTest(t)
 
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
@@ -248,7 +253,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	}
 
 	client := ae2e.NewTestPoetClient(2, poetCfg)
-	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),

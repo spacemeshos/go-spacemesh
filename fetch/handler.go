@@ -339,7 +339,7 @@ func (h *handler) doHandleHashReqStream(
 ) error {
 	var requestBatch RequestBatch
 	if err := codec.Decode(msg, &requestBatch); err != nil {
-		return fmt.Errorf("%w: decooding request: %w", errBadRequest, err)
+		return fmt.Errorf("%w: decoding request: %w", errBadRequest, err)
 	}
 
 	if hint != datastore.NoHint && len(requestBatch.Requests) > 1 {

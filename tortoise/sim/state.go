@@ -2,6 +2,7 @@ package sim
 
 import (
 	"errors"
+	"testing"
 
 	"go.uber.org/zap"
 
@@ -17,10 +18,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-func newState(logger *zap.Logger, conf config, atxdata *atxsdata.Data) State {
+func newState(tb testing.TB, logger *zap.Logger, conf config, atxdata *atxsdata.Data) State {
 	return State{
 		logger:  logger,
-		DB:      newCacheDB(logger, conf),
+		DB:      newCacheDB(tb, logger, conf),
 		Atxdata: atxdata,
 	}
 }

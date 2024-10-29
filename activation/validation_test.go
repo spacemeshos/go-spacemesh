@@ -476,7 +476,7 @@ func TestValidateMerkleProof(t *testing.T) {
 }
 
 func TestVerifyChainDeps(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()
@@ -662,7 +662,7 @@ func TestVerifyChainDeps(t *testing.T) {
 }
 
 func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()

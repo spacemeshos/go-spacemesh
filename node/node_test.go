@@ -139,10 +139,10 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	myLogger := "anton"
 	subLogger := app.addLogger(myLogger, lg)
 	subLogger.Debug("should not get printed")
-	teststr := "should get printed"
-	subLogger.Info(teststr)
+	testStr := "should get printed"
+	subLogger.Info(testStr)
 	r.Equal(
-		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, teststr),
+		fmt.Sprintf("INFO\t%s\t%s\n", myLogger, testStr),
 		buf.String(),
 	)
 }
@@ -189,19 +189,19 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(expected2, str)
 }
 
-func marshalProto(t *testing.T, msg proto.Message) []byte {
+func marshalProto(tb testing.TB, msg proto.Message) []byte {
 	buf, err := protojson.Marshal(msg)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return buf
 }
 
-func callEndpoint(t *testing.T, url string, payload []byte) ([]byte, int) {
+func callEndpoint(tb testing.TB, url string, payload []byte) ([]byte, int) {
 	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
-	require.NoError(t, err)
-	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	require.NoError(tb, err)
+	require.Equal(tb, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
+	require.NoError(tb, err)
+	require.NoError(tb, resp.Body.Close())
 
 	return buf, resp.StatusCode
 }
@@ -217,13 +217,10 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	require.NoError(t, err)
-
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
@@ -265,13 +262,10 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	err := app.NewIdentity()
 	require.NoError(t, err)
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	require.NoError(t, err)
-
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
@@ -300,13 +294,11 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	require.NoError(t, err)
-
+	var err error
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(zaptest.NewLogger(t)))
 	require.NoError(t, err)
 
@@ -347,8 +339,8 @@ func (f *noopHook) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {}
 // E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	logger := logtest.New(t)
-	// errlog is used to simulate errors in the app
-	errlog := log.NewFromLog(
+	// errLog is used to simulate errors in the app
+	errLog := log.NewFromLog(
 		zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{}))),
 	)
 
@@ -438,9 +430,9 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Report two errors and make sure they're both received
 	eg.Go(func() error {
-		errlog.Error("test123")
-		errlog.Error("test456")
-		errlog.Panic("testPANIC")
+		errLog.Error("test123")
+		errLog.Error("test456")
+		errLog.Panic("testPANIC")
 		return nil
 	})
 
@@ -505,7 +497,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.HARE3.RoundDuration = 100 * time.Millisecond
 
 		app.Config.Genesis = config.GenesisConfig{
-			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
+			GenesisTime: config.Genesis(time.Now().Add(20 * time.Second)),
 			Accounts: map[string]uint64{
 				address.String(): 100_000_000,
 			},
@@ -610,7 +602,7 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, err)
 
 		conf := config.Config{}
-		require.NoError(t, loadConfig(&conf, name, ""))
+		require.NoError(t, LoadConfig(&conf, name, nil))
 		require.Equal(t, preset, conf)
 	})
 
@@ -623,7 +615,7 @@ func TestConfig_Preset(t *testing.T) {
 		cmd.AddFlags(&flags, &conf)
 
 		const lowPeers = 1234
-		require.NoError(t, loadConfig(&conf, name, ""))
+		require.NoError(t, LoadConfig(&conf, name, nil))
 		require.NoError(t, flags.Parse([]string{"--low-peers=" + strconv.Itoa(lowPeers)}))
 		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, conf)
@@ -636,10 +628,8 @@ func TestConfig_Preset(t *testing.T) {
 		conf := config.Config{}
 		const lowPeers = 1234
 		content := fmt.Sprintf(`{"p2p": {"low-peers": %d}}`, lowPeers)
-		path := filepath.Join(t.TempDir(), "config.json")
-		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-		require.NoError(t, loadConfig(&conf, name, path))
+		require.NoError(t, LoadConfig(&conf, name, strings.NewReader(content)))
 		preset.P2P.LowPeers = lowPeers
 		require.Equal(t, preset, conf)
 	})
@@ -650,10 +640,8 @@ func TestConfig_Preset(t *testing.T) {
 
 		conf := config.Config{}
 		content := fmt.Sprintf(`{"preset": "%s"}`, name)
-		path := filepath.Join(t.TempDir(), "config.json")
-		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 
-		require.NoError(t, loadConfig(&conf, name, path))
+		require.NoError(t, LoadConfig(&conf, name, strings.NewReader(content)))
 		require.NoError(t, err)
 		require.Equal(t, preset, conf)
 	})
@@ -727,7 +715,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			var flags pflag.FlagSet
 			cmd.AddFlags(&flags, &conf)
 
-			require.NoError(t, loadConfig(&conf, "", ""))
+			require.NoError(t, LoadConfig(&conf, "", nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &mainnet)
 			require.Equal(t, mainnet, conf)
@@ -738,10 +726,8 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.Nil(t, mainnet.SMESHING.Opts.ProviderID.Value())
 
 			conf := config.MainnetConfig()
-			path := filepath.Join(t.TempDir(), "config.json")
-			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
 
-			require.NoError(t, loadConfig(&conf, "", path))
+			require.NoError(t, LoadConfig(&conf, "", strings.NewReader(tc.config)))
 			tc.updatePreset(t, &mainnet)
 			require.Equal(t, mainnet, conf)
 		})
@@ -754,7 +740,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 			var flags pflag.FlagSet
 			cmd.AddFlags(&flags, &conf)
 
-			require.NoError(t, loadConfig(&conf, name, ""))
+			require.NoError(t, LoadConfig(&conf, name, nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
 			tc.updatePreset(t, &preset)
 			require.Equal(t, preset, conf)
@@ -765,10 +751,8 @@ func TestConfig_CustomTypes(t *testing.T) {
 			require.NoError(t, err)
 
 			conf := config.Config{}
-			path := filepath.Join(t.TempDir(), "config.json")
-			require.NoError(t, os.WriteFile(path, []byte(tc.config), 0o600))
 
-			require.NoError(t, loadConfig(&conf, name, path))
+			require.NoError(t, LoadConfig(&conf, name, strings.NewReader(tc.config)))
 			tc.updatePreset(t, &preset)
 			require.Equal(t, preset, conf)
 		})
@@ -811,10 +795,8 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 		t.Run(fmt.Sprintf("%s_ConfigFile", tc.name), func(t *testing.T) {
 			conf := config.Config{}
 
-			path := filepath.Join(t.TempDir(), "config.json")
 			cfg := fmt.Sprintf(`{"smeshing": {"smeshing-opts": {"smeshing-opts-provider": %s}}}`, tc.configValue)
-			require.NoError(t, os.WriteFile(path, []byte(cfg), 0o600))
-			err := loadConfig(&conf, "", path)
+			err := LoadConfig(&conf, "", strings.NewReader(cfg))
 			require.ErrorContains(t, err, "invalid provider ID value")
 		})
 	}
@@ -824,18 +806,15 @@ func TestConfig_Load(t *testing.T) {
 	t.Run("invalid fails to load", func(t *testing.T) {
 		conf := config.Config{}
 
-		path := filepath.Join(t.TempDir(), "config.json")
-		require.NoError(t, os.WriteFile(path, []byte("}"), 0o600))
-
-		err := loadConfig(&conf, "", path)
-		require.ErrorContains(t, err, path)
+		err := LoadConfig(&conf, "", strings.NewReader("}"))
+		require.ErrorContains(t, err, "invalid character '}' looking for beginning of value")
 	})
 	t.Run("missing default doesn't fail", func(t *testing.T) {
 		conf := config.Config{}
 		var flags pflag.FlagSet
 		cmd.AddFlags(&flags, &conf)
 
-		require.NoError(t, loadConfig(&conf, "", ""))
+		require.NoError(t, LoadConfig(&conf, "", nil))
 		require.NoError(t, flags.Parse([]string{}))
 	})
 }
@@ -856,7 +835,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		args = append(args, fmt.Sprintf("-a %s=%d", key, value))
 	}
 
-	require.NoError(t, loadConfig(&conf, "", ""))
+	require.NoError(t, LoadConfig(&conf, "", nil))
 	require.NoError(t, flags.Parse(args))
 	for _, key := range keys {
 		require.EqualValues(t, value, conf.Genesis.Accounts[key])
@@ -866,9 +845,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 func TestHRP(t *testing.T) {
 	conf := config.Config{}
 	data := `{"main": {"network-hrp": "TEST"}}`
-	cfg := filepath.Join(t.TempDir(), "config.json")
-	require.NoError(t, os.WriteFile(cfg, []byte(data), 0o600))
-	require.NoError(t, loadConfig(&conf, "", cfg))
+	require.NoError(t, LoadConfig(&conf, "", strings.NewReader(data)))
 	app := New(WithConfig(&conf))
 	require.NotNil(t, app)
 	require.Equal(t, "TEST", types.NetworkHRP())
@@ -883,10 +860,7 @@ func TestGenesisConfig(t *testing.T) {
 		t.Cleanup(func() { app.Cleanup(context.Background()) })
 
 		var existing config.GenesisConfig
-		require.NoError(
-			t,
-			existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)),
-		)
+		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
 		require.Empty(t, existing.Diff(&app.Config.Genesis))
 	})
 
@@ -912,14 +886,6 @@ func TestGenesisConfig(t *testing.T) {
 		app.Cleanup(context.Background())
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
-	})
-
-	t.Run("not valid time", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		cfg.Genesis.GenesisTime = time.Now().Format(time.RFC1123)
-		app := New(WithConfig(cfg))
-
-		require.ErrorContains(t, app.Initialize(), "time.RFC3339")
 	})
 
 	t.Run("long extra data", func(t *testing.T) {
@@ -975,7 +941,7 @@ func TestAdminEvents(t *testing.T) {
 	cfg.SMESHING.Start = true
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
-	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	cfg.Genesis.GenesisTime = config.Genesis(time.Now().Add(5 * time.Second))
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	logger := logtest.New(t, zapcore.DebugLevel)
@@ -1025,7 +991,12 @@ func TestAdminEvents(t *testing.T) {
 			&pb.Event_PostStart{},
 			&pb.Event_PostComplete{},
 			&pb.Event_PoetWaitRound{},
+			&pb.Event_WaitingForPoetRegistrationWindow{},
+			&pb.Event_RegisteredInPoet{},
 			&pb.Event_PoetWaitProof{},
+			&pb.Event_WaitingForPoetRoundEnd{},
+			&pb.Event_ProofDownloadedFromPoet{},
+			&pb.Event_BestProofSelected{},
 			&pb.Event_PostStart{},
 			&pb.Event_PostComplete{},
 			&pb.Event_AtxPublished{},
@@ -1052,7 +1023,7 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	cfg.API.PostListener = "0.0.0.0:10094"
 	cfg.POSTService.PostServiceCmd = activation.DefaultTestPostServiceConfig().PostServiceCmd
 
-	cfg.Genesis.GenesisTime = time.Now().Add(5 * time.Second).Format(time.RFC3339)
+	cfg.Genesis.GenesisTime = config.Genesis(time.Now().Add(5 * time.Second))
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	logger := zaptest.NewLogger(t)

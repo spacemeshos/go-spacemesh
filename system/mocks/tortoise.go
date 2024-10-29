@@ -22,6 +22,7 @@ import (
 type MockTortoise struct {
 	ctrl     *gomock.Controller
 	recorder *MockTortoiseMockRecorder
+	isgomock struct{}
 }
 
 // MockTortoiseMockRecorder is the mock recorder for MockTortoise.
