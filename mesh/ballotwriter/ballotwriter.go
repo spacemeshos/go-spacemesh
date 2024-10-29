@@ -20,7 +20,7 @@ import (
 var writerDelay = 100 * time.Millisecond
 
 type BallotWriter struct {
-	db     db
+	db     sql.StateDatabase
 	logger *zap.Logger
 
 	atxMu sync.Mutex
@@ -30,7 +30,7 @@ type BallotWriter struct {
 	ballotBatchResult *batchResult
 }
 
-func New(db db, logger *zap.Logger) *BallotWriter {
+func New(db sql.StateDatabase, logger *zap.Logger) *BallotWriter {
 	// create a stopped ticker that can be started later
 	timer := time.NewTicker(writerDelay)
 	timer.Stop()
@@ -162,10 +162,4 @@ func (w *BallotWriter) Store(b *types.Ballot) error {
 type batchResult struct {
 	doneC chan struct{}
 	err   error
-}
-
-type db interface {
-	sql.Executor
-
-	WithTxImmediate(context.Context, func(sql.Transaction) error) error
 }
