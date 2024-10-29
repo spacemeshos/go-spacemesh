@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -23,6 +25,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
+
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 // Opt is for changing VM during initialization.
@@ -387,7 +391,7 @@ func (v *VM) execute(
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			_, _, err = ctx.PrincipalHandler.Exec(ctx, ss, ss, tx.Payload)
+			_, _, err = ctx.PrincipalHandler.Exec(ctx, ss, ss, ctx.Payload())
 		}
 		if err != nil {
 			logger.Debug("transaction failed",
@@ -555,7 +559,25 @@ func parse(
 
 	// in case of a self-spawn, we need to check that the calculated principal matches.
 	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
-	if ctx.Spawn && core.ComputePrincipal(ctx.Header.TemplateAddress, output.Payload) != principal {
+
+	// in order to calculate the principal, we need to extract the pubkey from the spawn tx
+	var unmarshaled struct {
+		*athcon.MethodSelector
+		signing.PublicKey
+	}
+	err = gossamerScale.Unmarshal(output.Payload, &unmarshaled)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
+	}
+	computedPrincipal, err := core.ComputePrincipalFromPubkey(
+		ctx.Header.TemplateAddress,
+		unmarshaled.PublicKey,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: computing spawn principal: %w", core.ErrInternal, err)
+	}
+
+	if ctx.Spawn && computedPrincipal != principal {
 		return nil, nil, fmt.Errorf(
 			"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
 	}
@@ -571,7 +593,9 @@ func parse(
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
 
 	ctx.Header.Principal = principal
-	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
+	ctx.Header.MaxGas = 100_000_000
+	// TODO(lane): fix this
+	// ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 

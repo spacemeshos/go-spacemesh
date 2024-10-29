@@ -33,7 +33,7 @@ func Spawn(
 	pk signing.PrivateKey,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
-) []byte {
+) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
@@ -51,18 +51,21 @@ func Spawn(
 
 	// note that principal is computed from pk
 	athenaPayload := vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk)))
-	principal := core.ComputePrincipal(wallet.TemplateAddress, athenaPayload)
+	principal, err := core.ComputePrincipalFromPubkey(wallet.TemplateAddress, *signing.NewPublicKey(signing.Public(pk)))
+	if err != nil {
+		return nil, err
+	}
 	payload := core.Payload(athenaPayload)
 
 	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
 
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
-	return append(tx, sig...)
+	return append(tx, sig...), nil
 }
 
 // Spend creates a spend transaction.
-func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) []byte {
+func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
@@ -74,9 +77,10 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
 
-	// We need a provisional spawn payload to calculate the principal address
-	spawnPayload := vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk)))
-	principal := core.ComputePrincipal(wallet.TemplateAddress, spawnPayload)
+	principal, err := core.ComputePrincipalFromPubkey(wallet.TemplateAddress, *signing.NewPublicKey(signing.Public(pk)))
+	if err != nil {
+		return nil, err
+	}
 
 	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), nonce))
 
@@ -88,5 +92,5 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
-	return append(tx, sig...)
+	return append(tx, sig...), nil
 }

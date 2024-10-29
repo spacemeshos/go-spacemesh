@@ -92,7 +92,10 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 
 	// first print the keys and addresses
 	for i, pubkey := range pubkeys {
-		addr := walletSdk.Address(pubkey[:])
+		addr, err := walletSdk.Address(*signing.NewPublicKey(pubkey))
+		if err != nil {
+			log.Fatalf("failed to generate address: %w", err)
+		}
 		addrs = append(addrs, addr)
 		t1.AppendRow(table.Row{
 			hex.EncodeToString(pubkey),
@@ -114,6 +117,10 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 
 	// next generate and print the transactions
 	for i, principal := range addrs {
+		tx, err := walletSdk.Spawn(signing.PrivateKey(privkeys[i]), 0)
+		if err != nil {
+			log.Fatalf("failed to generate spawn transaction: %w", err)
+		}
 		// first generate a spawn transaction
 		t2.AppendRow(table.Row{
 			fmt.Sprintf("spawn [%s]", hex.EncodeToString(spawnSelector[:])),
@@ -125,7 +132,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 			hex.EncodeToString(vmlib.EncodeTxSpawn(athcon.Bytes32(pubkeys[i]))),
 			"",
 			"0",
-			hex.EncodeToString(walletSdk.Spawn(signing.PrivateKey(privkeys[i]), 0)),
+			hex.EncodeToString(tx),
 		})
 
 		// generate some spend txs
@@ -133,6 +140,10 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 			// generate a random amount and nonce
 			amount := rand.Uint64()
 			nonce := rand.Uint64()
+			tx, err := walletSdk.Spend(signing.PrivateKey(privkeys[i]), recipient, amount, nonce)
+			if err != nil {
+				log.Fatalf("failed to generate spend transaction: %w", err)
+			}
 			t2.AppendRow(table.Row{
 				fmt.Sprintf("spend [%s]", hex.EncodeToString(spendSelector[:])),
 				principal.String(),
@@ -143,7 +154,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 				"",
 				recipient.String(),
 				amount,
-				hex.EncodeToString(walletSdk.Spend(signing.PrivateKey(privkeys[i]), recipient, amount, nonce)),
+				hex.EncodeToString(tx),
 			})
 		}
 	}

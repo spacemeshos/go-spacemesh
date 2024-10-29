@@ -344,6 +344,44 @@ func (c *MockHostNonceCall) DoAndReturn(f func() uint64) *MockHostNonceCall {
 	return c
 }
 
+// Payload mocks base method.
+func (m *MockHost) Payload() []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Payload")
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Payload indicates an expected call of Payload.
+func (mr *MockHostMockRecorder) Payload() *MockHostPayloadCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Payload", reflect.TypeOf((*MockHost)(nil).Payload))
+	return &MockHostPayloadCall{Call: call}
+}
+
+// MockHostPayloadCall wrap *gomock.Call
+type MockHostPayloadCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostPayloadCall) Return(arg0 []byte) *MockHostPayloadCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostPayloadCall) Do(f func() []byte) *MockHostPayloadCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostPayloadCall) DoAndReturn(f func() []byte) *MockHostPayloadCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Principal mocks base method.
 func (m *MockHost) Principal() types.Address {
 	m.ctrl.T.Helper()

@@ -3,6 +3,9 @@ package core
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/signing"
+
+	"github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 func SigningBody(genesis, tx []byte) []byte {
@@ -12,13 +15,25 @@ func SigningBody(genesis, tx []byte) []byte {
 	return full
 }
 
-// ComputePrincipal address as the last 24 bytes of Hash(template || spawnArgs).
+// ComputePrincipal address as the last 24 bytes of Hash(template || blob).
 // See https://github.com/spacemeshos/go-spacemesh/issues/6420 for more details.
-func ComputePrincipal(template types.Address, spawnArgs []byte) Address {
+func ComputePrincipalFromBlob(template types.Address, blob []byte) Address {
 	hasher := hash.GetHasher()
 	defer hash.PutHasher(hasher)
 	hasher.Write(template[:])
-	hasher.Write(spawnArgs)
+	hasher.Write(blob)
 	sum := hasher.Sum(nil)
 	return types.GenerateAddress(sum)
+}
+
+func ComputePrincipalFromPubkey(template types.Address, pubkey signing.PublicKey) (Address, error) {
+	// construct and encode the blob, which is a SCALE-encoded Athena wallet template instance
+	blob, err := scale.Marshal(struct {
+		Nonce, Balance uint64
+		Owner          [32]byte
+	}{0, 0, [32]byte(pubkey.PublicKey)})
+	if err != nil {
+		return Address{}, err
+	}
+	return ComputePrincipalFromBlob(template, blob), nil
 }

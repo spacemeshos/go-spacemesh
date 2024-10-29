@@ -13,7 +13,6 @@ import (
 	reflect "reflect"
 
 	scale "github.com/spacemeshos/go-scale"
-	core "github.com/spacemeshos/go-spacemesh/vm/core"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -156,17 +155,17 @@ func (c *MockTemplateMaxSpendCall) DoAndReturn(f func([]byte) (uint64, error)) *
 }
 
 // Verify mocks base method.
-func (m *MockTemplate) Verify(arg0 core.Host, arg1 []byte, arg2 *scale.Decoder) bool {
+func (m *MockTemplate) Verify(arg0 []byte, arg1 *scale.Decoder) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "Verify", arg0, arg1)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Verify indicates an expected call of Verify.
-func (mr *MockTemplateMockRecorder) Verify(arg0, arg1, arg2 any) *MockTemplateVerifyCall {
+func (mr *MockTemplateMockRecorder) Verify(arg0, arg1 any) *MockTemplateVerifyCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockTemplate)(nil).Verify), arg0, arg1, arg2)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockTemplate)(nil).Verify), arg0, arg1)
 	return &MockTemplateVerifyCall{Call: call}
 }
 
@@ -182,13 +181,13 @@ func (c *MockTemplateVerifyCall) Return(arg0 bool) *MockTemplateVerifyCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTemplateVerifyCall) Do(f func(core.Host, []byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
+func (c *MockTemplateVerifyCall) Do(f func([]byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateVerifyCall) DoAndReturn(f func(core.Host, []byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
+func (c *MockTemplateVerifyCall) DoAndReturn(f func([]byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -18,6 +18,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -42,10 +43,10 @@ func newTester(tb testing.TB) *tester {
 type testAccount interface {
 	getAddress() core.Address
 	getTemplate() core.Address
-	spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte
-	selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte
+	spend(t *tester, to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte
+	selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
 
-	spawn(nonce core.Nonce, opts ...sdk.Opt) []byte
+	spawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
 
 	baseGas() int
 	loadGas() int
@@ -64,19 +65,26 @@ func (a *singlesigAccount) getTemplate() core.Address {
 	return wallet.TemplateAddress
 }
 
-func (a *singlesigAccount) spend(to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.Spend(a.pk, to, amount, nonce, opts...)
+func (a *singlesigAccount) spend(t *tester, to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	tx, err := sdkwallet.Spend(a.pk, to, amount, nonce, opts...)
+	require.NoError(t, err)
+	return tx
 }
 
-func (a *singlesigAccount) selfSpawn(nonce core.Nonce, opts ...sdk.Opt) []byte {
-	return sdkwallet.Spawn(a.pk, nonce, opts...)
+func (a *singlesigAccount) selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	tx, err := sdkwallet.Spawn(a.pk, nonce, opts...)
+	require.NoError(t, err)
+	return tx
 }
 
 func (a *singlesigAccount) spawn(
+	t *tester,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) []byte {
-	return sdkwallet.Spawn(a.pk, nonce, opts...)
+	addr, err := sdkwallet.Spawn(a.pk, nonce, opts...)
+	require.NoError(t, err)
+	return addr
 }
 
 func (a *singlesigAccount) baseGas() int {
@@ -133,7 +141,9 @@ func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		t.addAccount(&singlesigAccount{pk: pk, address: sdkwallet.Address(pub)}, 1_000_000_000)
+		address, err := sdkwallet.Address(*signing.NewPublicKey(pub))
+		require.NoError(t, err)
+		t.addAccount(&singlesigAccount{pk, address}, 1_000_000_000)
 	}
 	return t
 }
@@ -183,12 +193,12 @@ func (t *tester) spawnAll() []types.RawTx {
 
 func (t *tester) selfSpawn(i int, opts ...sdk.Opt) types.RawTx {
 	nonce := t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].selfSpawn(nonce, opts...))
+	return types.NewRawTx(t.accounts[i].selfSpawn(t, nonce, opts...))
 }
 
 func (t *tester) spawn(i, j int, opts ...sdk.Opt) types.RawTx {
 	nonce := t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].spawn(nonce, opts...))
+	return types.NewRawTx(t.accounts[i].spawn(t, nonce, opts...))
 }
 
 func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
@@ -213,7 +223,7 @@ func (t *tester) spend(from, to int, amount uint64, opts ...sdk.Opt) types.RawTx
 }
 
 func (t *tester) spendWithNonce(from, to int, amount uint64, nonce core.Nonce, opts ...sdk.Opt) types.RawTx {
-	return types.NewRawTx(t.accounts[from].spend(t.accounts[to].getAddress(), amount, nonce, opts...))
+	return types.NewRawTx(t.accounts[from].spend(t, t.accounts[to].getAddress(), amount, nonce, opts...))
 }
 
 type reward struct {
@@ -240,7 +250,7 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 }
 
 func (t *tester) estimateSpawnGas(principal, target int) int {
-	tx := t.accounts[principal].spawn(0)
+	tx := t.accounts[principal].spawn(t, 0)
 	gas := t.accounts[principal].baseGas() +
 		int(core.TxDataGas(len(tx)))
 	if principal != target {
@@ -250,7 +260,7 @@ func (t *tester) estimateSpawnGas(principal, target int) int {
 }
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
-	tx := t.accounts[principal].spend(t.accounts[to].getAddress(), uint64(amount), nonce)
+	tx := t.accounts[principal].spend(t, t.accounts[to].getAddress(), uint64(amount), nonce)
 	return t.accounts[principal].baseGas() +
 		t.accounts[principal].loadGas() +
 		int(core.TxDataGas(len(tx)))

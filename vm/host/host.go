@@ -316,7 +316,7 @@ func (h *hostContext) Spawn(blob []byte) athcon.Address {
 	}
 
 	// calculate the new principal address
-	principalAddress := core.ComputePrincipal(
+	principalAddress := core.ComputePrincipalFromBlob(
 		h.dynamicContext.Template,
 		blob,
 	)
