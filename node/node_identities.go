@@ -43,10 +43,15 @@ func (app *App) NewIdentity() error {
 }
 
 // LoadIdentities loads all existing identities from the config directory.
-func (app *App) LoadIdentities() error {
+func (app *App) LoadIdentities() (err error) {
+	app.signers, err = loadIdentities(app.Config.DataDir(), app.Config.Genesis.GenesisID().Bytes(), app.log)
+	return err
+}
+
+func loadIdentities(path string, genesisId []byte, logger log.Log) ([]*signing.EdSigner, error) {
 	signers := make([]*signing.EdSigner, 0)
 
-	dir := filepath.Join(app.Config.DataDir(), keyDir)
+	dir := filepath.Join(path, keyDir)
 	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return fmt.Errorf("failed to walk directory at %s: %w", path, err)
@@ -64,13 +69,13 @@ func (app *App) LoadIdentities() error {
 
 		signer, err := signing.NewEdSigner(
 			signing.FromFile(path),
-			signing.WithPrefix(app.Config.Genesis.GenesisID().Bytes()),
+			signing.WithPrefix(genesisId),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to construct identity %s: %w", d.Name(), err)
 		}
 
-		app.log.With().Info("Loaded existing identity",
+		logger.With().Info("Loaded existing identity",
 			log.String("filename", d.Name()),
 			log.ShortStringer("public_key", signer.PublicKey()),
 		)
@@ -78,10 +83,10 @@ func (app *App) LoadIdentities() error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(signers) == 0 {
-		return fmt.Errorf("no identity files found: %w", fs.ErrNotExist)
+		return nil, fmt.Errorf("no identity files found: %w", fs.ErrNotExist)
 	}
 
 	// make sure all keys are unique
@@ -89,7 +94,7 @@ func (app *App) LoadIdentities() error {
 	collision := false
 	for _, sig := range signers {
 		if file, ok := seen[sig.PublicKey().String()]; ok {
-			app.log.With().Error("duplicate key",
+			logger.With().Error("duplicate key",
 				log.String("filename1", sig.Name()),
 				log.String("filename2", file),
 				log.String("public_key", sig.PublicKey().ShortString()),
@@ -100,26 +105,24 @@ func (app *App) LoadIdentities() error {
 		seen[sig.PublicKey().String()] = sig.Name()
 	}
 	if collision {
-		return errors.New("duplicate key found in identity files")
+		return nil, errors.New("duplicate key found in identity files")
 	}
 
 	if len(signers) > 1 {
-		app.log.Info("Loaded %d identities from disk", len(signers))
+		logger.Info("Loaded %d identities from disk", len(signers))
 		for _, sig := range signers {
 			if sig.Name() == supervisedIDKeyFileName {
-				app.log.Error(
+				logger.Error(
 					"Identities contain key for supervised smeshing (%s). This is not supported in remote smeshing.",
 					supervisedIDKeyFileName,
 				)
-				app.log.Error(
+				logger.Error(
 					"Ensure you do not have a file named %s in your identities directory when using remote smeshing.",
 					supervisedIDKeyFileName,
 				)
-				return errors.New("supervised key found in remote smeshing mode")
+				return nil, errors.New("supervised key found in remote smeshing mode")
 			}
 		}
 	}
-
-	app.signers = signers
-	return nil
+	return signers, nil
 }

@@ -175,6 +175,9 @@ func GetCommand() *cobra.Command {
 			}
 			defer app.Unlock()
 
+			app.setupLogging()
+			app.log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
+
 			if err := app.Initialize(); err != nil {
 				return fmt.Errorf("initializing app: %w", err)
 			}
@@ -486,39 +489,44 @@ func (app *App) Unlock() {
 	}
 }
 
-// Initialize parses and validates the node configuration and sets up logging.
+// Initialize parses and validates the node configuration.
 func (app *App) Initialize() error {
-	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
-	var existing config.GenesisConfig
-	if err := existing.LoadFromFile(gpath); err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
-		}
-		if err := app.Config.Genesis.Validate(); err != nil {
-			return err
-		}
-		if err := app.Config.Genesis.WriteToFile(gpath); err != nil {
-			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
-		}
-	} else {
-		diff := existing.Diff(&app.Config.Genesis)
-		if len(diff) > 0 {
-			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
-				" at %s.\ndiff:\n%s", gpath, diff,
-			)
-			return errors.New("genesis config updated after node initialization")
-		}
+	if err := initConfig(app.Config.Genesis, app.Config.DataDir(), app.log); err != nil {
+		return fmt.Errorf("initConfig: %w", err)
 	}
 
 	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
-	app.setupLogging()
-	app.log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
-
 	public.Version.WithLabelValues(cmd.Version).Set(1)
 	public.SmeshingOptsProvingNonces.Set(float64(app.Config.SMESHING.ProvingOpts.Nonces))
 	public.SmeshingOptsProvingThreads.Set(float64(app.Config.SMESHING.ProvingOpts.Threads))
+
+	return nil
+}
+
+func initConfig(genesis config.GenesisConfig, datadir string, logger log.Log) error {
+	gpath := filepath.Join(datadir, genesisFileName)
+	var existing config.GenesisConfig
+	if err := existing.LoadFromFile(gpath); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
+		}
+		if err := genesis.Validate(); err != nil {
+			return err
+		}
+		if err := genesis.WriteToFile(gpath); err != nil {
+			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
+		}
+	} else {
+		diff := existing.Diff(&genesis)
+		if len(diff) > 0 {
+			logger.Error("genesis config updated after node initialization, if this update is required delete config"+
+				" at %s.\ndiff:\n%s", gpath, diff,
+			)
+			return errors.New("genesis config updated after node initialization")
+		}
+	}
 	return nil
 }
 
