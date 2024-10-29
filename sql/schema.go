@@ -85,7 +85,7 @@ func (s *Schema) SkipMigrations(i ...int) {
 
 // Apply applies the schema to the database.
 func (s *Schema) Apply(db Database) error {
-	return db.WithTx(context.Background(), func(tx Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 		scanner := bufio.NewScanner(strings.NewReader(s.Script))
 		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 			if i := bytes.Index(data, []byte(";")); i >= 0 {
@@ -147,7 +147,7 @@ func (s *Schema) Migrate(logger *zap.Logger, db Database, before, vacuumState in
 		if m.Order() <= before {
 			continue
 		}
-		if err := db.WithTx(context.Background(), func(tx Transaction) error {
+		if err := db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 			if _, ok := s.skipMigration[m.Order()]; !ok {
 				if err := m.Apply(tx, logger); err != nil {
 					for j := i; j >= 0 && s.Migrations[j].Order() > before; j-- {
@@ -196,7 +196,7 @@ func (s *Schema) MigrateTempDB(logger *zap.Logger, db Database, before int) erro
 		}
 
 		if _, ok := s.skipMigration[m.Order()]; !ok {
-			if err := db.WithTx(context.Background(), func(tx Transaction) error {
+			if err := db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 				return m.Apply(tx, logger)
 			}); err != nil {
 				return fmt.Errorf("apply %s: %w", m.Name(), err)
