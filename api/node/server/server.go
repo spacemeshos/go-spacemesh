@@ -265,7 +265,7 @@ func (n *nodeWeightResp) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWr
 func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWeightNodeIdLayerRequestObject) (GetHareWeightNodeIdLayerResponseObject, error) {
 	hexBuf, err := hex.DecodeString(request.NodeId)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("decode node id: %w")
 	}
 	id := types.BytesToNodeID(hexBuf)
 	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))}, nil
