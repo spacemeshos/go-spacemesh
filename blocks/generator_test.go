@@ -88,7 +88,8 @@ func createTestGenerator(tb testing.TB) *testGenerator {
 		tg.mockPatrol,
 		WithGeneratorLogger(lg),
 		WithHareOutputChan(ch),
-		WithConfig(testConfig()))
+		WithConfig(testConfig()),
+	)
 	return tg
 }
 
