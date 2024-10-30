@@ -9,7 +9,6 @@ import (
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
 
-	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
 )
@@ -35,31 +34,21 @@ func New(host core.Host) (*Wallet, error) {
 	}
 	walletState := walletAccount.State
 
-	// Instantiate the VM
-	vmhost, err := vmhost.NewHost(host)
-	if err != nil {
-		return nil, fmt.Errorf("loading Athena VM: %w", err)
-	}
+	// // Instantiate the VM
+	// vmhost, err := vmhost.NewHost(host)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("loading Athena VM: %w", err)
+	// }
 
-	// We use an in-memory database for the updater because we don't want to persist changes.
-	// Neither MaxSpend nor Verify should modify state.
-	db := statesql.InMemory()
-	ss := core.NewStagedCache(core.DBLoader{Executor: db})
-
-	// store the pubkey, i.e., the constructor args (aka immutable state) required to instantiate
-	// the wallet program instance in Athena, so we can lazily instantiate it as required.
-	return &Wallet{host, vmhost, templateCode, walletState, ss}, nil
+	return &Wallet{host, templateCode, walletState}, nil
 }
-
-//go:generate scalegen
 
 // Wallet is a single-key wallet.
 type Wallet struct {
-	host         core.Host
-	vmhost       core.VMHost
+	host core.Host
+	// vmhost       core.VMHost
 	templateCode []byte
 	walletState  []byte
-	cache        core.AccountLoader
 }
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
@@ -86,7 +75,15 @@ func (s *Wallet) MaxSpend(spendArgs []byte) (uint64, error) {
 	maxSpendSelector, _ := athcon.FromString("athexp_max_spend")
 	maxGasPayload := append(maxSpendSelector[:], spendArgs[4:]...)
 
-	output, _, err := s.vmhost.Execute(
+	// Instantiate the VM
+	// Use a mock host to ensure that no state changes occur.
+	host := s.host.Clone()
+	vmhost, err := vmhost.NewHost(host)
+	if err != nil {
+		return 0, fmt.Errorf("loading Athena VM: %w", err)
+	}
+
+	output, _, err := vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
 		s.host.Principal(),
@@ -129,6 +126,14 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 		return false
 	}
 
+	// Instantiate the VM
+	// Use a mock host to ensure that no state changes occur.
+	host := s.host.Clone()
+	vmhost, err := vmhost.NewHost(host)
+	if err != nil {
+		return false
+	}
+
 	// If this is a spawn transaction, the wallet state is currently empty. So we need to
 	// provisionally spawn the wallet program instance so we can call the verify method.
 	if s.host.IsSpawn() {
@@ -139,7 +144,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 
 		// the transaction must already be a spawn tx, so there's no need to modify the payload.
 		executionPayload := athcon.EncodedExecutionPayload(nil, s.host.Payload())
-		_, _, err := s.vmhost.Execute(
+		_, _, err = vmhost.Execute(
 			s.host.Layer(),
 			maxgas,
 			s.host.Principal(),
@@ -153,7 +158,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 		}
 
 		// the account should've been spawned
-		walletAccount, err := s.cache.Get(s.host.Principal())
+		walletAccount, err := host.Get(s.host.Principal())
 		if err != nil {
 			return false
 		}
@@ -176,7 +181,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 	}
 	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
-	output, _, err := s.vmhost.Execute(
+	output, _, err := vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
 		s.host.Principal(),

@@ -32,9 +32,7 @@ func TestMaxSpend(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	testWallet := Wallet{}
 	mockHost := mocks.NewMockHost(ctrl)
-	mockVMHost := mocks.NewMockVMHost(ctrl)
 	testWallet.host = mockHost
-	testWallet.vmhost = mockVMHost
 
 	// construct spawn and spend payloads
 	// nothing in the payload after the selector matters
@@ -47,9 +45,6 @@ func TestMaxSpend(t *testing.T) {
 	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
 	mockHost.EXPECT().Principal().Return(types.Address{}).Times(2)
 	mockHost.EXPECT().MaxGas().Return(1000).Times(2)
-	mockVMHost.EXPECT().Execute(
-		gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(),
-	).Return(output, 0, nil).Times(1)
 	t.Run("Spawn", func(t *testing.T) {
 		max, err := testWallet.MaxSpend(spawnPayload[:])
 		require.NoError(t, err)

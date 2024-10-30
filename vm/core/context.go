@@ -54,6 +54,16 @@ type Context struct {
 	changed map[Address]*Account
 }
 
+// Clone returns a copy of the context.
+func (c *Context) Clone() Host {
+	clone := *c
+	clone.changed = make(map[Address]*Account, len(c.changed))
+	for k, v := range c.changed {
+		clone.changed[k] = v
+	}
+	return &clone
+}
+
 // PrincipalAccount returns the current state of the principal account.
 func (c *Context) PrincipalAccount() (*Account, error) {
 	return c.load(c.PrincipalAddress)

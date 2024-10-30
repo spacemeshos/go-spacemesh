@@ -79,6 +79,44 @@ func (c *MockHostBalanceCall) DoAndReturn(f func() (uint64, error)) *MockHostBal
 	return c
 }
 
+// Clone mocks base method.
+func (m *MockHost) Clone() core.Host {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Clone")
+	ret0, _ := ret[0].(core.Host)
+	return ret0
+}
+
+// Clone indicates an expected call of Clone.
+func (mr *MockHostMockRecorder) Clone() *MockHostCloneCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Clone", reflect.TypeOf((*MockHost)(nil).Clone))
+	return &MockHostCloneCall{Call: call}
+}
+
+// MockHostCloneCall wrap *gomock.Call
+type MockHostCloneCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostCloneCall) Return(arg0 core.Host) *MockHostCloneCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostCloneCall) Do(f func() core.Host) *MockHostCloneCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostCloneCall) DoAndReturn(f func() core.Host) *MockHostCloneCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Consume mocks base method.
 func (m *MockHost) Consume(arg0 uint64) error {
 	m.ctrl.T.Helper()

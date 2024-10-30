@@ -97,6 +97,8 @@ type HandlerRegistry interface {
 
 // Host API with methods and data that are required by templates.
 type Host interface {
+	Clone() Host
+
 	Consume(uint64) error
 	Transfer(Address, uint64) error
 
