@@ -24,6 +24,13 @@ import (
 // 1. The initial ATX of the smesher for the Commitment ATX
 // 2. The marriage ATX of the smesher in the case the smesher is part of an equivocation set.
 type ProofInvalidPost struct {
+	// ATXID is the ID of the ATX containing the invalid PoST.
+	ATXID types.ATXID
+	// SmesherID is the ID of the smesher that published the ATX.
+	SmesherID types.NodeID
+	// Signature is the signature of the ATXID by the smesher.
+	Signature types.EdSignature
+
 	// NodeID is the node ID that created the invalid proof
 	NodeID types.NodeID
 
@@ -47,13 +54,17 @@ func NewInvalidPostProof(atx, initialAtx *ActivationTxV2) (*ProofInvalidPost, er
 // Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
 // and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
 func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
-	if err := p.Commitment.Valid(malValidator, p.NodeID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("invalid commitment proof: %w", err)
+	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
+		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 
 	// TODO(mafa): verify p.NodeID to match the ID in the marriage ATX via the marriage index
 
-	if err := p.InvalidPost.Valid(ctx, malValidator, p.NodeID, p.Commitment.CommitmentATX); err != nil {
+	if err := p.Commitment.Valid(malValidator, p.NodeID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("invalid commitment proof: %w", err)
+	}
+
+	if err := p.InvalidPost.Valid(ctx, malValidator, p.ATXID, p.NodeID, p.Commitment.CommitmentATX); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
 	}
 
@@ -62,18 +73,17 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 
 // CommitmentProof is a proof for the commitment ATX of a smesher. It is generated from the initial ATX of the smesher.
 type CommitmentProof struct {
-	// ATXID is the ID of the ATX being proven. It is the merkle root from the contents of the ATX.
-	ATXID types.ATXID
+	// InitialATXID is the ID of the initial ATX of the smesher.
+	InitialATXID types.ATXID
 
 	// InitialPostRoot is the root of the initial PoST merkle tree.
 	InitialPostRoot types.Hash32
-	// InitialPostProof contains the merkle path from the root of the ATX merkle tree (ATXID) to the root of the
-	// InitialPost.
+	// InitialPostProof contains the merkle path from the root of the merkle tree to the root of the InitialPost.
 	InitialPostProof []types.Hash32 `scale:"max=32"`
 
 	// CommitmentATX is the ATX that was used by the identity as their commitment ATX.
 	CommitmentATX types.ATXID
-	// CommitmentATXProof contains the merkle path from the root of the ATX merkle tree (ATXID) to the CommitmentATX
+	// CommitmentATXProof contains the merkle path from the root of the merkle tree to the CommitmentATX
 	// field.
 	CommitmentATXProof []types.Hash32 `scale:"max=32"`
 
@@ -84,7 +94,7 @@ type CommitmentProof struct {
 // Valid returns no error if the proof is valid. It verifies that the signature is valid and that the merkle proofs
 // are valid.
 func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID) error {
-	if !malValidator.Signature(signing.ATX, nodeID, p.ATXID.Bytes(), p.Signature) {
+	if !malValidator.Signature(signing.ATX, nodeID, p.InitialATXID.Bytes(), p.Signature) {
 		return errors.New("invalid signature")
 	}
 
@@ -100,7 +110,7 @@ func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.N
 		[]uint64{uint64(InitialPostsRootIndex)},
 		[][]byte{p.InitialPostRoot.Bytes()},
 		initialPostProof,
-		p.ATXID.Bytes(),
+		p.InitialATXID.Bytes(),
 		atxTreeHash,
 	)
 	if err != nil {
@@ -132,9 +142,6 @@ func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.N
 }
 
 type InvalidPostProof struct {
-	// ATXID is the ID of the ATX containing the invalid PoST.
-	ATXID types.ATXID
-
 	// --- NiPost ---
 
 	// NiPostsTreeRoot is the root of the merkle tree containing the NiPoSTs of the ATX.
@@ -182,11 +189,6 @@ type InvalidPostProof struct {
 
 	// InvalidPostIndex is the index of the leaf that was identified to be invalid.
 	InvalidPostIndex uint32
-
-	// SmesherID is the ID of the smesher that published the ATX.
-	SmesherID types.NodeID
-	// Signature is the signature of the ATXID by the smesher.
-	Signature types.EdSignature
 }
 
 // Valid returns no error if the proof is valid. It verifies that the signature is valid, that the merkle proofs are
@@ -194,13 +196,10 @@ type InvalidPostProof struct {
 func (p InvalidPostProof) Valid(
 	ctx context.Context,
 	malValidator MalfeasanceValidator,
+	atxID types.ATXID,
 	nodeID types.NodeID,
 	commitmentATX types.ATXID,
 ) error {
-	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
-		return errors.New("invalid signature")
-	}
-
 	// -- NiPoST --
 
 	nipostsTreeProof := make([][]byte, len(p.NiPostsTreeProof))
@@ -211,7 +210,7 @@ func (p InvalidPostProof) Valid(
 		[]uint64{uint64(NIPostsRootIndex)},
 		[][]byte{p.NiPostsTreeRoot.Bytes()},
 		nipostsTreeProof,
-		p.ATXID.Bytes(),
+		atxID.Bytes(),
 		atxTreeHash,
 	)
 	if err != nil {

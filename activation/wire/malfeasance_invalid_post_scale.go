@@ -10,6 +10,27 @@ import (
 
 func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeByteArray(enc, t.NodeID[:])
 		if err != nil {
 			return total, err
@@ -34,6 +55,27 @@ func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error
 }
 
 func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.NodeID[:])
 		if err != nil {
@@ -60,7 +102,7 @@ func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error
 
 func (t *CommitmentProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
+		n, err := scale.EncodeByteArray(enc, t.InitialATXID[:])
 		if err != nil {
 			return total, err
 		}
@@ -106,7 +148,7 @@ func (t *CommitmentProof) EncodeScale(enc *scale.Encoder) (total int, err error)
 
 func (t *CommitmentProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
+		n, err := scale.DecodeByteArray(dec, t.InitialATXID[:])
 		if err != nil {
 			return total, err
 		}
@@ -153,13 +195,6 @@ func (t *CommitmentProof) DecodeScale(dec *scale.Decoder) (total int, err error)
 }
 
 func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.NiPostsTreeRoot[:])
 		if err != nil {
@@ -279,31 +314,10 @@ func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	return total, nil
 }
 
 func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.NiPostsTreeRoot[:])
 		if err != nil {
@@ -433,20 +447,6 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		}
 		total += n
 		t.InvalidPostIndex = uint32(field)
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
 	}
 	return total, nil
 }
