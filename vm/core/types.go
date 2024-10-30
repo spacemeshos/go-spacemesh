@@ -1,9 +1,13 @@
 package core
 
 import (
+	"encoding/hex"
+
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+
+	"go.uber.org/zap/zapcore"
 )
 
 const TxSizeLimit = 1024
@@ -39,7 +43,7 @@ type Handler interface {
 	Parse(*scale.Decoder) (ParseOutput, error)
 
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, AccountLoader, AccountUpdater, []byte) ([]byte, int64, error)
+	Exec(Host, Payload) ([]byte, int64, error)
 
 	// New instantiates Template from host context.
 	New(Host, AccountLoader) (Template, error)
@@ -98,14 +102,18 @@ type Host interface {
 
 	Principal() Address
 	Nonce() uint64
-	Payload() []byte
+	Payload() Payload
 	TemplateAddress() Address
 	MaxGas() uint64
 	Handler() Handler
+	Spawn(Address, []byte) (Address, error)
+	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)
+	Has(Address) (bool, error)
+	Get(Address) (*Account, error)
 	Template() Template
 	Layer() LayerID
 	GetGenesisID() Hash20
-	Balance() uint64
+	Balance() (uint64, error)
 	IsSpawn() bool
 }
 
@@ -140,6 +148,11 @@ type Metadata struct {
 // Payload contains the opaque, Athena-encoded transaction payload including the method selector
 // and method args.
 type Payload []byte
+
+func (t Payload) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	encoder.AddString("payload", hex.EncodeToString(t))
+	return nil
+}
 
 func (t *Payload) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{

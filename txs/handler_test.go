@@ -38,7 +38,7 @@ func Test_WrongHash(t *testing.T) {
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(nil, nil)
 	req := smocks.NewMockValidationRequest(ctrl)
-	req.EXPECT().Parse().Times(1).Return(tx.TxHeader, nil)
+	req.EXPECT().Parse(gomock.Any).Times(1).Return(tx.TxHeader, nil)
 	cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
 	err = th.HandleProposalTransaction(context.Background(), types.RandomHash(), p2p.NoPeer, tx.Raw)
 	require.ErrorIs(t, err, errWrongHash)
@@ -98,7 +98,7 @@ func Test_HandleBlock(t *testing.T) {
 			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
 			if tc.hasErr == nil && !tc.has {
 				req := smocks.NewMockValidationRequest(ctrl)
-				req.EXPECT().Parse().Times(1).Return(tx.TxHeader, tc.parseErr)
+				req.EXPECT().Parse(gomock.Any).Times(1).Return(tx.TxHeader, tc.parseErr)
 				cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
 				if tc.parseErr == nil {
 					req.EXPECT().Verify().Times(1).Return(true)
@@ -146,7 +146,7 @@ func gossipExpectations(
 	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(rst, hasErr).Times(1)
 	if hasErr == nil && !has {
 		req := smocks.NewMockValidationRequest(ctrl)
-		req.EXPECT().Parse().Times(1).Return(tx.TxHeader, parseErr)
+		req.EXPECT().Parse(gomock.Any).Times(1).Return(tx.TxHeader, parseErr)
 		cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
 		if parseErr == nil && fee != 0 {
 			req.EXPECT().Verify().Times(1).Return(verify)

@@ -113,7 +113,7 @@ func TestSpawn(t *testing.T) {
 	executionPayload := athcon.EncodedExecutionPayload([]byte{}, athenaPayload)
 
 	// Execute the spawn and catch the result
-	output, gasLeft, err := (&handler{}).Exec(mockHost, mockLoader, mockUpdater, executionPayload)
+	output, gasLeft, err := (&handler{}).Exec(mockHost, executionPayload)
 	require.Less(t, gasLeft, int64(5000))
 	require.Equal(t, expectedPrincipalAddress, types.Address(output))
 	require.NoError(t, err)

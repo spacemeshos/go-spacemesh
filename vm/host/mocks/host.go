@@ -41,11 +41,12 @@ func (m *MockHost) EXPECT() *MockHostMockRecorder {
 }
 
 // Balance mocks base method.
-func (m *MockHost) Balance() uint64 {
+func (m *MockHost) Balance() (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Balance")
 	ret0, _ := ret[0].(uint64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Balance indicates an expected call of Balance.
@@ -61,19 +62,19 @@ type MockHostBalanceCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHostBalanceCall) Return(arg0 uint64) *MockHostBalanceCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockHostBalanceCall) Return(arg0 uint64, arg1 error) *MockHostBalanceCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHostBalanceCall) Do(f func() uint64) *MockHostBalanceCall {
+func (c *MockHostBalanceCall) Do(f func() (uint64, error)) *MockHostBalanceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostBalanceCall) DoAndReturn(f func() uint64) *MockHostBalanceCall {
+func (c *MockHostBalanceCall) DoAndReturn(f func() (uint64, error)) *MockHostBalanceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -112,6 +113,45 @@ func (c *MockHostConsumeCall) Do(f func(uint64) error) *MockHostConsumeCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockHostConsumeCall) DoAndReturn(f func(uint64) error) *MockHostConsumeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Get mocks base method.
+func (m *MockHost) Get(arg0 types.Address) (*types.Account, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Get", arg0)
+	ret0, _ := ret[0].(*types.Account)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Get indicates an expected call of Get.
+func (mr *MockHostMockRecorder) Get(arg0 any) *MockHostGetCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockHost)(nil).Get), arg0)
+	return &MockHostGetCall{Call: call}
+}
+
+// MockHostGetCall wrap *gomock.Call
+type MockHostGetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostGetCall) Return(arg0 *types.Account, arg1 error) *MockHostGetCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostGetCall) Do(f func(types.Address) (*types.Account, error)) *MockHostGetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostGetCall) DoAndReturn(f func(types.Address) (*types.Account, error)) *MockHostGetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -188,6 +228,45 @@ func (c *MockHostHandlerCall) Do(f func() core.Handler) *MockHostHandlerCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockHostHandlerCall) DoAndReturn(f func() core.Handler) *MockHostHandlerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Has mocks base method.
+func (m *MockHost) Has(arg0 types.Address) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Has", arg0)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Has indicates an expected call of Has.
+func (mr *MockHostMockRecorder) Has(arg0 any) *MockHostHasCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*MockHost)(nil).Has), arg0)
+	return &MockHostHasCall{Call: call}
+}
+
+// MockHostHasCall wrap *gomock.Call
+type MockHostHasCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostHasCall) Return(arg0 bool, arg1 error) *MockHostHasCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostHasCall) Do(f func(types.Address) (bool, error)) *MockHostHasCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostHasCall) DoAndReturn(f func(types.Address) (bool, error)) *MockHostHasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -345,10 +424,10 @@ func (c *MockHostNonceCall) DoAndReturn(f func() uint64) *MockHostNonceCall {
 }
 
 // Payload mocks base method.
-func (m *MockHost) Payload() []byte {
+func (m *MockHost) Payload() core.Payload {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Payload")
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(core.Payload)
 	return ret0
 }
 
@@ -365,19 +444,19 @@ type MockHostPayloadCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHostPayloadCall) Return(arg0 []byte) *MockHostPayloadCall {
+func (c *MockHostPayloadCall) Return(arg0 core.Payload) *MockHostPayloadCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHostPayloadCall) Do(f func() []byte) *MockHostPayloadCall {
+func (c *MockHostPayloadCall) Do(f func() core.Payload) *MockHostPayloadCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostPayloadCall) DoAndReturn(f func() []byte) *MockHostPayloadCall {
+func (c *MockHostPayloadCall) DoAndReturn(f func() core.Payload) *MockHostPayloadCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -416,6 +495,84 @@ func (c *MockHostPrincipalCall) Do(f func() types.Address) *MockHostPrincipalCal
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockHostPrincipalCall) DoAndReturn(f func() types.Address) *MockHostPrincipalCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SetStorage mocks base method.
+func (m *MockHost) SetStorage(arg0 types.Address, arg1, arg2 [32]byte) (core.StorageStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetStorage", arg0, arg1, arg2)
+	ret0, _ := ret[0].(core.StorageStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetStorage indicates an expected call of SetStorage.
+func (mr *MockHostMockRecorder) SetStorage(arg0, arg1, arg2 any) *MockHostSetStorageCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStorage", reflect.TypeOf((*MockHost)(nil).SetStorage), arg0, arg1, arg2)
+	return &MockHostSetStorageCall{Call: call}
+}
+
+// MockHostSetStorageCall wrap *gomock.Call
+type MockHostSetStorageCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostSetStorageCall) Return(arg0 core.StorageStatus, arg1 error) *MockHostSetStorageCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostSetStorageCall) Do(f func(types.Address, [32]byte, [32]byte) (core.StorageStatus, error)) *MockHostSetStorageCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostSetStorageCall) DoAndReturn(f func(types.Address, [32]byte, [32]byte) (core.StorageStatus, error)) *MockHostSetStorageCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Spawn mocks base method.
+func (m *MockHost) Spawn(arg0 types.Address, arg1 []byte) (types.Address, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Spawn", arg0, arg1)
+	ret0, _ := ret[0].(types.Address)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Spawn indicates an expected call of Spawn.
+func (mr *MockHostMockRecorder) Spawn(arg0, arg1 any) *MockHostSpawnCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Spawn", reflect.TypeOf((*MockHost)(nil).Spawn), arg0, arg1)
+	return &MockHostSpawnCall{Call: call}
+}
+
+// MockHostSpawnCall wrap *gomock.Call
+type MockHostSpawnCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostSpawnCall) Return(arg0 types.Address, arg1 error) *MockHostSpawnCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostSpawnCall) Do(f func(types.Address, []byte) (types.Address, error)) *MockHostSpawnCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostSpawnCall) DoAndReturn(f func(types.Address, []byte) (types.Address, error)) *MockHostSpawnCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

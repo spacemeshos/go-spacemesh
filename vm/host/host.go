@@ -1,7 +1,6 @@
 package host
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"log"
@@ -46,8 +45,6 @@ func AthenaLibPath() string {
 type Host struct {
 	vm             *athcon.VM
 	host           core.Host
-	loader         core.AccountLoader
-	updater        core.AccountUpdater
 	staticContext  core.StaticContext
 	dynamicContext core.DynamicContext
 }
@@ -55,11 +52,7 @@ type Host struct {
 // Load the VM from the shared library and returns an instance of a Host.
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
-func NewHost(
-	host core.Host,
-	loader core.AccountLoader,
-	updater core.AccountUpdater,
-) (*Host, error) {
+func NewHost(host core.Host) (*Host, error) {
 	vm, err := athcon.Load(AthenaLibPath())
 	if err != nil {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
@@ -78,7 +71,7 @@ func NewHost(
 		Callee:   host.Principal(),
 	}
 
-	return &Host{vm, host, loader, updater, staticContext, dynamicContext}, nil
+	return &Host{vm, host, staticContext, dynamicContext}, nil
 }
 
 func (h *Host) Destroy() {
@@ -96,8 +89,6 @@ func (h *Host) Execute(
 	hostCtx := &hostContext{
 		layer,
 		h.host,
-		h.loader,
-		h.updater,
 		h.staticContext,
 		h.dynamicContext,
 		h.vm,
@@ -124,8 +115,6 @@ func (h *Host) Execute(
 type hostContext struct {
 	layer          types.LayerID
 	host           core.Host
-	loader         core.AccountLoader
-	updater        core.AccountUpdater
 	staticContext  core.StaticContext
 	dynamicContext core.DynamicContext
 	vm             *athcon.VM
@@ -134,14 +123,14 @@ type hostContext struct {
 var _ athcon.HostContext = (*hostContext)(nil)
 
 func (h *hostContext) AccountExists(addr athcon.Address) bool {
-	if has, err := h.loader.Has(types.Address(addr)); !has || err != nil {
+	if has, err := h.host.Has(types.Address(addr)); !has || err != nil {
 		return false
 	}
 	return true
 }
 
 func (h *hostContext) GetStorage(addr athcon.Address, key athcon.Bytes32) athcon.Bytes32 {
-	if account, err := h.loader.Get(types.Address(addr)); err == nil {
+	if account, err := h.host.Get(types.Address(addr)); err == nil {
 		// TODO(lane): make this more efficient
 		for _, item := range account.Storage {
 			if item.Key == key {
@@ -157,24 +146,19 @@ func (h *hostContext) SetStorage(
 	key athcon.Bytes32,
 	value athcon.Bytes32,
 ) athcon.StorageStatus {
-	if account, err := h.loader.Get(types.Address(addr)); err == nil {
-		// TODO(lane): make this more efficient
-		for i, item := range account.Storage {
-			if item.Key == key {
-				account.Storage[i].Value = value
-				_ = h.updater.Update(account)
-				return athcon.StorageModified
-			}
-		}
-		account.Storage = append(account.Storage, types.StorageItem{Key: key, Value: value})
-		_ = h.updater.Update(account)
+	status, _ := h.host.SetStorage(types.Address(addr), [32]byte(key), [32]byte(value))
+	switch status {
+	case core.StorageStatusAdded:
 		return athcon.StorageAdded
+	case core.StorageStatusModified:
+		return athcon.StorageModified
+	default:
+		panic("unexpected storage status")
 	}
-	panic("account not found")
 }
 
 func (h *hostContext) GetBalance(addr athcon.Address) uint64 {
-	if account, err := h.loader.Get(types.Address(addr)); err == nil {
+	if account, err := h.host.Get(types.Address(addr)); err == nil {
 		return account.Balance
 	}
 	return 0
@@ -214,7 +198,7 @@ func (h *hostContext) Call(
 	// take snapshot of state
 	// TODO: implement me
 
-	destinationAccount, err := h.loader.Get(types.Address(recipient))
+	destinationAccount, err := h.host.Get(types.Address(recipient))
 	if err != nil {
 		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
@@ -225,7 +209,7 @@ func (h *hostContext) Call(
 	// if there is input data, then the destination account must exist and must be spawned
 	template := destinationAccount.TemplateAddress
 	state := destinationAccount.State
-	var templateAccount types.Account
+	var templateAccount *types.Account
 	if len(input) > 0 {
 		if template == nil || len(state) == 0 {
 			return nil, 0, athcon.Error{
@@ -235,7 +219,7 @@ func (h *hostContext) Call(
 		}
 
 		// read template code
-		templateAccount, err = h.loader.Get(types.Address(*template))
+		templateAccount, err = h.host.Get(types.Address(*template))
 		if err != nil || len(templateAccount.State) == 0 {
 			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
@@ -315,30 +299,9 @@ func (h *hostContext) Spawn(blob []byte) athcon.Address {
 		return athcon.Address(emptyAddress)
 	}
 
-	// calculate the new principal address
-	principalAddress := core.ComputePrincipalFromBlob(
-		h.dynamicContext.Template,
-		blob,
-	)
-
-	// check if the account is already spawned
-	account, err := h.loader.Get(principalAddress)
-	if err != nil {
+	if address, err := h.host.Spawn(types.Address(h.dynamicContext.Template), blob); err != nil {
 		return athcon.Address(emptyAddress)
+	} else {
+		return athcon.Address(address)
 	}
-	// the account is already spawned and contains different code. this should not happen.
-	if len(account.State) > 0 && !bytes.Equal(account.State, blob) {
-		return athcon.Address(emptyAddress)
-	}
-
-	// create a new account, or update existing account, with this code
-	account.Layer = h.layer
-	account.Address = principalAddress
-	account.State = blob
-	account.TemplateAddress = &h.dynamicContext.Template
-	if err = h.updater.Update(account); err != nil {
-		// don't silently swallow the error
-		fmt.Fprintf(os.Stderr, "failed to update account: %v\n", err)
-	}
-	return athcon.Address(principalAddress)
 }

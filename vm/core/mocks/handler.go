@@ -41,9 +41,9 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 }
 
 // Exec mocks base method.
-func (m *MockHandler) Exec(arg0 core.Host, arg1 core.AccountLoader, arg2 core.AccountUpdater, arg3 []byte) ([]byte, int64, error) {
+func (m *MockHandler) Exec(arg0 core.Host, arg1 core.Payload) ([]byte, int64, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "Exec", arg0, arg1)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(int64)
 	ret2, _ := ret[2].(error)
@@ -51,9 +51,9 @@ func (m *MockHandler) Exec(arg0 core.Host, arg1 core.AccountLoader, arg2 core.Ac
 }
 
 // Exec indicates an expected call of Exec.
-func (mr *MockHandlerMockRecorder) Exec(arg0, arg1, arg2, arg3 any) *MockHandlerExecCall {
+func (mr *MockHandlerMockRecorder) Exec(arg0, arg1 any) *MockHandlerExecCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockHandler)(nil).Exec), arg0, arg1, arg2, arg3)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Exec", reflect.TypeOf((*MockHandler)(nil).Exec), arg0, arg1)
 	return &MockHandlerExecCall{Call: call}
 }
 
@@ -69,13 +69,13 @@ func (c *MockHandlerExecCall) Return(arg0 []byte, arg1 int64, arg2 error) *MockH
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerExecCall) Do(f func(core.Host, core.AccountLoader, core.AccountUpdater, []byte) ([]byte, int64, error)) *MockHandlerExecCall {
+func (c *MockHandlerExecCall) Do(f func(core.Host, core.Payload) ([]byte, int64, error)) *MockHandlerExecCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, core.AccountLoader, core.AccountUpdater, []byte) ([]byte, int64, error)) *MockHandlerExecCall {
+func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, core.Payload) ([]byte, int64, error)) *MockHandlerExecCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -1329,7 +1329,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := tt.Validation(tc.tx)
-			header, err := req.Parse()
+			header, err := req.Parse(req.Cache())
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
@@ -1431,7 +1431,7 @@ func BenchmarkValidation(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			req := tt.Validation(raw)
-			_, err := req.Parse()
+			_, err := req.Parse(req.Cache())
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -1520,7 +1520,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 		parsed := make([]types.Transaction, 0, len(raw))
 		for _, tx := range raw {
 			val := tt.Validation(tx)
-			header, err := val.Parse()
+			header, err := val.Parse(val.Cache())
 			require.NoError(b, err)
 			parsed = append(parsed, types.Transaction{
 				RawTx:    tx,

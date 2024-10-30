@@ -36,14 +36,15 @@ func New(host core.Host, cache core.AccountLoader) (*Wallet, error) {
 	walletState := walletAccount.State
 
 	// Instantiate the VM
+	vmhost, err := vmhost.NewHost(host)
+	if err != nil {
+		return nil, fmt.Errorf("loading Athena VM: %w", err)
+	}
+
 	// We use an in-memory database for the updater because we don't want to persist changes.
 	// Neither MaxSpend nor Verify should modify state.
 	db := statesql.InMemory()
 	ss := core.NewStagedCache(core.DBLoader{Executor: db})
-	vmhost, err := vmhost.NewHost(host, cache, ss)
-	if err != nil {
-		return nil, fmt.Errorf("loading Athena VM: %w", err)
-	}
 
 	// store the pubkey, i.e., the constructor args (aka immutable state) required to instantiate
 	// the wallet program instance in Athena, so we can lazily instantiate it as required.

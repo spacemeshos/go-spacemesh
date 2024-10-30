@@ -301,7 +301,7 @@ func (v *VM) execute(
 		limit       = v.cfg.GasLimit
 	)
 	for i, tx := range txs {
-		logger := v.logger.With(zap.Int("ith", i))
+		logger := v.logger.With(zap.Int("txnum", i))
 		txCount.Inc()
 
 		t1 := time.Now()
@@ -315,7 +315,7 @@ func (v *VM) execute(
 			decoder: decoder,
 		}
 
-		header, err := req.Parse()
+		header, err := req.Parse(ss)
 		if err != nil {
 			logger.Warn("ineffective transaction. failed to parse",
 				log.ZShortStringer("tx", tx.GetRaw().ID),
@@ -330,16 +330,20 @@ func (v *VM) execute(
 		if header.GasPrice == 0 {
 			logger.Warn("ineffective transaction. zero gas price",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
-		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
+		balance, err := ctx.Balance()
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("%w: error getting balance: %w", core.ErrInternal, err)
+		}
+		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); balance < intrinsic {
 			logger.Warn("ineffective transaction. intrinsic gas not covered",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 				zap.Uint64("intrinsic gas", intrinsic),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
@@ -351,7 +355,7 @@ func (v *VM) execute(
 				zap.Uint64("block gas limit", v.cfg.GasLimit),
 				zap.Uint64("current limit", limit),
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -362,18 +366,20 @@ func (v *VM) execute(
 		// when saved into database by txs module
 		if !tx.Verified() && !req.Verify() {
 			logger.Warn("ineffective transaction. failed verify",
+				zap.String("txid", tx.GetRaw().ID.String()),
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
+				zap.Object("payload", ctx.Payload()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
 
-		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce {
+		if ctx.NextNonce() > ctx.Header.Nonce {
 			logger.Warn("ineffective transaction. nonce too low",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw(), TxHeader: header})
 			invalidTxCount.Inc()
@@ -382,8 +388,10 @@ func (v *VM) execute(
 
 		t2 := time.Now()
 		logger.Debug("applying transaction",
+			zap.String("txid", tx.GetRaw().ID.String()),
 			zap.Object("header", header),
-			zap.Object("account", &ctx.PrincipalAccount),
+			zap.String("account", ctx.PrincipalAddress.String()),
+			zap.Object("payload", ctx.Payload()),
 		)
 
 		rst := types.TransactionWithResult{}
@@ -391,12 +399,12 @@ func (v *VM) execute(
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			_, _, err = ctx.PrincipalHandler.Exec(ctx, ss, ss, ctx.Payload())
+			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
 		}
 		if err != nil {
 			logger.Debug("transaction failed",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 				zap.Error(err),
 			)
 			if errors.Is(err, core.ErrInternal) {
@@ -444,13 +452,17 @@ type Request struct {
 	ctx *core.Context
 }
 
+func (r *Request) Cache() *core.StagedCache {
+	return r.cache
+}
+
 // Parse header from the raw transaction.
-func (r *Request) Parse() (*core.Header, error) {
+func (r *Request) Parse(cache *core.StagedCache) (*core.Header, error) {
 	start := time.Now()
 	if len(r.raw.Raw) > core.TxSizeLimit {
 		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
 	}
-	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
+	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -504,11 +516,12 @@ func parse(
 	logger.Debug("loaded principal account state", zap.Inline(&principalAccount))
 
 	ctx := &core.Context{
-		GenesisID:        cfg.GenesisID,
-		Registry:         reg,
-		Loader:           loader,
-		PrincipalAccount: principalAccount,
-		LayerID:          lid,
+		GenesisID:          cfg.GenesisID,
+		Registry:           reg,
+		Loader:             loader,
+		PrincipalAddress:   principal,
+		PrincipalNextNonce: principalAccount.NextNonce,
+		LayerID:            lid,
 	}
 
 	// There are three cases to consider:
@@ -547,7 +560,7 @@ func parse(
 			return nil, nil, fmt.Errorf("%w: wallet template missing", core.ErrInternal)
 		}
 		ctx.Header.TemplateAddress = wallet.TemplateAddress
-		ctx.Spawn = true
+		ctx.SpawnTx = true
 	}
 
 	// now that we have a template handler, go ahead and parse the tx
@@ -569,18 +582,18 @@ func parse(
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
 	}
-	computedPrincipal, err := core.ComputePrincipalFromPubkey(
-		ctx.Header.TemplateAddress,
-		unmarshaled.PublicKey,
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: computing spawn principal: %w", core.ErrInternal, err)
-	}
+	// computedPrincipal, err := core.ComputePrincipalFromPubkey(
+	// 	ctx.Header.TemplateAddress,
+	// 	unmarshaled.PublicKey,
+	// )
+	// if err != nil {
+	// 	return nil, nil, fmt.Errorf("%w: computing spawn principal: %w", core.ErrInternal, err)
+	// }
 
-	if ctx.Spawn && computedPrincipal != principal {
-		return nil, nil, fmt.Errorf(
-			"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
-	}
+	// if ctx.Spawn && computedPrincipal != principal {
+	// 	return nil, nil, fmt.Errorf(
+	// 		"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
+	// }
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().

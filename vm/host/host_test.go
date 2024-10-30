@@ -26,7 +26,7 @@ func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	// 	Template: types.Address{11, 12, 13, 14},
 	// 	Callee:   types.Address{15, 16, 17, 18},
 	// }
-	host, err := NewHost(ctx, cache, cache)
+	host, err := NewHost(ctx)
 	require.NoError(t, err)
 	return host, cache
 }

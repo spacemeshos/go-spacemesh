@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/vm/core"
@@ -53,14 +54,9 @@ func (*handler) New(host core.Host, cache core.AccountLoader) (core.Template, er
 }
 
 // Pass the transaction into the VM for execution.
-func (*handler) Exec(
-	host core.Host,
-	loader core.AccountLoader,
-	updater core.AccountUpdater,
-	payload []byte,
-) ([]byte, int64, error) {
+func (*handler) Exec(host core.Host, payload core.Payload) ([]byte, int64, error) {
 	// Load the template code
-	templateAccount, err := loader.Get(host.TemplateAddress())
+	templateAccount, err := host.Get(host.TemplateAddress())
 	if err != nil {
 		return []byte{}, 0, fmt.Errorf("failed to load template account: %w", err)
 	} else if len(templateAccount.State) == 0 {
@@ -68,10 +64,18 @@ func (*handler) Exec(
 	}
 
 	// Instantiate the VM
-	vmhost, err := vmhost.NewHost(host, loader, updater)
+	vmhost, err := vmhost.NewHost(host)
 	if err != nil {
-		return []byte{}, 0, err
+		return []byte{}, 0, fmt.Errorf("failed to instantiate VM: %w", err)
 	}
+
+	// Augment the payload with the account state snapshot
+	// Note: for a spawn, this will be empty, which is fine.
+	principalAccount, err := host.Get(host.Principal())
+	if err != nil {
+		return []byte{}, 0, fmt.Errorf("failed to load principal account: %w", err)
+	}
+	executionPayload := athcon.EncodedExecutionPayload(principalAccount.State, payload)
 
 	// Execute the transaction in the VM
 	// Note: at this point, maxgas was already consumed from the principal account, so we don't
@@ -86,7 +90,7 @@ func (*handler) Exec(
 		maxgas,
 		host.Principal(),
 		host.Principal(),
-		payload,
+		executionPayload,
 		// note: value here is zero because this is unused at the top-level. any amount actually being
 		// transferred is encoded in the args to a wallet.Spend() method inside the payload; in other
 		// words, it's abstracted inside the VM as part of our account abstraction.

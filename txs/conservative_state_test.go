@@ -582,12 +582,12 @@ func TestConsistentHandling(t *testing.T) {
 			verified[i] = *txs[i]
 
 			req := smocks.NewMockValidationRequest(gomock.NewController(t))
-			req.EXPECT().Parse().Times(1).Return(txs[i].TxHeader, nil)
+			req.EXPECT().Parse(gomock.Any).Times(1).Return(txs[i].TxHeader, nil)
 			req.EXPECT().Verify().Times(1).Return(true)
 			instances[0].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(req)
 
 			failed := smocks.NewMockValidationRequest(gomock.NewController(t))
-			failed.EXPECT().Parse().Times(1).Return(nil, errors.New("test"))
+			failed.EXPECT().Parse(gomock.Any).Times(1).Return(nil, errors.New("test"))
 			instances[1].mvm.EXPECT().Validation(txs[i].RawTx).Times(1).Return(failed)
 
 			require.NoError(

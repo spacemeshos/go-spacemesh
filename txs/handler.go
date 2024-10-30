@@ -104,7 +104,7 @@ func (th *TxHandler) verifyAndCache(ctx context.Context, expHash types.Hash32, m
 	}
 
 	req := th.state.Validation(raw)
-	header, err := req.Parse()
+	header, err := req.Parse(req.Cache())
 	if err != nil {
 		return fmt.Errorf("%w: %s (err: %s)", errParse, raw.ID, err)
 	}
@@ -147,7 +147,7 @@ func (th *TxHandler) HandleBlockTransaction(_ context.Context, expHash types.Has
 		return fmt.Errorf("%w: block tx want %s, got %s", errWrongHash, expHash.ShortString(), tx.ID.ShortString())
 	}
 	req := th.state.Validation(raw)
-	header, err := req.Parse()
+	header, err := req.Parse(req.Cache())
 	if err == nil {
 		if req.Verify() {
 			tx.TxHeader = header

@@ -13,6 +13,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	core "github.com/spacemeshos/go-spacemesh/vm/core"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -39,19 +40,57 @@ func (m *MockValidationRequest) EXPECT() *MockValidationRequestMockRecorder {
 	return m.recorder
 }
 
-// Parse mocks base method.
-func (m *MockValidationRequest) Parse() (*types.TxHeader, error) {
+// Cache mocks base method.
+func (m *MockValidationRequest) Cache() *core.StagedCache {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Parse")
+	ret := m.ctrl.Call(m, "Cache")
+	ret0, _ := ret[0].(*core.StagedCache)
+	return ret0
+}
+
+// Cache indicates an expected call of Cache.
+func (mr *MockValidationRequestMockRecorder) Cache() *MockValidationRequestCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cache", reflect.TypeOf((*MockValidationRequest)(nil).Cache))
+	return &MockValidationRequestCacheCall{Call: call}
+}
+
+// MockValidationRequestCacheCall wrap *gomock.Call
+type MockValidationRequestCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockValidationRequestCacheCall) Return(arg0 *core.StagedCache) *MockValidationRequestCacheCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockValidationRequestCacheCall) Do(f func() *core.StagedCache) *MockValidationRequestCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockValidationRequestCacheCall) DoAndReturn(f func() *core.StagedCache) *MockValidationRequestCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Parse mocks base method.
+func (m *MockValidationRequest) Parse(arg0 *core.StagedCache) (*types.TxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Parse", arg0)
 	ret0, _ := ret[0].(*types.TxHeader)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Parse indicates an expected call of Parse.
-func (mr *MockValidationRequestMockRecorder) Parse() *MockValidationRequestParseCall {
+func (mr *MockValidationRequestMockRecorder) Parse(arg0 any) *MockValidationRequestParseCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockValidationRequest)(nil).Parse))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockValidationRequest)(nil).Parse), arg0)
 	return &MockValidationRequestParseCall{Call: call}
 }
 
@@ -67,13 +106,13 @@ func (c *MockValidationRequestParseCall) Return(arg0 *types.TxHeader, arg1 error
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockValidationRequestParseCall) Do(f func() (*types.TxHeader, error)) *MockValidationRequestParseCall {
+func (c *MockValidationRequestParseCall) Do(f func(*core.StagedCache) (*types.TxHeader, error)) *MockValidationRequestParseCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockValidationRequestParseCall) DoAndReturn(f func() (*types.TxHeader, error)) *MockValidationRequestParseCall {
+func (c *MockValidationRequestParseCall) DoAndReturn(f func(*core.StagedCache) (*types.TxHeader, error)) *MockValidationRequestParseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
