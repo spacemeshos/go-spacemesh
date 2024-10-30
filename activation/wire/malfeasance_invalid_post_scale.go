@@ -152,9 +152,23 @@ func (t *CommitmentProof) DecodeScale(dec *scale.Decoder) (total int, err error)
 	return total, nil
 }
 
-func (t *InvalidATXPostProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.NiPostsTreeRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPostsTreeProof, 32)
 		if err != nil {
 			return total, err
 		}
@@ -168,7 +182,14 @@ func (t *InvalidATXPostProof) EncodeScale(enc *scale.Encoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPostsProof, 32)
+		n, err := scale.EncodeCompact16(enc, uint16(t.NiPostRootIndex))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPostsRootProof, 32)
 		if err != nil {
 			return total, err
 		}
@@ -210,7 +231,7 @@ func (t *InvalidATXPostProof) EncodeScale(enc *scale.Encoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.SubPostRootIndex))
+		n, err := scale.EncodeCompact16(enc, uint16(t.SubPostRootIndex))
 		if err != nil {
 			return total, err
 		}
@@ -275,7 +296,7 @@ func (t *InvalidATXPostProof) EncodeScale(enc *scale.Encoder) (total int, err er
 	return total, nil
 }
 
-func (t *InvalidATXPostProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
 		if err != nil {
@@ -284,7 +305,7 @@ func (t *InvalidATXPostProof) DecodeScale(dec *scale.Decoder) (total int, err er
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.NiPostsRoot[:])
+		n, err := scale.DecodeByteArray(dec, t.NiPostsTreeRoot[:])
 		if err != nil {
 			return total, err
 		}
@@ -296,7 +317,30 @@ func (t *InvalidATXPostProof) DecodeScale(dec *scale.Decoder) (total int, err er
 			return total, err
 		}
 		total += n
-		t.NiPostsProof = field
+		t.NiPostsTreeProof = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.NiPostsRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NiPostRootIndex = uint16(field)
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NiPostsRootProof = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Challenge[:])
@@ -336,12 +380,12 @@ func (t *InvalidATXPostProof) DecodeScale(dec *scale.Decoder) (total int, err er
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeCompact64(dec)
+		field, n, err := scale.DecodeCompact16(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.SubPostRootIndex = uint64(field)
+		t.SubPostRootIndex = uint16(field)
 	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)

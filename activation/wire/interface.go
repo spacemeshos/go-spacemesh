@@ -19,7 +19,7 @@ type MalfeasanceValidator interface {
 		post *types.Post,
 		challenge []byte,
 		numUnits uint32,
-		idx uint64,
+		idx int,
 	) error
 
 	// Signature validates the given signature against the given message and public key.

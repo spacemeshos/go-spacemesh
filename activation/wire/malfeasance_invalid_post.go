@@ -27,9 +27,12 @@ type ProofInvalidPost struct {
 	// NodeID is the node ID that created the invalid proof
 	NodeID types.NodeID
 
+	// Commitment is the proof for the commitment ATX of the smesher. It is generated from the initial ATX of `NodeID`.
 	Commitment CommitmentProof
 
-	InvalidPost InvalidATXPostProof
+	// InvalidPost is the proof for the invalid PoST of the ATX. It contains the PoST and the merkle proofs to verify
+	// the PoST.
+	InvalidPost InvalidPostProof
 
 	// TODO(mafa): add marriage ATX proof - the marriage index is needed to verify that NodeID created the proof
 }
@@ -43,16 +46,14 @@ func NewInvalidPostProof(atx, initialAtx *ActivationTxV2) (*ProofInvalidPost, er
 
 // Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
 // and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
-func (p ProofInvalidPost) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
-	if err := p.Commitment.Valid(edVerifier, p.NodeID); err != nil {
+func (p ProofInvalidPost) Valid(malValidator MalfeasanceValidator) (types.NodeID, error) {
+	if err := p.Commitment.Valid(malValidator, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid commitment proof: %w", err)
 	}
 
 	// TODO(mafa): verify p.NodeID to match the ID in the marriage ATX via the marriage index
 
-	// TODO(mafa): nil is not a valid post verifier - replace edVerifier with interface to validation functions
-	// (signature and post)
-	if err := p.InvalidPost.Valid(edVerifier, nil, p.Commitment.CommitmentATX, p.NodeID); err != nil {
+	if err := p.InvalidPost.Valid(malValidator, p.NodeID, p.Commitment.CommitmentATX); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
 	}
 
@@ -82,8 +83,8 @@ type CommitmentProof struct {
 
 // Valid returns no error if the proof is valid. It verifies that the signature is valid and that the merkle proofs
 // are valid.
-func (p CommitmentProof) Valid(edVerifier *signing.EdVerifier, nodeID types.NodeID) error {
-	if !edVerifier.Verify(signing.ATX, nodeID, p.ATXID.Bytes(), p.Signature) {
+func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID) error {
+	if !malValidator.Signature(signing.ATX, nodeID, p.ATXID.Bytes(), p.Signature) {
 		return errors.New("invalid signature")
 	}
 
@@ -130,19 +131,32 @@ func (p CommitmentProof) Valid(edVerifier *signing.EdVerifier, nodeID types.Node
 	return nil
 }
 
-type InvalidATXPostProof struct {
-	// ATXID is the ID of the ATX being proven. It is the merkle root from the contents of the ATX.
+type InvalidPostProof struct {
+	// ATXID is the ID of the ATX containing the invalid PoST.
 	ATXID types.ATXID
 
-	// NiPostsRoot is the root of the NiPoST merkle tree.
+	// --- NiPost ---
+
+	// NiPostsTreeRoot is the root of the merkle tree containing the NiPoSTs of the ATX.
+	NiPostsTreeRoot types.Hash32
+	// NiPostsTreeProof contains the merkle path from the root of the ATX merkle tree (ATXID) to the Post field.
+	NiPostsTreeProof []types.Hash32 `scale:"max=32"`
+
+	// NiPostsRoot is the root of the NiPoST containing the invalid PoST.
 	NiPostsRoot types.Hash32
-	// NiPostsProof contains the merkle path from the root of the ATX merkle tree (ATXID) to the Post field.
-	NiPostsProof []types.Hash32 `scale:"max=32"`
+	// NiPostsRootIndex is the index of the NiPoST in the NiPoSTs tree.
+	NiPostRootIndex uint16
+	// NiPostsRootProof contains the merkle path from the NiPostsTreeRoot to the NiPostRoot field.
+	NiPostsRootProof []types.Hash32 `scale:"max=32"`
+
+	// --- Challenge for PoST ---
 
 	// Challenge for the NiPoST.
 	Challenge types.Hash32
 	// ChallengeProof contains the merkle path from the NiPostsRoot to the Challenge field.
 	ChallengeProof []types.Hash32 `scale:"max=32"`
+
+	// --- PoST ---
 
 	// PostsRoot is the root of the PoST merkle tree.
 	PostsRoot types.Hash32
@@ -152,7 +166,7 @@ type InvalidATXPostProof struct {
 	// SubPostRoot is the root of the sub PoST merkle tree.
 	SubPostRoot types.Hash32
 	// SubPostRootIndex is the index of the sub PoST in the NiPoST.
-	SubPostRootIndex uint64
+	SubPostRootIndex uint16
 	// SubPostRootProof contains the merkle path from the PostsRoot to the SubPostRoot field.
 	SubPostRootProof []types.Hash32 `scale:"max=32"`
 
@@ -160,10 +174,12 @@ type InvalidATXPostProof struct {
 	Post PostV1
 	// PostProof contains the merkle path from the SubPostRoot to the PoST field.
 	PostProof []types.Hash32 `scale:"max=32"`
+
 	// NumUnits is the number of units in the PoST.
 	NumUnits uint32
 	// NumUnitsProof contains the merkle path from the PoST to the NumUnits field.
 	NumUnitsProof []types.Hash32 `scale:"max=32"`
+
 	// InvalidPostIndex is the index of the leaf that was identified to be invalid.
 	InvalidPostIndex uint32
 
@@ -175,24 +191,25 @@ type InvalidATXPostProof struct {
 
 // Valid returns no error if the proof is valid. It verifies that the signature is valid, that the merkle proofs are
 // and that the provided post is invalid.
-func (p InvalidATXPostProof) Valid(
-	edVerifier *signing.EdVerifier,
-	validator postVerifier,
-	commitmentATX types.ATXID,
+func (p InvalidPostProof) Valid(
+	malValidator MalfeasanceValidator,
 	nodeID types.NodeID,
+	commitmentATX types.ATXID,
 ) error {
-	if !edVerifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
+	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
 		return errors.New("invalid signature")
 	}
 
-	nipostsProof := make([][]byte, len(p.NiPostsProof))
-	for i, h := range p.NiPostsProof {
-		nipostsProof[i] = h.Bytes()
+	// -- NiPoST --
+
+	nipostsTreeProof := make([][]byte, len(p.NiPostsTreeProof))
+	for i, h := range p.NiPostsTreeProof {
+		nipostsTreeProof[i] = h.Bytes()
 	}
 	ok, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(NIPostsRootIndex)},
-		[][]byte{p.NiPostsRoot.Bytes()},
-		nipostsProof,
+		[][]byte{p.NiPostsTreeRoot.Bytes()},
+		nipostsTreeProof,
 		p.ATXID.Bytes(),
 		atxTreeHash,
 	)
@@ -202,6 +219,26 @@ func (p InvalidATXPostProof) Valid(
 	if !ok {
 		return errors.New("invalid NiPoST root proof")
 	}
+
+	nipostsProof := make([][]byte, len(p.NiPostsRootProof))
+	for i, h := range p.NiPostsRootProof {
+		nipostsProof[i] = h.Bytes()
+	}
+	ok, err = merkle.ValidatePartialTree(
+		[]uint64{uint64(p.NiPostRootIndex)},
+		[][]byte{p.NiPostsRoot.Bytes()},
+		nipostsProof,
+		p.NiPostsTreeRoot.Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		return fmt.Errorf("validate NiPoST proof: %w", err)
+	}
+	if !ok {
+		return errors.New("invalid NiPoST proof")
+	}
+
+	// -- Challenge for PoST --
 
 	challengeProof := make([][]byte, len(p.ChallengeProof))
 	for i, h := range p.ChallengeProof {
@@ -221,6 +258,8 @@ func (p InvalidATXPostProof) Valid(
 		return errors.New("invalid NiPoST challenge proof")
 	}
 
+	// --- PoST ---
+
 	postsProof := make([][]byte, len(p.PostsRootProof))
 	for i, h := range p.PostsRootProof {
 		postsProof[i] = h.Bytes()
@@ -229,7 +268,7 @@ func (p InvalidATXPostProof) Valid(
 		[]uint64{uint64(PostsRootIndex)},
 		[][]byte{p.PostsRoot.Bytes()},
 		postsProof,
-		p.NiPostsRoot.Bytes(),
+		p.NiPostsTreeRoot.Bytes(),
 		atxTreeHash,
 	)
 	if err != nil {
@@ -244,7 +283,7 @@ func (p InvalidATXPostProof) Valid(
 		subPostProof[i] = h.Bytes()
 	}
 	ok, err = merkle.ValidatePartialTree(
-		[]uint64{p.SubPostRootIndex},
+		[]uint64{uint64(p.SubPostRootIndex)},
 		[][]byte{p.SubPostRoot.Bytes()},
 		subPostProof,
 		p.PostsRoot.Bytes(),
@@ -296,7 +335,7 @@ func (p InvalidATXPostProof) Valid(
 		return errors.New("invalid PoST num units proof")
 	}
 
-	if err := validator.PostV2Idx(
+	if err := malValidator.PostIndex(
 		context.Background(),
 		nodeID,
 		commitmentATX,

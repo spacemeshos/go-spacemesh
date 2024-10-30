@@ -48,7 +48,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
@@ -147,7 +147,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
@@ -200,7 +200,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
@@ -243,7 +243,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
@@ -284,7 +284,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
