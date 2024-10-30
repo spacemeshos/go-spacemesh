@@ -197,7 +197,6 @@ func (n *node) withOracle() *node {
 		n.db,
 		n.atxsdata,
 		signing.NewVRFVerifier(),
-		layersPerEpoch,
 	)
 	return n
 }

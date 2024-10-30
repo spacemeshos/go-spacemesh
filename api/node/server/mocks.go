@@ -22,6 +22,7 @@ import (
 type MockpoetDB struct {
 	ctrl     *gomock.Controller
 	recorder *MockpoetDBMockRecorder
+	isgomock struct{}
 }
 
 // MockpoetDBMockRecorder is the mock recorder for MockpoetDB.
@@ -83,6 +84,7 @@ func (c *MockpoetDBValidateAndStoreCall) DoAndReturn(f func(context.Context, *ty
 type Mockhare struct {
 	ctrl     *gomock.Controller
 	recorder *MockhareMockRecorder
+	isgomock struct{}
 }
 
 // MockhareMockRecorder is the mock recorder for Mockhare.

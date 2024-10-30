@@ -92,15 +92,14 @@ type Oracle struct {
 	// until graded oracle is implemented
 	synced bool
 
-	beacons        system.BeaconGetter
-	atxsdata       *atxsdata.Data
-	db             sql.Executor
-	vrfVerifier    vrfVerifier
-	cfg            Config
-	minerWeightFn  func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
-	totalWeightFn  func(ctx context.Context, layer types.LayerID) (uint64, error)
-	layersPerEpoch uint32
-	log            *zap.Logger
+	beacons       system.BeaconGetter
+	atxsdata      *atxsdata.Data
+	db            sql.Executor
+	vrfVerifier   vrfVerifier
+	cfg           Config
+	minerWeightFn func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
+	totalWeightFn func(ctx context.Context, layer types.LayerID) (uint64, error)
+	log           *zap.Logger
 }
 
 type Opt func(*Oracle)
@@ -135,7 +134,6 @@ func New(
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
-	layersPerEpoch uint32,
 	opts ...Opt,
 ) *Oracle {
 	activesCache, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
@@ -157,7 +155,7 @@ func New(
 	for _, opt := range opts {
 		opt(oracle)
 	}
-	oracle.log.Info("hare oracle initialized", zap.Uint32("epoch size", layersPerEpoch), zap.Inline(&oracle.cfg))
+	oracle.log.Info("hare oracle initialized", zap.Inline(&oracle.cfg))
 	return oracle
 }
 

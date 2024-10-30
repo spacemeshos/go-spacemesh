@@ -398,7 +398,6 @@ type App struct {
 	pprofService       *http.Server
 	profilerService    *pyroscope.Profiler
 	syncer             *syncer.Syncer
-	proposalListener   *proposals.Handler
 	proposalBuilder    *miner.ProposalBuilder
 	mesh               *mesh.Mesh
 	atxsdata           *atxsdata.Data
@@ -411,7 +410,6 @@ type App struct {
 	blockGen           *blocks.Generator
 	certifier          *blocks.Certifier
 	atxBuilder         *activation.Builder
-	nipostBuilder      *activation.NIPostBuilder
 	atxHandler         *activation.Handler
 	txHandler          *txs.TxHandler
 	validator          *activation.Validator
@@ -419,11 +417,9 @@ type App struct {
 	beaconProtocol     *beacon.ProtocolDriver
 	log                log.Log
 	syncLogger         log.Log
-	svm                *vm.VM
 	conState           *txs.ConservativeState
 	fetcher            *fetch.Fetch
 	ptimesync          *peersync.Sync
-	tortoise           *tortoise.Tortoise
 	updater            *bootstrap.Updater
 	poetDb             *activation.PoetDb
 	postVerifier       activation.PostVerifier
@@ -819,7 +815,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.db,
 		app.atxsdata,
 		vrfVerifier,
-		app.Config.LayersPerEpoch,
 		extraOpts...,
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
@@ -925,23 +920,12 @@ func (app *App) initServices(ctx context.Context) error {
 			nodeServiceClient,
 			app.hOracle,
 			logger,
-			// app.host,
-			// app.db,
-			// app.atxsdata,
-			// proposalsStore,
-			// app.edVerifier,
-			// newSyncer,
-			// patrol,
-			// hare3.WithLogger(logger),
-			// hare3.WithConfig(),
-			// hare3.WithResultsChan(app.hareResultsChan),
 		)
 		for _, sig := range app.signers {
 			app.remoteHare.Register(sig)
 		}
-		app.remoteHare.Start()
+		app.remoteHare.Start(ctx)
 	} else {
-
 		if app.Config.HARE3.Enable {
 			app.hare3 = hare3.New(
 				app.clock,

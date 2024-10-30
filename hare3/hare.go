@@ -363,7 +363,6 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	beacon, err := beacons.Get(h.db, layer.GetEpoch())
-	fmt.Println("beacon value get result", beacon)
 	h.log.Info("hare tried to get beacon value", zap.Error(err))
 	if err != nil || beacon == types.EmptyBeacon {
 		h.log.Debug("no beacon",
@@ -374,7 +373,6 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	h.patrol.SetHareInCharge(layer)
-	fmt.Println("continuing hare")
 	h.mu.Lock()
 	// signer can't join mid session
 	s := &session{
@@ -683,9 +681,5 @@ func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.
 }
 
 func (h *Hare) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
-	beacon, err := beacons.Get(h.db, epoch)
-	if err != nil {
-		return beacon, fmt.Errorf("get beacon: %w")
-	}
-	return beacon, nil
+	return beacons.Get(h.db, epoch)
 }

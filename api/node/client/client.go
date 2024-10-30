@@ -30,6 +30,7 @@ var (
 	_ activation.AtxService   = (*NodeService)(nil)
 	_ activation.PoetDbStorer = (*NodeService)(nil)
 	_ pubsub.Publisher        = (*NodeService)(nil)
+	_ hare3.NodeService       = (*NodeService)(nil)
 )
 
 type Config struct {
@@ -127,7 +128,10 @@ func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProof
 }
 
 func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
-	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx, externalRef0.LayerID(layer), externalRef0.HareIter(round.Iter), externalRef0.HareRound(round.Round))
+	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx,
+		externalRef0.LayerID(layer),
+		externalRef0.HareIter(round.Iter),
+		externalRef0.HareRound(round.Round))
 	if err != nil {
 		return nil, err
 	}
