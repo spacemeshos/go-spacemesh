@@ -19,13 +19,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
@@ -233,18 +233,28 @@ func TestParseTransactions(t *testing.T) {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
+		addr, err := wallet.Address(*signing.NewPublicKey(pub))
+		require.NoError(t, err)
+		accounts[i] = types.Account{Address: addr, Balance: 1e12}
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(
+	tx, err := wallet.Spawn(keys[0], 0)
+	require.NoError(t, err)
+	_, _, err = vminst.Apply(
 		types.GetEffectiveGenesis().Add(1),
 		[]types.Transaction{
-			{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))},
+			{RawTx: types.NewRawTx(tx)},
 		},
 		nil)
 	require.NoError(t, err)
-	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	mangled, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
 	mangled[len(mangled)-1] -= 1
+
+	tx1, err := wallet.Spend(keys[2], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
+	tx2, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
 
 	for _, tc := range []struct {
 		desc   string
@@ -266,19 +276,19 @@ func TestParseTransactions(t *testing.T) {
 		},
 		{
 			"not spawned",
-			wallet.Spend(keys[2], accounts[3].Address, 100, 0),
+			tx1,
 			false,
 			expectParseError(codes.NotFound, "not spawned"),
 		},
 		{
 			"all good",
-			wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			tx2,
 			false,
 			parseOk(),
 		},
 		{
 			"all good with verification",
-			wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			tx2,
 			true,
 			parseOk(),
 		},

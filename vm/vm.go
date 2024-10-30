@@ -83,7 +83,7 @@ type VM struct {
 }
 
 // Validation initializes validation request.
-func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
+func (v *VM) Validation(raw types.RawTx) system.ValidationRequestNew {
 	return &Request{
 		vm:      v,
 		cache:   core.NewStagedCache(core.DBLoader{Executor: v.db}),
@@ -457,12 +457,12 @@ func (r *Request) Cache() *core.StagedCache {
 }
 
 // Parse header from the raw transaction.
-func (r *Request) Parse(cache *core.StagedCache) (*core.Header, error) {
+func (r *Request) Parse(loader core.AccountLoader) (*core.Header, error) {
 	start := time.Now()
 	if len(r.raw.Raw) > core.TxSizeLimit {
 		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
 	}
-	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, cache, r.vm.cfg, r.raw.Raw, r.decoder)
+	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, loader, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -597,7 +597,7 @@ func parse(
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
-	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, loader)
+	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
 	}

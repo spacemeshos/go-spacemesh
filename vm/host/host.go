@@ -219,13 +219,14 @@ func (h *hostContext) Call(
 		}
 
 		// read template code
-		templateAccount, err = h.host.Get(types.Address(*template))
+		acct, err := h.host.Get(types.Address(*template))
 		if err != nil || len(templateAccount.State) == 0 {
 			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
 				Err:  fmt.Errorf("loading template account: %w", err),
 			}
 		}
+		templateAccount = &acct
 	}
 
 	// balance transfer

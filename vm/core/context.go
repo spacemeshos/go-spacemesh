@@ -277,8 +277,9 @@ func (c *Context) Has(address types.Address) (bool, error) {
 	return true, nil
 }
 
-func (c *Context) Get(address types.Address) (*Account, error) {
-	return c.load(address)
+func (c *Context) Get(address types.Address) (Account, error) {
+	addr, err := c.load(address)
+	return *addr, err
 }
 
 func (c *Context) load(address types.Address) (*Account, error) {

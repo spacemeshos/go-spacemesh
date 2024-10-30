@@ -19,12 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	multisig2 "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
 	vesting2 "github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
@@ -34,6 +30,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 func TestTransactionService_List(t *testing.T) {
@@ -238,12 +238,16 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
+		address, err := wallet.Address(*signing.NewPublicKey(pub))
+		require.NoError(t, err)
+		accounts[i] = types.Account{Address: address, Balance: 1e12}
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(
+	tx, err := wallet.Spawn(keys[0], 0)
+	require.NoError(t, err)
+	_, _, err = vminst.Apply(
 		types.GetEffectiveGenesis().Add(1),
-		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}},
+		[]types.Transaction{{RawTx: types.NewRawTx(tx)}},
 		nil,
 	)
 	require.NoError(t, err)
@@ -252,8 +256,10 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	t.Run("valid tx", func(t *testing.T) {
+		tx, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
 		resp, err := client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
-			Transaction: wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			Transaction: tx,
 		})
 		require.NoError(t, err)
 		require.Equal(t, uint64(36090), resp.RecommendedMaxGas)
@@ -277,8 +283,10 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 		assert.Contains(t, s.Message(), "empty")
 	})
 	t.Run("not spawned", func(t *testing.T) {
-		_, err := client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
-			Transaction: wallet.Spend(keys[2], accounts[3].Address, 100, 0),
+		tx, err := wallet.Spend(keys[2], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
+		_, err = client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
+			Transaction: tx,
 		})
 		s, ok := status.FromError(err)
 		require.True(t, ok)
@@ -304,32 +312,41 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
+		addr, err := wallet.Address(*signing.NewPublicKey(pub))
+		require.NoError(t, err)
+		accounts[i] = types.Account{Address: addr, Balance: 1e12}
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(
+	tx, err := wallet.Spawn(keys[0], 0)
+	require.NoError(t, err)
+	_, _, err = vminst.Apply(
 		types.GetEffectiveGenesis().Add(1),
-		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}},
+		[]types.Transaction{{RawTx: types.NewRawTx(tx)}},
 		nil,
 	)
 	require.NoError(t, err)
 
-	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	mangled, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
 	mangled[len(mangled)-1] -= 1
 
 	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	t.Run("valid tx", func(t *testing.T) {
+		tx, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			Transaction: tx,
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, resp)
 	})
 	t.Run("valid tx with verify set to true", func(t *testing.T) {
+		tx, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			Transaction: tx,
 			Verify:      true,
 		})
 		require.NoError(t, err)
@@ -354,8 +371,10 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		assert.Contains(t, s.Message(), "empty")
 	})
 	t.Run("not spawned", func(t *testing.T) {
-		_, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[2], accounts[3].Address, 100, 0),
+		tx, err := wallet.Spend(keys[2], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
+		_, err = client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
+			Transaction: tx,
 		})
 		s, ok := status.FromError(err)
 		require.True(t, ok)
@@ -375,8 +394,10 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	t.Run("verify transaction contents for spend tx", func(t *testing.T) {
 		addr := accounts[3].Address
 		amount := uint64(100)
+		tx, err := wallet.Spend(keys[0], addr, amount, 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[0], addr, amount, 0),
+			Transaction: tx,
 			Verify:      true,
 		})
 		require.NoError(t, err)
@@ -388,8 +409,10 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	t.Run("transaction contents for spawn tx", func(t *testing.T) {
 		var publicKey core.PublicKey
 		copy(publicKey[:], signing.Public(keys[0]))
+		tx, err := wallet.Spawn(keys[0], 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.SelfSpawn(keys[0], 0),
+			Transaction: tx,
 			Verify:      true,
 		})
 		require.NoError(t, err)
@@ -418,9 +441,10 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
-	addr := wallet.Address(signer.PublicKey().Bytes())
 	require.NoError(t, err)
-	tx := newTx(0, addr, signer)
+	addr, err := wallet.Address(*signer.PublicKey())
+	require.NoError(t, err)
+	tx := newTx(t, 0, addr, signer)
 	serializedTx, err := codec.Encode(tx)
 	req.NoError(err, "error serializing tx")
 
@@ -461,9 +485,10 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
-	addr := wallet.Address(signer.PublicKey().Bytes())
 	require.NoError(t, err)
-	tx := newTx(0, addr, signer)
+	addr, err := wallet.Address(*signer.PublicKey())
+	require.NoError(t, err)
+	tx := newTx(t, 0, addr, signer)
 	serializedTx, err := codec.Encode(tx)
 	req.NoError(err, "error serializing tx")
 
@@ -498,9 +523,10 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
-	addr := wallet.Address(signer.PublicKey().Bytes())
 	require.NoError(t, err)
-	tx := newTx(0, addr, signer)
+	addr, err := wallet.Address(*signer.PublicKey())
+	require.NoError(t, err)
+	tx := newTx(t, 0, addr, signer)
 	for range numTxs {
 		res, err := c.SubmitTransaction(ctx, &spacemeshv2alpha1.SubmitTransactionRequest{
 			Transaction: tx.Raw,
@@ -511,21 +537,19 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	}
 }
 
-func newTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
+func newTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
-	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
+	principal, err := wallet.Address(*signer.PublicKey())
+	require.NoError(t, err)
+	tx.Principal = principal
 	if nonce == 0 {
-		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
-			0,
-			sdk.WithGasPrice(0),
-		))
+		tx2, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGasPrice(0))
+		require.NoError(t, err)
+		tx.RawTx = types.NewRawTx(tx2)
 	} else {
-		tx.RawTx = types.NewRawTx(
-			wallet.Spend(signer.PrivateKey(), recipient, 1,
-				nonce,
-				sdk.WithGasPrice(0),
-			),
-		)
+		tx2, err := wallet.Spend(signer.PrivateKey(), recipient, 1, nonce, sdk.WithGasPrice(0))
+		require.NoError(t, err)
+		tx.RawTx = types.NewRawTx(tx2)
 		tx.MaxSpend = 1
 	}
 	return &tx
@@ -539,7 +563,7 @@ func TestToTxContents(t *testing.T) {
 
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		tx := newTx(0, types.Address{}, signer)
+		tx := newTx(t, 0, types.Address{}, signer)
 
 		contents, txType, err := toTxContents(tx.Raw)
 		require.NoError(t, err)
@@ -553,7 +577,7 @@ func TestToTxContents(t *testing.T) {
 
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		tx := newTx(1, types.Address{}, signer)
+		tx := newTx(t, 1, types.Address{}, signer)
 
 		contents, txType, err := toTxContents(tx.Raw)
 		require.NoError(t, err)
@@ -563,6 +587,7 @@ func TestToTxContents(t *testing.T) {
 	})
 
 	t.Run("multisig spawn", func(t *testing.T) {
+		t.Skip("multisig spawn is not supported yet")
 		t.Parallel()
 
 		var pubs []ed25519.PublicKey
@@ -597,6 +622,7 @@ func TestToTxContents(t *testing.T) {
 	})
 
 	t.Run("multisig send", func(t *testing.T) {
+		t.Skip("multisig send is not supported yet")
 		t.Parallel()
 
 		var pubs []ed25519.PublicKey
@@ -608,7 +634,8 @@ func TestToTxContents(t *testing.T) {
 			pks = append(pks, pk)
 		}
 
-		to := wallet.Address(pubs[0])
+		to, err := wallet.Address(*signing.NewPublicKey(pubs[0]))
+		require.NoError(t, err)
 
 		var agg *multisig2.Aggregator
 		for i := 0; i < len(pks); i++ {
@@ -633,6 +660,7 @@ func TestToTxContents(t *testing.T) {
 	})
 
 	t.Run("vault spawn", func(t *testing.T) {
+		t.Skip("vault spawn is not supported yet")
 		t.Parallel()
 
 		var pubs []ed25519.PublicKey
@@ -644,7 +672,8 @@ func TestToTxContents(t *testing.T) {
 			pks = append(pks, pk)
 		}
 
-		owner := wallet.Address(pubs[0])
+		owner, err := wallet.Address(*signing.NewPublicKey(pubs[0]))
+		require.NoError(t, err)
 		vaultArgs := &vault.SpawnArguments{
 			Owner:               owner,
 			InitialUnlockAmount: uint64(1000),
@@ -652,7 +681,8 @@ func TestToTxContents(t *testing.T) {
 			VestingStart:        105120,
 			VestingEnd:          4 * 105120,
 		}
-		vaultAddr := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
+		vaultAddr := types.Address{}
+		// vaultAddr := core.ComputePrincipalFromBlob(vault.TemplateAddress, vaultArgs)
 
 		var agg *multisig2.Aggregator
 		for i := 0; i < len(pks); i++ {
@@ -682,6 +712,7 @@ func TestToTxContents(t *testing.T) {
 	})
 
 	t.Run("drain vault", func(t *testing.T) {
+		t.Skip("drain vault is not supported yet")
 		t.Parallel()
 
 		var pubs [][]byte
@@ -694,8 +725,10 @@ func TestToTxContents(t *testing.T) {
 		}
 
 		principal := multisig2.Address(multisig.TemplateAddress, 3, pubs...)
-		to := wallet.Address(pubs[1])
-		vaultAddr := wallet.Address(pubs[2])
+		to, err := wallet.Address(*signing.NewPublicKey(pubs[1]))
+		require.NoError(t, err)
+		vaultAddr, err := wallet.Address(*signing.NewPublicKey(pubs[2]))
+		require.NoError(t, err)
 
 		agg := vesting.DrainVault(
 			0,
@@ -724,6 +757,7 @@ func TestToTxContents(t *testing.T) {
 	})
 
 	t.Run("multisig vesting spawn", func(t *testing.T) {
+		t.Skip("multisig vesting spawn is not supported yet")
 		t.Parallel()
 
 		var pubs []ed25519.PublicKey

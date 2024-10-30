@@ -39,9 +39,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	peerinfomocks "github.com/spacemeshos/go-spacemesh/p2p/peerinfo/mocks"
@@ -54,6 +51,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const (
@@ -153,8 +153,16 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	addr1 = wallet.Address(signer1.PublicKey().Bytes())
-	addr2 = wallet.Address(signer2.PublicKey().Bytes())
+	addr1, err = wallet.Address(*signer1.PublicKey())
+	if err != nil {
+		log.Println("failed to create address:", err)
+		os.Exit(1)
+	}
+	addr2, err = wallet.Address(*signer2.PublicKey())
+	if err != nil {
+		log.Println("failed to create address:", err)
+		os.Exit(1)
+	}
 
 	globalAtx = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
@@ -371,25 +379,29 @@ func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
 	return t.nonces[addr], nil
 }
 
-func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequest {
+func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequestNew {
 	panic("dont use this")
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
-	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
+	principal, err := wallet.Address(*signer.PublicKey())
+	if err != nil {
+		panic(err)
+	}
+	tx.Principal = principal
 	if nonce == 0 {
-		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
-			0,
-			sdk.WithGasPrice(0),
-		))
+		tx2, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGasPrice(0))
+		if err != nil {
+			panic(err)
+		}
+		tx.RawTx = types.NewRawTx(tx2)
 	} else {
-		tx.RawTx = types.NewRawTx(
-			wallet.Spend(signer.PrivateKey(), recipient, 1,
-				nonce,
-				sdk.WithGasPrice(0),
-			),
-		)
+		tx2, err := wallet.Spend(signer.PrivateKey(), recipient, 1, nonce, sdk.WithGasPrice(0))
+		if err != nil {
+			panic(err)
+		}
+		tx.RawTx = types.NewRawTx(tx2)
 		tx.MaxSpend = 1
 	}
 	return &tx
@@ -2315,7 +2327,8 @@ func TestTransactionsRewards(t *testing.T) {
 	t.Cleanup(cancel)
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 
-	address := wallet.Address(types.RandomNodeID().Bytes())
+	address, err := wallet.Address(*signing.NewPublicKey(types.RandomNodeID().Bytes()))
+	req.NoError(err)
 	weight := new(big.Rat).SetFloat64(18.7)
 	rewards := []types.CoinbaseReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
 
@@ -2385,16 +2398,20 @@ func TestVMAccountUpdates(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		keys[i] = signer
+		addr, err := wallet.Address(*signing.NewPublicKey(signer.NodeID().Bytes()))
+		require.NoError(t, err)
 		accounts[i] = types.Account{
-			Address: wallet.Address(signer.NodeID().Bytes()),
+			Address: addr,
 			Balance: initial,
 		}
 	}
 	require.NoError(t, svm.ApplyGenesis(accounts))
 	spawns := []types.Transaction{}
 	for _, key := range keys {
+		tx, err := wallet.Spawn(key.PrivateKey(), 0)
+		require.NoError(t, err)
 		spawns = append(spawns, types.Transaction{
-			RawTx: types.NewRawTx(wallet.SelfSpawn(key.PrivateKey(), 0)),
+			RawTx: types.NewRawTx(tx),
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
@@ -2429,10 +2446,10 @@ func TestVMAccountUpdates(t *testing.T) {
 	spends := []types.Transaction{}
 	const amount = 100_000
 	for _, key := range keys {
+		tx, err := wallet.Spend(key.PrivateKey(), types.Address{1}, amount, 1)
+		require.NoError(t, err)
 		spends = append(spends, types.Transaction{
-			RawTx: types.NewRawTx(wallet.Spend(
-				key.PrivateKey(), types.Address{1}, amount, 1,
-			)),
+			RawTx: types.NewRawTx(tx),
 		})
 	}
 	_, _, err = svm.Apply(lid.Add(1), spends, nil)

@@ -39,7 +39,7 @@ type conservativeState interface {
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
 	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
-	Validation(raw types.RawTx) system.ValidationRequest
+	Validation(raw types.RawTx) system.ValidationRequestNew
 }
 
 // syncer is the API to get sync status.

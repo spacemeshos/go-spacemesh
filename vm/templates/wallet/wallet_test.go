@@ -165,7 +165,7 @@ func TestVerify(t *testing.T) {
 	// point to the library path
 	os.Setenv("ATHENA_LIB_PATH", "../../../build")
 
-	wallet, err := New(mockHost, mockLoader)
+	wallet, err := New(mockHost)
 	require.NoError(t, err)
 
 	t.Run("Invalid", func(t *testing.T) {

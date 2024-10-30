@@ -46,7 +46,7 @@ type Handler interface {
 	Exec(Host, Payload) ([]byte, int64, error)
 
 	// New instantiates Template from host context.
-	New(Host, AccountLoader) (Template, error)
+	New(Host) (Template, error)
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
@@ -109,7 +109,7 @@ type Host interface {
 	Spawn(Address, []byte) (Address, error)
 	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)
 	Has(Address) (bool, error)
-	Get(Address) (*Account, error)
+	Get(Address) (Account, error)
 	Template() Template
 	Layer() LayerID
 	GetGenesisID() Hash20

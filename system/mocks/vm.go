@@ -40,57 +40,19 @@ func (m *MockValidationRequest) EXPECT() *MockValidationRequestMockRecorder {
 	return m.recorder
 }
 
-// Cache mocks base method.
-func (m *MockValidationRequest) Cache() *core.StagedCache {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Cache")
-	ret0, _ := ret[0].(*core.StagedCache)
-	return ret0
-}
-
-// Cache indicates an expected call of Cache.
-func (mr *MockValidationRequestMockRecorder) Cache() *MockValidationRequestCacheCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cache", reflect.TypeOf((*MockValidationRequest)(nil).Cache))
-	return &MockValidationRequestCacheCall{Call: call}
-}
-
-// MockValidationRequestCacheCall wrap *gomock.Call
-type MockValidationRequestCacheCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockValidationRequestCacheCall) Return(arg0 *core.StagedCache) *MockValidationRequestCacheCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockValidationRequestCacheCall) Do(f func() *core.StagedCache) *MockValidationRequestCacheCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockValidationRequestCacheCall) DoAndReturn(f func() *core.StagedCache) *MockValidationRequestCacheCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Parse mocks base method.
-func (m *MockValidationRequest) Parse(arg0 *core.StagedCache) (*types.TxHeader, error) {
+func (m *MockValidationRequest) Parse() (*types.TxHeader, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Parse", arg0)
+	ret := m.ctrl.Call(m, "Parse")
 	ret0, _ := ret[0].(*types.TxHeader)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Parse indicates an expected call of Parse.
-func (mr *MockValidationRequestMockRecorder) Parse(arg0 any) *MockValidationRequestParseCall {
+func (mr *MockValidationRequestMockRecorder) Parse() *MockValidationRequestParseCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockValidationRequest)(nil).Parse), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockValidationRequest)(nil).Parse))
 	return &MockValidationRequestParseCall{Call: call}
 }
 
@@ -106,13 +68,13 @@ func (c *MockValidationRequestParseCall) Return(arg0 *types.TxHeader, arg1 error
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockValidationRequestParseCall) Do(f func(*core.StagedCache) (*types.TxHeader, error)) *MockValidationRequestParseCall {
+func (c *MockValidationRequestParseCall) Do(f func() (*types.TxHeader, error)) *MockValidationRequestParseCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockValidationRequestParseCall) DoAndReturn(f func(*core.StagedCache) (*types.TxHeader, error)) *MockValidationRequestParseCall {
+func (c *MockValidationRequestParseCall) DoAndReturn(f func() (*types.TxHeader, error)) *MockValidationRequestParseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -151,6 +113,144 @@ func (c *MockValidationRequestVerifyCall) Do(f func() bool) *MockValidationReque
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockValidationRequestVerifyCall) DoAndReturn(f func() bool) *MockValidationRequestVerifyCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockValidationRequestNew is a mock of ValidationRequestNew interface.
+type MockValidationRequestNew struct {
+	ctrl     *gomock.Controller
+	recorder *MockValidationRequestNewMockRecorder
+}
+
+// MockValidationRequestNewMockRecorder is the mock recorder for MockValidationRequestNew.
+type MockValidationRequestNewMockRecorder struct {
+	mock *MockValidationRequestNew
+}
+
+// NewMockValidationRequestNew creates a new mock instance.
+func NewMockValidationRequestNew(ctrl *gomock.Controller) *MockValidationRequestNew {
+	mock := &MockValidationRequestNew{ctrl: ctrl}
+	mock.recorder = &MockValidationRequestNewMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockValidationRequestNew) EXPECT() *MockValidationRequestNewMockRecorder {
+	return m.recorder
+}
+
+// Cache mocks base method.
+func (m *MockValidationRequestNew) Cache() *core.StagedCache {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Cache")
+	ret0, _ := ret[0].(*core.StagedCache)
+	return ret0
+}
+
+// Cache indicates an expected call of Cache.
+func (mr *MockValidationRequestNewMockRecorder) Cache() *MockValidationRequestNewCacheCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Cache", reflect.TypeOf((*MockValidationRequestNew)(nil).Cache))
+	return &MockValidationRequestNewCacheCall{Call: call}
+}
+
+// MockValidationRequestNewCacheCall wrap *gomock.Call
+type MockValidationRequestNewCacheCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockValidationRequestNewCacheCall) Return(arg0 *core.StagedCache) *MockValidationRequestNewCacheCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockValidationRequestNewCacheCall) Do(f func() *core.StagedCache) *MockValidationRequestNewCacheCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockValidationRequestNewCacheCall) DoAndReturn(f func() *core.StagedCache) *MockValidationRequestNewCacheCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Parse mocks base method.
+func (m *MockValidationRequestNew) Parse(arg0 core.AccountLoader) (*types.TxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Parse", arg0)
+	ret0, _ := ret[0].(*types.TxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Parse indicates an expected call of Parse.
+func (mr *MockValidationRequestNewMockRecorder) Parse(arg0 any) *MockValidationRequestNewParseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockValidationRequestNew)(nil).Parse), arg0)
+	return &MockValidationRequestNewParseCall{Call: call}
+}
+
+// MockValidationRequestNewParseCall wrap *gomock.Call
+type MockValidationRequestNewParseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockValidationRequestNewParseCall) Return(arg0 *types.TxHeader, arg1 error) *MockValidationRequestNewParseCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockValidationRequestNewParseCall) Do(f func(core.AccountLoader) (*types.TxHeader, error)) *MockValidationRequestNewParseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockValidationRequestNewParseCall) DoAndReturn(f func(core.AccountLoader) (*types.TxHeader, error)) *MockValidationRequestNewParseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Verify mocks base method.
+func (m *MockValidationRequestNew) Verify() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Verify")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockValidationRequestNewMockRecorder) Verify() *MockValidationRequestNewVerifyCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockValidationRequestNew)(nil).Verify))
+	return &MockValidationRequestNewVerifyCall{Call: call}
+}
+
+// MockValidationRequestNewVerifyCall wrap *gomock.Call
+type MockValidationRequestNewVerifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockValidationRequestNewVerifyCall) Return(arg0 bool) *MockValidationRequestNewVerifyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockValidationRequestNewVerifyCall) Do(f func() bool) *MockValidationRequestNewVerifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockValidationRequestNewVerifyCall) DoAndReturn(f func() bool) *MockValidationRequestNewVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

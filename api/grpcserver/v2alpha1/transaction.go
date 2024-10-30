@@ -36,7 +36,7 @@ const (
 
 // transactionConState is an API to validate transaction.
 type transactionConState interface {
-	Validation(raw types.RawTx) system.ValidationRequest
+	Validation(raw types.RawTx) system.ValidationRequestNew
 }
 
 // transactionSyncer is an API to get sync status.
@@ -146,7 +146,7 @@ func (s *TransactionService) ParseTransaction(
 	}
 	raw := types.NewRawTx(request.Transaction)
 	req := s.conState.Validation(raw)
-	header, err := req.Parse()
+	header, err := req.Parse(req.Cache())
 	if errors.Is(err, core.ErrNotSpawned) {
 		return nil, status.Error(codes.NotFound, "account is not spawned")
 	} else if errors.Is(err, core.ErrMalformed) {
@@ -223,7 +223,7 @@ func (s *TransactionService) EstimateGas(
 	raw := types.NewRawTx(request.Transaction)
 	req := s.conState.Validation(raw)
 	// TODO: Fill signature if it's not present
-	header, err := req.Parse()
+	header, err := req.Parse(req.Cache())
 	if errors.Is(err, core.ErrNotSpawned) {
 		return nil, status.Error(codes.NotFound, "account is not spawned")
 	} else if errors.Is(err, core.ErrMalformed) {

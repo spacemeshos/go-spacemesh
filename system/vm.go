@@ -9,7 +9,12 @@ import (
 
 // ValidationRequest parses transaction and verifies it.
 type ValidationRequest interface {
-	Parse(*core.StagedCache) (*types.TxHeader, error)
+	Parse() (*types.TxHeader, error)
+	Verify() bool
+}
+
+type ValidationRequestNew interface {
+	Parse(core.AccountLoader) (*types.TxHeader, error)
 	Verify() bool
 	Cache() *core.StagedCache
 }

@@ -15,9 +15,9 @@ import (
 )
 
 // New returns Wallet instance with SpawnArguments.
-func New(host core.Host, cache core.AccountLoader) (*Wallet, error) {
+func New(host core.Host) (*Wallet, error) {
 	// Load the template account
-	templateAccount, err := cache.Get(host.TemplateAddress())
+	templateAccount, err := host.Get(host.TemplateAddress())
 	if err != nil {
 		return nil, fmt.Errorf("new wallet template: failed to load template account: %w", err)
 	} else if len(templateAccount.State) == 0 {
@@ -26,7 +26,7 @@ func New(host core.Host, cache core.AccountLoader) (*Wallet, error) {
 	templateCode := templateAccount.State
 
 	// Load the wallet state
-	walletAccount, err := cache.Get(host.Principal())
+	walletAccount, err := host.Get(host.Principal())
 	if err != nil {
 		return nil, fmt.Errorf("new wallet template: failed to load wallet principal account: %w", err)
 	} else if len(walletAccount.State) == 0 && !host.IsSpawn() {
