@@ -6,18 +6,18 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 )
 
 // AddressList represents a list of addresses.
-type AddressList []multiaddr.Multiaddr
+type AddressList []ma.Multiaddr
 
 // AddressListFromStringSlice parses strings in the slice into
 // Multiaddr values and returns them as an AddressList.
 func AddressListFromStringSlice(s []string) (AddressList, error) {
 	al := make(AddressList, len(s))
 	for n, s := range s {
-		ma, err := multiaddr.NewMultiaddr(s)
+		ma, err := ma.NewMultiaddr(s)
 		if err != nil {
 			return nil, fmt.Errorf("address %s is not a valid multiaddr: %w", s, err)
 		}

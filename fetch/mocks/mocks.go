@@ -23,6 +23,7 @@ import (
 type Mockrequester struct {
 	ctrl     *gomock.Controller
 	recorder *MockrequesterMockRecorder
+	isgomock struct{}
 }
 
 // MockrequesterMockRecorder is the mock recorder for Mockrequester.
@@ -171,6 +172,7 @@ func (c *MockrequesterStreamRequestCall) DoAndReturn(f func(context.Context, p2p
 type MockSyncValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MockSyncValidatorMockRecorder
+	isgomock struct{}
 }
 
 // MockSyncValidatorMockRecorder is the mock recorder for MockSyncValidator.
@@ -232,6 +234,7 @@ func (c *MockSyncValidatorHandleMessageCall) DoAndReturn(f func(context.Context,
 type MockPoetValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MockPoetValidatorMockRecorder
+	isgomock struct{}
 }
 
 // MockPoetValidatorMockRecorder is the mock recorder for MockPoetValidator.
@@ -293,6 +296,7 @@ func (c *MockPoetValidatorValidateAndStoreMsgCall) DoAndReturn(f func(context.Co
 type Mockhost struct {
 	ctrl     *gomock.Controller
 	recorder *MockhostMockRecorder
+	isgomock struct{}
 }
 
 // MockhostMockRecorder is the mock recorder for Mockhost.

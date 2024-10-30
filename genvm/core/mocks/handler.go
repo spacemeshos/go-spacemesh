@@ -21,6 +21,7 @@ import (
 type MockHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockHandlerMockRecorder
+	isgomock struct{}
 }
 
 // MockHandlerMockRecorder is the mock recorder for MockHandler.
@@ -41,7 +42,7 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 }
 
 // Args mocks base method.
-func (m *MockHandler) Args(arg0 byte) scale.Type {
+func (m *MockHandler) Args(arg0 uint8) scale.Type {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Args", arg0)
 	ret0, _ := ret[0].(scale.Type)
@@ -67,19 +68,19 @@ func (c *MockHandlerArgsCall) Return(arg0 scale.Type) *MockHandlerArgsCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerArgsCall) Do(f func(byte) scale.Type) *MockHandlerArgsCall {
+func (c *MockHandlerArgsCall) Do(f func(uint8) scale.Type) *MockHandlerArgsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerArgsCall) DoAndReturn(f func(byte) scale.Type) *MockHandlerArgsCall {
+func (c *MockHandlerArgsCall) DoAndReturn(f func(uint8) scale.Type) *MockHandlerArgsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Exec mocks base method.
-func (m *MockHandler) Exec(arg0 core.Host, arg1 byte, arg2 scale.Encodable) error {
+func (m *MockHandler) Exec(arg0 core.Host, arg1 uint8, arg2 scale.Encodable) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
@@ -105,13 +106,13 @@ func (c *MockHandlerExecCall) Return(arg0 error) *MockHandlerExecCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerExecCall) Do(f func(core.Host, byte, scale.Encodable) error) *MockHandlerExecCall {
+func (c *MockHandlerExecCall) Do(f func(core.Host, uint8, scale.Encodable) error) *MockHandlerExecCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, byte, scale.Encodable) error) *MockHandlerExecCall {
+func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, uint8, scale.Encodable) error) *MockHandlerExecCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -195,7 +196,7 @@ func (c *MockHandlerNewCall) DoAndReturn(f func(any) (core.Template, error)) *Mo
 }
 
 // Parse mocks base method.
-func (m *MockHandler) Parse(arg0 byte, arg1 *scale.Decoder) (core.ParseOutput, error) {
+func (m *MockHandler) Parse(arg0 uint8, arg1 *scale.Decoder) (core.ParseOutput, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Parse", arg0, arg1)
 	ret0, _ := ret[0].(core.ParseOutput)
@@ -222,13 +223,13 @@ func (c *MockHandlerParseCall) Return(arg0 core.ParseOutput, arg1 error) *MockHa
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerParseCall) Do(f func(byte, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
+func (c *MockHandlerParseCall) Do(f func(uint8, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerParseCall) DoAndReturn(f func(byte, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
+func (c *MockHandlerParseCall) DoAndReturn(f func(uint8, *scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

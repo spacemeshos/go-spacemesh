@@ -1,14 +1,12 @@
 PRAGMA user_version = 10;
 CREATE TABLE atx_blobs
 (
-    id         CHAR(32),
+    id         CHAR(32) PRIMARY KEY,
     pubkey     CHAR(32) NOT NULL,
     epoch      INT NOT NULL,
     atx        BLOB,
     version    INTEGER
 );
-CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
-CREATE UNIQUE INDEX atx_blobs_id ON atx_blobs (id);
 CREATE TABLE atx_sync_requests 
 (
     epoch     INT NOT NULL,
@@ -60,7 +58,6 @@ CREATE TABLE poet_certificates
     certificate  BLOB NOT NULL,
     signature    BLOB NOT NULL
 );
-CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);
 CREATE TABLE poet_registration
 (
     id            CHAR(32) NOT NULL,
@@ -91,3 +88,5 @@ CREATE TABLE prepared_activeset
     data          BLOB NOT NULL,
     PRIMARY KEY (kind, epoch)
 ) WITHOUT ROWID;
+CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
+CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);

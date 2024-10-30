@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	// by assumption adversarial weight can't be larger than 1/3.
+	// By assumption adversarial weight can't be larger than 1/3.
 	adversarialWeightFraction = 3
-	// nodes should not be on different sides of the local threshold if they receive different adversarial votes.
+	// Nodes should not be on different sides of the local threshold if they receive different adversarial votes.
 	localThresholdFraction = 3
-	// for comleteness:
+	// For completeness:
 	// global threshold is set in a such way so that if adversary
 	// cancels their weight (adversarialWeightFraction) - honest nodes should still cross local threshold.
 )

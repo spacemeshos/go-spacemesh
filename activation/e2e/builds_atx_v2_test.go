@@ -53,8 +53,9 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 
 	opts := testPostSetupOpts(t)
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
@@ -65,7 +66,8 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
@@ -93,9 +95,9 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	t.Cleanup(clock.Close)
 
 	client := ae2e.NewTestPoetClient(1, poetCfg)
-	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
-	localDB := localsql.InMemory()
+	localDB := localsql.InMemoryTest(t)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,

@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -93,7 +92,7 @@ func (s *Server) GetActivationAtxAtxId(
 	id := types.BytesToATXID(idBytes)
 	atx, err := s.atxService.Atx(ctx, id)
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, activation.ErrNotFound):
 		return GetActivationAtxAtxId404Response{}, nil
 	case err != nil:
 		return nil, err
@@ -126,7 +125,7 @@ func (s *Server) GetActivationLastAtxNodeId(
 
 	atxid, err := s.atxService.LastATX(ctx, id)
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, activation.ErrNotFound):
 		return GetActivationLastAtxNodeId404Response{}, nil
 	case err != nil:
 		return nil, err

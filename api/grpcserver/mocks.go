@@ -18,7 +18,6 @@ import (
 	multiaddr "github.com/multiformats/go-multiaddr"
 	activation "github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	peerinfo "github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
@@ -30,6 +29,7 @@ import (
 type MocknetworkInfo struct {
 	ctrl     *gomock.Controller
 	recorder *MocknetworkInfoMockRecorder
+	isgomock struct{}
 }
 
 // MocknetworkInfoMockRecorder is the mock recorder for MocknetworkInfo.
@@ -320,6 +320,7 @@ func (c *MocknetworkInfoReachabilityCall) DoAndReturn(f func() network.Reachabil
 type MockconservativeState struct {
 	ctrl     *gomock.Controller
 	recorder *MockconservativeStateMockRecorder
+	isgomock struct{}
 }
 
 // MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
@@ -732,6 +733,7 @@ func (c *MockconservativeStateValidationCall) DoAndReturn(f func(types.RawTx) sy
 type Mocksyncer struct {
 	ctrl     *gomock.Controller
 	recorder *MocksyncerMockRecorder
+	isgomock struct{}
 }
 
 // MocksyncerMockRecorder is the mock recorder for Mocksyncer.
@@ -793,6 +795,7 @@ func (c *MocksyncerIsSyncedCall) DoAndReturn(f func(context.Context) bool) *Mock
 type MocktxValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MocktxValidatorMockRecorder
+	isgomock struct{}
 }
 
 // MocktxValidatorMockRecorder is the mock recorder for MocktxValidator.
@@ -854,6 +857,7 @@ func (c *MocktxValidatorVerifyAndCacheTxCall) DoAndReturn(f func(context.Context
 type MockatxProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockatxProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
@@ -913,10 +917,10 @@ func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.Acti
 }
 
 // MalfeasanceProof mocks base method.
-func (m *MockatxProvider) MalfeasanceProof(id types.NodeID) (*wire.MalfeasanceProof, error) {
+func (m *MockatxProvider) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MalfeasanceProof", id)
-	ret0, _ := ret[0].(*wire.MalfeasanceProof)
+	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -934,19 +938,19 @@ type MockatxProviderMalfeasanceProofCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxProviderMalfeasanceProofCall) Return(arg0 *wire.MalfeasanceProof, arg1 error) *MockatxProviderMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) Return(arg0 []byte, arg1 error) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxProviderMalfeasanceProofCall) Do(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) Do(f func(types.NodeID) ([]byte, error)) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxProviderMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) (*wire.MalfeasanceProof, error)) *MockatxProviderMalfeasanceProofCall {
+func (c *MockatxProviderMalfeasanceProofCall) DoAndReturn(f func(types.NodeID) ([]byte, error)) *MockatxProviderMalfeasanceProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1033,6 +1037,7 @@ func (c *MockatxProviderPreviousCall) DoAndReturn(f func(types.ATXID) ([]types.A
 type MockpostState struct {
 	ctrl     *gomock.Controller
 	recorder *MockpostStateMockRecorder
+	isgomock struct{}
 }
 
 // MockpostStateMockRecorder is the mock recorder for MockpostState.
@@ -1094,6 +1099,7 @@ func (c *MockpostStatePostStatesCall) DoAndReturn(f func() map[types.IdentityDes
 type MockpostSupervisor struct {
 	ctrl     *gomock.Controller
 	recorder *MockpostSupervisorMockRecorder
+	isgomock struct{}
 }
 
 // MockpostSupervisorMockRecorder is the mock recorder for MockpostSupervisor.
@@ -1347,6 +1353,7 @@ func (c *MockpostSupervisorStopCall) DoAndReturn(f func(bool) error) *MockpostSu
 type MockgrpcPostService struct {
 	ctrl     *gomock.Controller
 	recorder *MockgrpcPostServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockgrpcPostServiceMockRecorder is the mock recorder for MockgrpcPostService.
@@ -1406,6 +1413,7 @@ func (c *MockgrpcPostServiceAllowConnectionsCall) DoAndReturn(f func(bool)) *Moc
 type MockpeerCounter struct {
 	ctrl     *gomock.Controller
 	recorder *MockpeerCounterMockRecorder
+	isgomock struct{}
 }
 
 // MockpeerCounterMockRecorder is the mock recorder for MockpeerCounter.
@@ -1467,6 +1475,7 @@ func (c *MockpeerCounterPeerCountCall) DoAndReturn(f func() uint64) *MockpeerCou
 type Mockpeers struct {
 	ctrl     *gomock.Controller
 	recorder *MockpeersMockRecorder
+	isgomock struct{}
 }
 
 // MockpeersMockRecorder is the mock recorder for Mockpeers.
@@ -1566,6 +1575,7 @@ func (c *MockpeersGetPeersCall) DoAndReturn(f func() []p2p.Peer) *MockpeersGetPe
 type MockgenesisTimeAPI struct {
 	ctrl     *gomock.Controller
 	recorder *MockgenesisTimeAPIMockRecorder
+	isgomock struct{}
 }
 
 // MockgenesisTimeAPIMockRecorder is the mock recorder for MockgenesisTimeAPI.
@@ -1665,6 +1675,7 @@ func (c *MockgenesisTimeAPIGenesisTimeCall) DoAndReturn(f func() time.Time) *Moc
 type MockmeshAPI struct {
 	ctrl     *gomock.Controller
 	recorder *MockmeshAPIMockRecorder
+	isgomock struct{}
 }
 
 // MockmeshAPIMockRecorder is the mock recorder for MockmeshAPI.
@@ -1997,6 +2008,7 @@ func (c *MockmeshAPIProcessedLayerCall) DoAndReturn(f func() types.LayerID) *Moc
 type Mockoracle struct {
 	ctrl     *gomock.Controller
 	recorder *MockoracleMockRecorder
+	isgomock struct{}
 }
 
 // MockoracleMockRecorder is the mock recorder for Mockoracle.

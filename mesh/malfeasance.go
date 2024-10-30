@@ -50,6 +50,19 @@ func NewMalfeasanceHandler(
 	return mh
 }
 
+func (mh *MalfeasanceHandler) Info(data wire.ProofData) (map[string]string, error) {
+	bp, ok := data.(*wire.BallotProof)
+	if !ok {
+		return nil, errors.New("wrong message type for multi ballots")
+	}
+	return map[string]string{
+		"msg1":       bp.Messages[0].InnerMsg.MsgHash.String(),
+		"msg2":       bp.Messages[1].InnerMsg.MsgHash.String(),
+		"layer":      bp.Messages[0].InnerMsg.Layer.String(),
+		"smesher_id": bp.Messages[0].SmesherID.String(),
+	}, nil
+}
+
 func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error) {
 	bp, ok := data.(*wire.BallotProof)
 	if !ok {

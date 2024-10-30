@@ -38,7 +38,7 @@ import (
 
 func TestTransactionService_List(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 
 	gen := fixture.NewTransactionResultGenerator().WithAddresses(2)
@@ -223,7 +223,7 @@ func TestTransactionService_List(t *testing.T) {
 
 func TestTransactionService_EstimateGas(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	vminst := vm.New(db)
 	ctx := context.Background()
 
@@ -289,7 +289,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 
 func TestTransactionService_ParseTransaction(t *testing.T) {
 	types.SetLayersPerEpoch(5)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	vminst := vm.New(db)
 	ctx := context.Background()
 
@@ -408,7 +408,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemoryTest(t), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -451,7 +451,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemoryTest(t), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -488,7 +488,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktransactionValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	svc := NewTransactionService(statesql.InMemory(), nil, syncer, txHandler, publisher)
+	svc := NewTransactionService(statesql.InMemoryTest(t), nil, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 

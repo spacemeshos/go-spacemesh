@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -27,6 +28,7 @@ type dbAtxService struct {
 type dbAtxServiceConfig struct {
 	// delay before PoST in ATX is considered valid (counting from the time it was received)
 	postValidityDelay time.Duration
+	trusted           []types.NodeID
 }
 
 type dbAtxServiceOption func(*dbAtxServiceConfig)
@@ -34,6 +36,12 @@ type dbAtxServiceOption func(*dbAtxServiceConfig)
 func WithPostValidityDelay(delay time.Duration) dbAtxServiceOption {
 	return func(cfg *dbAtxServiceConfig) {
 		cfg.postValidityDelay = delay
+	}
+}
+
+func WithTrustedIDs(ids ...types.NodeID) dbAtxServiceOption {
+	return func(cfg *dbAtxServiceConfig) {
+		cfg.trusted = ids
 	}
 }
 
@@ -64,12 +72,19 @@ func NewDBAtxService(
 }
 
 func (s *dbAtxService) Atx(_ context.Context, id types.ATXID) (*types.ActivationTx, error) {
-	return atxs.Get(s.db, id)
+	atx, err := atxs.Get(s.db, id)
+	if errors.Is(err, sql.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return atx, err
 }
 
 func (s *dbAtxService) LastATX(ctx context.Context, id types.NodeID) (*types.ActivationTx, error) {
 	atxid, err := atxs.GetLastIDByNodeID(s.db, id)
-	if err != nil {
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return nil, ErrNotFound
+	case err != nil:
 		return nil, fmt.Errorf("getting last ATXID: %w", err)
 	}
 	return atxs.Get(s.db, atxid)
@@ -84,22 +99,16 @@ func (s *dbAtxService) PositioningATX(ctx context.Context, maxPublish types.Epoc
 
 	// positioning ATX publish epoch must be lower than the publish epoch of built ATX
 	positioningAtxPublished := min(latestPublished, maxPublish)
-	id, err := findFullyValidHighTickAtx(
+	return findFullyValidHighTickAtx(
 		ctx,
 		s.atxsdata,
 		positioningAtxPublished,
 		s.golden,
 		s.validator, s.logger,
 		VerifyChainOpts.AssumeValidBefore(time.Now().Add(-s.cfg.postValidityDelay)),
-		// VerifyChainOpts.WithTrustedID(nodeID),
+		VerifyChainOpts.WithTrustedIDs(s.cfg.trusted...),
 		VerifyChainOpts.WithLogger(s.logger),
 	)
-	if err != nil {
-		s.logger.Info("search failed - using golden atx as positioning atx", zap.Error(err))
-		id = s.golden
-	}
-
-	return id, nil
 }
 
 func findFullyValidHighTickAtx(

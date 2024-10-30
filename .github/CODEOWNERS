@@ -4,4 +4,4 @@
 # Default owners for the repository.
 # Unless further specified all of those will be requested for review whenever someone opens a PR.
 # These are also the only users who are allowed to `bors try` and `bors merge`.
-*       @dshulyak @fasmat @poszu @ivan4th @acud
+*       @dshulyak @fasmat @poszu @ivan4th @acud @jellonek

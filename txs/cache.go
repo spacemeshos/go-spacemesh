@@ -94,7 +94,7 @@ func (ac *accountCache) availBalance() uint64 {
 	return ac.txsByNonce.Back().Value.(*candidate).postBalance
 }
 
-func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
+func (ac *accountCache) precheck(ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
 		return nil, nil, fmt.Errorf("%w: len %d", errTooManyNonce, ac.txsByNonce.Len())
@@ -127,7 +127,7 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 		replaced    *NanoTX
 		err         error
 	)
-	prev, cand, err = ac.precheck(logger, ntx)
+	prev, cand, err = ac.precheck(ntx)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func findBest(ntxs []*NanoTX, balance uint64, blockSeed []byte) *NanoTX {
 	return best
 }
 
-// adding a tx to the account cache. possible outcomes:
+// Adding a tx to the account cache. Possible outcomes:
 //   - nonce is smaller than the next nonce in state: reject from cache
 //   - too many txs present: reject from cache
 //   - nonce already exists in the cache:
@@ -337,8 +337,8 @@ func (ac *accountCache) addPendingFromNonce(
 	return ac.addBatch(logger, byPrincipal[ac.addr], nil)
 }
 
-// find the first nonce without a layer.
-// a nonce with a valid layer indicates that it's already packed in a proposal/block.
+// Find the first nonce without a layer.
+// A nonce with a valid layer indicates that it's already packed in a proposal/block.
 func (ac *accountCache) getMempool(logger *zap.Logger) []*NanoTX {
 	bests := make([]*NanoTX, 0, maxTXsPerAcct)
 	offset := 0

@@ -37,6 +37,11 @@ func init() {
 }
 
 func testnet() config.Config {
+	genesisTime, err := time.Parse(time.RFC3339, "2023-09-13T18:00:00Z")
+	if err != nil {
+		panic(err)
+	}
+
 	p2pconfig := p2p.DefaultConfig()
 
 	smeshing := config.DefaultSmeshingConfig()
@@ -87,7 +92,7 @@ func testnet() config.Config {
 			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: config.GenesisConfig{
-			GenesisTime: "2023-09-13T18:00:00Z",
+			GenesisTime: config.Genesis(genesisTime),
 			ExtraData:   "0000000000000000000000c76c58ebac180989673fd6d237b40e66ed5c976ec3",
 		},
 		Tortoise: tortoise.Config{
@@ -126,6 +131,7 @@ func testnet() config.Config {
 
 			InfoCacheTTL:      5 * time.Minute,
 			PowParamsCacheTTL: 5 * time.Minute,
+			PoetProofsCache:   200,
 		},
 		POST: activation.PostConfig{
 			MinNumUnits:   2,

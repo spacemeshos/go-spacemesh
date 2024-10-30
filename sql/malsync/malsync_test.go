@@ -10,7 +10,7 @@ import (
 )
 
 func TestMalfeasanceSyncState(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	timestamp, err := GetSyncState(db)
 	require.NoError(t, err)
 	require.Equal(t, time.Time{}, timestamp)

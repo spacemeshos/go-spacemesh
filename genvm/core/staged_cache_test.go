@@ -10,7 +10,7 @@ import (
 )
 
 func TestCacheGetCopies(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ss := core.NewStagedCache(core.DBLoader{db})
 	address := core.Address{1}
 	account, err := ss.Get(address)
@@ -23,7 +23,7 @@ func TestCacheGetCopies(t *testing.T) {
 }
 
 func TestCacheUpdatePreserveOrder(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ss := core.NewStagedCache(core.DBLoader{db})
 	order := []core.Address{{3}, {1}, {2}}
 	for _, address := range order {

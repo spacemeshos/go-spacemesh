@@ -14,14 +14,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 type NodeService struct {
 	client *ClientWithResponses
-	logger *zap.Logger
 }
 
 var (
@@ -51,7 +49,6 @@ func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*Node
 	}
 	return &NodeService{
 		client: client,
-		logger: logger,
 	}, nil
 }
 
@@ -63,7 +60,7 @@ func (s *NodeService) Atx(ctx context.Context, id types.ATXID) (*types.Activatio
 	switch resp.StatusCode() {
 	case http.StatusOK:
 	case http.StatusNotFound:
-		return nil, common.ErrNotFound
+		return nil, activation.ErrNotFound
 	default:
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status())
 	}
@@ -78,7 +75,7 @@ func (s *NodeService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.
 	switch resp.StatusCode() {
 	case http.StatusOK:
 	case http.StatusNotFound:
-		return nil, common.ErrNotFound
+		return nil, activation.ErrNotFound
 	default:
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status())
 	}

@@ -39,16 +39,16 @@ type testExecutor struct {
 	mvm      *mocks.MockvmState
 }
 
-func newTestExecutor(t *testing.T) *testExecutor {
-	ctrl := gomock.NewController(t)
+func newTestExecutor(tb testing.TB) *testExecutor {
+	ctrl := gomock.NewController(tb)
 	te := &testExecutor{
-		tb:       t,
-		db:       statesql.InMemory(),
+		tb:       tb,
+		db:       statesql.InMemoryTest(tb),
 		atxsdata: atxsdata.New(),
 		mvm:      mocks.NewMockvmState(ctrl),
 		mcs:      mocks.NewMockconservativeState(ctrl),
 	}
-	te.exec = mesh.NewExecutor(te.db, te.atxsdata, te.mvm, te.mcs, zaptest.NewLogger(t))
+	te.exec = mesh.NewExecutor(te.db, te.atxsdata, te.mvm, te.mcs, zaptest.NewLogger(tb))
 	return te
 }
 

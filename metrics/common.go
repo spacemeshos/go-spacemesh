@@ -36,6 +36,13 @@ func NewHistogram(name, subsystem, help string, labels []string) *prometheus.His
 	)
 }
 
+// NewSimpleHistogram returns a histogram without labels.
+func NewSimpleHistogram(name, subsystem, help string, buckets []float64) prometheus.Histogram {
+	return promauto.NewHistogram(
+		prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets},
+	)
+}
+
 // NewHistogramWithBuckets creates a Histogram metrics with custom buckets.
 func NewHistogramWithBuckets(
 	name, subsystem, help string,
@@ -76,9 +83,15 @@ func ReportMessageLatency(protocol, msgType string, latency time.Duration) {
 	receivedMessagesLatency.WithLabelValues(protocol, msgType, sign).Observe(seconds)
 }
 
-func NewCounterOpts(ns, name, help string) prometheus.CounterOpts {
+// NewSimpleCounter creates a simple prometheus counter.
+func NewSimpleCounter(subsystem, name, help string) prometheus.Counter {
+	return promauto.NewCounter(NewCounterOpts(subsystem, name, help))
+}
+
+func NewCounterOpts(subsystem, name, help string) prometheus.CounterOpts {
 	return prometheus.CounterOpts{
-		Namespace: ns,
+		Namespace: Namespace,
+		Subsystem: subsystem,
 		Name:      name,
 		Help:      help,
 	}

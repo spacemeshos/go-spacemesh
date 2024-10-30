@@ -476,7 +476,7 @@ func TestValidateMerkleProof(t *testing.T) {
 }
 
 func TestVerifyChainDeps(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()
@@ -543,7 +543,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		v := NewMockPostVerifier(ctrl)
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
-		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedID(signer.NodeID()))
+		err = validator.VerifyChain(ctx, vAtx.ID(), goldenATXID, VerifyChainOpts.WithTrustedIDs(signer.NodeID()))
 		require.NoError(t, err)
 	})
 
@@ -662,7 +662,7 @@ func TestVerifyChainDeps(t *testing.T) {
 }
 
 func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()

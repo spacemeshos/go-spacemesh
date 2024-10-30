@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand/v2"
 	"time"
 
 	"go.uber.org/zap"
@@ -107,9 +108,10 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloa
 		return fmt.Errorf("failed to get last request time for epoch %v: %w", publish, err)
 	}
 	// in case of immediate we will request epoch info without waiting EpochInfoInterval
-	immediate := len(state) == 0 || (errors.Is(err, sql.ErrNotFound) || !lastSuccess.After(downloadUntil))
+	immediate := len(state) == 0 || errors.Is(err, sql.ErrNotFound) || !lastSuccess.After(downloadUntil)
 	if !immediate && total == downloaded {
-		s.logger.Debug("sync for epoch was completed before",
+		s.logger.Debug(
+			"sync for epoch was completed before",
 			log.ZContext(parent),
 			zap.Uint32("epoch_id", publish.Uint32()),
 		)
@@ -120,7 +122,7 @@ func (s *Syncer) Download(parent context.Context, publish types.EpochID, downloa
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan epochUpdate, s.cfg.EpochInfoPeers)
 	if len(state) == 0 {
-		state = map[types.ATXID]int{}
+		state = atxsync.EpochSyncState{}
 	} else {
 		updates <- epochUpdate{time: lastSuccess, update: state}
 	}
@@ -150,22 +152,24 @@ func (s *Syncer) downloadEpochInfo(
 ) error {
 	interval := s.cfg.EpochInfoInterval
 	if immediate {
-		interval = 0
+		interval = 1 * time.Second // not really immediate, to avoid an endless loop that doesn't wait between requests
 	}
+
 	for {
-		if interval != 0 {
-			s.logger.Debug(
-				"waiting between epoch info requests",
-				zap.Uint32("epoch_id", publish.Uint32()),
-				zap.Duration("duration", interval),
-			)
-		}
+		// randomize interval to avoid sync spikes
+		minWait := time.Duration(float64(interval) * 0.9)
+		maxWait := time.Duration(float64(interval) * 1.1)
+		wait := minWait + rand.N(maxWait-minWait+1)
+		s.logger.Debug(
+			"waiting between epoch info requests",
+			zap.Uint32("epoch_id", publish.Uint32()),
+			zap.Duration("duration", wait),
+		)
+
 		select {
 		case <-ctx.Done():
 			return nil
-		// TODO(dshulyak) this has to be randomized in a followup
-		// when sync will be schedulled in advance, in order to smooth out request rate across the network
-		case <-time.After(interval):
+		case <-time.After(wait):
 		}
 
 		peers := s.fetcher.SelectBestShuffled(s.cfg.EpochInfoPeers)
@@ -195,9 +199,9 @@ func (s *Syncer) downloadEpochInfo(
 			)
 			// adding hashes to fetcher is not useful as they overflow the cache and are not used
 			// so we switch to asking best peers immediately
-			update := make(map[types.ATXID]int, len(epochData.AtxIDs))
+			update := make(atxsync.EpochSyncState, len(epochData.AtxIDs))
 			for _, atx := range epochData.AtxIDs {
-				update[atx] = 0
+				update[atx] = &atxsync.IDSyncState{Tries: 0}
 			}
 			select {
 			case <-ctx.Done():
@@ -214,7 +218,7 @@ func (s *Syncer) downloadAtxs(
 	ctx context.Context,
 	publish types.EpochID,
 	downloadUntil time.Time,
-	state map[types.ATXID]int,
+	state atxsync.EpochSyncState,
 	updates <-chan epochUpdate,
 ) error {
 	var (
@@ -277,7 +281,8 @@ func (s *Syncer) downloadAtxs(
 				downloaded[atx] = true
 				continue
 			}
-			if requests >= s.cfg.RequestsLimit {
+			// drop from memory if we already persisted info that this atx is not available
+			if requests.Tries >= s.cfg.RequestsLimit && requests.TriesPersisted() {
 				delete(state, atx)
 				continue
 			}
@@ -317,9 +322,10 @@ func (s *Syncer) downloadAtxs(
 							continue
 						}
 						if errors.Is(err, pubsub.ErrValidationReject) {
-							state[types.ATXID(hash)] = s.cfg.RequestsLimit
+							// if atx invalid there is no pointing in re-downloading it again
+							state[types.ATXID(hash)].Tries = s.cfg.RequestsLimit
 						} else {
-							state[types.ATXID(hash)]++
+							state[types.ATXID(hash)].Tries++
 						}
 					}
 				}
@@ -341,5 +347,5 @@ func (s *Syncer) downloadAtxs(
 
 type epochUpdate struct {
 	time   time.Time
-	update map[types.ATXID]int
+	update atxsync.EpochSyncState
 }

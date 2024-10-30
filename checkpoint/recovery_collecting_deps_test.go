@@ -10,14 +10,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestCollectingDeps(t *testing.T) {
 	golden := types.RandomATXID()
 	t.Run("collect marriage ATXs", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 
 		marriageATX := &wire.ActivationTxV1{
 			InnerActivationTxV1: wire.InnerActivationTxV1{
@@ -47,9 +47,9 @@ func TestCollectingDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		// marry the two IDs
-		err := identities.SetMarriage(db, marriageATX.SmesherID, &identities.MarriageData{ATX: marriageATX.ID()})
+		err := marriage.Add(db, marriage.Info{ID: 1, ATX: marriageATX.ID(), NodeID: marriageATX.SmesherID})
 		require.NoError(t, err)
-		err = identities.SetMarriage(db, atx.SmesherID, &identities.MarriageData{ATX: marriageATX.ID()})
+		err = marriage.Add(db, marriage.Info{ID: 1, ATX: marriageATX.ID(), NodeID: marriageATX.SmesherID})
 		require.NoError(t, err)
 
 		all := map[types.ATXID]struct{}{golden: {}}

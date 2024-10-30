@@ -83,7 +83,7 @@ func Get(db sql.Executor, id types.ATXID) (*types.ActivationTx, error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
-	q := fmt.Sprintf("%v where id =?1;", fullQuery)
+	q := fmt.Sprintf("%s where id =?1;", fullQuery)
 	v, err := load(db, q, enc)
 	if err != nil {
 		return nil, fmt.Errorf("get id %s: %w", id.String(), err)
@@ -780,7 +780,8 @@ func IterateAtxsOps(
 	_, err := db.Exec(
 		fullQuery+builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
-		decoder(fn))
+		decoder(fn),
+	)
 	return err
 }
 
@@ -796,7 +797,7 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 	return
 }
 
-// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasence proofs if they exist.
+// IterateForGrading selects every atx from publish epoch and joins identities to load malfeasance proofs if they exist.
 func IterateForGrading(
 	db sql.Executor,
 	epoch types.EpochID,

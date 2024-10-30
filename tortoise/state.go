@@ -204,11 +204,6 @@ func (l *layerInfo) computeOpinion(hdist uint32, last types.LayerID) {
 }
 
 type (
-	baseInfo struct {
-		id    types.BallotID
-		layer types.LayerID
-	}
-
 	conditions struct {
 		// set after comparing with local beacon
 		badBeacon bool
@@ -226,7 +221,6 @@ type (
 	ballotInfo struct {
 		id         types.BallotID
 		layer      types.LayerID
-		base       baseInfo
 		malicious  bool
 		weight     weight
 		reference  *referenceInfo
@@ -434,7 +428,7 @@ type headerWithSign struct {
 	sign   sign
 }
 
-func decodeVotes(evicted, blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID, error) {
+func decodeVotes(_, blid types.LayerID, base *ballotInfo, exceptions types.Votes) (votes, types.LayerID, error) {
 	from := base.layer
 	diff := map[types.LayerID]map[types.BlockID]headerWithSign{}
 	for _, header := range exceptions.Against {

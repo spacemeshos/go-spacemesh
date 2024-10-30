@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -16,13 +17,38 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
+func Test_ConReturnedToPool(t *testing.T) {
+	db := InMemory(
+		WithLogger(zaptest.NewLogger(t)),
+		WithConnections(1),
+		WithDatabaseSchema(&Schema{
+			Script: `CREATE TABLE testing1 (
+				id varchar primary key,
+				field int
+			);`,
+		}),
+		WithNoCheckSchemaDrift(),
+	)
+
+	require.Panics(t, func() {
+		db.Exec("select 1", nil, func(stmt *Statement) bool {
+			panic("decoder panic")
+		})
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	con := db.pool.Get(ctx)
+	require.NotNil(t, con, "connection was not returned")
+}
+
 func Test_Transaction_Isolation(t *testing.T) {
 	db := InMemory(
 		WithLogger(zaptest.NewLogger(t)),
 		WithConnections(10),
 		WithLatencyMetering(true),
 		WithDatabaseSchema(&Schema{
-			Script: `create table testing1 (
+			Script: `CREATE TABLE testing1 (
 				id varchar primary key,
 				field int
 			);`,
@@ -169,14 +195,14 @@ func TestDatabaseSkipMigrations(t *testing.T) {
 	require.NoError(t, db.Close())
 }
 
-func execSQL(t *testing.T, db Executor, sql string, col int) (result string) {
+func execSQL(tb testing.TB, db Executor, sql string, col int) (result string) {
 	_, err := db.Exec(sql, nil, func(stmt *Statement) bool {
 		if col >= 0 {
 			result = stmt.ColumnText(col)
 		}
 		return true
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return result
 }
 
@@ -195,7 +221,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 			require.NotContains(t, execSQL(t, db, "PRAGMA database_list", 2), "_migrate")
 			require.Equal(t, "wal", execSQL(t, db, "PRAGMA journal_mode", 0))
 			require.Equal(t, "1", execSQL(t, db, "PRAGMA synchronous", 0)) // NORMAL
-			execSQL(t, db, "create table foo(x int)", -1)
+			execSQL(t, db, "CREATE TABLE foo(x int)", -1)
 			return nil
 		}).Times(1)
 
@@ -211,7 +237,7 @@ func TestDatabaseVacuumState(t *testing.T) {
 			// Synchronous is off for the temp database as it is deleted in case
 			// of migration failure.
 			require.Equal(t, "0", execSQL(t, db, "PRAGMA synchronous", 0)) // OFF
-			execSQL(t, db, "create table bar(y int)", -1)
+			execSQL(t, db, "CREATE TABLE bar(y int)", -1)
 			return nil
 		}).Times(1)
 
@@ -273,7 +299,7 @@ func TestDatabaseVacuumStateError(t *testing.T) {
 	migration1 := &sqlMigration{
 		order:   1,
 		name:    "0001_initial.sql",
-		content: "create table foo(x int)",
+		content: "CREATE TABLE foo(x int);",
 	}
 
 	fail := true
@@ -285,7 +311,7 @@ func TestDatabaseVacuumStateError(t *testing.T) {
 			if fail {
 				return errors.New("migration failed")
 			}
-			execSQL(t, db, "create table bar(y int)", -1)
+			execSQL(t, db, "CREATE TABLE bar(y int)", -1)
 			return nil
 		}).Times(2)
 
@@ -364,14 +390,14 @@ func TestDropIncompleteMigration(t *testing.T) {
 	migration1 := &sqlMigration{
 		order:   1,
 		name:    "0001_initial.sql",
-		content: "create table foo(x int)",
+		content: "CREATE TABLE foo(x int);",
 	}
 	migration2 := &faultyMigration{
 		panic: true,
 		sqlMigration: &sqlMigration{
 			order:   2,
 			name:    "0002_test.sql",
-			content: "create table bar(y int)",
+			content: "CREATE TABLE bar(y int);",
 		},
 	}
 
@@ -428,7 +454,7 @@ func TestResumeCopyMigration(t *testing.T) {
 	migration1 := &sqlMigration{
 		order:   1,
 		name:    "0001_initial.sql",
-		content: "create table foo(x int)",
+		content: "CREATE TABLE foo(x int);",
 	}
 	// This migration will panic when VACUUM INTO is attempted to copy
 	// the migrated database to the source database location.
@@ -437,7 +463,7 @@ func TestResumeCopyMigration(t *testing.T) {
 		sqlMigration: &sqlMigration{
 			order:   2,
 			name:    "0002_test.sql",
-			content: "create table bar(y int)",
+			content: "CREATE TABLE bar(y int);",
 		},
 	}
 
@@ -552,7 +578,7 @@ func TestSchemaDrift(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	_, err = db.Exec("create table newtbl (id int)", nil, nil)
+	_, err = db.Exec("CREATE TABLE newtbl (id int)", nil, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, db.Close())
@@ -563,7 +589,7 @@ func TestSchemaDrift(t *testing.T) {
 		WithLogger(logger),
 	)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "newtbl")
+	require.ErrorContains(t, err, "newtbl")
 	require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
 
 	db, err = Open("file:"+dbFile,

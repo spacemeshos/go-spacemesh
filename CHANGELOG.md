@@ -2,13 +2,105 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Unreleased
+
+### Improvements
+
+* [#6408](https://github.com/spacemeshos/go-spacemesh/pull/6408) Prevent empty DB connection pool by freeing connections
+  upon errors during DB operations. This mostly fixes issues when a node is under heavy load from the API.
+
+* [#6417](https://github.com/spacemeshos/go-spacemesh/pull/6417) Fix initial post being deleted when the node is
+  restarted or times out before the first ATX is published.
+
+## v1.7.6
+
+### Upgrade information
+
+The previous version of go-spacemesh introduced a bug into the code that handles incoming ATXs. This bug would cause
+the node to store invalid data in the database and could lead to a node disagreeing about the state of the network with
+other nodes. This version fixes the bug. If you are running v1.7.5 you should upgrade to v1.7.6 as soon as possible and
+rebuild your `state.db`, either via quicksync, from a backup from before you upgraded or by full syncing from genesis.
+
+### Improvements
+
+* [#6398](https://github.com/spacemeshos/go-spacemesh/pull/6398) Fixed a bug where the node would store invalid
+  information about ATXs in the database.
+
+## v1.7.5
+
+### Upgrade information
+
+New event types introduced in the API of the node, see [API #382](https://github.com/spacemeshos/api/pull/382) and 2
+previously existing events where renamed. Old events were marked as deprecated. Please update your automations to use
+new event types.
+
+### Improvements
+
+* [#6378](https://github.com/spacemeshos/go-spacemesh/pull/6387) Improved handling of malicious identities. This reduces
+  the number of DB queries needed during ATX validation.
+
+* [#6386](https://github.com/spacemeshos/go-spacemesh/pull/6386) The API of the node now has its own DB connection pool
+  to reduce the load on the main DB connection pool.
+
+* [#6387](https://github.com/spacemeshos/go-spacemesh/pull/6387) Fix an issue were in rare cases invalid proofs for
+  malicious identities were created.
+
+* [#6393](https://github.com/spacemeshos/go-spacemesh/pull/6393) Further improved proposal building process to avoid
+  late proposals in 1:N setups and during cyclegap.
+
+* [#6382](https://github.com/spacemeshos/go-spacemesh/pull/6382) Improve visibility around poet registrations in events.
+
+## v1.7.4
+
+### Improvements
+
+* [#6370](https://github.com/spacemeshos/go-spacemesh/pull/6370) Fix an issue in v2alpha1 account service API.
+
+## v1.7.3
+
+### Upgrade information
+
+This release prepares the node for enabling hare4 in the near future. No special upgrade steps are required.
+
+### Improvements
+
+* [#6360](https://github.com/spacemeshos/go-spacemesh/pull/6360) Prepare node for hare4.
+
+## v1.7.2
+
+### Upgrade information
+
+This version adds new and updates existing `v2alpha1` API endpoints and does not require any special upgrade steps.
+Additionally performance improvements were made to the node.
+
+### Improvements
+
+* [#6289](https://github.com/spacemeshos/go-spacemesh/pull/6289) Added write coalescing for ballots, reducing the
+  amount of time and CPU we're spending on writing ballots.
+
+* [#6353](https://github.com/spacemeshos/go-spacemesh/pull/6353) Add new malfeasance API.
+
+* [#6357](https://github.com/spacemeshos/go-spacemesh/pull/6353) Add template address to account service.
+
+## v1.7.1
+
+### Upgrade information
+
+This version has no code changes to v1.7.0, only the release process was updated to fix a problem with the windows
+build.
+
+### Improvements
+
+* [#6351](https://github.com/spacemeshos/go-spacemesh/pull/6351) Fixed filenames of windows builds.
+
 ## v1.7.0
 
 ### Upgrade information
 
 Ensure you are running v1.6.x before upgrading to v1.7.0, if you skip v1.6.x your node will not be able to fully migrate
 its local state. Upgrading from v1.6.x to v1.7.0 will require a time consuming database migration that optimizes how
-the node stores at locally and will not allow you to downgrade to v1.6.x again.
+the node stores state locally and will not allow you to downgrade to v1.6.x again. The upgrade process requires you
+to have at least the same amount of free disk space as your current database size for the duration of the migration.
 
 The command line flag `--scan-malfeasant-atxs` has been removed. All malfeasant ATXs before 1.6.0 have been marked as
 such and the node will continue to scan new ATXs for their validity.
@@ -22,7 +114,7 @@ migration, after which it will be freed again.
 The node will now continue to try to register at all configured PoETs until the end of the registration window instead
 of giving up on non-responding PoETs after 15-20 minutes.
 
-Various minor improvements have been made to the node to improve performance and reduce the amount of log spam.
+Various smaller improvements have been made to the node to improve performance and reduce the amount of log spam.
 
 ### Features
 
@@ -52,6 +144,9 @@ are doing.
 
 * [#6274](https://github.com/spacemeshos/go-spacemesh/pull/6274) Additional queries to PoETs are now cached to reduce
   the number of requests made to PoET servers.
+
+* [#6317](https://github.com/spacemeshos/go-spacemesh/pull/6317) Improved the proposal building process. This will
+  reduce the likelihood of nodes publishing proposals late in 1:N setups.
 
 ## Release v1.6.8
 
