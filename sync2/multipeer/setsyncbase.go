@@ -99,7 +99,7 @@ func (ssb *SetSyncBase) receiveKey(k rangesync.KeyBytes, p p2p.Peer) error {
 	key := k.String()
 	has, err := ssb.os.Has(k)
 	if err != nil {
-		return err
+		return fmt.Errorf("checking if the key is present: %w", err)
 	}
 	if !has {
 		ssb.waiting = append(ssb.waiting,
