@@ -380,55 +380,56 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock          *flock.Flock
-	signers           []*signing.EdSigner
-	Config            *config.Config
-	db                sql.StateDatabase
-	apiDB             sql.StateDatabase
-	cachedDB          *datastore.CachedDB
-	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDB           sql.LocalDatabase
-	grpcPublicServer  *grpcserver.Server
-	grpcPrivateServer *grpcserver.Server
-	grpcPostServer    *grpcserver.Server
-	grpcTLSServer     *grpcserver.Server
-	jsonAPIServer     *grpcserver.JSONHTTPServer
-	nodeServiceServer *http.Server
-	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService      *http.Server
-	profilerService   *pyroscope.Profiler
-	syncer            *syncer.Syncer
-	proposalListener  *proposals.Handler
-	proposalBuilder   *miner.ProposalBuilder
-	mesh              *mesh.Mesh
-	atxsdata          *atxsdata.Data
-	clock             *timesync.NodeClock
-	hare3             *hare3.Hare
-	hare4             *hare4.Hare
-	remoteHare        *hare3.RemoteHare
-	hareResultsChan   chan hare4.ConsensusOutput
-	hOracle           *eligibility.Oracle
-	blockGen          *blocks.Generator
-	certifier         *blocks.Certifier
-	atxBuilder        *activation.Builder
-	nipostBuilder     *activation.NIPostBuilder
-	atxHandler        *activation.Handler
-	txHandler         *txs.TxHandler
-	validator         *activation.Validator
-	edVerifier        *signing.EdVerifier
-	beaconProtocol    *beacon.ProtocolDriver
-	log               log.Log
-	syncLogger        log.Log
-	svm               *vm.VM
-	conState          *txs.ConservativeState
-	fetcher           *fetch.Fetch
-	ptimesync         *peersync.Sync
-	tortoise          *tortoise.Tortoise
-	updater           *bootstrap.Updater
-	poetDb            *activation.PoetDb
-	postVerifier      activation.PostVerifier
-	postSupervisor    *activation.PostSupervisor
-	errCh             chan error
+	fileLock           *flock.Flock
+	signers            []*signing.EdSigner
+	Config             *config.Config
+	db                 sql.StateDatabase
+	apiDB              sql.StateDatabase
+	cachedDB           *datastore.CachedDB
+	dbMetrics          *dbmetrics.DBMetricsCollector
+	localDB            sql.LocalDatabase
+	grpcPublicServer   *grpcserver.Server
+	grpcPrivateServer  *grpcserver.Server
+	grpcPostServer     *grpcserver.Server
+	grpcTLSServer      *grpcserver.Server
+	jsonAPIServer      *grpcserver.JSONHTTPServer
+	nodeServiceServer  *http.Server
+	grpcServices       map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService       *http.Server
+	profilerService    *pyroscope.Profiler
+	syncer             *syncer.Syncer
+	proposalListener   *proposals.Handler
+	proposalBuilder    *miner.ProposalBuilder
+	mesh               *mesh.Mesh
+	atxsdata           *atxsdata.Data
+	clock              *timesync.NodeClock
+	hare3              *hare3.Hare
+	hare4              *hare4.Hare
+	remoteHare         *hare3.RemoteHare
+	hareResultsChan    chan hare4.ConsensusOutput
+	hOracle            *eligibility.Oracle
+	blockGen           *blocks.Generator
+	certifier          *blocks.Certifier
+	atxBuilder         *activation.Builder
+	nipostBuilder      *activation.NIPostBuilder
+	atxHandler         *activation.Handler
+	txHandler          *txs.TxHandler
+	validator          *activation.Validator
+	edVerifier         *signing.EdVerifier
+	beaconProtocol     *beacon.ProtocolDriver
+	log                log.Log
+	syncLogger         log.Log
+	svm                *vm.VM
+	conState           *txs.ConservativeState
+	fetcher            *fetch.Fetch
+	ptimesync          *peersync.Sync
+	tortoise           *tortoise.Tortoise
+	updater            *bootstrap.Updater
+	poetDb             *activation.PoetDb
+	postVerifier       activation.PostVerifier
+	postSupervisor     *activation.PostSupervisor
+	malfeasanceHandler *malfeasance.Handler
+	errCh              chan error
 
 	host *p2p.Host
 
