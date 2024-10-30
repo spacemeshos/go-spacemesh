@@ -20,7 +20,6 @@ import (
 type MockpeerStream struct {
 	ctrl     *gomock.Controller
 	recorder *MockpeerStreamMockRecorder
-	isgomock struct{}
 }
 
 // MockpeerStreamMockRecorder is the mock recorder for MockpeerStream.

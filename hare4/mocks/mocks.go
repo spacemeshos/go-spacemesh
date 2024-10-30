@@ -24,7 +24,6 @@ import (
 type MockstreamRequester struct {
 	ctrl     *gomock.Controller
 	recorder *MockstreamRequesterMockRecorder
-	isgomock struct{}
 }
 
 // MockstreamRequesterMockRecorder is the mock recorder for MockstreamRequester.
@@ -129,7 +128,6 @@ func (c *MockstreamRequesterStreamRequestCall) DoAndReturn(f func(context.Contex
 type Mockverifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockverifierMockRecorder
-	isgomock struct{}
 }
 
 // MockverifierMockRecorder is the mock recorder for Mockverifier.

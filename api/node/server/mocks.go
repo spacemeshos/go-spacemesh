@@ -22,7 +22,6 @@ import (
 type MockpoetDB struct {
 	ctrl     *gomock.Controller
 	recorder *MockpoetDBMockRecorder
-	isgomock struct{}
 }
 
 // MockpoetDBMockRecorder is the mock recorder for MockpoetDB.

@@ -22,7 +22,6 @@ import (
 type MockPeerInfo struct {
 	ctrl     *gomock.Controller
 	recorder *MockPeerInfoMockRecorder
-	isgomock struct{}
 }
 
 // MockPeerInfoMockRecorder is the mock recorder for MockPeerInfo.

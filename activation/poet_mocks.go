@@ -22,7 +22,6 @@ import (
 type MockPoetClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockPoetClientMockRecorder
-	isgomock struct{}
 }
 
 // MockPoetClientMockRecorder is the mock recorder for MockPoetClient.

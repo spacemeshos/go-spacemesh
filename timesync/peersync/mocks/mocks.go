@@ -21,7 +21,6 @@ import (
 type MockTime struct {
 	ctrl     *gomock.Controller
 	recorder *MockTimeMockRecorder
-	isgomock struct{}
 }
 
 // MockTimeMockRecorder is the mock recorder for MockTime.
@@ -83,7 +82,6 @@ func (c *MockTimeNowCall) DoAndReturn(f func() time.Time) *MockTimeNowCall {
 type MockgetPeers struct {
 	ctrl     *gomock.Controller
 	recorder *MockgetPeersMockRecorder
-	isgomock struct{}
 }
 
 // MockgetPeersMockRecorder is the mock recorder for MockgetPeers.

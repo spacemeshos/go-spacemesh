@@ -21,7 +21,6 @@ import (
 type MockBeaconCollector struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconCollectorMockRecorder
-	isgomock struct{}
 }
 
 // MockBeaconCollectorMockRecorder is the mock recorder for MockBeaconCollector.
@@ -81,7 +80,6 @@ func (c *MockBeaconCollectorReportBeaconFromBallotCall) DoAndReturn(f func(types
 type MockBeaconGetter struct {
 	ctrl     *gomock.Controller
 	recorder *MockBeaconGetterMockRecorder
-	isgomock struct{}
 }
 
 // MockBeaconGetterMockRecorder is the mock recorder for MockBeaconGetter.

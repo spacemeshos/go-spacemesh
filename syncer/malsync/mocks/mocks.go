@@ -22,7 +22,6 @@ import (
 type Mockfetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockfetcherMockRecorder
-	isgomock struct{}
 }
 
 // MockfetcherMockRecorder is the mock recorder for Mockfetcher.
@@ -161,7 +160,6 @@ func (c *MockfetcherSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Peer) 
 type Mockcounter struct {
 	ctrl     *gomock.Controller
 	recorder *MockcounterMockRecorder
-	isgomock struct{}
 }
 
 // MockcounterMockRecorder is the mock recorder for Mockcounter.

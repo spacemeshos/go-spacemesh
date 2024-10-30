@@ -24,7 +24,6 @@ import (
 type Mockcoin struct {
 	ctrl     *gomock.Controller
 	recorder *MockcoinMockRecorder
-	isgomock struct{}
 }
 
 // MockcoinMockRecorder is the mock recorder for Mockcoin.
@@ -269,7 +268,6 @@ func (c *MockcoinStartRoundCall) DoAndReturn(f func(context.Context, types.Round
 type MockeligibilityChecker struct {
 	ctrl     *gomock.Controller
 	recorder *MockeligibilityCheckerMockRecorder
-	isgomock struct{}
 }
 
 // MockeligibilityCheckerMockRecorder is the mock recorder for MockeligibilityChecker.
@@ -369,7 +367,6 @@ func (c *MockeligibilityCheckerPassThresholdCall) DoAndReturn(f func(types.VrfSi
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerClockMockRecorder
-	isgomock struct{}
 }
 
 // MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
@@ -507,7 +504,6 @@ func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.T
 type MockvrfSigner struct {
 	ctrl     *gomock.Controller
 	recorder *MockvrfSignerMockRecorder
-	isgomock struct{}
 }
 
 // MockvrfSignerMockRecorder is the mock recorder for MockvrfSigner.
@@ -607,7 +603,6 @@ func (c *MockvrfSignerSignCall) DoAndReturn(f func([]byte) types.VrfSignature) *
 type MockvrfVerifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockvrfVerifierMockRecorder
-	isgomock struct{}
 }
 
 // MockvrfVerifierMockRecorder is the mock recorder for MockvrfVerifier.
@@ -669,7 +664,6 @@ func (c *MockvrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, typ
 type MocknonceFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MocknonceFetcherMockRecorder
-	isgomock struct{}
 }
 
 // MocknonceFetcherMockRecorder is the mock recorder for MocknonceFetcher.

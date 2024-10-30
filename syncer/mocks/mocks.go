@@ -25,7 +25,6 @@ import (
 type MocklayerTicker struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerTickerMockRecorder
-	isgomock struct{}
 }
 
 // MocklayerTickerMockRecorder is the mock recorder for MocklayerTicker.
@@ -125,7 +124,6 @@ func (c *MocklayerTickerLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.
 type MockfetchLogic struct {
 	ctrl     *gomock.Controller
 	recorder *MockfetchLogicMockRecorder
-	isgomock struct{}
 }
 
 // MockfetchLogicMockRecorder is the mock recorder for MockfetchLogic.
@@ -697,7 +695,6 @@ func (c *MockfetchLogicSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Pee
 type MockatxSyncer struct {
 	ctrl     *gomock.Controller
 	recorder *MockatxSyncerMockRecorder
-	isgomock struct{}
 }
 
 // MockatxSyncerMockRecorder is the mock recorder for MockatxSyncer.
@@ -759,7 +756,6 @@ func (c *MockatxSyncerDownloadCall) DoAndReturn(f func(context.Context, types.Ep
 type MockmalSyncer struct {
 	ctrl     *gomock.Controller
 	recorder *MockmalSyncerMockRecorder
-	isgomock struct{}
 }
 
 // MockmalSyncerMockRecorder is the mock recorder for MockmalSyncer.
@@ -859,7 +855,6 @@ func (c *MockmalSyncerEnsureInSyncCall) DoAndReturn(f func(context.Context, time
 type Mockfetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockfetcherMockRecorder
-	isgomock struct{}
 }
 
 // MockfetcherMockRecorder is the mock recorder for Mockfetcher.
@@ -1348,7 +1343,6 @@ func (c *MockfetcherSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Peer) 
 type MocklayerPatrol struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerPatrolMockRecorder
-	isgomock struct{}
 }
 
 // MocklayerPatrolMockRecorder is the mock recorder for MocklayerPatrol.
@@ -1410,7 +1404,6 @@ func (c *MocklayerPatrolIsHareInChargeCall) DoAndReturn(f func(types.LayerID) bo
 type MockcertHandler struct {
 	ctrl     *gomock.Controller
 	recorder *MockcertHandlerMockRecorder
-	isgomock struct{}
 }
 
 // MockcertHandlerMockRecorder is the mock recorder for MockcertHandler.
@@ -1472,7 +1465,6 @@ func (c *MockcertHandlerHandleSyncedCertificateCall) DoAndReturn(f func(context.
 type MockforkFinder struct {
 	ctrl     *gomock.Controller
 	recorder *MockforkFinderMockRecorder
-	isgomock struct{}
 }
 
 // MockforkFinderMockRecorder is the mock recorder for MockforkFinder.

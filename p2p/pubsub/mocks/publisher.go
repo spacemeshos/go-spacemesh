@@ -21,7 +21,6 @@ import (
 type MockPublisher struct {
 	ctrl     *gomock.Controller
 	recorder *MockPublisherMockRecorder
-	isgomock struct{}
 }
 
 // MockPublisherMockRecorder is the mock recorder for MockPublisher.
@@ -83,7 +82,6 @@ func (c *MockPublisherPublishCall) DoAndReturn(f func(context.Context, string, [
 type MockSubscriber struct {
 	ctrl     *gomock.Controller
 	recorder *MockSubscriberMockRecorder
-	isgomock struct{}
 }
 
 // MockSubscriberMockRecorder is the mock recorder for MockSubscriber.
@@ -148,7 +146,6 @@ func (c *MockSubscriberRegisterCall) DoAndReturn(f func(string, pubsub.GossipHan
 type MockPublishSubscriber struct {
 	ctrl     *gomock.Controller
 	recorder *MockPublishSubscriberMockRecorder
-	isgomock struct{}
 }
 
 // MockPublishSubscriberMockRecorder is the mock recorder for MockPublishSubscriber.

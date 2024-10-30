@@ -28,7 +28,6 @@ import (
 type MockAtxReceiver struct {
 	ctrl     *gomock.Controller
 	recorder *MockAtxReceiverMockRecorder
-	isgomock struct{}
 }
 
 // MockAtxReceiverMockRecorder is the mock recorder for MockAtxReceiver.
@@ -88,7 +87,6 @@ func (c *MockAtxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTx)) *Moc
 type MockPostVerifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockPostVerifierMockRecorder
-	isgomock struct{}
 }
 
 // MockPostVerifierMockRecorder is the mock recorder for MockPostVerifier.
@@ -193,7 +191,6 @@ func (c *MockPostVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared
 type Mockscaler struct {
 	ctrl     *gomock.Controller
 	recorder *MockscalerMockRecorder
-	isgomock struct{}
 }
 
 // MockscalerMockRecorder is the mock recorder for Mockscaler.
@@ -253,7 +250,6 @@ func (c *MockscalerscaleCall) DoAndReturn(f func(int)) *MockscalerscaleCall {
 type MocknipostValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MocknipostValidatorMockRecorder
-	isgomock struct{}
 }
 
 // MocknipostValidatorMockRecorder is the mock recorder for MocknipostValidator.
@@ -755,7 +751,6 @@ func (c *MocknipostValidatorVerifyChainCall) DoAndReturn(f func(context.Context,
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerClockMockRecorder
-	isgomock struct{}
 }
 
 // MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
@@ -893,7 +888,6 @@ func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.T
 type MocknipostBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MocknipostBuilderMockRecorder
-	isgomock struct{}
 }
 
 // MocknipostBuilderMockRecorder is the mock recorder for MocknipostBuilder.
@@ -1034,7 +1028,6 @@ func (c *MocknipostBuilderResetStateCall) DoAndReturn(f func(types.NodeID) error
 type Mocksyncer struct {
 	ctrl     *gomock.Controller
 	recorder *MocksyncerMockRecorder
-	isgomock struct{}
 }
 
 // MocksyncerMockRecorder is the mock recorder for Mocksyncer.
@@ -1096,7 +1089,6 @@ func (c *MocksyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{
 type MockmalfeasancePublisher struct {
 	ctrl     *gomock.Controller
 	recorder *MockmalfeasancePublisherMockRecorder
-	isgomock struct{}
 }
 
 // MockmalfeasancePublisherMockRecorder is the mock recorder for MockmalfeasancePublisher.
@@ -1158,7 +1150,6 @@ func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context
 type MockatxProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockatxProviderMockRecorder
-	isgomock struct{}
 }
 
 // MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
@@ -1221,7 +1212,6 @@ func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.Acti
 type MockAtxService struct {
 	ctrl     *gomock.Controller
 	recorder *MockAtxServiceMockRecorder
-	isgomock struct{}
 }
 
 // MockAtxServiceMockRecorder is the mock recorder for MockAtxService.
@@ -1362,7 +1352,6 @@ func (c *MockAtxServicePositioningATXCall) DoAndReturn(f func(context.Context, t
 type MockpostSetupProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockpostSetupProviderMockRecorder
-	isgomock struct{}
 }
 
 // MockpostSetupProviderMockRecorder is the mock recorder for MockpostSetupProvider.
@@ -1538,7 +1527,6 @@ func (c *MockpostSetupProviderStatusCall) DoAndReturn(f func() *PostSetupStatus)
 type MockSmeshingProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockSmeshingProviderMockRecorder
-	isgomock struct{}
 }
 
 // MockSmeshingProviderMockRecorder is the mock recorder for MockSmeshingProvider.
@@ -1788,7 +1776,6 @@ func (c *MockSmeshingProviderStopSmeshingCall) DoAndReturn(f func(bool) error) *
 type MockPoetService struct {
 	ctrl     *gomock.Controller
 	recorder *MockPoetServiceMockRecorder
-	isgomock struct{}
 }
 
 // MockPoetServiceMockRecorder is the mock recorder for MockPoetService.
@@ -2006,7 +1993,6 @@ func (c *MockPoetServiceTickSizeCall) DoAndReturn(f func() uint64) *MockPoetServ
 type MockcertifierClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockcertifierClientMockRecorder
-	isgomock struct{}
 }
 
 // MockcertifierClientMockRecorder is the mock recorder for MockcertifierClient.
@@ -2069,7 +2055,6 @@ func (c *MockcertifierClientCertifyCall) DoAndReturn(f func(context.Context, typ
 type MockcertifierService struct {
 	ctrl     *gomock.Controller
 	recorder *MockcertifierServiceMockRecorder
-	isgomock struct{}
 }
 
 // MockcertifierServiceMockRecorder is the mock recorder for MockcertifierService.
@@ -2170,7 +2155,6 @@ func (c *MockcertifierServiceDeleteCertificateCall) DoAndReturn(f func(types.Nod
 type MockPoetDbStorer struct {
 	ctrl     *gomock.Controller
 	recorder *MockPoetDbStorerMockRecorder
-	isgomock struct{}
 }
 
 // MockPoetDbStorerMockRecorder is the mock recorder for MockPoetDbStorer.
@@ -2232,7 +2216,6 @@ func (c *MockPoetDbStorerStorePoetProofCall) DoAndReturn(f func(context.Context,
 type MockpoetDbAPI struct {
 	ctrl     *gomock.Controller
 	recorder *MockpoetDbAPIMockRecorder
-	isgomock struct{}
 }
 
 // MockpoetDbAPIMockRecorder is the mock recorder for MockpoetDbAPI.
@@ -2373,7 +2356,6 @@ func (c *MockpoetDbAPIValidateAndStoreCall) DoAndReturn(f func(context.Context, 
 type MockAtxBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockAtxBuilderMockRecorder
-	isgomock struct{}
 }
 
 // MockAtxBuilderMockRecorder is the mock recorder for MockAtxBuilder.
@@ -2433,7 +2415,6 @@ func (c *MockAtxBuilderRegisterCall) DoAndReturn(f func(*signing.EdSigner)) *Moc
 type MockpostService struct {
 	ctrl     *gomock.Controller
 	recorder *MockpostServiceMockRecorder
-	isgomock struct{}
 }
 
 // MockpostServiceMockRecorder is the mock recorder for MockpostService.
@@ -2496,7 +2477,6 @@ func (c *MockpostServiceClientCall) DoAndReturn(f func(types.NodeID) (PostClient
 type MockPostClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockPostClientMockRecorder
-	isgomock struct{}
 }
 
 // MockPostClientMockRecorder is the mock recorder for MockPostClient.
@@ -2599,7 +2579,6 @@ func (c *MockPostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*
 type MockPostStates struct {
 	ctrl     *gomock.Controller
 	recorder *MockPostStatesMockRecorder
-	isgomock struct{}
 }
 
 // MockPostStatesMockRecorder is the mock recorder for MockPostStates.

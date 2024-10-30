@@ -20,7 +20,6 @@ import (
 type MockpostStatesGetter struct {
 	ctrl     *gomock.Controller
 	recorder *MockpostStatesGetterMockRecorder
-	isgomock struct{}
 }
 
 // MockpostStatesGetterMockRecorder is the mock recorder for MockpostStatesGetter.
@@ -82,7 +81,6 @@ func (c *MockpostStatesGetterGetCall) DoAndReturn(f func() map[types.NodeID]type
 type Mocksubscription[T any] struct {
 	ctrl     *gomock.Controller
 	recorder *MocksubscriptionMockRecorder[T]
-	isgomock struct{}
 }
 
 // MocksubscriptionMockRecorder is the mock recorder for Mocksubscription.

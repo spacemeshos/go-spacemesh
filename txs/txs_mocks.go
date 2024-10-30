@@ -23,7 +23,6 @@ import (
 type MockconservativeState struct {
 	ctrl     *gomock.Controller
 	recorder *MockconservativeStateMockRecorder
-	isgomock struct{}
 }
 
 // MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
@@ -239,7 +238,6 @@ func (c *MockconservativeStateValidationCall) DoAndReturn(f func(types.RawTx) sy
 type MockvmState struct {
 	ctrl     *gomock.Controller
 	recorder *MockvmStateMockRecorder
-	isgomock struct{}
 }
 
 // MockvmStateMockRecorder is the mock recorder for MockvmState.
@@ -535,7 +533,6 @@ func (c *MockvmStateValidationCall) DoAndReturn(f func(types.RawTx) system.Valid
 type MockconStateCache struct {
 	ctrl     *gomock.Controller
 	recorder *MockconStateCacheMockRecorder
-	isgomock struct{}
 }
 
 // MockconStateCacheMockRecorder is the mock recorder for MockconStateCache.
