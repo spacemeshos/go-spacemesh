@@ -97,7 +97,7 @@ type Oracle struct {
 	db             sql.Executor
 	vrfVerifier    vrfVerifier
 	cfg            Config
-  minerWeightFn  func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
+	minerWeightFn  func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
 	totalWeightFn  func(ctx context.Context, layer types.LayerID) (uint64, error)
 	layersPerEpoch uint32
 	log            *zap.Logger
