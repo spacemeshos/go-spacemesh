@@ -140,7 +140,7 @@ func TestWireConduit(t *testing.T) {
 		t, "srv",
 		func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
 			require.Equal(t, []byte("hello"), initialRequest)
-			c := rangesync.StartWireConduit(ctx, stream)
+			c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 			defer c.Stop()
 			s := rangesync.Sender{c}
 			require.Equal(t, []rangesync.SyncMessage{
@@ -174,7 +174,7 @@ func TestWireConduit(t *testing.T) {
 	client := newFakeRequester(t, "client", nil, srv)
 	require.NoError(t, client.StreamRequest(context.Background(), "srv", []byte("hello"),
 		func(ctx context.Context, stream io.ReadWriter) error {
-			c := rangesync.StartWireConduit(ctx, stream)
+			c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 			defer c.Stop()
 			s := rangesync.Sender{c}
 			require.NoError(t, s.SendFingerprint(hs[0], hs[1], fp, 4))
@@ -209,27 +209,26 @@ func TestWireConduit(t *testing.T) {
 
 func TestWireConduit_Limits(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		opts  []rangesync.ConduitOption
-		error bool
+		name         string
+		trafficLimit int
+		messageLimit int
+		error        bool
 	}{
 		{
-			name:  "message limit hit",
-			opts:  []rangesync.ConduitOption{rangesync.WithMessageLimit(10)},
-			error: true,
+			name:         "message limit hit",
+			messageLimit: 10,
+			error:        true,
 		},
 		{
-			name:  "traffic limit hit",
-			opts:  []rangesync.ConduitOption{rangesync.WithTrafficLimit(100)},
-			error: true,
+			name:         "traffic limit hit",
+			trafficLimit: 100,
+			error:        true,
 		},
 		{
-			name: "limits not hit",
-			opts: []rangesync.ConduitOption{
-				rangesync.WithMessageLimit(1000),
-				rangesync.WithTrafficLimit(10000),
-			},
-			error: false,
+			name:         "limits not hit",
+			trafficLimit: 10000,
+			messageLimit: 1000,
+			error:        false,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -237,7 +236,10 @@ func TestWireConduit_Limits(t *testing.T) {
 			srv := newFakeRequester(
 				t, "srv",
 				func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
-					c := rangesync.StartWireConduit(ctx, stream, tc.opts...)
+					cfg := rangesync.DefaultConfig()
+					cfg.TrafficLimit = tc.trafficLimit
+					cfg.MessageLimit = tc.messageLimit
+					c := rangesync.StartWireConduit(ctx, stream, cfg)
 					defer c.Stop()
 					for range 11 {
 						msg, err := c.NextMessage()
@@ -266,7 +268,8 @@ func TestWireConduit_Limits(t *testing.T) {
 			eg.Go(func() error {
 				client.StreamRequest(ctx, "srv", []byte("hello"),
 					func(ctx context.Context, stream io.ReadWriter) error {
-						c := rangesync.StartWireConduit(ctx, stream)
+						c := rangesync.StartWireConduit(
+							ctx, stream, rangesync.DefaultConfig())
 						defer c.Stop()
 						s := rangesync.Sender{c}
 						for i := 0; i < 11; i++ {
@@ -308,7 +311,7 @@ func TestWireConduit_StopSend(t *testing.T) {
 	defer cancel()
 	client.StreamRequest(ctx, "srv", []byte("hello"),
 		func(ctx context.Context, stream io.ReadWriter) error {
-			c := rangesync.StartWireConduit(ctx, stream)
+			c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 			s := rangesync.Sender{c}
 			// The actual message is enqueued but not sent
 			s.SendDone()

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
 
@@ -295,16 +296,13 @@ func TestRangeSync(t *testing.T) {
 			logger := zaptest.NewLogger(t)
 			for n, maxSendRange := range []int{1, 2, 3, 4} {
 				t.Logf("maxSendRange: %d", maxSendRange)
+				cfg := rangesync.DefaultConfig()
+				cfg.MaxSendRange = maxSendRange
+				cfg.ItemChunkSize = 3
 				setA := makeSet(tc.a)
-				syncA := rangesync.NewRangeSetReconciler(setA,
-					rangesync.WithLogger(logger.Named("A")),
-					rangesync.WithMaxSendRange(maxSendRange),
-					rangesync.WithItemChunkSize(3))
+				syncA := rangesync.NewRangeSetReconciler(logger.Named("A"), cfg, setA)
 				setB := makeSet(tc.b)
-				syncB := rangesync.NewRangeSetReconciler(setB,
-					rangesync.WithLogger(logger.Named("B")),
-					rangesync.WithMaxSendRange(maxSendRange),
-					rangesync.WithItemChunkSize(3))
+				syncB := rangesync.NewRangeSetReconciler(logger.Named("B"), cfg, setB)
 
 				var (
 					nRounds    int
@@ -372,12 +370,12 @@ func TestRandomSync(t *testing.T) {
 		slices.Sort(expectedSet)
 
 		maxSendRange := rand.Intn(16) + 1
-		syncA := rangesync.NewRangeSetReconciler(setA,
-			rangesync.WithMaxSendRange(maxSendRange),
-			rangesync.WithItemChunkSize(3))
-		syncB := rangesync.NewRangeSetReconciler(setB,
-			rangesync.WithMaxSendRange(maxSendRange),
-			rangesync.WithItemChunkSize(3))
+		cfg := rangesync.DefaultConfig()
+		cfg.MaxSendRange = maxSendRange
+		cfg.ItemChunkSize = 3
+		logger := zap.NewNop()
+		syncA := rangesync.NewRangeSetReconciler(logger, cfg, setA)
+		syncB := rangesync.NewRangeSetReconciler(logger, cfg, setB)
 
 		runSync(t, syncA, syncB, nil, nil, max(len(expectedSet), 2))
 		setA.AddReceived()
@@ -401,20 +399,20 @@ type hashSyncTester struct {
 	tb           testing.TB
 	src          []rangesync.KeyBytes
 	setA, setB   *rangesync.DumbSet
-	opts         []rangesync.RangeSetReconcilerOption
+	cfg          rangesync.RangeSetReconcilerConfig
 	numSpecificA int
 	numSpecificB int
 }
 
 func newHashSyncTester(tb testing.TB, cfg hashSyncTestConfig) *hashSyncTester {
 	tb.Helper()
+	rCfg := rangesync.DefaultConfig()
+	rCfg.MaxSendRange = cfg.maxSendRange
+	rCfg.MaxReconcDiff = 0.1
 	st := &hashSyncTester{
-		tb:  tb,
-		src: make([]rangesync.KeyBytes, cfg.numTestHashes),
-		opts: []rangesync.RangeSetReconcilerOption{
-			rangesync.WithMaxSendRange(cfg.maxSendRange),
-			rangesync.WithMaxDiff(0.1),
-		},
+		tb:           tb,
+		src:          make([]rangesync.KeyBytes, cfg.numTestHashes),
+		cfg:          rCfg,
 		numSpecificA: rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA,
 		numSpecificB: rand.Intn(cfg.maxNumSpecificB+1-cfg.minNumSpecificB) + cfg.minNumSpecificB,
 	}
@@ -461,8 +459,9 @@ func TestSyncHash(t *testing.T) {
 		minNumSpecificB: 4,
 		maxNumSpecificB: 90,
 	})
-	syncA := rangesync.NewRangeSetReconciler(st.setA, st.opts...)
-	syncB := rangesync.NewRangeSetReconciler(st.setB, st.opts...)
+	logger := zap.NewNop()
+	syncA := rangesync.NewRangeSetReconciler(logger, st.cfg, st.setA)
+	syncB := rangesync.NewRangeSetReconciler(logger, st.cfg, st.setB)
 	nRounds, nMsg, nItems := runSync(t, syncA, syncB, nil, nil, 100)
 	numSpecific := st.numSpecificA + st.numSpecificB
 	itemCoef := float64(nItems) / float64(numSpecific)

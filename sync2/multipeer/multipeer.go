@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
 type syncability struct {
@@ -80,6 +81,7 @@ type MultiPeerReconcilerConfig struct {
 	FullSyncednessPeriod time.Duration `mapstructure:"full-syncedness-count"`
 }
 
+// DefaultConfig returns the default configuration for the MultiPeerReconciler.
 func DefaultConfig() MultiPeerReconcilerConfig {
 	return MultiPeerReconcilerConfig{
 		SyncPeerCount:          20,
@@ -154,59 +156,82 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 	s.syncable = nil
 	s.splitSyncable = nil
 	s.nearFullCount = 0
-	for _, p := range syncPeers {
-		mpr.logger.Debug("probe peer", zap.Stringer("peer", p))
-		pr, err := mpr.syncBase.Probe(ctx, p)
-		if err != nil {
-			mpr.logger.Warn("error probing the peer", zap.Any("peer", p), zap.Error(err))
-			if errors.Is(err, context.Canceled) {
-				return s, err
-			}
-			continue
-		}
-
-		c, err := mpr.syncBase.Count()
-		if err != nil {
-			return s, err
-		}
-
-		// We do not consider peers with substantially fewer items than the local
-		// set for active sync. It's these peers' responsibility to request sync
-		// against this node.
-		if pr.Count+mpr.cfg.MaxSyncDiff < c {
-			mpr.logger.Debug("skipping peer with low item count",
-				zap.Int("peerCount", pr.Count),
-				zap.Int("localCount", c))
-			continue
-		}
-
-		s.syncable = append(s.syncable, p)
-		if pr.Count > mpr.cfg.MinSplitSyncCount {
-			mpr.logger.Debug("splitSyncable peer",
-				zap.Stringer("peer", p),
-				zap.Int("count", pr.Count))
-			s.splitSyncable = append(s.splitSyncable, p)
-		} else {
-			mpr.logger.Debug("NOT splitSyncable peer",
-				zap.Stringer("peer", p),
-				zap.Int("count", pr.Count))
-		}
-
-		mDiff := float64(mpr.cfg.MaxFullDiff)
-		if math.Abs(float64(pr.Count-c)) < mDiff && (1-pr.Sim)*float64(c) < mDiff {
-			mpr.logger.Debug("nearFull peer",
-				zap.Stringer("peer", p),
-				zap.Float64("sim", pr.Sim),
-				zap.Int("localCount", c))
-			s.nearFullCount++
-		} else {
-			mpr.logger.Debug("nearFull peer",
-				zap.Stringer("peer", p),
-				zap.Float64("sim", pr.Sim),
-				zap.Int("localCount", c))
-		}
+	type probeResult struct {
+		p p2p.Peer
+		rangesync.ProbeResult
 	}
-	return s, nil
+	probeCh := make(chan probeResult)
+
+	var eg errgroup.Group
+	for _, p := range syncPeers {
+		eg.Go(func() error {
+			mpr.logger.Debug("probe peer", zap.Stringer("peer", p))
+			pr, err := mpr.syncBase.Probe(ctx, p)
+			if err != nil {
+				mpr.logger.Warn("error probing the peer", zap.Any("peer", p), zap.Error(err))
+				if errors.Is(err, context.Canceled) {
+					return err
+				}
+			} else {
+				probeCh <- probeResult{p, pr}
+			}
+			return nil
+		})
+	}
+
+	var egConsume errgroup.Group
+	egConsume.Go(func() error {
+		for pr := range probeCh {
+			c, err := mpr.syncBase.Count()
+			if err != nil {
+				return err
+			}
+
+			// We do not consider peers with substantially fewer items than the local
+			// set for active sync. It's these peers' responsibility to request sync
+			// against this node.
+			if pr.Count+mpr.cfg.MaxSyncDiff < c {
+				mpr.logger.Debug("skipping peer with low item count",
+					zap.Int("peerCount", pr.Count),
+					zap.Int("localCount", c))
+				continue
+			}
+
+			s.syncable = append(s.syncable, pr.p)
+			if pr.Count > mpr.cfg.MinSplitSyncCount {
+				mpr.logger.Debug("splitSyncable peer",
+					zap.Stringer("peer", pr.p),
+					zap.Int("count", pr.Count))
+				s.splitSyncable = append(s.splitSyncable, pr.p)
+			} else {
+				mpr.logger.Debug("NOT splitSyncable peer",
+					zap.Stringer("peer", pr.p),
+					zap.Int("count", pr.Count))
+			}
+
+			mDiff := float64(mpr.cfg.MaxFullDiff)
+			if math.Abs(float64(pr.Count-c)) < mDiff && (1-pr.Sim)*float64(c) < mDiff {
+				mpr.logger.Debug("nearFull peer",
+					zap.Stringer("peer", pr.p),
+					zap.Float64("sim", pr.Sim),
+					zap.Int("localCount", c))
+				s.nearFullCount++
+			} else {
+				mpr.logger.Debug("nearFull peer",
+					zap.Stringer("peer", pr.p),
+					zap.Float64("sim", pr.Sim),
+					zap.Int("localCount", c))
+			}
+		}
+		return nil
+	})
+	err := eg.Wait()
+	close(probeCh)
+	if err != nil {
+		egConsume.Wait()
+		return s, err
+	}
+	return s, egConsume.Wait()
 }
 
 func (mpr *MultiPeerReconciler) needSplitSync(s syncability) bool {
@@ -237,12 +262,12 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 	for _, p := range syncPeers {
 		syncer := mpr.syncBase.Derive(p)
 		eg.Go(func() error {
-			defer syncer.Release()
 			err := syncer.Sync(ctx, nil, nil)
 			switch {
 			case err == nil:
 				mpr.sl.NoteSync()
 			case errors.Is(err, context.Canceled):
+				syncer.Release()
 				return err
 			default:
 				// failing to sync against a particular peer is not considered
@@ -343,7 +368,6 @@ func (mpr *MultiPeerReconciler) Run(ctx context.Context) error {
 	//      Use peers with > minSplitSyncCount
 	//      Wait for all the syncs to complete/fail
 	//    All syncs completed (success / fail) => A
-	ctx, cancel := context.WithCancel(ctx)
 	var (
 		err  error
 		full bool
@@ -376,12 +400,10 @@ LOOP:
 		case <-mpr.clock.After(interval):
 		}
 	}
-	cancel()
-	if err != nil {
-		mpr.syncBase.Wait()
-		return err
-	}
-	return mpr.syncBase.Wait()
+	// The loop is only exited upon context cancellation.
+	// Thus, syncBase.Wait() is guaranteed not to block indefinitely here.
+	mpr.syncBase.Wait()
+	return err
 }
 
 // Synced returns true if the node is considered synced, that is, the specified

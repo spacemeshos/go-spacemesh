@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -28,7 +29,7 @@ type setSyncBaseTester struct {
 	doneCh  chan rangesync.KeyBytes
 }
 
-func newSetSyncBaseTester(t *testing.T, os multipeer.OrderedSet) *setSyncBaseTester {
+func newSetSyncBaseTester(t *testing.T, os rangesync.OrderedSet) *setSyncBaseTester {
 	ctrl := gomock.NewController(t)
 	st := &setSyncBaseTester{
 		T:       t,
@@ -51,7 +52,7 @@ func newSetSyncBaseTester(t *testing.T, os multipeer.OrderedSet) *setSyncBaseTes
 			st.doneCh <- k
 			return true, err
 		}).AnyTimes()
-	st.ssb = multipeer.NewSetSyncBase(st.ps, os, st.handler)
+	st.ssb = multipeer.NewSetSyncBase(zaptest.NewLogger(t), st.ps, os, st.handler)
 	return st
 }
 
@@ -229,12 +230,11 @@ func TestSetSyncBase(t *testing.T) {
 		st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any())
 		st.os.EXPECT().Advance()
 		require.NoError(t, ss.Sync(context.Background(), nil, nil))
-		handlerErr := errors.New("fail")
-		st.getWaitCh(k1) <- handlerErr
+		st.getWaitCh(k1) <- errors.New("fail")
 		close(st.getWaitCh(k2))
 
 		handledKeys, err := st.wait(2)
-		require.ErrorIs(t, err, handlerErr)
+		require.ErrorContains(t, err, "some key handlers failed")
 		require.ElementsMatch(t, []rangesync.KeyBytes{k1, k2}, handledKeys)
 	})
 
@@ -244,27 +244,26 @@ func TestSetSyncBase(t *testing.T) {
 		for n := range hs {
 			hs[n] = rangesync.RandomKeyBytes(32)
 		}
-		os := multipeer.NewDumbHashSet()
+		var os rangesync.DumbSet
 		os.AddUnchecked(hs[0])
 		os.AddUnchecked(hs[1])
-		st := newSetSyncBaseTester(t, os)
+		st := newSetSyncBaseTester(t, &os)
 		ss := st.ssb.Derive(p2p.Peer("p1"))
 		ss.(rangesync.OrderedSet).Receive(hs[2])
 		ss.(rangesync.OrderedSet).Add(hs[2])
 		ss.(rangesync.OrderedSet).Receive(hs[3])
 		ss.(rangesync.OrderedSet).Add(hs[3])
-		// syncer's cloned ItemStore has new key immediately
-		has, err := ss.(multipeer.OrderedSet).Has(hs[2])
+		// syncer's cloned set has new key immediately
+		has, err := ss.(rangesync.OrderedSet).Has(hs[2])
 		require.NoError(t, err)
 		require.True(t, has)
-		has, err = ss.(multipeer.OrderedSet).Has(hs[3])
+		has, err = ss.(rangesync.OrderedSet).Has(hs[3])
 		require.NoError(t, err)
 		require.True(t, has)
-		handlerErr := errors.New("fail")
-		st.getWaitCh(hs[2]) <- handlerErr
+		st.getWaitCh(hs[2]) <- errors.New("fail")
 		close(st.getWaitCh(hs[3]))
 		handledKeys, err := st.wait(2)
-		require.ErrorIs(t, err, handlerErr)
+		require.ErrorContains(t, err, "some key handlers failed")
 		require.ElementsMatch(t, hs[2:], handledKeys)
 		// only successfully handled keys propagate the syncBase
 		received, err := os.Received().Collect()

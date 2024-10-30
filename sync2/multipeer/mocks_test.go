@@ -399,7 +399,7 @@ func (m *MockSyncKeyHandler) EXPECT() *MockSyncKeyHandlerMockRecorder {
 }
 
 // Commit mocks base method.
-func (m *MockSyncKeyHandler) Commit(peer p2p.Peer, base, new multipeer.OrderedSet) error {
+func (m *MockSyncKeyHandler) Commit(peer p2p.Peer, base, new rangesync.OrderedSet) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Commit", peer, base, new)
 	ret0, _ := ret[0].(error)
@@ -425,13 +425,13 @@ func (c *MockSyncKeyHandlerCommitCall) Return(arg0 error) *MockSyncKeyHandlerCom
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncKeyHandlerCommitCall) Do(f func(p2p.Peer, multipeer.OrderedSet, multipeer.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
+func (c *MockSyncKeyHandlerCommitCall) Do(f func(p2p.Peer, rangesync.OrderedSet, rangesync.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncKeyHandlerCommitCall) DoAndReturn(f func(p2p.Peer, multipeer.OrderedSet, multipeer.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
+func (c *MockSyncKeyHandlerCommitCall) DoAndReturn(f func(p2p.Peer, rangesync.OrderedSet, rangesync.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

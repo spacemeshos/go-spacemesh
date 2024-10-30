@@ -55,21 +55,19 @@ func newSplitSync(
 		panic("BUG: no peers passed to splitSync")
 	}
 	return &splitSync{
-		logger:      logger,
-		syncBase:    syncBase,
-		peers:       peers,
-		syncPeers:   syncPeers,
-		gracePeriod: gracePeriod,
-		clock:       clock,
-		sq:          newSyncQueue(len(syncPeers), keyLen, maxDepth),
-		// TODO: should not need buffering (stop when finished)
-		resCh:        make(chan syncResult, 3*len(syncPeers)),
+		logger:       logger,
+		syncBase:     syncBase,
+		peers:        peers,
+		syncPeers:    syncPeers,
+		gracePeriod:  gracePeriod,
+		clock:        clock,
+		sq:           newSyncQueue(len(syncPeers), keyLen, maxDepth),
+		resCh:        make(chan syncResult),
 		syncMap:      make(map[p2p.Peer]*syncRange),
 		failedPeers:  make(map[p2p.Peer]struct{}),
 		numRemaining: len(syncPeers),
 		numPeers:     len(syncPeers),
-		// TODO: should not need buffering (stop when finished)
-		slowRangeCh: make(chan *syncRange, 3*len(syncPeers)),
+		slowRangeCh:  make(chan *syncRange),
 	}
 }
 
@@ -109,7 +107,11 @@ func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange
 		case <-gpTimer:
 			// if another peer finishes its part early, let
 			// it pick up this range
-			s.slowRangeCh <- sr
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case s.slowRangeCh <- sr:
+			}
 		}
 		return nil
 	})
@@ -174,14 +176,15 @@ func (s *splitSync) Sync(ctx context.Context) error {
 		var sr *syncRange
 		for {
 			sr := s.sq.PopRange()
-			if sr != nil {
-				if sr.Done {
-					continue
-				}
-				p := s.nextPeer()
-				s.syncMap[p] = sr
-				s.startPeerSync(syncCtx, p, sr)
+			if sr == nil {
+				break
 			}
+			if sr.Done {
+				continue
+			}
+			p := s.nextPeer()
+			s.syncMap[p] = sr
+			s.startPeerSync(syncCtx, p, sr)
 			break
 		}
 		s.clearDeadPeers()

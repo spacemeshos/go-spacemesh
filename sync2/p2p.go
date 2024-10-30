@@ -22,27 +22,18 @@ type Dispatcher = rangesync.Dispatcher
 
 // Config contains the configuration for the P2PHashSync.
 type Config struct {
+	rangesync.RangeSetReconcilerConfig  `mapstructure:",squash"`
 	multipeer.MultiPeerReconcilerConfig `mapstructure:",squash"`
-	MaxSendRange                        int           `mapstructure:"max-send-range"`
-	SampleSize                          int           `mapstructure:"sample-size"`
-	RecentTimeSpan                      time.Duration `mapstructure:"recent-time-span"`
-	EnableActiveSync                    bool          `mapstructure:"enable-active-sync"`
-	MaxReconcDiff                       float64       `mapstructure:"max-reconc-diff"`
-	AutoCommitCount                     int           `mapstructure:"auto-commit-count"`
-	AutoCommitIdle                      time.Duration `mapstructure:"auto-commit-idle"`
-	TrafficLimit                        int           `mapstructure:"traffic-limit"`
-	MessageLimit                        int           `mapstructure:"message-limit"`
+	EnableActiveSync                    bool `mapstructure:"enable-active-sync"`
+	TrafficLimit                        int  `mapstructure:"traffic-limit"`
+	MessageLimit                        int  `mapstructure:"message-limit"`
 }
 
 // DefaultConfig returns the default configuration for the P2PHashSync.
 func DefaultConfig() Config {
 	return Config{
+		RangeSetReconcilerConfig:  rangesync.DefaultConfig(),
 		MultiPeerReconcilerConfig: multipeer.DefaultConfig(),
-		MaxSendRange:              rangesync.DefaultMaxSendRange,
-		SampleSize:                rangesync.DefaultSampleSize,
-		MaxReconcDiff:             0.01,
-		AutoCommitCount:           10000,
-		AutoCommitIdle:            time.Second,
 		TrafficLimit:              200_000_000,
 		MessageLimit:              20_000_000,
 	}
@@ -52,7 +43,7 @@ func DefaultConfig() Config {
 type P2PHashSync struct {
 	logger     *zap.Logger
 	cfg        Config
-	os         multipeer.OrderedSet
+	os         rangesync.OrderedSet
 	syncBase   multipeer.SyncBase
 	reconciler *multipeer.MultiPeerReconciler
 	cancel     context.CancelFunc
@@ -66,7 +57,7 @@ func NewP2PHashSync(
 	logger *zap.Logger,
 	d *Dispatcher,
 	name string,
-	os multipeer.OrderedSet,
+	os rangesync.OrderedSet,
 	keyLen, maxDepth int,
 	peers *peers.Peers,
 	handler multipeer.SyncKeyHandler,
@@ -78,21 +69,9 @@ func NewP2PHashSync(
 		os:     os,
 		cfg:    cfg,
 	}
-	rangeSyncOpts := []rangesync.RangeSetReconcilerOption{
-		rangesync.WithMaxSendRange(cfg.MaxSendRange),
-		rangesync.WithSampleSize(cfg.SampleSize),
-		rangesync.WithMaxDiff(cfg.MaxReconcDiff),
-		rangesync.WithLogger(logger),
-	}
-	if cfg.RecentTimeSpan > 0 {
-		rangeSyncOpts = append(rangeSyncOpts, rangesync.WithRecentTimeSpan(cfg.RecentTimeSpan))
-	}
 	// var ps multipeer.PairwiseSyncer
-	ps := rangesync.NewPairwiseSetSyncer(requester, name, rangeSyncOpts, []rangesync.ConduitOption{
-		rangesync.WithTrafficLimit(cfg.TrafficLimit),
-		rangesync.WithMessageLimit(cfg.MessageLimit),
-	})
-	s.syncBase = multipeer.NewSetSyncBase(ps, s.os, handler)
+	ps := rangesync.NewPairwiseSetSyncer(logger, requester, name, cfg.RangeSetReconcilerConfig)
+	s.syncBase = multipeer.NewSetSyncBase(logger, ps, s.os, handler)
 	s.reconciler = multipeer.NewMultiPeerReconciler(
 		logger, cfg.MultiPeerReconcilerConfig,
 		s.syncBase, peers, keyLen, maxDepth)

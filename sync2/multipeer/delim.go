@@ -15,7 +15,7 @@ import (
 // range being assigned to a separate peer. The first range begins with zero-valued key
 // (k0), represented by KeyBytes of length keyLen consisting entirely of zeroes.
 // The ranges to scan are:
-// [k0,ks[0]); [k0,ks[1]); ... [k0,ks[numPeers-2]); [ks[numPeers-2],0)
+// [k0,ks[0]); [k0,ks[1]); ... [k0,ks[numPeers-2]); [ks[numPeers-2],0).
 func getDelimiters(numPeers, keyLen, maxDepth int) (ks []rangesync.KeyBytes) {
 	if numPeers < 2 {
 		return nil

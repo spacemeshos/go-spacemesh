@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -19,8 +20,9 @@ import (
 // has not been yet received and validated.
 type SetSyncBase struct {
 	mtx     sync.Mutex
+	logger  *zap.Logger
 	ps      PairwiseSyncer
-	os      OrderedSet
+	os      rangesync.OrderedSet
 	handler SyncKeyHandler
 	waiting []<-chan singleflight.Result
 	g       singleflight.Group
@@ -29,8 +31,14 @@ type SetSyncBase struct {
 var _ SyncBase = &SetSyncBase{}
 
 // NewSetSyncBase creates a new SetSyncBase.
-func NewSetSyncBase(ps PairwiseSyncer, os OrderedSet, handler SyncKeyHandler) *SetSyncBase {
+func NewSetSyncBase(
+	logger *zap.Logger,
+	ps PairwiseSyncer,
+	os rangesync.OrderedSet,
+	handler SyncKeyHandler,
+) *SetSyncBase {
 	return &SetSyncBase{
+		logger:  logger,
 		ps:      ps,
 		os:      os,
 		handler: handler,
@@ -53,7 +61,7 @@ func (ssb *SetSyncBase) Count() (int, error) {
 	}
 	info, err := ssb.os.GetRangeInfo(x, x)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get range info: %w", err)
 	}
 	return info.Count, nil
 }
@@ -64,7 +72,7 @@ func (ssb *SetSyncBase) Derive(p p2p.Peer) PeerSyncer {
 	defer ssb.mtx.Unlock()
 	return &peerSetSyncer{
 		SetSyncBase: ssb,
-		OrderedSet:  ssb.os.Copy(true).(OrderedSet),
+		OrderedSet:  ssb.os.Copy(true),
 		p:           p,
 		handler:     ssb.handler,
 	}
@@ -76,13 +84,13 @@ func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (rangesync.ProbeR
 	ssb.mtx.Lock()
 	os := ssb.os.Copy(true)
 	ssb.mtx.Unlock()
-	defer os.(OrderedSet).Release()
 
 	pr, err := ssb.ps.Probe(ctx, p, os, nil, nil)
 	if err != nil {
-		return rangesync.ProbeResult{}, err
+		os.Release()
+		return rangesync.ProbeResult{}, fmt.Errorf("probing peer %s: %w", p, err)
 	}
-	return pr, os.(OrderedSet).Release()
+	return pr, os.Release()
 }
 
 func (ssb *SetSyncBase) receiveKey(k rangesync.KeyBytes, p p2p.Peer) error {
@@ -118,13 +126,20 @@ func (ssb *SetSyncBase) Wait() error {
 	waiting := ssb.waiting
 	ssb.waiting = nil
 	ssb.mtx.Unlock()
-	var errs []error
+	gotError := false
 	for _, w := range waiting {
 		r := <-w
-		ssb.g.Forget(r.Val.(string))
-		errs = append(errs, r.Err)
+		key := r.Val.(string)
+		ssb.g.Forget(key)
+		if r.Err != nil {
+			gotError = true
+			ssb.logger.Error("error from key handler", zap.String("key", key), zap.Error(r.Err))
+		}
 	}
-	return errors.Join(errs...)
+	if gotError {
+		return errors.New("some key handlers failed")
+	}
+	return nil
 }
 
 func (ssb *SetSyncBase) advance() error {
@@ -135,14 +150,14 @@ func (ssb *SetSyncBase) advance() error {
 
 type peerSetSyncer struct {
 	*SetSyncBase
-	OrderedSet
+	rangesync.OrderedSet
 	p       p2p.Peer
 	handler SyncKeyHandler
 }
 
 var (
-	_ PeerSyncer = &peerSetSyncer{}
-	_ OrderedSet = &peerSetSyncer{}
+	_ PeerSyncer           = &peerSetSyncer{}
+	_ rangesync.OrderedSet = &peerSetSyncer{}
 )
 
 // Peer implements Syncer.

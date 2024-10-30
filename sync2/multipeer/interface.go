@@ -10,9 +10,6 @@ import (
 
 //go:generate mockgen -typed -package=multipeer_test -destination=./mocks_test.go -source=./interface.go
 
-// QQQQQ: rm
-type OrderedSet = rangesync.OrderedSet
-
 // SyncBase is a synchronization base which holds the original OrderedSet.
 // It is used to derive per-peer PeerSyncers with their own copies of the OrderedSet,
 // copy operation being O(1) in terms of memory and time complexity.
@@ -47,7 +44,7 @@ type SyncKeyHandler interface {
 	// Receive handles a key that was received from a peer.
 	Receive(k rangesync.KeyBytes, peer p2p.Peer) (bool, error)
 	// Commit is invoked at the end of synchronization to apply the changes.
-	Commit(peer p2p.Peer, base, new OrderedSet) error
+	Commit(peer p2p.Peer, base, new rangesync.OrderedSet) error
 }
 
 // PairwiseSyncer is used to probe a peer or sync against a single peer.
