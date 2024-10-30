@@ -18,8 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
-type Dispatcher = rangesync.Dispatcher
-
 // Config contains the configuration for the P2PHashSync.
 type Config struct {
 	rangesync.RangeSetReconcilerConfig  `mapstructure:",squash"`
@@ -55,7 +53,7 @@ type P2PHashSync struct {
 // NewP2PHashSync creates a new P2PHashSync.
 func NewP2PHashSync(
 	logger *zap.Logger,
-	d *Dispatcher,
+	d *rangesync.Dispatcher,
 	name string,
 	os rangesync.OrderedSet,
 	keyLen, maxDepth int,
