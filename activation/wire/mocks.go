@@ -14,67 +14,106 @@ import (
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	signing "github.com/spacemeshos/go-spacemesh/signing"
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockpostVerifier is a mock of postVerifier interface.
-type MockpostVerifier struct {
+// MockMalfeasanceValidator is a mock of MalfeasanceValidator interface.
+type MockMalfeasanceValidator struct {
 	ctrl     *gomock.Controller
-	recorder *MockpostVerifierMockRecorder
+	recorder *MockMalfeasanceValidatorMockRecorder
 	isgomock struct{}
 }
 
-// MockpostVerifierMockRecorder is the mock recorder for MockpostVerifier.
-type MockpostVerifierMockRecorder struct {
-	mock *MockpostVerifier
+// MockMalfeasanceValidatorMockRecorder is the mock recorder for MockMalfeasanceValidator.
+type MockMalfeasanceValidatorMockRecorder struct {
+	mock *MockMalfeasanceValidator
 }
 
-// NewMockpostVerifier creates a new mock instance.
-func NewMockpostVerifier(ctrl *gomock.Controller) *MockpostVerifier {
-	mock := &MockpostVerifier{ctrl: ctrl}
-	mock.recorder = &MockpostVerifierMockRecorder{mock}
+// NewMockMalfeasanceValidator creates a new mock instance.
+func NewMockMalfeasanceValidator(ctrl *gomock.Controller) *MockMalfeasanceValidator {
+	mock := &MockMalfeasanceValidator{ctrl: ctrl}
+	mock.recorder = &MockMalfeasanceValidatorMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockpostVerifier) EXPECT() *MockpostVerifierMockRecorder {
+func (m *MockMalfeasanceValidator) EXPECT() *MockMalfeasanceValidatorMockRecorder {
 	return m.recorder
 }
 
-// PostV2Idx mocks base method.
-func (m *MockpostVerifier) PostV2Idx(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *types.Post, challenge []byte, numUnits uint32, idx int) error {
+// PostIndex mocks base method.
+func (m *MockMalfeasanceValidator) PostIndex(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *types.Post, challenge []byte, numUnits uint32, idx uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PostV2Idx", ctx, smesherID, commitment, post, challenge, numUnits, idx)
+	ret := m.ctrl.Call(m, "PostIndex", ctx, smesherID, commitment, post, challenge, numUnits, idx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// PostV2Idx indicates an expected call of PostV2Idx.
-func (mr *MockpostVerifierMockRecorder) PostV2Idx(ctx, smesherID, commitment, post, challenge, numUnits, idx any) *MockpostVerifierPostV2IdxCall {
+// PostIndex indicates an expected call of PostIndex.
+func (mr *MockMalfeasanceValidatorMockRecorder) PostIndex(ctx, smesherID, commitment, post, challenge, numUnits, idx any) *MockMalfeasanceValidatorPostIndexCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostV2Idx", reflect.TypeOf((*MockpostVerifier)(nil).PostV2Idx), ctx, smesherID, commitment, post, challenge, numUnits, idx)
-	return &MockpostVerifierPostV2IdxCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PostIndex", reflect.TypeOf((*MockMalfeasanceValidator)(nil).PostIndex), ctx, smesherID, commitment, post, challenge, numUnits, idx)
+	return &MockMalfeasanceValidatorPostIndexCall{Call: call}
 }
 
-// MockpostVerifierPostV2IdxCall wrap *gomock.Call
-type MockpostVerifierPostV2IdxCall struct {
+// MockMalfeasanceValidatorPostIndexCall wrap *gomock.Call
+type MockMalfeasanceValidatorPostIndexCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockpostVerifierPostV2IdxCall) Return(arg0 error) *MockpostVerifierPostV2IdxCall {
+func (c *MockMalfeasanceValidatorPostIndexCall) Return(arg0 error) *MockMalfeasanceValidatorPostIndexCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockpostVerifierPostV2IdxCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, int) error) *MockpostVerifierPostV2IdxCall {
+func (c *MockMalfeasanceValidatorPostIndexCall) Do(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, uint64) error) *MockMalfeasanceValidatorPostIndexCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockpostVerifierPostV2IdxCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, int) error) *MockpostVerifierPostV2IdxCall {
+func (c *MockMalfeasanceValidatorPostIndexCall) DoAndReturn(f func(context.Context, types.NodeID, types.ATXID, *types.Post, []byte, uint32, uint64) error) *MockMalfeasanceValidatorPostIndexCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Signature mocks base method.
+func (m_2 *MockMalfeasanceValidator) Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+	m_2.ctrl.T.Helper()
+	ret := m_2.ctrl.Call(m_2, "Verify", d, nodeID, m, sig)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockMalfeasanceValidatorMockRecorder) Verify(d, nodeID, m, sig any) *MockMalfeasanceValidatorVerifyCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockMalfeasanceValidator)(nil).Signature), d, nodeID, m, sig)
+	return &MockMalfeasanceValidatorVerifyCall{Call: call}
+}
+
+// MockMalfeasanceValidatorVerifyCall wrap *gomock.Call
+type MockMalfeasanceValidatorVerifyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockMalfeasanceValidatorVerifyCall) Return(arg0 bool) *MockMalfeasanceValidatorVerifyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockMalfeasanceValidatorVerifyCall) Do(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *MockMalfeasanceValidatorVerifyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockMalfeasanceValidatorVerifyCall) DoAndReturn(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *MockMalfeasanceValidatorVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

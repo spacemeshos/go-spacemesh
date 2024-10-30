@@ -102,7 +102,7 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	for _, niPost := range atx.NiPosts {
 		niPostTree.AddLeaf(niPost.Root(atx.PreviousATXs))
 	}
-	// Add empty niposts up to the max scale limit.
+	// Add empty NiPoSTs up to the max scale limit.
 	// This must be updated when the max scale limit is changed.
 	for i := len(atx.NiPosts); i < 4; i++ {
 		niPostTree.AddLeaf(types.EmptyHash32.Bytes())
@@ -196,9 +196,9 @@ func (i *InitialAtxPartsV2) Root() []byte {
 // A marriage allows for publishing a merged ATX, which can contain PoST for all married IDs.
 // Any ID from the marriage can publish a merged ATX on behalf of all married IDs.
 type MarriageCertificate struct {
-	// An ATX of the ID that marries. It proves that the ID exists.
+	// An ATX of the NodeID that marries. It proves that the NodeID exists.
 	// Note: the reference ATX does not need to be from the previous epoch.
-	// It only needs to prove the existence of the ID.
+	// It only needs to prove the existence of the Identity.
 	ReferenceAtx types.ATXID
 	// Signature over the other ID that this ID marries with
 	// If Alice marries Bob, then Alice signs Bob's ID

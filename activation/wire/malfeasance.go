@@ -4,7 +4,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
@@ -84,5 +83,5 @@ type Proof interface {
 
 	// TODO(mafa): adjust interface to receive a context and a new validator service for validation
 	// (of signatures and post). Provider should be malfeasance service in activation package.
-	Valid(edVerifier *signing.EdVerifier) (types.NodeID, error)
+	Valid(malHandler MalfeasanceValidator) (types.NodeID, error)
 }

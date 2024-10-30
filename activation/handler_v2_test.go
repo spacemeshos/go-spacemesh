@@ -1655,6 +1655,13 @@ func Test_Marriages(t *testing.T) {
 		}
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
+
+		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
+		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
+			}).MinTimes(1)
+
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
@@ -1664,7 +1671,7 @@ func Test_Marriages(t *testing.T) {
 			}),
 		).DoAndReturn(func(_ context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMarry)
-			nId, err := malProof.Valid(atxHandler.edVerifier)
+			nId, err := malProof.Valid(verifier)
 			require.NoError(t, err)
 			require.Equal(t, sig.NodeID(), nId)
 			return nil

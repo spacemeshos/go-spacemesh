@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -19,6 +20,8 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 	otherSig, err := signing.NewEdSigner()
 	require.NoError(t, err)
+
+	edVerifier := signing.NewEdVerifier()
 
 	t.Run("valid", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
@@ -43,7 +46,13 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, proof)
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
 		id, err := proof.Valid(verifier)
 		require.NoError(t, err)
 		require.Equal(t, otherSig.NodeID(), id)
@@ -96,7 +105,9 @@ func Test_DoubleMarryProof(t *testing.T) {
 			},
 		}
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+
 		id, err := proof.Valid(verifier)
 		require.ErrorContains(t, err, "same ATX ID")
 		require.Equal(t, types.EmptyNodeID, id)
@@ -134,7 +145,13 @@ func Test_DoubleMarryProof(t *testing.T) {
 			},
 		}
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
 		proof.Proofs[0].MarriageProof = slices.Clone(proof1.MarriageProof)
 		proof.Proofs[0].MarriageProof[0] = types.RandomHash()
 		id, err := proof.Valid(verifier)
@@ -181,7 +198,13 @@ func Test_DoubleMarryProof(t *testing.T) {
 			},
 		}
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
 		proof.Proofs[0].CertificateProof = slices.Clone(proof1.CertificateProof)
 		proof.Proofs[0].CertificateProof[0] = types.RandomHash()
 		id, err := proof.Valid(verifier)
@@ -218,7 +241,12 @@ func Test_DoubleMarryProof(t *testing.T) {
 		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
 		require.NoError(t, err)
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
 
 		proof.Proofs[0].Signature = types.RandomEdSignature()
 		id, err := proof.Valid(verifier)
@@ -254,7 +282,12 @@ func Test_DoubleMarryProof(t *testing.T) {
 		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
 		require.NoError(t, err)
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
 
 		proof.Proofs[0].CertificateSignature = types.RandomEdSignature()
 		id, err := proof.Valid(verifier)
