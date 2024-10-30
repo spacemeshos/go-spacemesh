@@ -12,6 +12,9 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 * [#6417](https://github.com/spacemeshos/go-spacemesh/pull/6417) Fix initial post being deleted when the node is
   restarted or times out before the first ATX is published.
 
+* [#6422](https://github.com/spacemeshos/go-spacemesh/pull/6422) Further improved performance of the proposal building
+  process to avoid late proposals.
+
 ## v1.7.6
 
 ### Upgrade information

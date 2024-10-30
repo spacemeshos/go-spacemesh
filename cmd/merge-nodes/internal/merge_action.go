@@ -159,7 +159,7 @@ func MergeDBs(ctx context.Context, dbLog *zap.Logger, from, to string) error {
 	}
 
 	dbLog.Info("merging databases", zap.String("from", from), zap.String("to", to))
-	err = dstDB.WithTx(ctx, func(tx sql.Transaction) error {
+	err = dstDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		enc := func(stmt *sql.Statement) {
 			stmt.BindText(1, filepath.Join(from, localDbFile))
 		}

@@ -1134,6 +1134,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.localDB,
 		atxService,
 		atxPublisher,
+
 		app.validator,
 		nipostBuilder,
 		app.clock,
