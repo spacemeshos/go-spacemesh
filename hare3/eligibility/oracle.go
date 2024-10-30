@@ -584,18 +584,10 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 	o.fallback[epoch] = activeSet
 }
 
-func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
-	totalWeight, err := o.totalWeightFn(ctx, layer)
-	if err != nil {
-		panic(err)
-	}
-	return totalWeight
+func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
+	return o.totalWeightFn(ctx, layer)
 }
 
-func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
-	minerWeight, err := o.minerWeightFn(ctx, layer, node)
-	if err != nil {
-		panic(err)
-	}
-	return minerWeight
+func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error) {
+	return o.minerWeightFn(ctx, layer, node)
 }

@@ -30,9 +30,9 @@ type poetDB interface {
 
 type hare interface {
 	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
-	TotalWeight(ctx context.Context, layer types.LayerID) uint64
-	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64
-	Beacon(ctx context.Context, epoch types.EpochID) types.Beacon
+	TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error)
+	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error)
+	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
 
 type Server struct {
@@ -248,7 +248,11 @@ func (t *totalWeightResp) VisitGetHareTotalWeightLayerResponse(w http.ResponseWr
 }
 
 func (s *Server) GetHareTotalWeightLayer(ctx context.Context, req GetHareTotalWeightLayerRequestObject) (GetHareTotalWeightLayerResponseObject, error) {
-	return &totalWeightResp{s.hare.TotalWeight(ctx, types.LayerID(req.Layer))}, nil
+	weight, err := s.hare.TotalWeight(ctx, types.LayerID(req.Layer))
+	if err != nil {
+		return nil, err
+	}
+	return &totalWeightResp{weight}, nil
 }
 
 type nodeWeightResp struct {
@@ -268,7 +272,11 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWe
 		return nil, fmt.Errorf("decode node id: %w")
 	}
 	id := types.BytesToNodeID(hexBuf)
-	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))}, nil
+	weight, err := s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))
+	if err != nil {
+		return nil, fmt.Errorf("miner weight: %w", err)
+	}
+	return &nodeWeightResp{val: weight}, nil
 }
 
 type beaconResp struct{ b types.Beacon }
@@ -281,6 +289,9 @@ func (b *beaconResp) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) erro
 }
 
 func (s *Server) GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error) {
-	beacon := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
+	beacon, err := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
+	if err != nil {
+		return nil, err
+	}
 	return &beaconResp{b: beacon}, nil
 }

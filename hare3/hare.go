@@ -674,18 +674,18 @@ func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
 	return r.message
 }
 
-func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
+func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	return h.oracle.oracle.TotalWeight(ctx, layer)
 }
 
-func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) uint64 {
+func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) (uint64, error) {
 	return h.oracle.oracle.MinerWeight(ctx, miner, layer)
 }
 
-func (h *Hare) Beacon(ctx context.Context, epoch types.EpochID) types.Beacon {
+func (h *Hare) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
 	beacon, err := beacons.Get(h.db, epoch)
 	if err != nil {
-		panic(err)
+		return beacon, fmt.Errorf("get beacon: %w")
 	}
-	return beacon
+	return beacon, nil
 }
