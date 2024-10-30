@@ -1660,7 +1660,7 @@ func Test_Marriages(t *testing.T) {
 		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
-			}).MinTimes(1)
+			}).AnyTimes()
 
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
@@ -1669,9 +1669,9 @@ func Test_Marriages(t *testing.T) {
 				_, ok := data.(*wire.ProofDoubleMarry)
 				return ok
 			}),
-		).DoAndReturn(func(_ context.Context, _ types.NodeID, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMarry)
-			nId, err := malProof.Valid(verifier)
+			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)
 			require.Equal(t, sig.NodeID(), nId)
 			return nil

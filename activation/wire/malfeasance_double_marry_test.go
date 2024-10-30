@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -53,7 +54,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		id, err := proof.Valid(verifier)
+		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, otherSig.NodeID(), id)
 	})
@@ -108,7 +109,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
 
-		id, err := proof.Valid(verifier)
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "same ATX ID")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -154,14 +155,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		proof.Proofs[0].MarriageProof = slices.Clone(proof1.MarriageProof)
 		proof.Proofs[0].MarriageProof[0] = types.RandomHash()
-		id, err := proof.Valid(verifier)
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].MarriageProof[0] = proof1.MarriageProof[0]
 		proof.Proofs[1].MarriageProof = slices.Clone(proof2.MarriageProof)
 		proof.Proofs[1].MarriageProof[0] = types.RandomHash()
-		id, err = proof.Valid(verifier)
+		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -207,14 +208,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		proof.Proofs[0].CertificateProof = slices.Clone(proof1.CertificateProof)
 		proof.Proofs[0].CertificateProof[0] = types.RandomHash()
-		id, err := proof.Valid(verifier)
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate proof")
 		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].CertificateProof[0] = proof1.CertificateProof[0]
 		proof.Proofs[1].CertificateProof = slices.Clone(proof2.CertificateProof)
 		proof.Proofs[1].CertificateProof[0] = types.RandomHash()
-		id, err = proof.Valid(verifier)
+		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate proof")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -249,13 +250,13 @@ func Test_DoubleMarryProof(t *testing.T) {
 			}).AnyTimes()
 
 		proof.Proofs[0].Signature = types.RandomEdSignature()
-		id, err := proof.Valid(verifier)
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].Signature = atx1.Signature
 		proof.Proofs[1].Signature = types.RandomEdSignature()
-		id, err = proof.Valid(verifier)
+		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -290,13 +291,13 @@ func Test_DoubleMarryProof(t *testing.T) {
 			}).AnyTimes()
 
 		proof.Proofs[0].CertificateSignature = types.RandomEdSignature()
-		id, err := proof.Valid(verifier)
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate signature")
 		require.Equal(t, types.EmptyNodeID, id)
 
 		proof.Proofs[0].CertificateSignature = atx1.Marriages[1].Signature
 		proof.Proofs[1].CertificateSignature = types.RandomEdSignature()
-		id, err = proof.Valid(verifier)
+		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate signature")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
