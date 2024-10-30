@@ -133,15 +133,15 @@ func certificateProof(certs MarriageCertificates, index uint64) ([]types.Hash32,
 	return proofHashes, nil
 }
 
-func (p ProofDoubleMarry) Valid(edVerifier *signing.EdVerifier) (types.NodeID, error) {
+func (p ProofDoubleMarry) Valid(malValidator MalfeasanceValidator) (types.NodeID, error) {
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
 		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
 	}
 
-	if err := p.Proofs[0].Valid(edVerifier, p.NodeID); err != nil {
+	if err := p.Proofs[0].Valid(malValidator, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
-	if err := p.Proofs[1].Valid(edVerifier, p.NodeID); err != nil {
+	if err := p.Proofs[1].Valid(malValidator, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
 	}
 	return p.NodeID, nil
@@ -168,12 +168,12 @@ type MarryProof struct {
 	Signature types.EdSignature
 }
 
-func (p MarryProof) Valid(edVerifier *signing.EdVerifier, nodeID types.NodeID) error {
-	if !edVerifier.Verify(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
+func (p MarryProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID) error {
+	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
 		return errors.New("invalid ATX signature")
 	}
 
-	if !edVerifier.Verify(signing.MARRIAGE, nodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
+	if !malValidator.Signature(signing.MARRIAGE, nodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
 		return errors.New("invalid certificate signature")
 	}
 
