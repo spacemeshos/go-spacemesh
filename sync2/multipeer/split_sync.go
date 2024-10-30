@@ -15,7 +15,7 @@ import (
 )
 
 type syncResult struct {
-	s   Syncer
+	s   PeerSyncer
 	err error
 }
 

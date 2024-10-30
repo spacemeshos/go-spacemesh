@@ -10,31 +10,18 @@ import (
 
 //go:generate mockgen -typed -package=multipeer_test -destination=./mocks_test.go -source=./interface.go
 
-// OrdredSet is an interface for a set that can be synced against a remote peer.
-// It extends rangesync.OrderedSet with methods which are needed for multi-peer
-// reconciliation.
-type OrderedSet interface {
-	rangesync.OrderedSet
-	// EnsureLoaded ensures that the set is loaded and ready for use.
-	// It may do nothing in case of in-memory sets, but may trigger loading
-	// from database in case of database-backed sets.
-	EnsureLoaded() error
-	// Advance advances the set by including the items since the set was last loaded
-	// or advanced.
-	Advance() error
-	// Has returns true if the specified key is present in OrderedSet.
-	Has(rangesync.KeyBytes) (bool, error)
-	// Release releases the resources associated with the set.
-	// Calling Release on a set that is already released is a no-op.
-	Release() error
-}
+// QQQQQ: rm
+type OrderedSet = rangesync.OrderedSet
 
 // SyncBase is a synchronization base which holds the original OrderedSet.
+// It is used to derive per-peer PeerSyncers with their own copies of the OrderedSet,
+// copy operation being O(1) in terms of memory and time complexity.
+// It can also probe peers to decide on the synchronization strategy.
 type SyncBase interface {
 	// Count returns the number of items in the set.
 	Count() (int, error)
 	// Derive creates a Syncer for the specified peer.
-	Derive(p p2p.Peer) Syncer
+	Derive(p p2p.Peer) PeerSyncer
 	// Probe probes the specified peer, obtaining its set fingerprint,
 	// the number of items and the similarity value.
 	Probe(ctx context.Context, p p2p.Peer) (rangesync.ProbeResult, error)
@@ -42,8 +29,8 @@ type SyncBase interface {
 	Wait() error
 }
 
-// Syncer is a synchronization interface for a single peer.
-type Syncer interface {
+// PeerSyncer is a synchronization interface for a single peer.
+type PeerSyncer interface {
 	// Peer returns the peer this syncer is for.
 	Peer() p2p.Peer
 	// Sync synchronizes the set with the peer.
@@ -63,19 +50,25 @@ type SyncKeyHandler interface {
 	Commit(peer p2p.Peer, base, new OrderedSet) error
 }
 
+// PairwiseSyncer is used to probe a peer or sync against a single peer.
+// It does not contain a copy of the set.
 type PairwiseSyncer interface {
+	// Probe probes the peer using the specified range, to check how different the
+	// peer's set is from the local set.
 	Probe(
 		ctx context.Context,
 		peer p2p.Peer,
 		os rangesync.OrderedSet,
 		x, y rangesync.KeyBytes,
 	) (rangesync.ProbeResult, error)
+	// Sync synchronizes the set with the peer using the specified range.
 	Sync(
 		ctx context.Context,
 		peer p2p.Peer,
 		os rangesync.OrderedSet,
 		x, y rangesync.KeyBytes,
 	) error
+	// Serve serves an incoming synchronization request.
 	Serve(context context.Context, stream io.ReadWriter, os rangesync.OrderedSet) error
 }
 

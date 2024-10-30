@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync/mocks"
 )
 
 type setSyncBaseTester struct {
@@ -20,7 +21,7 @@ type setSyncBaseTester struct {
 	ctrl    *gomock.Controller
 	ps      *MockPairwiseSyncer
 	handler *MockSyncKeyHandler
-	os      *MockOrderedSet
+	os      *mocks.MockOrderedSet
 	ssb     *multipeer.SetSyncBase
 	waitMtx sync.Mutex
 	waitChs map[string]chan error
@@ -37,7 +38,7 @@ func newSetSyncBaseTester(t *testing.T, os multipeer.OrderedSet) *setSyncBaseTes
 		doneCh:  make(chan rangesync.KeyBytes),
 	}
 	if os == nil {
-		st.os = NewMockOrderedSet(ctrl)
+		st.os = mocks.NewMockOrderedSet(ctrl)
 		st.os.EXPECT().Items().DoAndReturn(func() rangesync.SeqResult {
 			return rangesync.EmptySeqResult()
 		}).AnyTimes()
@@ -65,8 +66,8 @@ func (st *setSyncBaseTester) getWaitCh(k rangesync.KeyBytes) chan error {
 	return ch
 }
 
-func (st *setSyncBaseTester) expectCopy(addedKeys ...rangesync.KeyBytes) *MockOrderedSet {
-	copy := NewMockOrderedSet(st.ctrl)
+func (st *setSyncBaseTester) expectCopy(addedKeys ...rangesync.KeyBytes) *mocks.MockOrderedSet {
+	copy := mocks.NewMockOrderedSet(st.ctrl)
 	st.os.EXPECT().Copy(true).DoAndReturn(func(bool) rangesync.OrderedSet {
 		copy.EXPECT().Items().DoAndReturn(func() rangesync.SeqResult {
 			return rangesync.EmptySeqResult()
@@ -83,7 +84,7 @@ func (st *setSyncBaseTester) expectCopy(addedKeys ...rangesync.KeyBytes) *MockOr
 
 func (st *setSyncBaseTester) expectSync(
 	p p2p.Peer,
-	ss multipeer.Syncer,
+	ss multipeer.PeerSyncer,
 	addedKeys ...rangesync.KeyBytes,
 ) {
 	st.ps.EXPECT().Sync(gomock.Any(), p, ss, nil, nil).

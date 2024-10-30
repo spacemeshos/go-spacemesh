@@ -22,43 +22,29 @@ type Dispatcher = rangesync.Dispatcher
 
 // Config contains the configuration for the P2PHashSync.
 type Config struct {
-	MaxSendRange           int           `mapstructure:"max-send-range"`
-	SampleSize             int           `mapstructure:"sample-size"`
-	SyncPeerCount          int           `mapstructure:"sync-peer-count"`
-	MinSplitSyncCount      int           `mapstructure:"min-split-sync-count"`
-	MaxFullDiff            int           `mapstructure:"max-full-diff"`
-	SyncInterval           time.Duration `mapstructure:"sync-interval"`
-	NoPeersRecheckInterval time.Duration `mapstructure:"no-peers-recheck-interval"`
-	MinSplitSyncPeers      int           `mapstructure:"min-split-sync-peers"`
-	MinCompleteFraction    float64       `mapstructure:"min-complete-fraction"`
-	SplitSyncGracePeriod   time.Duration `mapstructure:"split-sync-grace-period"`
-	RecentTimeSpan         time.Duration `mapstructure:"recent-time-span"`
-	EnableActiveSync       bool          `mapstructure:"enable-active-sync"`
-	MaxReconcDiff          float64       `mapstructure:"max-reconc-diff"`
-	AutoCommitCount        int           `mapstructure:"auto-commit-count"`
-	AutoCommitIdle         time.Duration `mapstructure:"auto-commit-idle"`
-	TrafficLimit           int           `mapstructure:"traffic-limit"`
-	MessageLimit           int           `mapstructure:"message-limit"`
+	multipeer.MultiPeerReconcilerConfig `mapstructure:",squash"`
+	MaxSendRange                        int           `mapstructure:"max-send-range"`
+	SampleSize                          int           `mapstructure:"sample-size"`
+	RecentTimeSpan                      time.Duration `mapstructure:"recent-time-span"`
+	EnableActiveSync                    bool          `mapstructure:"enable-active-sync"`
+	MaxReconcDiff                       float64       `mapstructure:"max-reconc-diff"`
+	AutoCommitCount                     int           `mapstructure:"auto-commit-count"`
+	AutoCommitIdle                      time.Duration `mapstructure:"auto-commit-idle"`
+	TrafficLimit                        int           `mapstructure:"traffic-limit"`
+	MessageLimit                        int           `mapstructure:"message-limit"`
 }
 
 // DefaultConfig returns the default configuration for the P2PHashSync.
 func DefaultConfig() Config {
 	return Config{
-		MaxSendRange:           rangesync.DefaultMaxSendRange,
-		SampleSize:             rangesync.DefaultSampleSize,
-		SyncPeerCount:          20,
-		MinSplitSyncPeers:      2,
-		MinSplitSyncCount:      1000,
-		MaxFullDiff:            10000,
-		SyncInterval:           5 * time.Minute,
-		MinCompleteFraction:    0.5,
-		SplitSyncGracePeriod:   time.Minute,
-		NoPeersRecheckInterval: 30 * time.Second,
-		MaxReconcDiff:          0.01,
-		AutoCommitCount:        10000,
-		AutoCommitIdle:         time.Second,
-		TrafficLimit:           200_000_000,
-		MessageLimit:           20_000_000,
+		MultiPeerReconcilerConfig: multipeer.DefaultConfig(),
+		MaxSendRange:              rangesync.DefaultMaxSendRange,
+		SampleSize:                rangesync.DefaultSampleSize,
+		MaxReconcDiff:             0.01,
+		AutoCommitCount:           10000,
+		AutoCommitIdle:            time.Second,
+		TrafficLimit:              200_000_000,
+		MessageLimit:              20_000_000,
 	}
 }
 
@@ -108,16 +94,8 @@ func NewP2PHashSync(
 	})
 	s.syncBase = multipeer.NewSetSyncBase(ps, s.os, handler)
 	s.reconciler = multipeer.NewMultiPeerReconciler(
-		s.syncBase, peers, keyLen, maxDepth,
-		multipeer.WithLogger(logger),
-		multipeer.WithSyncPeerCount(cfg.SyncPeerCount),
-		multipeer.WithMinSplitSyncPeers(cfg.MinSplitSyncPeers),
-		multipeer.WithMinSplitSyncCount(cfg.MinSplitSyncCount),
-		multipeer.WithMaxFullDiff(cfg.MaxFullDiff),
-		multipeer.WithSyncInterval(cfg.SyncInterval),
-		multipeer.WithMinCompleteFraction(cfg.MinCompleteFraction),
-		multipeer.WithSplitSyncGracePeriod(time.Minute),
-		multipeer.WithNoPeersRecheckInterval(cfg.NoPeersRecheckInterval))
+		logger, cfg.MultiPeerReconcilerConfig,
+		s.syncBase, peers, keyLen, maxDepth)
 	d.Register(name, s.serve)
 	return s
 }

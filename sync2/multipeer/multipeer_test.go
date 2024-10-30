@@ -76,17 +76,18 @@ func newMultiPeerSyncTester(t *testing.T) *multiPeerSyncTester {
 		peers:      peers.New(),
 		clock:      clockwork.NewFakeClock().(fakeClock),
 	}
-	mt.reconciler = multipeer.NewMultiPeerReconciler(mt.syncBase, mt.peers, 32, 24,
-		multipeer.WithLogger(zaptest.NewLogger(t)),
-		multipeer.WithSyncInterval(time.Minute),
-		multipeer.WithSyncPeerCount(6),
-		multipeer.WithMinSplitSyncPeers(2),
-		multipeer.WithMinSplitSyncCount(90),
-		multipeer.WithMaxFullDiff(20),
-		multipeer.WithMinCompleteFraction(0.9),
-		multipeer.WithNoPeersRecheckInterval(10*time.Second),
-		multipeer.WithSyncRunner(mt.syncRunner),
-		multipeer.WithClock(mt.clock))
+	cfg := multipeer.DefaultConfig()
+	cfg.SyncInterval = time.Minute
+	cfg.SyncPeerCount = 6
+	cfg.MinSplitSyncPeers = 2
+	cfg.MinSplitSyncCount = 90
+	cfg.MaxFullDiff = 20
+	cfg.MinCompleteFraction = 0.9
+	cfg.NoPeersRecheckInterval = 10 * time.Second
+	mt.reconciler = multipeer.NewMultiPeerReconcilerInternal(
+		zaptest.NewLogger(t), cfg,
+		mt.syncBase, mt.peers, 32, 24,
+		mt.syncRunner, mt.clock)
 	return mt
 }
 
@@ -141,11 +142,11 @@ func (mt *multiPeerSyncTester) expectFullSync(pl *peerList, times, numFails int)
 			// delegate to the real fullsync
 			return mt.reconciler.FullSync(ctx, peers)
 		})
-	mt.syncBase.EXPECT().Derive(gomock.Any()).DoAndReturn(func(p p2p.Peer) multipeer.Syncer {
+	mt.syncBase.EXPECT().Derive(gomock.Any()).DoAndReturn(func(p p2p.Peer) multipeer.PeerSyncer {
 		mt.mtx.Lock()
 		defer mt.mtx.Unlock()
 		require.Contains(mt, pl.get(), p)
-		s := NewMockSyncer(mt.ctrl)
+		s := NewMockPeerSyncer(mt.ctrl)
 		s.EXPECT().Peer().Return(p).AnyTimes()
 		// TODO: do better job at tracking Release() calls
 		s.EXPECT().Release().AnyTimes()

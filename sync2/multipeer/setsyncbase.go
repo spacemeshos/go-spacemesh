@@ -59,10 +59,10 @@ func (ssb *SetSyncBase) Count() (int, error) {
 }
 
 // Derive implements SyncBase.
-func (ssb *SetSyncBase) Derive(p p2p.Peer) Syncer {
+func (ssb *SetSyncBase) Derive(p p2p.Peer) PeerSyncer {
 	ssb.mtx.Lock()
 	defer ssb.mtx.Unlock()
-	return &setSyncer{
+	return &peerSetSyncer{
 		SetSyncBase: ssb,
 		OrderedSet:  ssb.os.Copy(true).(OrderedSet),
 		p:           p,
@@ -133,7 +133,7 @@ func (ssb *SetSyncBase) advance() error {
 	return ssb.os.Advance()
 }
 
-type setSyncer struct {
+type peerSetSyncer struct {
 	*SetSyncBase
 	OrderedSet
 	p       p2p.Peer
@@ -141,42 +141,42 @@ type setSyncer struct {
 }
 
 var (
-	_ Syncer     = &setSyncer{}
-	_ OrderedSet = &setSyncer{}
+	_ PeerSyncer = &peerSetSyncer{}
+	_ OrderedSet = &peerSetSyncer{}
 )
 
 // Peer implements Syncer.
-func (ss *setSyncer) Peer() p2p.Peer {
-	return ss.p
+func (pss *peerSetSyncer) Peer() p2p.Peer {
+	return pss.p
 }
 
 // Sync implements Syncer.
-func (ss *setSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
-	if err := ss.ps.Sync(ctx, ss.p, ss, x, y); err != nil {
+func (pss *peerSetSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
+	if err := pss.ps.Sync(ctx, pss.p, pss, x, y); err != nil {
 		return err
 	}
-	return ss.commit()
+	return pss.commit()
 }
 
 // Serve implements Syncer.
-func (ss *setSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
-	if err := ss.ps.Serve(ctx, stream, ss); err != nil {
+func (pss *peerSetSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
+	if err := pss.ps.Serve(ctx, stream, pss); err != nil {
 		return err
 	}
-	return ss.commit()
+	return pss.commit()
 }
 
 // Receive implements OrderedSet.
-func (ss *setSyncer) Receive(k rangesync.KeyBytes) error {
-	if err := ss.receiveKey(k, ss.p); err != nil {
+func (pss *peerSetSyncer) Receive(k rangesync.KeyBytes) error {
+	if err := pss.receiveKey(k, pss.p); err != nil {
 		return err
 	}
-	return ss.OrderedSet.Receive(k)
+	return pss.OrderedSet.Receive(k)
 }
 
-func (ss *setSyncer) commit() error {
-	if err := ss.handler.Commit(ss.p, ss.SetSyncBase.os, ss.OrderedSet); err != nil {
+func (pss *peerSetSyncer) commit() error {
+	if err := pss.handler.Commit(pss.p, pss.SetSyncBase.os, pss.OrderedSet); err != nil {
 		return err
 	}
-	return ss.SetSyncBase.advance()
+	return pss.SetSyncBase.advance()
 }
