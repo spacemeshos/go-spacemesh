@@ -1657,7 +1657,7 @@ func Test_Marriages(t *testing.T) {
 		atxHandler.expectAtxV2(atx2)
 
 		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
-		verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).MinTimes(1)
