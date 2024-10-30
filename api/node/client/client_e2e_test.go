@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	"github.com/spacemeshos/go-spacemesh/api/node/server"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 )
@@ -65,9 +64,9 @@ func Test_ActivationService_Atx(t *testing.T) {
 	atxid := types.ATXID{1, 2, 3, 4}
 
 	t.Run("not found", func(t *testing.T) {
-		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(nil, common.ErrNotFound)
+		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(nil, activation.ErrNotFound)
 		_, err := svc.Atx(context.Background(), atxid)
-		require.ErrorIs(t, err, common.ErrNotFound)
+		require.ErrorIs(t, err, activation.ErrNotFound)
 	})
 
 	t.Run("found", func(t *testing.T) {
@@ -117,9 +116,9 @@ func Test_ActivationService_LastATX(t *testing.T) {
 	nodeid := types.NodeID{5, 6, 7, 8}
 
 	t.Run("not found", func(t *testing.T) {
-		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(nil, common.ErrNotFound)
+		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(nil, activation.ErrNotFound)
 		_, err := svc.LastATX(context.Background(), nodeid)
-		require.ErrorIs(t, err, common.ErrNotFound)
+		require.ErrorIs(t, err, activation.ErrNotFound)
 	})
 
 	t.Run("found", func(t *testing.T) {

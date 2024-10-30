@@ -21,12 +21,9 @@ func TestTracer(t *testing.T) {
 
 	path := filepath.Join(t.TempDir(), "tortoise.trace")
 	const size = 12
-	s := sim.New(
-		sim.WithLayerSize(size),
-	)
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
-	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
@@ -35,7 +32,7 @@ func TestTracer(t *testing.T) {
 		s.Next()
 	}
 	last := s.Next()
-	trt.TallyVotes(ctx, last)
+	trt.TallyVotes(last)
 	trt.Updates() // just trace final result
 	t.Run("live", func(t *testing.T) {
 		t.Parallel()

@@ -13,7 +13,6 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
@@ -36,7 +35,7 @@ func newActiveSetGenerator(
 	cfg config,
 	log *zap.Logger,
 	db, localdb sql.Executor,
-	atxsdata *atxsdata.Data,
+	atxsdata atxsData,
 	clock layerClock,
 	opts ...activesetGenOpt,
 ) *activeSetGenerator {
@@ -61,7 +60,7 @@ type activeSetGenerator struct {
 	log *zap.Logger
 
 	db, localdb sql.Executor
-	atxsdata    *atxsdata.Data
+	atxsdata    atxsData
 	clock       layerClock
 	wallclock   clockwork.Clock
 
@@ -254,7 +253,7 @@ func activeSetFromGrades(
 	}, nil
 }
 
-func getSetWeight(atxsdata *atxsdata.Data, target types.EpochID, set []types.ATXID) (uint64, error) {
+func getSetWeight(atxsdata atxsData, target types.EpochID, set []types.ATXID) (uint64, error) {
 	var setWeight uint64
 	for _, id := range set {
 		atx := atxsdata.Get(target, id)
@@ -270,9 +269,9 @@ func getSetWeight(atxsdata *atxsdata.Data, target types.EpochID, set []types.ATX
 // https://community.spacemesh.io/t/grading-atxs-for-the-active-set/335
 //
 // let s be the start of the epoch, and δ the network propagation time.
-// grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
-// grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof by time s-δ.
-// grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
+// Grade 0: ATX was received at time t >= s-3δ, or an equivocation proof was received by time s-δ.
+// Grade 1: ATX was received at time t < s-3δ before the start of the epoch, and no equivocation proof by time s-δ.
+// Grade 2: ATX was received at time t < s-4δ, and no equivocation proof was received for that id until time s.
 type atxGrade int
 
 const (

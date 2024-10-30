@@ -138,10 +138,8 @@ func malData(ids ...string) []types.NodeID {
 type tester struct {
 	tb           testing.TB
 	syncer       *Syncer
-	localdb      sql.LocalDatabase
 	db           sql.StateDatabase
 	cfg          Config
-	ctrl         *gomock.Controller
 	fetcher      *mocks.Mockfetcher
 	clock        clockwork.FakeClock
 	received     map[types.NodeID]bool
@@ -151,8 +149,8 @@ type tester struct {
 }
 
 func newTester(tb testing.TB, cfg Config) *tester {
-	localdb := localsql.InMemory()
-	db := statesql.InMemory()
+	localdb := localsql.InMemoryTest(tb)
+	db := statesql.InMemoryTest(tb)
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	clock := clockwork.NewFakeClock()
@@ -166,10 +164,8 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	return &tester{
 		tb:           tb,
 		syncer:       syncer,
-		localdb:      localdb,
 		db:           db,
 		cfg:          cfg,
-		ctrl:         ctrl,
 		fetcher:      fetcher,
 		clock:        clock,
 		received:     make(map[types.NodeID]bool),
@@ -229,8 +225,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectGetProofs(nil)
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
 			nid("1"), nid("2"), nid("3"), nid("4"),
 		}, maps.Keys(tester.received))
@@ -242,8 +237,7 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.Zero(t, tester.peerErrCount.n)
 	})
 	t.Run("EnsureInSync with no malfeasant identities", func(t *testing.T) {
@@ -299,7 +293,7 @@ func TestSyncer(t *testing.T) {
 		cancel()
 		eg.Wait()
 	})
-	t.Run("gettings ids from MinSyncPeers peers is enough", func(t *testing.T) {
+	t.Run("getting ids from MinSyncPeers peers is enough", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.MinSyncPeers = 2
 		tester := newTester(t, cfg)
@@ -328,8 +322,7 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.Equal(t, 1, tester.peerErrCount.n)
 	})
 	t.Run("skip hashes after max retries", func(t *testing.T) {
@@ -356,8 +349,7 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 	})
 	t.Run("skip hashes after validation reject", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -383,7 +375,6 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 	})
 }

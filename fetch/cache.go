@@ -1,6 +1,7 @@
 package fetch
 
 import (
+	"fmt"
 	"math/rand/v2"
 	"sync"
 
@@ -9,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -24,12 +24,12 @@ type HashPeersCache struct {
 type HashPeers map[p2p.Peer]struct{}
 
 // NewHashPeersCache creates a new hash-to-peers cache.
-func NewHashPeersCache(size int) *HashPeersCache {
+func NewHashPeersCache(size int) (*HashPeersCache, error) {
 	cache, err := lru.New[types.Hash32, HashPeers](size)
 	if err != nil {
-		log.Panic("could not initialize cache ", err)
+		return nil, fmt.Errorf("create lru: %w", err)
 	}
-	return &HashPeersCache{Cache: cache}
+	return &HashPeersCache{Cache: cache}, nil
 }
 
 // get returns peers for a given hash (non-thread-safe).

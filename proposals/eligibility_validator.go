@@ -16,7 +16,7 @@ import (
 )
 
 // Validator validates the eligibility of a Ballot.
-// the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
+// The validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
 type Validator struct {
 	minActiveSetWeight []types.EpochMinimalActiveWeight
 	avgLayerSize       uint32
@@ -111,11 +111,14 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 				ballot.EligibilityProofs[i-1].J,
 			)
 		}
-		if !v.vrfVerifier.Verify(ballot.SmesherID,
-			MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), atx.Nonce, proof.J), proof.Sig) {
+		msg := MustSerializeVRFMessage(data.Beacon, ballot.Layer.GetEpoch(), atx.Nonce, proof.J)
+		if !v.vrfVerifier.Verify(ballot.SmesherID, msg, proof.Sig) {
 			return fmt.Errorf(
-				"%w: proof contains incorrect VRF signature. beacon: %v, epoch: %v, counter: %v, vrfSig: %s",
+				"%w: proof contains incorrect VRF signature: "+
+					"ballot: %s, smesher: %s, beacon: %s, epoch: %v, counter: %v, vrfSig: %s",
 				fetch.ErrIgnore,
+				ballot.ID(),
+				ballot.SmesherID.ShortString(),
 				data.Beacon,
 				ballot.Layer.GetEpoch(),
 				proof.J,
@@ -124,8 +127,12 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot, 
 		}
 		eligible := CalcEligibleLayer(ballot.Layer.GetEpoch(), v.layersPerEpoch, proof.Sig)
 		if ballot.Layer != eligible {
-			return fmt.Errorf("%w: ballot has incorrect layer index. ballot layer (%v), eligible layer (%v)",
-				pubsub.ErrValidationReject, ballot.Layer, eligible)
+			return fmt.Errorf(
+				"%w: ballot has incorrect layer index. ballot layer (%v), eligible layer (%v)",
+				pubsub.ErrValidationReject,
+				ballot.Layer,
+				eligible,
+			)
 		}
 	}
 
@@ -214,5 +221,5 @@ func (v *Validator) validateSecondary(ballot *types.Ballot) (*types.EpochData, e
 			ballot.Layer.GetEpoch(),
 		)
 	}
-	return &types.EpochData{Beacon: refdata.Beacon, EligibilityCount: refdata.Eligiblities}, nil
+	return &types.EpochData{Beacon: refdata.Beacon, EligibilityCount: refdata.Eligibilities}, nil
 }

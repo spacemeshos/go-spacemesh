@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net"
 	"net/http"
@@ -111,6 +112,7 @@ const (
 	PostServiceLogger      = "postService"
 	PostInfoServiceLogger  = "postInfoService"
 	StateDbLogger          = "stateDb"
+	ApiStateDBLogger       = "apiStateDB"
 	BeaconLogger           = "beacon"
 	CachedDBLogger         = "cachedDB"
 	PoetDbLogger           = "poetDb"
@@ -246,31 +248,39 @@ func GetCommand() *cobra.Command {
 }
 
 func configure(c *cobra.Command, configPath string, conf *config.Config) error {
-	preset := conf.Preset // might be set via CLI flag
-	if err := loadConfig(conf, preset, configPath); err != nil {
+	f, err := os.Open(configPath)
+	if err != nil {
+		return fmt.Errorf("opening config file: %w", err)
+	}
+	defer f.Close()
+	if err := LoadConfig(conf, conf.Preset, f); err != nil {
 		return fmt.Errorf("loading config: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("closing config file: %w", err)
 	}
 	// apply CLI args to config
 	if err := c.ParseFlags(os.Args[1:]); err != nil {
 		return fmt.Errorf("parsing flags: %w", err)
 	}
-
 	if cmd.NoMainNet && onMainNet(conf) && !conf.NoMainOverride {
 		return errors.New("this is a testnet-only build not intended for mainnet")
 	}
-
 	return nil
 }
 
 var grpcLog = grpc_logsettable.ReplaceGrpcLoggerV2()
 
-// loadConfig loads config and preset (if provided) into the provided config.
+// LoadConfig loads config and preset (if provided) into the provided config.
 // It first loads the preset and then overrides it with values from the config file.
-func loadConfig(cfg *config.Config, preset, path string) error {
+func LoadConfig(cfg *config.Config, preset string, src io.Reader) error {
 	v := viper.New()
-	// read in config from file
-	if err := config.LoadConfig(path, v); err != nil {
-		return err
+	// read in config from src
+	if src != nil {
+		v.SetConfigType("json")
+		if err := v.ReadConfig(src); err != nil {
+			return fmt.Errorf("can't load config: %w", err)
+		}
 	}
 
 	// override default config with preset if provided
@@ -285,7 +295,7 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		*cfg = p
 	}
 
-	// Unmarshall config file into config struct
+	// Unmarshal config file into config struct
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
@@ -296,15 +306,12 @@ func loadConfig(cfg *config.Config, preset, path string) error {
 		mapstructureutil.AtxVersionsDecodeFunc(),
 		mapstructure.TextUnmarshallerHookFunc(),
 	)
-
 	opts := []viper.DecoderConfigOption{
 		viper.DecodeHook(hook),
 		WithZeroFields(),
 		WithIgnoreUntagged(),
 		WithErrorUnused(),
 	}
-
-	// load config if it was loaded to the viper
 	if err := v.Unmarshal(cfg, opts...); err != nil {
 		return fmt.Errorf("unmarshal config: %w", err)
 	}
@@ -377,6 +384,7 @@ type App struct {
 	signers           []*signing.EdSigner
 	Config            *config.Config
 	db                sql.StateDatabase
+	apiDB             sql.StateDatabase
 	cachedDB          *datastore.CachedDB
 	dbMetrics         *dbmetrics.DBMetricsCollector
 	localDB           sql.LocalDatabase
@@ -430,7 +438,7 @@ type App struct {
 }
 
 func (app *App) loadCheckpoint(ctx context.Context) (*checkpoint.PreservedData, error) {
-	var nodeIDs []types.NodeID
+	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	if app.Config.Recovery.PreserveOwnAtx {
 		for _, sig := range app.signers {
 			nodeIDs = append(nodeIDs, sig.NodeID())
@@ -600,11 +608,20 @@ func (app *App) initServices(ctx context.Context) error {
 		}
 	}
 
-	var poetDbOpts []activation.PoetDbOption
+	poetDbOpts := []activation.PoetDbOption{
+		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
+	}
 	if nodeServiceClient != nil {
 		poetDbOpts = append(poetDbOpts, activation.WithRemotePoetStorer(nodeServiceClient))
 	}
-	poetDb := activation.NewPoetDb(app.db, app.addLogger(PoetDbLogger, lg).Zap(), poetDbOpts...)
+	poetDb, err := activation.NewPoetDb(
+		app.db,
+		app.addLogger(PoetDbLogger, lg).Zap(),
+		poetDbOpts...,
+	)
+	if err != nil {
+		return fmt.Errorf("creating poet db: %w", err)
+	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -728,10 +745,15 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(ExecutorLogger, lg).Zap(),
 	)
 	mlog := app.addLogger(MeshLogger, lg).Zap()
-	msh, err := mesh.NewMesh(app.db, app.atxsdata, app.clock, trtl, executor, app.conState, mlog)
+	msh, err := mesh.NewMesh(app.db, app.atxsdata, trtl, executor, app.conState, mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
+
+	app.eg.Go(func() error {
+		msh.Start(ctx)
+		return nil
+	})
 
 	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
 	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
@@ -839,11 +861,14 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 
 	flog := app.addLogger(Fetcher, lg)
-	fetcher := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
+	fetcher, err := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog.Zap()),
 	)
+	if err != nil {
+		return fmt.Errorf("create fetcher: %w", err)
+	}
 	fetcherWrapped.Fetcher = fetcher
 	app.eg.Go(func() error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
@@ -975,7 +1000,6 @@ func (app *App) initServices(ctx context.Context) error {
 				)
 				return nil
 			})
-			panic("hare4 still not enabled")
 		}
 	}
 	propHare := &proposalConsumerHare{
@@ -1086,6 +1110,7 @@ func (app *App) initServices(ctx context.Context) error {
 			server,
 			app.Config.POET,
 			lg.Zap().Named("poet"),
+			app.Config.TickSize,
 			activation.WithCertifier(certifier),
 		)
 		if err != nil {
@@ -1122,6 +1147,10 @@ func (app *App) initServices(ctx context.Context) error {
 		atxService = nodeServiceClient
 		atxPublisher = nodeServiceClient
 	} else {
+		trustedIDs := make([]types.NodeID, 0, len(app.signers))
+		for _, sig := range app.signers {
+			trustedIDs = append(trustedIDs, sig.NodeID())
+		}
 		atxService = activation.NewDBAtxService(
 			app.db,
 			goldenATXID,
@@ -1129,6 +1158,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.validator,
 			atxBuilderLog,
 			activation.WithPostValidityDelay(app.Config.PostValidDelay),
+			activation.WithTrustedIDs(trustedIDs...),
 		)
 		atxPublisher = app.host
 	}
@@ -1138,6 +1168,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.localDB,
 		atxService,
 		atxPublisher,
+
 		app.validator,
 		nipostBuilder,
 		app.clock,
@@ -1192,32 +1223,27 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
-		malfeasanceLogger,
 		app.edVerifier,
 		app.postVerifier,
 	)
-	invalidPrevMH := activation.NewInvalidPrevATXHandler(
-		app.cachedDB,
-		malfeasanceLogger,
-		app.edVerifier,
-	)
+	invalidPrevMH := activation.NewInvalidPrevATXHandler(app.cachedDB, app.edVerifier)
 
 	nodeIDs := make([]types.NodeID, 0, len(app.signers))
 	for _, s := range app.signers {
 		nodeIDs = append(nodeIDs, s.NodeID())
 	}
-	malfeasanceHandler := malfeasance.NewHandler(
+	app.malfeasanceHandler = malfeasance.NewHandler(
 		app.cachedDB,
 		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
 		trtl,
 	)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleATXs, activationMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.MultipleBallots, meshMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.HareEquivocation, hareMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPostIndex, invalidPostMH)
-	malfeasanceHandler.RegisterHandlerV1(malfeasance.InvalidPrevATX, invalidPrevMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
+	app.malfeasanceHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
@@ -1262,7 +1288,7 @@ func (app *App) initServices(ctx context.Context) error {
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
-				malfeasanceHandler.HandleSyncedMalfeasanceProof,
+				app.malfeasanceHandler.HandleSyncedMalfeasanceProof,
 				app.host,
 				lg.Zap(),
 			),
@@ -1323,21 +1349,17 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
-		pubsub.ChainGossipHandler(atxSyncHandler, malfeasanceHandler.HandleMalfeasanceProof),
+		pubsub.ChainGossipHandler(atxSyncHandler, app.malfeasanceHandler.HandleMalfeasanceProof),
 	)
 
 	app.proposalBuilder = proposalBuilder
-	app.proposalListener = proposalListener
 	app.mesh = msh
 	app.syncer = newSyncer
-	app.svm = state
 	app.atxBuilder = atxBuilder
-	app.nipostBuilder = nipostBuilder
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
-	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,
@@ -1383,9 +1405,7 @@ func (app *App) launchStandalone(ctx context.Context) error {
 
 	cfg.RawRESTListener = parsed.Host
 	cfg.RawRPCListener = parsed.Hostname() + ":0"
-	if err := cfg.Genesis.UnmarshalFlag(app.Config.Genesis.GenesisTime); err != nil {
-		return err
-	}
+	cfg.Genesis = server.Genesis(app.Config.Genesis.GenesisTime)
 	cfg.Round.EpochDuration = app.Config.LayerDuration * time.Duration(app.Config.LayersPerEpoch)
 	cfg.Round.CycleGap = app.Config.POET.CycleGap
 	cfg.Round.PhaseShift = app.Config.POET.PhaseShift
@@ -1587,7 +1607,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:
-		service := grpcserver.NewPostInfoService(app.addLogger(PostInfoServiceLogger, lg).Zap(), app.atxBuilder)
+		service := grpcserver.NewPostInfoService(app.atxBuilder)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Transaction:
@@ -1606,25 +1626,34 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Activation:
-		service := v2alpha1.NewActivationService(app.db)
+		service := v2alpha1.NewActivationService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.ActivationStream:
-		service := v2alpha1.NewActivationStreamService(app.db)
+		service := v2alpha1.NewActivationStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Reward:
-		service := v2alpha1.NewRewardService(app.db)
+		service := v2alpha1.NewRewardService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.RewardStream:
-		service := v2alpha1.NewRewardStreamService(app.db)
+		service := v2alpha1.NewRewardStreamService(app.apiDB)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.Malfeasance:
+		service := v2alpha1.NewMalfeasanceService(app.apiDB, app.malfeasanceHandler)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.MalfeasanceStream:
+		service := v2alpha1.NewMalfeasanceStreamService(app.apiDB, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Network:
 		service := v2alpha1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config)
+			app.Config,
+		)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Node:
@@ -1632,23 +1661,23 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Layer:
-		service := v2alpha1.NewLayerService(app.db)
+		service := v2alpha1.NewLayerService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.LayerStream:
-		service := v2alpha1.NewLayerStreamService(app.db)
+		service := v2alpha1.NewLayerStreamService(app.apiDB)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Transaction:
-		service := v2alpha1.NewTransactionService(app.db, app.conState, app.syncer, app.txHandler, app.host)
+		service := v2alpha1.NewTransactionService(app.apiDB, app.conState, app.syncer, app.txHandler, app.host)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.TransactionStream:
-		service := v2alpha1.NewTransactionStreamService(app.db)
+		service := v2alpha1.NewTransactionStreamService()
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Account:
-		service := v2alpha1.NewAccountService(app.db, app.conState)
+		service := v2alpha1.NewAccountService(app.apiDB, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
@@ -2001,6 +2030,11 @@ func (app *App) stopServices(ctx context.Context) {
 			app.log.With().Warning("db exited with error", log.Err(err))
 		}
 	}
+	if app.apiDB != nil {
+		if err := app.apiDB.Close(); err != nil {
+			app.log.With().Warning("api db exited with error", log.Err(err))
+		}
+	}
 	if app.dbMetrics != nil {
 		app.dbMetrics.Close()
 	}
@@ -2034,7 +2068,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
 	}
 	dbLog := app.addLogger(StateDbLogger, lg).Zap()
-	schema, err := statemigrations.SchemaWithInCodeMigrations()
+	schema, err := statemigrations.SchemaWithInCodeMigrations(*app.Config)
 	if err != nil {
 		return fmt.Errorf("error loading db schema: %w", err)
 	}
@@ -2060,6 +2094,19 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		return fmt.Errorf("open sqlite db: %w", err)
 	}
 	app.db = sqlDB
+
+	apiDBLog := app.addLogger(ApiStateDBLogger, lg).Zap()
+	apiSqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile),
+		sql.WithReadOnly(),
+		sql.WithLogger(apiDBLog),
+		sql.WithConnections(app.Config.API.DatabaseConnections),
+		sql.WithMigrationsDisabled(),
+	)
+	if err != nil {
+		return fmt.Errorf("open sqlite db: %w", err)
+	}
+	app.apiDB = apiSqlDB
+
 	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
 			ctx,
@@ -2080,6 +2127,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			app.db,
 			app.Config.Tortoise.WindowSizeEpochs(applied),
 			warmupLog,
+			app.signers...,
 		)
 		if err != nil {
 			return err
@@ -2213,15 +2261,10 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	}
 
 	/* Initialize all protocol services */
-
-	gTime, err := time.Parse(time.RFC3339, app.Config.Genesis.GenesisTime)
-	if err != nil {
-		return fmt.Errorf("cannot parse genesis time %s: %w", app.Config.Genesis.GenesisTime, err)
-	}
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(gTime),
+		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
 		timesync.WithLogger(app.addLogger(ClockLogger, logger).Zap()),
 	)
 	if err != nil {

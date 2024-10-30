@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand/v2"
 	"sync"
@@ -203,9 +204,10 @@ func randomPeer(peers []p2p.Peer) p2p.Peer {
 type Option func(*Fetch)
 
 // WithContext configures the shutdown context for the fetcher.
-func WithContext(c context.Context) Option {
+func WithContext(ctx context.Context) Option {
 	return func(f *Fetch) {
-		f.shutdownCtx, f.cancel = context.WithCancel(c)
+		// TODO(mafa): fix this
+		f.shutdownCtx, f.cancel = context.WithCancel(ctx) // nolint:fatcontext
 	}
 }
 
@@ -268,9 +270,14 @@ func NewFetch(
 	proposals *store.Store,
 	host *p2p.Host,
 	opts ...Option,
-) *Fetch {
+) (*Fetch, error) {
 	bs := datastore.NewBlobStore(cdb, proposals)
 
+	hashPeerCache, err := NewHashPeersCache(cacheSize)
+	if err != nil {
+		// this should never happen, since cacheSize is a constant, but just in case
+		panic(fmt.Errorf("create hash peer cache: %w", err))
+	}
 	f := &Fetch{
 		cfg:         DefaultConfig(),
 		logger:      zap.NewNop(),
@@ -279,7 +286,7 @@ func NewFetch(
 		servers:     map[string]requester{},
 		unprocessed: make(map[types.Hash32]*request),
 		ongoing:     make(map[types.Hash32]*request),
-		hashToPeers: NewHashPeersCache(cacheSize),
+		hashToPeers: hashPeerCache,
 	}
 	for _, opt := range opts {
 		opt(f)
@@ -341,7 +348,7 @@ func NewFetch(
 		f.registerServer(host, lyrDataProtocol, server.WrapHandler(h.handleLayerDataReq))
 		f.registerServer(host, OpnProtocol, server.WrapHandler(h.handleLayerOpinionsReq2))
 	}
-	return f
+	return f, nil
 }
 
 func (f *Fetch) registerServer(

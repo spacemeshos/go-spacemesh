@@ -12,14 +12,14 @@ import (
 
 func TestGetNotFound(t *testing.T) {
 	const target = 10
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	_, _, _, err := Get(db, Tortoise, target)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
 func TestUniquePerEpochPerKind(t *testing.T) {
 	const target = 10
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	for _, kind := range []Kind{Tortoise, Hare} {
 		require.NoError(t, Add(db, kind, target, [32]byte{1}, 50, nil))
 		require.ErrorIs(t, Add(db, kind, target, [32]byte{2}, 50, nil), sql.ErrObjectExists)
@@ -28,7 +28,7 @@ func TestUniquePerEpochPerKind(t *testing.T) {
 
 func TestGet(t *testing.T) {
 	const target = 10
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	expectId := [32]byte{1}
 	expectWeight := uint64(50)
@@ -43,7 +43,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestLarge(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	expect := make([]types.ATXID, 5_000_000)
 	require.NoError(t, Add(db, Tortoise, 1, types.Hash32{1}, 10, expect))
 	_, _, set, err := Get(db, Tortoise, 1)

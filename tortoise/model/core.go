@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -29,8 +31,9 @@ const (
 	units     = 10
 )
 
-func newCore(rng *rand.Rand, id string, logger *zap.Logger) *core {
-	cdb := datastore.NewCachedDB(statesql.InMemory(), logger)
+func newCore(tb testing.TB, rng *rand.Rand, id string, logger *zap.Logger) *core {
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), logger)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	sig, err := signing.NewEdSigner(signing.WithKeyFromRand(rng))
 	if err != nil {
 		panic(err)
@@ -134,14 +137,14 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		m.Send(MessageBallot{Ballot: ballot})
 	case MessageLayerEnd:
 		if ev.LayerID.After(types.GetEffectiveGenesis()) {
-			tortoise.RecoverLayer(context.Background(),
+			tortoise.RecoverLayer(
 				c.tortoise,
 				c.cdb.Database,
 				c.atxdata,
 				ev.LayerID,
 				c.tortoise.OnBallot,
 			)
-			c.tortoise.TallyVotes(context.Background(), ev.LayerID)
+			c.tortoise.TallyVotes(ev.LayerID)
 			m.Notify(EventVerified{ID: c.id, Verified: c.tortoise.LatestComplete(), Layer: ev.LayerID})
 		}
 

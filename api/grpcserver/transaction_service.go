@@ -153,7 +153,7 @@ func (s *TransactionService) TransactionsState(
 	_ context.Context,
 	in *pb.TransactionsStateRequest,
 ) (*pb.TransactionsStateResponse, error) {
-	if in.TransactionId == nil || len(in.TransactionId) == 0 {
+	if len(in.TransactionId) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
 
@@ -190,7 +190,7 @@ func (s *TransactionService) TransactionsStateStream(
 	in *pb.TransactionsStateStreamRequest,
 	stream pb.TransactionService_TransactionsStateStreamServer,
 ) error {
-	if in.TransactionId == nil || len(in.TransactionId) == 0 {
+	if len(in.TransactionId) == 0 {
 		return status.Error(codes.InvalidArgument, "`TransactionId` must include one or more transaction IDs")
 	}
 

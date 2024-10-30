@@ -142,7 +142,7 @@ func (d *DBMetricsCollector) checkCompiledWithDBStat() (bool, error) {
 	return false, nil
 }
 
-// getListOfTables returns list of tables in db. need to separate size indexes and tables.
+// getListOfTables returns list of tables in db. Need to separate size indexes and tables.
 func (d *DBMetricsCollector) getListOfTables() (map[string]struct{}, error) {
 	tables := make(map[string]struct{})
 	_, err := d.db.Exec("SELECT name FROM sqlite_master WHERE type='table'", nil, func(stmt *sql.Statement) bool {

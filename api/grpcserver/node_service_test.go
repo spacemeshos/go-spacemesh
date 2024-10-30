@@ -23,8 +23,8 @@ type nodeServiceConn struct {
 	syncer      *Mocksyncer
 }
 
-func setupNodeService(t *testing.T) (*nodeServiceConn, context.Context) {
-	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
+func setupNodeService(tb testing.TB) (*nodeServiceConn, context.Context) {
+	ctrl, mockCtx := gomock.WithContext(context.Background(), tb)
 	peerCounter := NewMockpeerCounter(ctrl)
 	meshAPI := NewMockmeshAPI(ctrl)
 	genTime := NewMockgenesisTimeAPI(ctrl)
@@ -33,10 +33,10 @@ func setupNodeService(t *testing.T) (*nodeServiceConn, context.Context) {
 	version := "v0.0.0"
 	build := "cafebabe"
 	grpcService := NewNodeService(peerCounter, meshAPI, genTime, syncer, version, build)
-	cfg, cleanup := launchServer(t, grpcService)
-	t.Cleanup(cleanup)
+	cfg, cleanup := launchServer(tb, grpcService)
+	tb.Cleanup(cleanup)
 
-	conn := dialGrpc(t, cfg)
+	conn := dialGrpc(tb, cfg)
 	client := pb.NewNodeServiceClient(conn)
 
 	return &nodeServiceConn{

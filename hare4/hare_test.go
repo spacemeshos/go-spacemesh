@@ -120,7 +120,6 @@ type node struct {
 	nclock     *testNodeClock
 	signer     *signing.EdSigner
 	registered []*signing.EdSigner
-	vrfsigner  *signing.VRFSigner
 	atx        *types.ActivationTx
 	oracle     *eligibility.Oracle
 	db         sql.StateDatabase
@@ -146,13 +145,11 @@ func (n *node) withSigner() *node {
 	signer, err := signing.NewEdSigner(signing.WithKeyFromRand(n.t.rng))
 	require.NoError(n.t, err)
 	n.signer = signer
-	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
 func (n *node) reuseSigner(signer *signing.EdSigner) *node {
 	n.signer = signer
-	n.vrfsigner = signer.VRFSigner()
 	return n
 }
 
@@ -224,6 +221,7 @@ func (n *node) withPublisher() *node {
 
 func (n *node) withStreamRequester() *node {
 	n.mockStreamRequester = hmock.NewMockstreamRequester(n.ctrl)
+	n.mockStreamRequester.EXPECT().Run(gomock.Any()).Return(nil).AnyTimes()
 	return n
 }
 
@@ -317,7 +315,7 @@ func withProposals(fraction float64) clusterOpt {
 }
 
 // withSigners creates N signers in addition to regular active nodes.
-// this signers will be partitioned in fair fashion across regular active nodes.
+// This signers will be partitioned in fair fashion across regular active nodes.
 func withSigners(n int) clusterOpt {
 	return func(cluster *lockstepCluster) {
 		cluster.signersCount = n
@@ -599,6 +597,7 @@ func (cl *lockstepCluster) drainInteractiveMessages() {
 				case <-n.tracer.compactReq:
 				case <-n.tracer.compactResp:
 				case <-done:
+					return
 				}
 			}
 		}()
@@ -625,24 +624,24 @@ type testTracer struct {
 	compactResp chan struct{}
 }
 
-func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
+func waitForChan[T any](tb testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
 	var value T
 	select {
 	case <-time.After(timeout):
 		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
-		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+		tb.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case value = <-ch:
 	}
 	return value
 }
 
-func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
+func sendWithTimeout[T any](tb testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
 	select {
 	case <-time.After(timeout):
 		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
-		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+		tb.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case ch <- value:
 	}
 }
@@ -1055,7 +1054,7 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := statesql.InMemory()
+			db := statesql.InMemoryTest(t)
 			atxsdata := atxsdata.New()
 			proposals := store.New()
 			hare := New(

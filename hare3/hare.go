@@ -294,7 +294,7 @@ func (h *Hare) Running() int {
 	return len(h.sessions)
 }
 
-func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
+func (h *Hare) Handler(ctx context.Context, _ p2p.Peer, buf []byte) error {
 	msg := &Message{}
 	if err := codec.Decode(buf, msg); err != nil {
 		malformedError.Inc()
@@ -339,10 +339,10 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	if equivocation != nil && !malicious {
 		h.log.Debug("registered equivocation",
 			zap.Uint32("lid", msg.Layer.Uint32()),
-			zap.Stringer("sender", equivocation.Messages[0].SmesherID))
-		proof := equivocation.ToMalfeasanceProof()
-		if err := identities.SetMalicious(
-			h.db, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
+			zap.Stringer("sender", equivocation.Messages[0].SmesherID),
+		)
+		proof := codec.MustEncode(equivocation.ToMalfeasanceProof())
+		if err := identities.SetMalicious(h.db, equivocation.Messages[0].SmesherID, proof, time.Now()); err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))
 		}
 		h.atxsdata.SetMalicious(equivocation.Messages[0].SmesherID)

@@ -1,8 +1,6 @@
 package system
 
 import (
-	"context"
-
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/types/result"
@@ -15,7 +13,7 @@ type Tortoise interface {
 	OnBlock(types.BlockHeader)
 	OnHareOutput(types.LayerID, types.BlockID)
 	OnWeakCoin(types.LayerID, bool)
-	TallyVotes(context.Context, types.LayerID)
+	TallyVotes(types.LayerID)
 	LatestComplete() types.LayerID
 	Updates() []result.Layer
 	OnApplied(types.LayerID, types.Hash32) bool

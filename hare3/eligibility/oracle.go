@@ -94,12 +94,12 @@ type Oracle struct {
 
 	beacons        system.BeaconGetter
 	atxsdata       *atxsdata.Data
-	minerWeightFn  func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
-	totalWeightFn  func(ctx context.Context, layer types.LayerID) (uint64, error)
 	db             sql.Executor
 	vrfVerifier    vrfVerifier
-	layersPerEpoch uint32
 	cfg            Config
+  minerWeightFn  func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
+	totalWeightFn  func(ctx context.Context, layer types.LayerID) (uint64, error)
+	layersPerEpoch uint32
 	log            *zap.Logger
 }
 
@@ -143,15 +143,14 @@ func New(
 		panic("failed to create lru cache for active set" + err.Error())
 	}
 	oracle := &Oracle{
-		beacons:        beacons,
-		db:             db,
-		atxsdata:       atxsdata,
-		vrfVerifier:    vrfVerifier,
-		layersPerEpoch: layersPerEpoch,
-		activesCache:   activesCache,
-		fallback:       map[types.EpochID][]types.ATXID{},
-		cfg:            DefaultConfig(),
-		log:            zap.NewNop(),
+		beacons:      beacons,
+		db:           db,
+		atxsdata:     atxsdata,
+		vrfVerifier:  vrfVerifier,
+		activesCache: activesCache,
+		fallback:     map[types.EpochID][]types.ATXID{},
+		cfg:          DefaultConfig(),
+		log:          zap.NewNop(),
 	}
 	oracle.minerWeightFn = oracle.minerWeight
 	oracle.totalWeightFn = oracle.totalWeight
