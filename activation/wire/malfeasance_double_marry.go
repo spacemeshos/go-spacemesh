@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -133,7 +134,7 @@ func certificateProof(certs MarriageCertificates, index uint64) ([]types.Hash32,
 	return proofHashes, nil
 }
 
-func (p ProofDoubleMarry) Valid(malValidator MalfeasanceValidator) (types.NodeID, error) {
+func (p ProofDoubleMarry) Valid(_ context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
 		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
 	}

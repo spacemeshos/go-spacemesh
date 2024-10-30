@@ -46,14 +46,14 @@ func NewInvalidPostProof(atx, initialAtx *ActivationTxV2) (*ProofInvalidPost, er
 
 // Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
 // and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
-func (p ProofInvalidPost) Valid(malValidator MalfeasanceValidator) (types.NodeID, error) {
+func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
 	if err := p.Commitment.Valid(malValidator, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid commitment proof: %w", err)
 	}
 
 	// TODO(mafa): verify p.NodeID to match the ID in the marriage ATX via the marriage index
 
-	if err := p.InvalidPost.Valid(malValidator, p.NodeID, p.Commitment.CommitmentATX); err != nil {
+	if err := p.InvalidPost.Valid(ctx, malValidator, p.NodeID, p.Commitment.CommitmentATX); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
 	}
 
@@ -192,6 +192,7 @@ type InvalidPostProof struct {
 // Valid returns no error if the proof is valid. It verifies that the signature is valid, that the merkle proofs are
 // and that the provided post is invalid.
 func (p InvalidPostProof) Valid(
+	ctx context.Context,
 	malValidator MalfeasanceValidator,
 	nodeID types.NodeID,
 	commitmentATX types.ATXID,
@@ -336,7 +337,7 @@ func (p InvalidPostProof) Valid(
 	}
 
 	if err := malValidator.PostIndex(
-		context.Background(),
+		ctx,
 		nodeID,
 		commitmentATX,
 		PostFromWireV1(&p.Post),

@@ -1,6 +1,8 @@
 package wire
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -81,7 +83,5 @@ type ATXProof struct {
 type Proof interface {
 	scale.Encodable
 
-	// TODO(mafa): adjust interface to receive a context and a new validator service for validation
-	// (of signatures and post). Provider should be malfeasance service in activation package.
-	Valid(malHandler MalfeasanceValidator) (types.NodeID, error)
+	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
 }
