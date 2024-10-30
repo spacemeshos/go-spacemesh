@@ -103,11 +103,12 @@ func (m *Mockhare) EXPECT() *MockhareMockRecorder {
 }
 
 // Beacon mocks base method.
-func (m *Mockhare) Beacon(ctx context.Context, epoch types.EpochID) types.Beacon {
+func (m *Mockhare) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Beacon", ctx, epoch)
 	ret0, _ := ret[0].(types.Beacon)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Beacon indicates an expected call of Beacon.
@@ -123,29 +124,30 @@ type MockhareBeaconCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareBeaconCall) Return(arg0 types.Beacon) *MockhareBeaconCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockhareBeaconCall) Return(arg0 types.Beacon, arg1 error) *MockhareBeaconCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareBeaconCall) Do(f func(context.Context, types.EpochID) types.Beacon) *MockhareBeaconCall {
+func (c *MockhareBeaconCall) Do(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockhareBeaconCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) types.Beacon) *MockhareBeaconCall {
+func (c *MockhareBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockhareBeaconCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // MinerWeight mocks base method.
-func (m *Mockhare) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
+func (m *Mockhare) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MinerWeight", ctx, node, layer)
 	ret0, _ := ret[0].(uint64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // MinerWeight indicates an expected call of MinerWeight.
@@ -161,19 +163,19 @@ type MockhareMinerWeightCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareMinerWeightCall) Return(arg0 uint64) *MockhareMinerWeightCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockhareMinerWeightCall) Return(arg0 uint64, arg1 error) *MockhareMinerWeightCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareMinerWeightCall) Do(f func(context.Context, types.NodeID, types.LayerID) uint64) *MockhareMinerWeightCall {
+func (c *MockhareMinerWeightCall) Do(f func(context.Context, types.NodeID, types.LayerID) (uint64, error)) *MockhareMinerWeightCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.NodeID, types.LayerID) uint64) *MockhareMinerWeightCall {
+func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.NodeID, types.LayerID) (uint64, error)) *MockhareMinerWeightCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -217,11 +219,12 @@ func (c *MockhareRoundMessageCall) DoAndReturn(f func(types.LayerID, hare3.IterR
 }
 
 // TotalWeight mocks base method.
-func (m *Mockhare) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
+func (m *Mockhare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TotalWeight", ctx, layer)
 	ret0, _ := ret[0].(uint64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // TotalWeight indicates an expected call of TotalWeight.
@@ -237,19 +240,19 @@ type MockhareTotalWeightCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareTotalWeightCall) Return(arg0 uint64) *MockhareTotalWeightCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockhareTotalWeightCall) Return(arg0 uint64, arg1 error) *MockhareTotalWeightCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareTotalWeightCall) Do(f func(context.Context, types.LayerID) uint64) *MockhareTotalWeightCall {
+func (c *MockhareTotalWeightCall) Do(f func(context.Context, types.LayerID) (uint64, error)) *MockhareTotalWeightCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.LayerID) uint64) *MockhareTotalWeightCall {
+func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.LayerID) (uint64, error)) *MockhareTotalWeightCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
