@@ -38,7 +38,7 @@ type blobKey struct {
 }
 
 type testP2PFetch struct {
-	t *testing.T
+	tb testing.TB
 	// client proposals
 	clientPDB   *store.Store
 	clientCDB   *datastore.CachedDB
@@ -58,7 +58,7 @@ func mkFakeValidator(tpf *testP2PFetch, kind string) SyncValidator {
 		tpf.recvMtx.Lock()
 		defer tpf.recvMtx.Unlock()
 		k := blobKey{kind: kind, id: id}
-		require.NotContains(tpf.t, tpf.receivedData, k)
+		require.NotContains(tpf.tb, tpf.receivedData, k)
 		tpf.receivedData[k] = slices.Clone(data)
 		return nil
 	})
@@ -74,33 +74,33 @@ func p2pFetchCfg(streaming bool) Config {
 	return cfg
 }
 
-func p2pCfg(t *testing.T) p2p.Config {
+func p2pCfg(tb testing.TB) p2p.Config {
 	p2pconf := p2p.DefaultConfig()
 	p2pconf.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	p2pconf.IP4Blocklist = nil
-	p2pconf.DataDir = t.TempDir()
+	p2pconf.DataDir = tb.TempDir()
 	return p2pconf
 }
 
 func createP2PFetch(
-	t *testing.T,
+	tb testing.TB,
 	clientStreaming,
 	serverStreaming,
 	sqlCache bool,
 	opts ...Option,
 ) (*testP2PFetch, context.Context) {
-	lg := zaptest.NewLogger(t)
+	lg := zaptest.NewLogger(tb)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 
-	serverHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, serverHost.Stop()) })
+	serverHost, err := p2p.AutoStart(ctx, lg, p2pCfg(tb), []byte{}, []byte{})
+	require.NoError(tb, err)
+	tb.Cleanup(func() { assert.NoError(tb, serverHost.Stop()) })
 
-	clientHost, err := p2p.AutoStart(ctx, lg, p2pCfg(t), []byte{}, []byte{})
-	require.NoError(t, err)
-	t.Cleanup(func() { assert.NoError(t, clientHost.Stop()) })
+	clientHost, err := p2p.AutoStart(ctx, lg, p2pCfg(tb), []byte{}, []byte{})
+	require.NoError(tb, err)
+	tb.Cleanup(func() { assert.NoError(tb, clientHost.Stop()) })
 
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		cancel()
 		time.Sleep(10 * time.Millisecond)
 		// mafa: p2p internally uses a global logger this should prevent logging after
@@ -111,16 +111,20 @@ func createP2PFetch(
 	if sqlCache {
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
 	}
-	clientDB := statesql.InMemory(sqlOpts...)
-	serverDB := statesql.InMemory(sqlOpts...)
+	clientDB := statesql.InMemoryTest(tb, sqlOpts...)
+	clientCDB := datastore.NewCachedDB(clientDB, lg)
+	tb.Cleanup(func() { assert.NoError(tb, clientDB.Close()) })
+	serverDB := statesql.InMemoryTest(tb, sqlOpts...)
+	serverCDB := datastore.NewCachedDB(serverDB, lg)
+	tb.Cleanup(func() { assert.NoError(tb, serverDB.Close()) })
 	tpf := &testP2PFetch{
-		t:            t,
+		tb:           tb,
 		clientPDB:    store.New(store.WithLogger(lg)),
-		clientCDB:    datastore.NewCachedDB(clientDB, lg),
+		clientCDB:    clientCDB,
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
 		serverPDB:    store.New(store.WithLogger(lg)),
-		serverCDB:    datastore.NewCachedDB(serverDB, lg),
+		serverCDB:    serverCDB,
 		receivedData: make(map[blobKey][]byte),
 	}
 
@@ -132,16 +136,16 @@ func createP2PFetch(
 		WithConfig(p2pFetchCfg(serverStreaming)),
 		WithLogger(lg),
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	tpf.serverFetch = fetcher
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return nil },
 	)
 	tpf.serverFetch.SetValidators(vf, vf, vf, vf, vf, vf, vf, vf, vf)
-	require.NoError(t, tpf.serverFetch.Start())
-	t.Cleanup(tpf.serverFetch.Stop)
+	require.NoError(tb, tpf.serverFetch.Start())
+	tb.Cleanup(tpf.serverFetch.Stop)
 
-	require.Eventually(t, func() bool {
+	require.Eventually(tb, func() bool {
 		return len(serverHost.Mux().Protocols()) != 0
 	}, 10*time.Second, 10*time.Millisecond)
 
@@ -153,7 +157,7 @@ func createP2PFetch(
 		WithConfig(p2pFetchCfg(clientStreaming)),
 		WithLogger(lg),
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	tpf.clientFetch = fetcher
 	tpf.clientFetch.SetValidators(
 		mkFakeValidator(tpf, "atx"),
@@ -166,16 +170,16 @@ func createP2PFetch(
 		mkFakeValidator(tpf, "txProposal"),
 		mkFakeValidator(tpf, "mal"),
 	)
-	require.NoError(t, tpf.clientFetch.Start())
-	t.Cleanup(tpf.clientFetch.Stop)
+	require.NoError(tb, tpf.clientFetch.Start())
+	tb.Cleanup(tpf.clientFetch.Stop)
 
 	err = clientHost.Connect(ctx, peer.AddrInfo{
 		ID:    serverHost.ID(),
 		Addrs: serverHost.Addrs(),
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
-	require.Len(t, clientHost.GetPeers(), 1)
+	require.Len(tb, clientHost.GetPeers(), 1)
 
 	return tpf, ctx
 }
@@ -183,8 +187,8 @@ func createP2PFetch(
 func (tpf *testP2PFetch) createATXs(epoch types.EpochID) []types.ATXID {
 	atxIDs := make([]types.ATXID, 10)
 	for i := range atxIDs {
-		atx := newAtx(tpf.t, epoch)
-		require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, types.AtxBlob{}))
+		atx := newAtx(tpf.tb, epoch)
+		require.NoError(tpf.tb, atxs.Add(tpf.serverCDB, atx, types.AtxBlob{}))
 		atxIDs[i] = atx.ID()
 	}
 	return atxIDs
@@ -204,13 +208,13 @@ func (tpf *testP2PFetch) verifyGetHash(
 	}
 	err := toCall()
 	if errStr == "" {
-		require.NoError(tpf.t, err)
+		require.NoError(tpf.tb, err)
 		k := blobKey{kind: kind, id: h}
-		require.Contains(tpf.t, tpf.receivedData, k)
-		require.Equal(tpf.t, data, tpf.receivedData[k])
-		require.Equal(tpf.t, numAccepted+1, srv.NumAcceptedRequests())
+		require.Contains(tpf.tb, tpf.receivedData, k)
+		require.Equal(tpf.tb, data, tpf.receivedData[k])
+		require.Equal(tpf.tb, numAccepted+1, srv.NumAcceptedRequests())
 	} else {
-		require.ErrorContains(tpf.t, err, errStr)
+		require.ErrorContains(tpf.tb, err, errStr)
 	}
 }
 
@@ -363,9 +367,9 @@ func TestP2PGetATXs(t *testing.T) {
 		t, "database closed",
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
 			epoch := types.EpochID(11)
-			atx := newAtx(tpf.t, epoch)
+			atx := newAtx(tpf.tb, epoch)
 			blob := types.AtxBlob{Blob: types.RandomBytes(100)}
-			require.NoError(tpf.t, atxs.Add(tpf.serverCDB, atx, blob))
+			require.NoError(tpf.tb, atxs.Add(tpf.serverCDB, atx, blob))
 			tpf.verifyGetHash(
 				func() error { return tpf.clientFetch.GetAtxs(context.Background(), []types.ATXID{atx.ID()}) },
 				errStr, "atx", "hs/1", types.Hash32(atx.ID()), atx.ID().Bytes(),
@@ -420,7 +424,7 @@ func TestP2PGetActiveSet(t *testing.T) {
 				Epoch: 2,
 				Set:   []types.ATXID{{1}, {2}},
 			}
-			require.NoError(tpf.t, activesets.Add(tpf.serverCDB, id, set))
+			require.NoError(tpf.tb, activesets.Add(tpf.serverCDB, id, set))
 
 			tpf.verifyGetHash(
 				func() error { return tpf.clientFetch.GetActiveSet(context.Background(), id) },

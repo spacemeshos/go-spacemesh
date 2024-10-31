@@ -11,7 +11,7 @@ import (
 )
 
 func TestRecoveryInfo(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	restore := types.LayerID(12)
 
 	got, err := recovery.CheckpointInfo(db)

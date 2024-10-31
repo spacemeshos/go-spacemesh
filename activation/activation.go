@@ -586,12 +586,10 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		logger.Info("no previous ATX found, creating an initial nipost challenge")
-
 		challenge, err = b.buildInitialNIPostChallenge(ctx, logger, nodeID, publishEpochId)
 		if err != nil {
 			return nil, err
 		}
-
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	default:
@@ -662,7 +660,8 @@ func (b *Builder) buildInitialNIPostChallenge(
 ) (*types.NIPostChallenge, error) {
 	post, err := nipost.GetPost(b.localDB, nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("get initial post: %w", err)
+		// if initial post is not found, declare it invalid so it is regenerated
+		return nil, ErrInvalidInitialPost
 	}
 	logger.Info("verifying the initial post")
 	initialPost := &types.Post{
@@ -671,7 +670,12 @@ func (b *Builder) buildInitialNIPostChallenge(
 		Pow:     post.Pow,
 	}
 	err = b.validator.PostV2(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
-	if err != nil {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return nil, err
+	case errors.Is(err, context.DeadlineExceeded):
+		return nil, err
+	case err != nil:
 		logger.Error("initial POST is invalid", zap.Error(err))
 		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
 			logger.Fatal("failed to remove initial post", zap.Error(err))

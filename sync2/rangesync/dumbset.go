@@ -91,10 +91,7 @@ func naiveFPFunc(items []KeyBytes) Fingerprint {
 
 func realFPFunc(items []KeyBytes) Fingerprint {
 	hasher := hash.GetHasher()
-	defer func() {
-		hasher.Reset()
-		hash.PutHasher(hasher)
-	}()
+	defer hash.PutHasher(hasher)
 	for _, h := range items {
 		hasher.Write(h[:])
 	}
@@ -319,4 +316,36 @@ func (ds *DumbSet) Copy(syncScope bool) OrderedSet {
 // Recent implements OrderedSet.
 func (ds *DumbSet) Recent(since time.Time) (SeqResult, int) {
 	return EmptySeqResult(), 0
+}
+
+// Advance implements OrderedSet.
+func (ds *DumbSet) EnsureLoaded() error {
+	return nil
+}
+
+// Advance implements OrderedSet.
+func (ds *DumbSet) Advance() error {
+	return nil
+}
+
+// Has implements OrderedSet.
+func (ds *DumbSet) Has(k KeyBytes) (bool, error) {
+	var first KeyBytes
+	sr := ds.Items()
+	for cur := range sr.Seq {
+		if first == nil {
+			first = cur
+		} else if first.Compare(cur) == 0 {
+			return false, sr.Error()
+		}
+		if k.Compare(cur) == 0 {
+			return true, sr.Error()
+		}
+	}
+	return false, sr.Error()
+}
+
+// Release implements OrderedSet.
+func (ds *DumbSet) Release() error {
+	return nil
 }

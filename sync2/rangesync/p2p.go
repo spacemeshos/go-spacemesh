@@ -6,30 +6,48 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/jonboulle/clockwork"
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 type PairwiseSetSyncer struct {
-	r           Requester
-	name        string
-	opts        []RangeSetReconcilerOption
-	conduitOpts []ConduitOption
-	sent        atomic.Int64
-	recv        atomic.Int64
+	logger *zap.Logger
+	r      Requester
+	name   string
+	cfg    RangeSetReconcilerConfig
+	sent   atomic.Int64
+	recv   atomic.Int64
+	tracer Tracer
+	clock  clockwork.Clock
+}
+
+func newPairwiseSetSyncer(
+	logger *zap.Logger,
+	r Requester,
+	name string,
+	cfg RangeSetReconcilerConfig,
+	tracer Tracer,
+	clock clockwork.Clock,
+) *PairwiseSetSyncer {
+	return &PairwiseSetSyncer{
+		logger: logger,
+		r:      r,
+		name:   name,
+		cfg:    cfg,
+		tracer: tracer,
+		clock:  clock,
+	}
 }
 
 func NewPairwiseSetSyncer(
+	logger *zap.Logger,
 	r Requester,
 	name string,
-	opts []RangeSetReconcilerOption,
-	conduitOpts []ConduitOption,
+	cfg RangeSetReconcilerConfig,
 ) *PairwiseSetSyncer {
-	return &PairwiseSetSyncer{
-		r:           r,
-		name:        name,
-		opts:        opts,
-		conduitOpts: conduitOpts,
-	}
+	return newPairwiseSetSyncer(logger, r, name, cfg, nullTracer{}, clockwork.NewRealClock())
 }
 
 func (pss *PairwiseSetSyncer) updateCounts(c *wireConduit) {
@@ -37,19 +55,22 @@ func (pss *PairwiseSetSyncer) updateCounts(c *wireConduit) {
 	pss.recv.Add(int64(c.bytesReceived()))
 }
 
+func (pss *PairwiseSetSyncer) createReconciler(os OrderedSet) *RangeSetReconciler {
+	return newRangeSetReconciler(pss.logger, pss.cfg, os, pss.tracer, pss.clock)
+}
+
 func (pss *PairwiseSetSyncer) Probe(
 	ctx context.Context,
 	peer p2p.Peer,
 	os OrderedSet,
 	x, y KeyBytes,
-) (ProbeResult, error) {
-	var pr ProbeResult
-	rsr := NewRangeSetReconciler(os, pss.opts...)
+) (pr ProbeResult, err error) {
+	rsr := pss.createReconciler(os)
 	initReq := []byte(pss.name)
-	if err := pss.r.StreamRequest(
+	if err = pss.r.StreamRequest(
 		ctx, peer, initReq,
 		func(ctx context.Context, stream io.ReadWriter) (err error) {
-			c := startWireConduit(ctx, stream, pss.conduitOpts...)
+			c := startWireConduit(ctx, stream, pss.cfg)
 			defer func() {
 				// If the conduit is not closed by this point, stop it
 				// interrupting any ongoing send operations
@@ -79,7 +100,7 @@ func (pss *PairwiseSetSyncer) requestCallback(
 	rsr *RangeSetReconciler,
 	x, y KeyBytes,
 ) error {
-	c := startWireConduit(ctx, stream, pss.conduitOpts...)
+	c := startWireConduit(ctx, stream, pss.cfg)
 	defer func() {
 		c.Stop()
 		pss.updateCounts(c)
@@ -100,7 +121,7 @@ func (pss *PairwiseSetSyncer) Sync(
 	os OrderedSet,
 	x, y KeyBytes,
 ) error {
-	rsr := NewRangeSetReconciler(os, pss.opts...)
+	rsr := pss.createReconciler(os)
 	initReq := []byte(pss.name)
 	return pss.r.StreamRequest(
 		ctx, peer, initReq,
@@ -110,9 +131,9 @@ func (pss *PairwiseSetSyncer) Sync(
 }
 
 func (pss *PairwiseSetSyncer) Serve(ctx context.Context, stream io.ReadWriter, os OrderedSet) error {
-	c := startWireConduit(ctx, stream, pss.conduitOpts...)
+	c := startWireConduit(ctx, stream, pss.cfg)
 	defer c.Stop()
-	rsr := NewRangeSetReconciler(os, pss.opts...)
+	rsr := pss.createReconciler(os)
 	if err := rsr.Run(c); err != nil {
 		return err
 	}
@@ -121,7 +142,7 @@ func (pss *PairwiseSetSyncer) Serve(ctx context.Context, stream io.ReadWriter, o
 }
 
 func (pss *PairwiseSetSyncer) Register(d *Dispatcher, os OrderedSet) {
-	d.Register(pss.name, func(ctx context.Context, s io.ReadWriter) error {
+	d.Register(pss.name, func(ctx context.Context, _ p2p.Peer, s io.ReadWriter) error {
 		return pss.Serve(ctx, s, os)
 	})
 }

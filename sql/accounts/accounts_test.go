@@ -22,7 +22,7 @@ func genSeq(address types.Address, n int) []*types.Account {
 
 func TestUpdate(t *testing.T) {
 	address := types.Address{1, 2, 3}
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	seq := genSeq(address, 2)
 	for _, update := range seq {
 		require.NoError(t, Update(db, update))
@@ -35,7 +35,7 @@ func TestUpdate(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	address := types.Address{1, 2, 3}
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	has, err := Has(db, address)
 	require.NoError(t, err)
 	require.False(t, has)
@@ -51,7 +51,7 @@ func TestHas(t *testing.T) {
 func TestRevert(t *testing.T) {
 	address := types.Address{1, 1}
 	seq := genSeq(address, 10)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	for _, update := range seq {
 		require.NoError(t, Update(db, update))
 	}
@@ -63,7 +63,7 @@ func TestRevert(t *testing.T) {
 }
 
 func TestAll(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	addresses := []types.Address{{1, 1}, {2, 2}, {3, 3}}
 	n := []int{10, 7, 20}
 	for i, address := range addresses {
@@ -82,7 +82,7 @@ func TestAll(t *testing.T) {
 }
 
 func TestSnapshot(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	_, err := Snapshot(db, types.LayerID(1))
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -109,7 +109,7 @@ func TestSnapshot(t *testing.T) {
 }
 
 func TestIterateAccountsOps(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	for i := 0; i < 100; i++ {
 		addr := types.Address{}

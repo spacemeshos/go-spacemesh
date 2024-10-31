@@ -54,7 +54,7 @@ type testOracle struct {
 }
 
 func defaultOracle(tb testing.TB) *testOracle {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 
 	ctrl := gomock.NewController(tb)

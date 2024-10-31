@@ -506,8 +506,8 @@ type smesherServiceConn struct {
 	grpcPostService  *MockgrpcPostService
 }
 
-func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
-	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
+func setupSmesherService(tb testing.TB, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
+	ctrl, mockCtx := gomock.WithContext(context.Background(), tb)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
 	grpcPostService := NewMockgrpcPostService(ctrl)
@@ -520,10 +520,10 @@ func setupSmesherService(t *testing.T, sig *signing.EdSigner) (*smesherServiceCo
 		sig,
 	)
 	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
+	cfg, cleanup := launchServer(tb, svc)
+	tb.Cleanup(cleanup)
 
-	conn := dialGrpc(t, cfg)
+	conn := dialGrpc(tb, cfg)
 	client := pb.NewSmesherServiceClient(conn)
 
 	return &smesherServiceConn{
@@ -718,9 +718,10 @@ func TestMeshService(t *testing.T) {
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
 	genTime.EXPECT().CurrentLayer().Return(layerCurrent).AnyTimes()
-	db := datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t))
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	svc := NewMeshService(
-		db,
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -733,7 +734,7 @@ func TestMeshService(t *testing.T) {
 	require.NoError(
 		t,
 		activesets.Add(
-			db,
+			cdb,
 			ballot1.EpochData.ActiveSetHash,
 			&types.EpochActiveSet{Set: types.ATXIDList{globalAtx.ID(), globalAtx2.ID()}},
 		),
@@ -1247,7 +1248,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil)
 
-	svc := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	svc := NewTransactionService(statesql.InMemoryTest(t), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -1286,7 +1287,8 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(errors.New("failed validation"))
 
-	grpcService := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	db := statesql.InMemoryTest(t)
+	grpcService := NewTransactionService(db, publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1319,7 +1321,8 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).Times(numTxs)
 
-	grpcService := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	db := statesql.InMemoryTest(t)
+	grpcService := NewTransactionService(db, publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1347,7 +1350,8 @@ func TestTransactionService(t *testing.T) {
 	txHandler := NewMocktxValidator(ctrl)
 	txHandler.EXPECT().VerifyAndCacheTx(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 
-	grpcService := NewTransactionService(statesql.InMemory(), publisher, meshAPIMock, conStateAPI, syncer, txHandler)
+	db := statesql.InMemoryTest(t)
+	grpcService := NewTransactionService(db, publisher, meshAPIMock, conStateAPI, syncer, txHandler)
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
@@ -1611,22 +1615,22 @@ func TestTransactionService(t *testing.T) {
 	}
 }
 
-func checkTransaction(t *testing.T, tx *pb.Transaction) {
-	require.Equal(t, globalTx.ID.Bytes(), tx.Id)
-	require.Equal(t, globalTx.Principal.String(), tx.Principal.Address)
-	require.Equal(t, globalTx.GasPrice, tx.GasPrice)
-	require.Equal(t, globalTx.MaxGas, tx.MaxGas)
-	require.Equal(t, globalTx.MaxSpend, tx.MaxSpend)
-	require.Equal(t, globalTx.Nonce, tx.Nonce.Counter)
+func checkTransaction(tb testing.TB, tx *pb.Transaction) {
+	require.Equal(tb, globalTx.ID.Bytes(), tx.Id)
+	require.Equal(tb, globalTx.Principal.String(), tx.Principal.Address)
+	require.Equal(tb, globalTx.GasPrice, tx.GasPrice)
+	require.Equal(tb, globalTx.MaxGas, tx.MaxGas)
+	require.Equal(tb, globalTx.MaxSpend, tx.MaxSpend)
+	require.Equal(tb, globalTx.Nonce, tx.Nonce.Counter)
 }
 
-func checkLayer(t *testing.T, l *pb.Layer) {
-	require.Equal(t, uint32(0), l.Number.Number, "first layer is zero")
-	require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, l.Status, "first layer is confirmed")
+func checkLayer(tb testing.TB, l *pb.Layer) {
+	require.Equal(tb, uint32(0), l.Number.Number, "first layer is zero")
+	require.Equal(tb, pb.Layer_LAYER_STATUS_CONFIRMED, l.Status, "first layer is confirmed")
 
-	require.Empty(t, l.Activations, "unexpected number of activations in layer")
-	require.Len(t, l.Blocks, 1, "unexpected number of blocks in layer")
-	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
+	require.Empty(tb, l.Activations, "unexpected number of activations in layer")
+	require.Len(tb, l.Blocks, 1, "unexpected number of blocks in layer")
+	require.Equal(tb, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
 	resBlock := l.Blocks[0]
 
@@ -1634,17 +1638,17 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	for _, tx := range resBlock.Transactions {
 		resTxIDs = append(resTxIDs, types.TransactionID(types.BytesToHash(tx.Id)))
 	}
-	require.ElementsMatch(t, block1.TxIDs, resTxIDs)
-	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
+	require.ElementsMatch(tb, block1.TxIDs, resTxIDs)
+	require.Equal(tb, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
 	// Check the tx as well
 	resTx := resBlock.Transactions[0]
-	require.Equal(t, globalTx.ID.Bytes(), resTx.Id)
-	require.Equal(t, globalTx.Principal.String(), resTx.Principal.Address)
-	require.Equal(t, globalTx.GasPrice, resTx.GasPrice)
-	require.Equal(t, globalTx.MaxGas, resTx.MaxGas)
-	require.Equal(t, globalTx.MaxSpend, resTx.MaxSpend)
-	require.Equal(t, globalTx.Nonce, resTx.Nonce.Counter)
+	require.Equal(tb, globalTx.ID.Bytes(), resTx.Id)
+	require.Equal(tb, globalTx.Principal.String(), resTx.Principal.Address)
+	require.Equal(tb, globalTx.GasPrice, resTx.GasPrice)
+	require.Equal(tb, globalTx.MaxGas, resTx.MaxGas)
+	require.Equal(tb, globalTx.MaxSpend, resTx.MaxSpend)
+	require.Equal(tb, globalTx.Nonce, resTx.Nonce.Counter)
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
@@ -1654,8 +1658,10 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	grpcService := NewMeshService(
-		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -1834,10 +1840,11 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t))
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 
 	grpcService := NewMeshService(
-		db,
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -1880,92 +1887,92 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	checkLayer(t, res.Layer)
 }
 
-func checkAccountDataQueryItemAccount(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
+func checkAccountDataQueryItemAccount(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.AccountData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.AccountData_AccountWrapper)
 	// Check the account, nonce, and balance
-	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address,
+	require.Equal(tb, addr1.String(), x.AccountWrapper.AccountId.Address,
 		"inner account has bad address")
-	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
+	require.Equal(tb, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter,
 		"inner account has bad current counter")
-	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value,
+	require.Equal(tb, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value,
 		"inner account has bad current balance")
-	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter,
+	require.Equal(tb, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter,
 		"inner account has bad projected counter")
-	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value,
+	require.Equal(tb, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value,
 		"inner account has bad projected balance")
 }
 
-func checkAccountDataQueryItemReward(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
+func checkAccountDataQueryItemReward(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.AccountData_Reward{}, dataItem)
 	x := dataItem.(*pb.AccountData_Reward)
-	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-	require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
-	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
+	require.Equal(tb, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(tb, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(tb, uint64(rewardAmount), x.Reward.LayerReward.Value)
+	require.Equal(tb, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(tb, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
-func checkAccountMeshDataItemTx(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.AccountMeshData_MeshTransaction{}, dataItem)
+func checkAccountMeshDataItemTx(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.AccountMeshData_MeshTransaction{}, dataItem)
 	x := dataItem.(*pb.AccountMeshData_MeshTransaction)
 	// Check the sender
-	require.Equal(t, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
+	require.Equal(tb, globalTx.Principal.String(), x.MeshTransaction.Transaction.Principal.Address)
 }
 
-func checkAccountDataItemReward(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.AccountData_Reward{}, dataItem)
+func checkAccountDataItemReward(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.AccountData_Reward{}, dataItem)
 	x := dataItem.(*pb.AccountData_Reward)
-	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
+	require.Equal(tb, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(tb, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(tb, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+	require.Equal(tb, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(tb, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
-func checkAccountDataItemAccount(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.AccountData_AccountWrapper{}, dataItem)
+func checkAccountDataItemAccount(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.AccountData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.AccountData_AccountWrapper)
-	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
-	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
-	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
-	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
-	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
+	require.Equal(tb, addr1.String(), x.AccountWrapper.AccountId.Address)
+	require.Equal(tb, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+	require.Equal(tb, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+	require.Equal(tb, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+	require.Equal(tb, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
-func checkGlobalStateDataReward(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.GlobalStateData_Reward{}, dataItem)
+func checkGlobalStateDataReward(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.GlobalStateData_Reward{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_Reward)
-	require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
-	require.Equal(t, layerFirst.Uint32(), x.Reward.Layer.Number)
-	require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
-	require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
-	require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
+	require.Equal(tb, uint64(rewardAmount), x.Reward.Total.Value)
+	require.Equal(tb, layerFirst.Uint32(), x.Reward.Layer.Number)
+	require.Equal(tb, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+	require.Equal(tb, addr1.String(), x.Reward.Coinbase.Address)
+	require.Equal(tb, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 }
 
-func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.GlobalStateData_AccountWrapper{}, dataItem)
+func checkGlobalStateDataAccountWrapper(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.GlobalStateData_AccountWrapper{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_AccountWrapper)
-	require.Equal(t, addr1.String(), x.AccountWrapper.AccountId.Address)
-	require.Equal(t, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
-	require.Equal(t, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
-	require.Equal(t, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
-	require.Equal(t, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
+	require.Equal(tb, addr1.String(), x.AccountWrapper.AccountId.Address)
+	require.Equal(tb, uint64(accountBalance), x.AccountWrapper.StateCurrent.Balance.Value)
+	require.Equal(tb, uint64(accountCounter), x.AccountWrapper.StateCurrent.Counter)
+	require.Equal(tb, uint64(accountBalance+1), x.AccountWrapper.StateProjected.Balance.Value)
+	require.Equal(tb, uint64(accountCounter+1), x.AccountWrapper.StateProjected.Counter)
 }
 
-func checkGlobalStateDataGlobalState(t *testing.T, dataItem any) {
-	t.Helper()
-	require.IsType(t, &pb.GlobalStateData_GlobalState{}, dataItem)
+func checkGlobalStateDataGlobalState(tb testing.TB, dataItem any) {
+	tb.Helper()
+	require.IsType(tb, &pb.GlobalStateData_GlobalState{}, dataItem)
 	x := dataItem.(*pb.GlobalStateData_GlobalState)
-	require.Equal(t, layerFirst.Uint32(), x.GlobalState.Layer.Number)
-	require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
+	require.Equal(tb, layerFirst.Uint32(), x.GlobalState.Layer.Number)
+	require.Equal(tb, stateRoot.Bytes(), x.GlobalState.RootHash)
 }
 
 func TestMultiService(t *testing.T) {
@@ -1979,9 +1986,12 @@ func TestMultiService(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	genesis := time.Unix(genTimeUnix, 0)
 	genTime.EXPECT().GenesisTime().Return(genesis)
+
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, "v0.0.0", "cafebabe")
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -2026,7 +2036,7 @@ func TestDebugService(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	netInfo := NewMocknetworkInfo(ctrl)
 	mOracle := NewMockoracle(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	testLog := zap.NewAtomicLevel()
 	loggers := map[string]*zap.AtomicLevel{
@@ -2218,7 +2228,7 @@ func TestEventsReceived(t *testing.T) {
 	events.InitializeReporter()
 	t.Cleanup(events.CloseEventReporter)
 
-	txService := NewTransactionService(statesql.InMemory(), nil, meshAPIMock, conStateAPI, nil, nil)
+	txService := NewTransactionService(statesql.InMemoryTest(t), nil, meshAPIMock, conStateAPI, nil, nil)
 	gsService := NewGlobalStateService(meshAPIMock, conStateAPI)
 	cfg, cleanup := launchServer(t, txService, gsService)
 	t.Cleanup(cleanup)
@@ -2268,8 +2278,9 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(time.Millisecond * 50)
 
 	lg := zaptest.NewLogger(t)
-	svm := vm.New(statesql.InMemory(), vm.WithLogger(lg))
-	conState := txs.NewConservativeState(svm, statesql.InMemory(), txs.WithLogger(lg.Named("conState")))
+	db := statesql.InMemoryTest(t)
+	svm := vm.New(db, vm.WithLogger(lg))
+	conState := txs.NewConservativeState(svm, db, txs.WithLogger(lg.Named("conState")))
 	conState.AddToCache(context.Background(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
@@ -2331,7 +2342,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
+		svm := vm.New(statesql.InMemoryTest(t), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(types.LayerID(17), []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2352,7 +2363,7 @@ func TestTransactionsRewards(t *testing.T) {
 		req.NoError(err, "stream request returned unexpected error")
 		time.Sleep(50 * time.Millisecond)
 
-		svm := vm.New(statesql.InMemory(), vm.WithLogger(zaptest.NewLogger(t)))
+		svm := vm.New(statesql.InMemoryTest(t), vm.WithLogger(zaptest.NewLogger(t)))
 		_, _, err = svm.Apply(types.LayerID(17), []types.Transaction{*globalTx}, rewards)
 		req.NoError(err)
 
@@ -2467,9 +2478,12 @@ func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*typ
 func TestMeshService_EpochStream(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
+
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,

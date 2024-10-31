@@ -11,7 +11,7 @@ import (
 )
 
 func Test_AddNIPost(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	nodeID := types.RandomNodeID()
 	refNipost := &NIPostState{
@@ -50,7 +50,7 @@ func Test_AddNIPost(t *testing.T) {
 }
 
 func Test_AddNIPost_NoDuplicates(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	refNipost := &NIPostState{
 		NIPost: &types.NIPost{

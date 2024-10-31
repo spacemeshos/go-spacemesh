@@ -540,7 +540,7 @@ func (cl *lockstepCluster) setup() {
 					if other.peerId() == p {
 						b := make([]byte, 0, 1024)
 						buf := bytes.NewBuffer(b)
-						other.hare.handleProposalsStream(ctx, msg, buf)
+						other.hare.handleProposalsStream(ctx, p, msg, buf)
 						cb(ctx, buf)
 					}
 				}
@@ -624,24 +624,24 @@ type testTracer struct {
 	compactResp chan struct{}
 }
 
-func waitForChan[T any](t testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
+func waitForChan[T any](tb testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
 	var value T
 	select {
 	case <-time.After(timeout):
 		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
-		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+		tb.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case value = <-ch:
 	}
 	return value
 }
 
-func sendWithTimeout[T any](t testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
+func sendWithTimeout[T any](tb testing.TB, value T, ch chan<- T, timeout time.Duration, failureMsg string) {
 	select {
 	case <-time.After(timeout):
 		var builder strings.Builder
 		pprof.Lookup("goroutine").WriteTo(&builder, 2)
-		t.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
+		tb.Fatalf(failureMsg+", waited: %v, stacktraces:\n%s", timeout, builder.String())
 	case ch <- value:
 	}
 }
@@ -1054,7 +1054,7 @@ func TestProposals(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			db := statesql.InMemory()
+			db := statesql.InMemoryTest(t)
 			atxsdata := atxsdata.New()
 			proposals := store.New()
 			hare := New(
@@ -1211,7 +1211,7 @@ func TestHare_ReconstructForward(t *testing.T) {
 					if other.peerId() == p {
 						b := make([]byte, 0, 1024)
 						buf := bytes.NewBuffer(b)
-						if err := other.hare.handleProposalsStream(ctx, msg, buf); err != nil {
+						if err := other.hare.handleProposalsStream(ctx, p, msg, buf); err != nil {
 							return fmt.Errorf("exec handleProposalStream: %w", err)
 						}
 						if err := cb(ctx, buf); err != nil {

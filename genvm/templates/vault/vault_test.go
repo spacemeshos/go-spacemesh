@@ -392,7 +392,7 @@ func TestSpend(t *testing.T) {
 			}
 			ctx := core.Context{
 				LayerID: types.LayerID(tc.lid),
-				Loader:  core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()}),
+				Loader:  core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)}),
 				Header:  types.TxHeader{MaxSpend: math.MaxUint64},
 				PrincipalAccount: types.Account{
 					Address: owner,
@@ -419,7 +419,7 @@ func TestSpend(t *testing.T) {
 		}
 		ctx := core.Context{
 			LayerID: types.LayerID(2),
-			Loader:  core.NewStagedCache(core.DBLoader{Executor: statesql.InMemory()}),
+			Loader:  core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)}),
 			Header:  types.TxHeader{MaxSpend: math.MaxUint64},
 			PrincipalAccount: types.Account{
 				Address: owner,

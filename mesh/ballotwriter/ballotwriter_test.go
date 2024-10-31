@@ -183,14 +183,14 @@ func genBallot(tb testing.TB) *types.Ballot {
 	return b
 }
 
-func newTestBallotWriter(t testing.TB) (*ballotwriter.BallotWriter, sql.Database) {
-	t.Helper()
-	db := statesql.InMemoryTest(t)
-	log := zaptest.NewLogger(t)
+func newTestBallotWriter(tb testing.TB) (*ballotwriter.BallotWriter, sql.Database) {
+	tb.Helper()
+	db := statesql.InMemoryTest(tb)
+	log := zaptest.NewLogger(tb)
 	w := ballotwriter.New(db, log)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	t.Cleanup(func() {
+	tb.Cleanup(func() {
 		cancel()
 		<-done
 	})
@@ -206,9 +206,7 @@ func newDiskSqlite(tb testing.TB) sql.Database {
 
 	dir := tb.TempDir()
 	sqlDB, err := statesql.Open("file:" + filepath.Join(dir, "state.sql"))
-	if err != nil {
-		tb.Fatal(err)
-	}
+	require.NoError(tb, err)
 	tb.Cleanup(func() { sqlDB.Close() })
 	return sqlDB
 }

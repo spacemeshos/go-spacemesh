@@ -66,8 +66,8 @@ func unixPtr(sec, nsec int64) *time.Time {
 
 func newTesterActiveSetGenerator(tb testing.TB, cfg config) *testerActiveSetGenerator {
 	var (
-		db        = statesql.InMemory()
-		localdb   = localsql.InMemory()
+		db        = statesql.InMemoryTest(tb)
+		localdb   = localsql.InMemoryTest(tb)
 		atxsdata  = atxsdata.New()
 		ctrl      = gomock.NewController(tb)
 		clock     = mocks.NewMocklayerClock(ctrl)

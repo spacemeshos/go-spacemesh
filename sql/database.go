@@ -619,11 +619,13 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	if db.closed {
 		return nil, ErrClosed
 	}
-	conn := db.getConn(ctx)
+	conCtx, cancel := context.WithCancel(ctx)
+	conn := db.getConn(conCtx)
 	if conn == nil {
+		cancel()
 		return nil, ErrNoConnection
 	}
-	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn}
+	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn, freeConn: cancel}
 	if err := tx.begin(initstmt); err != nil {
 		return nil, err
 	}
@@ -1008,6 +1010,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		encoder(stmt)
 	}
 	defer stmt.ClearBindings()
+	defer stmt.Reset()
 
 	rows := 0
 	for {
@@ -1037,6 +1040,7 @@ type sqliteTx struct {
 	*queryCache
 	db        *sqliteDatabase
 	conn      *sqlite.Conn
+	freeConn  func()
 	committed bool
 	err       error
 }
@@ -1065,10 +1069,12 @@ func (tx *sqliteTx) Commit() error {
 func (tx *sqliteTx) Release() error {
 	defer tx.db.pool.Put(tx.conn)
 	if tx.committed {
+		tx.freeConn()
 		return nil
 	}
 	stmt := tx.conn.Prep("ROLLBACK")
 	_, tx.err = stmt.Step()
+	tx.freeConn()
 	return mapSqliteError(tx.err)
 }
 
