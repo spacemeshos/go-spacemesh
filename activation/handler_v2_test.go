@@ -406,7 +406,7 @@ func TestHandlerV2_SyntacticallyValidate_SoloAtx(t *testing.T) {
 	t.Run("rejects when len(NIPoSTs) != 1", func(t *testing.T) {
 		t.Parallel()
 		atx := newInitialATXv2(t, golden)
-		atx.NiPosts = append(atx.NiPosts, wire.NiPostsV2{})
+		atx.NiPosts = append(atx.NiPosts, wire.NIPostV2{})
 		atx.Sign(sig)
 
 		atxHandler.mclock.EXPECT().CurrentLayer()
@@ -720,7 +720,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 			PositioningATX: mATX.ID(),
 			Coinbase:       types.GenerateAddress([]byte("aaaa")),
 			VRFNonce:       uint64(999),
-			NiPosts:        make([]wire.NiPostsV2, 4),
+			NiPosts:        make([]wire.NIPostV2, 4),
 		}
 		atxsPerPoet := [][]*wire.ActivationTxV2{
 			append([]*wire.ActivationTxV2{mATX}, otherATXs[0]),
@@ -1049,7 +1049,7 @@ func TestCollectDeps_AtxV2(t *testing.T) {
 			PositioningATX: positioning,
 			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: commitment},
 			MarriageATX:    &marriage,
-			NiPosts: []wire.NiPostsV2{
+			NiPosts: []wire.NIPostV2{
 				{Challenge: poetA},
 				{Challenge: poetB},
 			},
@@ -1071,7 +1071,7 @@ func TestCollectDeps_AtxV2(t *testing.T) {
 			PositioningATX: atxA,
 			Initial:        &wire.InitialAtxPartsV2{CommitmentATX: atxA},
 			MarriageATX:    &atxA,
-			NiPosts: []wire.NiPostsV2{
+			NiPosts: []wire.NIPostV2{
 				{Challenge: poetA},
 				{Challenge: poetA},
 			},
@@ -1086,7 +1086,7 @@ func TestCollectDeps_AtxV2(t *testing.T) {
 			PreviousATXs:   []types.ATXID{prev0, prev1},
 			PositioningATX: positioning,
 			MarriageATX:    &marriage,
-			NiPosts: []wire.NiPostsV2{
+			NiPosts: []wire.NIPostV2{
 				{Challenge: poetA},
 				{Challenge: poetB},
 			},
@@ -1957,7 +1957,7 @@ func newInitialATXv2(tb testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
 	atx := &wire.ActivationTxV2{
 		PositioningATX: golden,
 		Initial:        &wire.InitialAtxPartsV2{CommitmentATX: golden},
-		NiPosts: []wire.NiPostsV2{
+		NiPosts: []wire.NIPostV2{
 			{
 				Challenge: types.RandomHash(),
 				Posts: []wire.SubPostV2{
@@ -1981,7 +1981,7 @@ func newSoloATXv2(tb testing.TB, publish types.EpochID, prev, pos types.ATXID) *
 		PublishEpoch:   publish,
 		PreviousATXs:   []types.ATXID{prev},
 		PositioningATX: pos,
-		NiPosts: []wire.NiPostsV2{
+		NiPosts: []wire.NIPostV2{
 			{
 				Challenge: types.RandomHash(),
 				Posts: []wire.SubPostV2{

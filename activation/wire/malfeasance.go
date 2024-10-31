@@ -32,18 +32,25 @@ const (
 	InitialPostIndex
 )
 
-type NiPostTreeIndex uint64
+type NIPostTreeIndex uint64
 
 const (
-	MembershipIndex NiPostTreeIndex = iota
+	MembershipIndex NIPostTreeIndex = iota
 	ChallengeIndex
 	PostsRootIndex
 )
 
-type SuPostV2Index uint64
+type MarriageCertificateIndex uint64
 
 const (
-	MarriageIndex SuPostV2Index = iota
+	ReferenceATXIndex MarriageCertificateIndex = iota
+	SignatureIndex
+)
+
+type SubPostTreeIndex uint64
+
+const (
+	MarriageIndex SubPostTreeIndex = iota
 	PrevATXIndex
 	MembershipLeafIndex
 	PostIndex
