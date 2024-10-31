@@ -11,7 +11,7 @@ import (
 //go:generate scalegen
 
 // MerkleTreeIndex is the index of the leaf containing the given field in the merkle tree.
-type MerkleTreeIndex uint16
+type MerkleTreeIndex uint64
 
 const (
 	PublishEpochIndex MerkleTreeIndex = iota

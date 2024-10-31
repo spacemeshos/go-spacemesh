@@ -337,7 +337,7 @@ func (p InvalidPostProof) Valid(
 	}
 	ok, err = merkle.ValidatePartialTree(
 		[]uint64{uint64(marriageIndex)},
-		[][]byte{p.Post.Root()},
+		[][]byte{p.Post.Root().Bytes()},
 		marriageIndexProof,
 		p.SubPostRoot.Bytes(),
 		atxTreeHash,
@@ -355,7 +355,7 @@ func (p InvalidPostProof) Valid(
 	}
 	ok, err = merkle.ValidatePartialTree(
 		[]uint64{uint64(PostIndex)},
-		[][]byte{p.Post.Root()},
+		[][]byte{p.Post.Root().Bytes()},
 		postProof,
 		p.SubPostRoot.Bytes(),
 		atxTreeHash,
@@ -378,7 +378,7 @@ func (p InvalidPostProof) Valid(
 		[]uint64{uint64(NumUnitsIndex)},
 		[][]byte{numUnits},
 		numUnitsProof,
-		p.Post.Root(),
+		p.Post.Root().Bytes(),
 		atxTreeHash,
 	)
 	if err != nil {
