@@ -1,0 +1,124 @@
+openapi: 3.0.0
+info:
+  title: Node Service API
+  description: API of a Node Service
+  version: 1.0.0
+
+paths:
+  /activation/positioning_atx/{publish_epoch}:
+    get:
+      summary: Get Positioning ATX ID with given maximum publish epoch
+      tags:
+        - "Activation"
+      parameters:
+        - in: path
+          name: publish_epoch
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/EpochID"
+
+      responses:
+        "200":
+          description: ATX ID
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ID:
+                    $ref: "models/components.yaml#/components/schemas/ATXID"
+                required:
+                  - ID
+
+  /activation/last_atx/{node_id}:
+    get:
+      summary: Get last ATX by node ID
+      tags:
+        - "Activation"
+      parameters:
+        - in: path
+          name: node_id
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/NodeID"
+      responses:
+        "200":
+          description: ATX
+          content:
+            application/json:
+              schema:
+                $ref: "models/components.yaml#/components/schemas/ActivationTx"
+        "400":
+          description: Bad request
+          content:
+            plain/text:
+              schema:
+                type: string
+
+        "404":
+          description: There is no ATX for this node
+
+  /activation/atx/{atx_id}:
+    get:
+      summary: Get ATX by ID
+      tags:
+        - "Activation"
+      parameters:
+        - in: path
+          name: atx_id
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/ATXID"
+      responses:
+        "200":
+          description: ATX
+          content:
+            application/json:
+              schema:
+                $ref: "models/components.yaml#/components/schemas/ActivationTx"
+        "404":
+          description: ATX not found
+
+  /publish/{protocol}:
+    post:
+      summary: Publish a blob in the given p2p protocol
+      tags:
+        - "Publish"
+      parameters:
+        - in: path
+          name: protocol
+          required: true
+          schema:
+            type: string
+            enum: [ax1, pp1, tx1, bc1, b1, bw1, bp1, bf1, bo1, mp1]
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Successfully published the blob
+  /poet:
+    post:
+      summary: Store PoET proof
+      tags:
+        - "Poet"
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: Successfully stored the proof
+        "400":
+          description: Bad request
+          content:
+            plain/text:
+              schema:
+                type: string

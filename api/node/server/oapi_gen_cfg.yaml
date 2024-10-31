@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/oapi-codegen/oapi-codegen/HEAD/configuration-schema.json
+package: server
+generate:
+  std-http-server: true
+  models: true
+  strict-server: true
+output: server.gen.go
+import-mapping:
+  models/components.yaml: github.com/spacemeshos/go-spacemesh/api/node/models

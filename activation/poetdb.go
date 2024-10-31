@@ -23,7 +23,8 @@ import (
 
 // PoetDbOptions are options for PoetDb.
 type PoetDbOptions struct {
-	cacheSize int
+	cacheSize    int
+	remoteStorer PoetDbStorer
 }
 
 type PoetDbOption func(*PoetDbOptions)
@@ -35,12 +36,19 @@ func WithCacheSize(size int) PoetDbOption {
 	}
 }
 
+func WithRemotePoetStorer(storer PoetDbStorer) PoetDbOption {
+	return func(opts *PoetDbOptions) {
+		opts.remoteStorer = storer
+	}
+}
+
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
 	sqlDB               sql.StateDatabase
 	poetProofsDbRequest singleflight.Group
 	poetProofsLru       *lru.Cache[types.PoetProofRef, *types.PoetProofMessage]
 	logger              *zap.Logger
+	remoteStorer        PoetDbStorer
 }
 
 // NewPoetDb returns a new PoET handler.
@@ -66,6 +74,7 @@ func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) (*Po
 		sqlDB:         db,
 		poetProofsLru: poetProofsLru,
 		logger:        log,
+		remoteStorer:  options.remoteStorer,
 	}, nil
 }
 
@@ -97,6 +106,13 @@ func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.Poet
 		proofMessage.Signature,
 	); err != nil {
 		return err
+	}
+
+	if db.remoteStorer != nil {
+		err := db.remoteStorer.StorePoetProof(ctx, proofMessage)
+		if err != nil {
+			db.logger.Warn("failed to store the poet proof in remote store", zap.Error(err))
+		}
 	}
 
 	return db.StoreProof(ctx, ref, proofMessage)
@@ -178,13 +194,17 @@ func (db *PoetDb) GetProofRef(poetID []byte, roundID string) (types.PoetProofRef
 }
 
 // GetProofMessage returns the originally received PoET proof message.
-func (db *PoetDb) GetProofMessage(proofRef types.PoetProofRef) ([]byte, error) {
+func (db *PoetDb) ProofMessage(proofRef types.PoetProofRef) (*types.PoetProofMessage, error) {
 	proof, err := poets.Get(db.sqlDB, proofRef)
 	if err != nil {
-		return proof, fmt.Errorf("get proof from store: %w", err)
+		return nil, fmt.Errorf("get proof from store: %w", err)
+	}
+	var proofMessage types.PoetProofMessage
+	if err := codec.Decode(proof, &proofMessage); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
 	}
 
-	return proof, nil
+	return &proofMessage, nil
 }
 
 // Proof returns full proof.
@@ -194,16 +214,12 @@ func (db *PoetDb) Proof(proofRef types.PoetProofRef) (*types.PoetProof, *types.H
 		if ok && cachedProof != nil {
 			return cachedProof, nil
 		}
-		proofMessageBytes, err := db.GetProofMessage(proofRef)
+		proofMessage, err := db.ProofMessage(proofRef)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch poet proof for ref %x: %w", proofRef, err)
 		}
-		var proofMessage types.PoetProofMessage
-		if err := codec.Decode(proofMessageBytes, &proofMessage); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal poet proof for ref %x: %w", proofRef, err)
-		}
-		db.poetProofsLru.Add(proofRef, &proofMessage)
-		return &proofMessage, nil
+		db.poetProofsLru.Add(proofRef, proofMessage)
+		return proofMessage, nil
 	})
 	if err != nil {
 		return nil, nil, err
