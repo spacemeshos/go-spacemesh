@@ -208,8 +208,21 @@ func (h *hostContext) Call(
 		}
 	}
 
+	var payload athcon.Payload
+
+	// attempt to decode the input payload, if there is input
+	if len(input) > 0 {
+		if err = gossamerScale.Unmarshal(input, &payload); err != nil {
+			// read the input payload
+			return nil, 0, athcon.Error{
+				Code: athcon.InternalError.Code,
+				Err:  fmt.Errorf("decoding input payload: %w", err),
+			}
+		}
+	}
+
 	// if no input, this is a simple balance transfer
-	if len(input) == 0 {
+	if len(input) == 0 || len(payload.Input) == 0 {
 		// short-circuit: perform balance transfer and return
 		// this does not depend upon the recipient account status
 		if err = h.host.Transfer(types.Address(recipient), value); err != nil {
@@ -222,14 +235,6 @@ func (h *hostContext) Call(
 	}
 
 	// there is input data, so the destination account must exist and must be spawned
-
-	var payload athcon.Payload
-	if err = gossamerScale.Unmarshal(input, &payload); err != nil {
-		return nil, 0, athcon.Error{
-			Code: athcon.InternalError.Code,
-			Err:  fmt.Errorf("decoding input payload: %w", err),
-		}
-	}
 
 	template := destinationAccount.TemplateAddress
 	state := destinationAccount.State

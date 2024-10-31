@@ -84,7 +84,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 		return nil, err
 	}
 
-	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), nonce))
+	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), amount))
 
 	meta := core.Metadata{}
 	meta.GasPrice = options.GasPrice

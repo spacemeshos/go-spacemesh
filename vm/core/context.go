@@ -8,6 +8,8 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+
+	"go.uber.org/zap"
 )
 
 type StorageStatus int
@@ -42,6 +44,8 @@ type Context struct {
 	Header  Header
 	Args    scale.Encodable
 	SpawnTx bool
+
+	Logger *zap.Logger
 
 	// consumed is in gas units and will be used
 	consumed uint64
@@ -146,6 +150,12 @@ func (c *Context) Spawn(template Address, blob []byte) (Address, error) {
 	account.State = blob
 	account.TemplateAddress = &template
 	c.change(account)
+	c.Logger.Debug(
+		"spawn",
+		zap.String("address", principalAddress.String()),
+		zap.String("template", template.String()),
+		zap.Int("state_size", len(blob)),
+	)
 	return principalAddress, nil
 }
 
@@ -181,6 +191,11 @@ func (c *Context) Transfer(to Address, amount uint64) error {
 	if err != nil {
 		return err
 	}
+	// no-op
+	if amount == 0 {
+		c.Logger.Debug("ignoring zero-value transfer")
+		return nil
+	}
 	return c.transfer(acct, to, amount, c.Header.MaxSpend)
 }
 
@@ -210,26 +225,35 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 		return nil
 	}
 
-	c.transferred += amount
 	if newBalance, err := safeAdd(account.Balance, amount); err != nil {
 		return err
 	} else {
 		account.Balance = newBalance
 	}
+	c.transferred += amount
 	from.Balance -= amount
+	c.change(from)
 	c.change(account)
+	c.Logger.Debug(
+		"transfer",
+		zap.Uint64("amount", amount),
+		zap.String("from", from.Address.String()),
+		zap.String("to", to.String()),
+		zap.Uint64("from_new_balance", from.Balance),
+		zap.Uint64("to_new_balance", account.Balance),
+	)
 	return nil
 }
 
 // Consume gas from the account after validation passes.
 func (c *Context) Consume(gas uint64) (err error) {
-	acct, err := c.PrincipalAccount()
+	principalAccount, err := c.PrincipalAccount()
 	if err != nil {
 		return err
 	}
 	amount := gas * c.Header.GasPrice
-	if amount > acct.Balance {
-		amount = acct.Balance
+	if amount > principalAccount.Balance {
+		amount = principalAccount.Balance
 		err = ErrOutOfGas
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
@@ -238,9 +262,25 @@ func (c *Context) Consume(gas uint64) (err error) {
 	}
 	c.consumed += gas
 	c.fee += amount
-	c.change(acct)
-	acct.Balance -= amount
+	principalAccount.Balance -= amount
+	c.change(principalAccount)
+
 	return err
+}
+
+// Refund refunds gas remaining after execution
+func (c *Context) Refund(gas uint64) (err error) {
+	principalAccount, err := c.PrincipalAccount()
+	if err != nil {
+		return err
+	}
+	amount := gas * c.Header.GasPrice
+	c.consumed -= gas
+	c.fee -= amount
+	principalAccount.Balance += amount
+	c.change(principalAccount)
+
+	return nil
 }
 
 // Apply is executed if transaction was consumed.
@@ -254,6 +294,9 @@ func (c *Context) Apply(updater AccountUpdater) error {
 		return fmt.Errorf("%w: %w", ErrInternal, err)
 	}
 	for _, address := range c.touched {
+		if address == c.PrincipalAddress {
+			continue
+		}
 		account := c.changed[address]
 		if err := updater.Update(*account); err != nil {
 			return fmt.Errorf("%w: %w", ErrInternal, err)

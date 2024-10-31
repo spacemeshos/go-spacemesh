@@ -238,8 +238,7 @@ func (v *VM) Apply(
 		total++
 		account.Layer = layer
 		v.logger.Debug("update account state", zap.Inline(account))
-		err = accounts.Update(tx, account)
-		if err != nil {
+		if err = accounts.Update(tx, account); err != nil {
 			return false
 		}
 		account.EncodeScale(encoder)
@@ -399,13 +398,19 @@ func (v *VM) execute(
 		rst.Layer = layer
 
 		err = ctx.Consume(ctx.Header.MaxGas)
+		logger.Debug("consumed max gas from principal",
+			zap.String("principal", ctx.PrincipalAddress.String()),
+			zap.Uint64("maxgas", ctx.Header.MaxGas),
+		)
+		var gasLeft int64
 		if err == nil {
-			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
+			_, gasLeft, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
 		}
 		if err != nil {
 			logger.Debug("transaction failed",
 				zap.Object("header", header),
 				zap.String("account", ctx.PrincipalAddress.String()),
+				zap.Int64("gasLeft", gasLeft),
 				zap.Error(err),
 			)
 			if errors.Is(err, core.ErrInternal) {
@@ -413,6 +418,18 @@ func (v *VM) execute(
 			}
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
+
+		// Refund remaining gas
+		if gasLeft < 0 {
+			panic("negative gas left")
+		}
+		if err = ctx.Refund(uint64(gasLeft)); err != nil {
+			return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err)
+		}
+		logger.Debug("refunded gas left to principal",
+			zap.String("principal", ctx.PrincipalAddress.String()),
+			zap.Int64("gasleft", gasLeft),
+		)
 
 		rst.RawTx = txs[i].GetRaw()
 		rst.TxHeader = &ctx.Header
@@ -523,6 +540,7 @@ func parse(
 		PrincipalAddress:   principal,
 		PrincipalNextNonce: principalAccount.NextNonce,
 		LayerID:            lid,
+		Logger:             logger,
 	}
 
 	// There are three cases to consider:
