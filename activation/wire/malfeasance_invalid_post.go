@@ -489,7 +489,7 @@ func (p InvalidPostProof) Valid(
 	nodeID types.NodeID,
 	commitmentATX types.ATXID,
 	marriageATX types.ATXID,
-	marriageIndex uint64,
+	marriageIndex uint16,
 ) error {
 	// --- MarriageATX ---
 
@@ -612,7 +612,7 @@ func (p InvalidPostProof) Valid(
 		marriageIndexProof[i] = h.Bytes()
 	}
 	ok, err = merkle.ValidatePartialTree(
-		[]uint64{marriageIndex},
+		[]uint64{uint64(marriageIndex)},
 		[][]byte{p.Post.Root()},
 		marriageIndexProof,
 		p.SubPostRoot.Bytes(),

@@ -133,7 +133,7 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	binary.LittleEndian.PutUint64(vrfNonce[:], atx.VRFNonce)
 	tree.AddLeaf(vrfNonce.Bytes())
 
-	tree.AddLeaf(atx.Marriages.Root())
+	tree.AddLeaf(types.Hash32(atx.Marriages.Root()).Bytes())
 
 	if atx.MarriageATX != nil {
 		tree.AddLeaf(atx.MarriageATX.Bytes())
@@ -157,6 +157,24 @@ func (atx *ActivationTxV2) merkleProof(leafIndex MerkleTreeIndex) []types.Hash32
 		proofHashes[i] = types.Hash32(p)
 	}
 	return proofHashes
+}
+
+func validateAtxProof(atxID types.ATXID, leaf types.Hash32, proof []types.Hash32, leafIndex MerkleTreeIndex) bool {
+	proofBytes := make([][]byte, len(proof))
+	for i, h := range proof {
+		proofBytes[i] = h.Bytes()
+	}
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(leafIndex)},
+		[][]byte{leaf.Bytes()},
+		proofBytes,
+		atxID.Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		panic(err)
+	}
+	return ok
 }
 
 // ID returns the ATX ID. It is the root of the ATX merkle tree.
@@ -204,8 +222,14 @@ func (atx *ActivationTxV2) VRFNonceProof() []types.Hash32 {
 	return atx.merkleProof(VRFNonceIndex)
 }
 
-func (atx *ActivationTxV2) MarriagesRootProof() []types.Hash32 {
+func (atx *ActivationTxV2) MarriagesRootProof() MarriagesRootProof {
 	return atx.merkleProof(MarriagesRootIndex)
+}
+
+type MarriagesRootProof []types.Hash32
+
+func (p MarriagesRootProof) Valid(atxID types.ATXID, marriagesRoot MarriagesRoot) bool {
+	return validateAtxProof(atxID, types.Hash32(marriagesRoot), p, MarriagesRootIndex)
 }
 
 func (atx *ActivationTxV2) MarriageATXProof() []types.Hash32 {
@@ -562,7 +586,9 @@ func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
 	}
 }
 
-func (mcs MarriageCertificates) Root() []byte {
+type MarriagesRoot types.Hash32
+
+func (mcs MarriageCertificates) Root() MarriagesRoot {
 	marriagesTree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
@@ -570,10 +596,10 @@ func (mcs MarriageCertificates) Root() []byte {
 		panic(err)
 	}
 	mcs.merkleTree(marriagesTree)
-	return marriagesTree.Root()
+	return MarriagesRoot(marriagesTree.Root())
 }
 
-func (mcs MarriageCertificates) Proof(index int) []types.Hash32 {
+func (mcs MarriageCertificates) Proof(index int) MarriageCertificateProof {
 	if index < 0 || index >= len(mcs) {
 		panic("index out of range")
 	}
@@ -592,6 +618,26 @@ func (mcs MarriageCertificates) Proof(index int) []types.Hash32 {
 		proofHashes[i] = types.Hash32(p)
 	}
 	return proofHashes
+}
+
+type MarriageCertificateProof []types.Hash32
+
+func (p MarriageCertificateProof) Valid(marriageRoot MarriagesRoot, index int, mc MarriageCertificate) bool {
+	proof := make([][]byte, len(p))
+	for i, h := range p {
+		proof[i] = h.Bytes()
+	}
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(index)},
+		[][]byte{mc.Root()},
+		proof,
+		types.Hash32(marriageRoot).Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		panic(err)
+	}
+	return ok
 }
 
 // MarriageCertificate proves the will of ID to be married with the ID that includes this certificate.
