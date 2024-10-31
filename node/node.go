@@ -140,6 +140,7 @@ const (
 	ExecutorLogger         = "executor"
 	MalfeasanceLogger      = "malfeasance"
 	BootstrapLogger        = "bootstrap"
+	NodeServiceLogger      = "nodeService"
 )
 
 func GetCommand() *cobra.Command {
@@ -1889,7 +1890,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return err
 		}
 		golden := types.ATXID(app.Config.Genesis.GoldenATX())
-		logger := app.log.Zap().Named("atx-service")
+		logger := app.addLogger(NodeServiceLogger, app.log).Zap()
 		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
 		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, logger)
 
