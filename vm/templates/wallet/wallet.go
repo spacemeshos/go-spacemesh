@@ -52,28 +52,36 @@ type Wallet struct {
 }
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
-func (s *Wallet) MaxSpend(spendArgs []byte) (uint64, error) {
+func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 	maxgas := int64(s.host.MaxGas())
 	if maxgas < 0 {
 		return 0, errors.New("gas limit exceeds maximum int64 value")
 	}
 
-	// Make sure we have a method selector
-	if len(spendArgs) < 4 {
-		return 0, errors.New("spendArgs is too short")
+	var unmarshaled athcon.Payload
+	err := gossamerScale.Unmarshal(payload, &unmarshaled)
+	if err != nil {
+		return 0, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
 	}
 
 	// Check the method selector
 	// We define MaxSpend for any method other than spend to be zero for now.
 	spendSelector, _ := athcon.FromString("athexp_spend")
-	txSelector := athcon.MethodSelector(spendArgs[:athcon.MethodSelectorLength])
-	if spendSelector != txSelector {
+	if unmarshaled.Selector == nil || *unmarshaled.Selector != spendSelector {
 		return 0, nil
 	}
 
 	// construct the payload. this requires some surgery to replace the method maxSpendSelector.
 	maxSpendSelector, _ := athcon.FromString("athexp_max_spend")
-	maxGasPayload := append(maxSpendSelector[:], spendArgs[4:]...)
+	maxGasPayload := athcon.Payload{
+		Selector: &maxSpendSelector,
+		Input:    unmarshaled.Input,
+	}
+	maxGasPayloadEncoded, err := gossamerScale.Marshal(maxGasPayload)
+	if err != nil {
+		return 0, fmt.Errorf("marshaling maxSpend payload: %w", err)
+	}
+	executionPayload := athcon.EncodedExecutionPayload(s.walletState, maxGasPayloadEncoded)
 
 	// Instantiate the VM
 	// Use a mock host to ensure that no state changes occur.
@@ -88,7 +96,7 @@ func (s *Wallet) MaxSpend(spendArgs []byte) (uint64, error) {
 		maxgas,
 		s.host.Principal(),
 		s.host.Principal(),
-		maxGasPayload,
+		executionPayload,
 		0,
 		s.templateCode,
 	)

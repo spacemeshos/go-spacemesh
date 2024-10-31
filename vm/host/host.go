@@ -12,6 +12,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 func AthenaLibPath() string {
@@ -206,11 +208,20 @@ func (h *hostContext) Call(
 		}
 	}
 
+	// decode input payload
+	var payload athcon.Payload
+	if err = gossamerScale.Unmarshal(input, &payload); err != nil {
+		return nil, 0, athcon.Error{
+			Code: athcon.InternalError.Code,
+			Err:  fmt.Errorf("decoding input payload: %w", err),
+		}
+	}
+
 	// if there is input data, then the destination account must exist and must be spawned
 	template := destinationAccount.TemplateAddress
 	state := destinationAccount.State
 	var templateAccount *types.Account
-	if len(input) > 0 {
+	if len(payload.Input) > 0 {
 		if template == nil || len(state) == 0 {
 			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
@@ -238,7 +249,7 @@ func (h *hostContext) Call(
 		}
 	}
 
-	if len(input) == 0 {
+	if len(payload.Input) == 0 {
 		// short-circuit and return if this is a simple balance transfer
 		return nil, gas, nil
 	}
