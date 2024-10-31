@@ -10,10 +10,13 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -23,6 +26,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
+
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 // Opt is for changing VM during initialization.
@@ -569,27 +574,31 @@ func parse(
 	// in case of a self-spawn, we need to check that the calculated principal matches.
 	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
 
-	// // in order to calculate the principal, we need to extract the pubkey from the spawn tx
-	// var unmarshaled struct {
-	// 	*athcon.MethodSelector
-	// 	signing.PublicKey
-	// }
-	// err = gossamerScale.Unmarshal(output.Payload, &unmarshaled)
-	// if err != nil {
-	// 	return nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
-	// }
-	// computedPrincipal, err := core.ComputePrincipalFromPubkey(
-	// 	ctx.Header.TemplateAddress,
-	// 	unmarshaled.PublicKey,
-	// )
-	// if err != nil {
-	// 	return nil, nil, fmt.Errorf("%w: computing spawn principal: %w", core.ErrInternal, err)
-	// }
+	// note: this check isn't strictly necessary. this tx will fail verify later, since the
+	// account will be spawned to the wrong location, but it's much cheaper to perform this check
+	// now and fail fast.
 
-	// if ctx.Spawn && computedPrincipal != principal {
-	// 	return nil, nil, fmt.Errorf(
-	// 		"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
-	// }
+	// in order to calculate the principal, we need to extract the pubkey from the spawn tx
+	var unmarshaled struct {
+		*athcon.MethodSelector
+		signing.PublicKey
+	}
+	err = gossamerScale.Unmarshal(output.Payload, &unmarshaled)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
+	}
+	computedPrincipal, err := core.ComputePrincipalFromPubkey(
+		ctx.Header.TemplateAddress,
+		unmarshaled.PublicKey,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: computing spawn principal: %w", core.ErrInternal, err)
+	}
+
+	if ctx.IsSpawn() && computedPrincipal != principal {
+		return nil, nil, fmt.Errorf(
+			"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
+	}
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().

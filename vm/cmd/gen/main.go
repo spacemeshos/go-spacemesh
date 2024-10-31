@@ -106,11 +106,11 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 		})
 	}
 
-	spawnSelector, err := athcon.FromString("athcon_spawn")
+	spawnSelector, err := athcon.FromString("athexp_spawn")
 	if err != nil {
 		log.Fatal("failed to generate method selector")
 	}
-	spendSelector, err := athcon.FromString("athcon_spend")
+	spendSelector, err := athcon.FromString("athexp_spend")
 	if err != nil {
 		log.Fatal("failed to generate method selector")
 	}

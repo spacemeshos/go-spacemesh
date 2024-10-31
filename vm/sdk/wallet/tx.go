@@ -58,6 +58,8 @@ func Spawn(
 	payload := core.Payload(athenaPayload)
 
 	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
+	// tx := encode(&sdk.TxVersion, &principal, &meta)
+	// tx = append(tx, payload...)
 
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
@@ -89,6 +91,8 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	meta.Nonce = nonce
 
 	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
+	// tx := encode(&sdk.TxVersion, &principal, &meta)
+	// tx = append(tx, payload...)
 
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
