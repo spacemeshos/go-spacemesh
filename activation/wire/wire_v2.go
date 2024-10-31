@@ -22,7 +22,7 @@ type ActivationTxV2 struct {
 	// only present in initial ATX
 	Initial      *InitialAtxPartsV2
 	PreviousATXs PrevATXs `scale:"max=256"`
-	NiPosts      NIPosts  `scale:"max=4"`
+	NIPosts      NIPosts  `scale:"max=4"`
 
 	// The VRF nonce must be valid for the collected space of all included IDs.
 	VRFNonce uint64
@@ -73,7 +73,7 @@ func (atx *ActivationTxV2) Sign(signer *signing.EdSigner) {
 
 func (atx *ActivationTxV2) TotalNumUnits() uint32 {
 	var total uint32
-	for _, post := range atx.NiPosts {
+	for _, post := range atx.NIPosts {
 		for _, subPost := range post.Posts {
 			total += subPost.NumUnits
 		}
@@ -93,7 +93,7 @@ func (atx *ActivationTxV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error
 	encoder.AddObject("Initial", atx.Initial)
 	encoder.AddArray("PreviousATXs", types.ATXIDs(atx.PreviousATXs))
 	encoder.AddArray("NiPosts", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-		for _, nipost := range atx.NiPosts {
+		for _, nipost := range atx.NIPosts {
 			encoder.AppendObject(&nipost)
 		}
 		return nil
@@ -121,13 +121,13 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	tree.AddLeaf(atx.Coinbase.Bytes())
 
 	if atx.Initial != nil {
-		tree.AddLeaf(atx.Initial.Root())
+		tree.AddLeaf(types.Hash32(atx.Initial.Root()).Bytes())
 	} else {
 		tree.AddLeaf(types.EmptyHash32.Bytes())
 	}
 
 	tree.AddLeaf(atx.PreviousATXs.Root())
-	tree.AddLeaf(atx.NiPosts.Root(atx.PreviousATXs))
+	tree.AddLeaf(types.Hash32(atx.NIPosts.Root(atx.PreviousATXs)).Bytes())
 
 	var vrfNonce types.Hash32
 	binary.LittleEndian.PutUint64(vrfNonce[:], atx.VRFNonce)
@@ -206,34 +206,52 @@ func (atx *ActivationTxV2) CoinbaseProof() []types.Hash32 {
 	return atx.merkleProof(CoinbaseIndex)
 }
 
-func (atx *ActivationTxV2) InitialPostsRootProof() []types.Hash32 {
-	return atx.merkleProof(InitialPostsRootIndex)
+func (atx *ActivationTxV2) InitialPostRootProof() InitialPostRootProof {
+	return atx.merkleProof(InitialPostRootIndex)
+}
+
+type InitialPostRootProof []types.Hash32
+
+func (p InitialPostRootProof) Valid(atxID types.ATXID, initialPostRoot InitialPostRoot) bool {
+	return validateAtxProof(atxID, types.Hash32(initialPostRoot), p, InitialPostRootIndex)
 }
 
 func (atx *ActivationTxV2) PreviousATXsRootProof() []types.Hash32 {
 	return atx.merkleProof(PreviousATXsRootIndex)
 }
 
-func (atx *ActivationTxV2) NIPostsRootProof() []types.Hash32 {
+func (atx *ActivationTxV2) NIPostsRootProof() NIPostsRootProof {
 	return atx.merkleProof(NIPostsRootIndex)
+}
+
+type NIPostsRootProof []types.Hash32
+
+func (p NIPostsRootProof) Valid(atxID types.ATXID, niPostsRoot NIPostsRoot) bool {
+	return validateAtxProof(atxID, types.Hash32(niPostsRoot), p, NIPostsRootIndex)
 }
 
 func (atx *ActivationTxV2) VRFNonceProof() []types.Hash32 {
 	return atx.merkleProof(VRFNonceIndex)
 }
 
-func (atx *ActivationTxV2) MarriagesRootProof() MarriagesRootProof {
+func (atx *ActivationTxV2) MarriagesRootProof() MarriageCertificatesRootProof {
 	return atx.merkleProof(MarriagesRootIndex)
 }
 
-type MarriagesRootProof []types.Hash32
+type MarriageCertificatesRootProof []types.Hash32
 
-func (p MarriagesRootProof) Valid(atxID types.ATXID, marriagesRoot MarriagesRoot) bool {
+func (p MarriageCertificatesRootProof) Valid(atxID types.ATXID, marriagesRoot MarriageCertificatesRoot) bool {
 	return validateAtxProof(atxID, types.Hash32(marriagesRoot), p, MarriagesRootIndex)
 }
 
-func (atx *ActivationTxV2) MarriageATXProof() []types.Hash32 {
+func (atx *ActivationTxV2) MarriageATXProof() MarriageATXProof {
 	return atx.merkleProof(MarriageATXIndex)
+}
+
+type MarriageATXProof []types.Hash32
+
+func (p MarriageATXProof) Valid(atxID, marriageATX types.ATXID) bool {
+	return validateAtxProof(atxID, types.Hash32(marriageATX), p, MarriageATXIndex)
 }
 
 type InitialAtxPartsV2 struct {
@@ -272,7 +290,32 @@ func (parts *InitialAtxPartsV2) merkleProof(leafIndex InitialPostTreeIndex) []ty
 	return proofHashes
 }
 
-func (parts *InitialAtxPartsV2) Root() []byte {
+func validateInitialATXPartsProof(
+	root InitialPostRoot,
+	leaf []byte,
+	proof []types.Hash32,
+	leafIndex InitialPostTreeIndex,
+) bool {
+	proofBytes := make([][]byte, len(proof))
+	for i, h := range proof {
+		proofBytes[i] = h.Bytes()
+	}
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(leafIndex)},
+		[][]byte{leaf},
+		proofBytes,
+		types.Hash32(root).Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		panic(err)
+	}
+	return ok
+}
+
+type InitialPostRoot types.Hash32
+
+func (parts *InitialAtxPartsV2) Root() InitialPostRoot {
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
@@ -280,11 +323,17 @@ func (parts *InitialAtxPartsV2) Root() []byte {
 		panic(err)
 	}
 	parts.merkleTree(tree)
-	return tree.Root()
+	return InitialPostRoot(tree.Root())
 }
 
-func (parts *InitialAtxPartsV2) CommitmentATXProof() []types.Hash32 {
+func (parts *InitialAtxPartsV2) CommitmentATXProof() CommitmentATXProof {
 	return parts.merkleProof(CommitmentATXIndex)
+}
+
+type CommitmentATXProof []types.Hash32
+
+func (p CommitmentATXProof) Valid(initialPostRoot InitialPostRoot, commitmentATX types.ATXID) bool {
+	return validateInitialATXPartsProof(initialPostRoot, commitmentATX.Bytes(), p, CommitmentATXIndex)
 }
 
 func (parts *InitialAtxPartsV2) PostProof() []types.Hash32 {
@@ -303,21 +352,21 @@ func (prevATXs PrevATXs) merkleTree(tree *merkle.Tree) {
 }
 
 func (prevATXs PrevATXs) Root() []byte {
-	prevATXsTree, err := merkle.NewTreeBuilder().
+	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
 	if err != nil {
 		panic(err)
 	}
-	prevATXs.merkleTree(prevATXsTree)
-	return prevATXsTree.Root()
+	prevATXs.merkleTree(tree)
+	return tree.Root()
 }
 
 type NIPosts []NIPostV2
 
 func (nps NIPosts) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 	for _, niPost := range nps {
-		tree.AddLeaf(niPost.Root(prevATXs))
+		tree.AddLeaf(types.Hash32(niPost.Root(prevATXs)).Bytes())
 	}
 	// Add empty NiPoSTs up to the max scale limit.
 	// This must be updated when the max scale limit is changed.
@@ -326,18 +375,20 @@ func (nps NIPosts) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 	}
 }
 
-func (nps NIPosts) Root(prevATXs []types.ATXID) []byte {
-	niPostTree, err := merkle.NewTreeBuilder().
+type NIPostsRoot types.Hash32
+
+func (nps NIPosts) Root(prevATXs []types.ATXID) NIPostsRoot {
+	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
 	if err != nil {
 		panic(err)
 	}
-	nps.merkleTree(niPostTree, prevATXs)
-	return niPostTree.Root()
+	nps.merkleTree(tree, prevATXs)
+	return NIPostsRoot(tree.Root())
 }
 
-func (nps NIPosts) Proof(index int, prevATXs []types.ATXID) []types.Hash32 {
+func (nps NIPosts) Proof(index int, prevATXs []types.ATXID) NIPostRootProof {
 	if index < 0 || index >= len(nps) {
 		panic("index out of range")
 	}
@@ -356,6 +407,26 @@ func (nps NIPosts) Proof(index int, prevATXs []types.ATXID) []types.Hash32 {
 		proofHashes[i] = types.Hash32(p)
 	}
 	return proofHashes
+}
+
+type NIPostRootProof []types.Hash32
+
+func (p NIPostRootProof) Valid(niPostsRoot NIPostsRoot, index int, nipostRoot NIPostRoot) bool {
+	proof := make([][]byte, len(p))
+	for i, h := range p {
+		proof[i] = h.Bytes()
+	}
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(index)},
+		[][]byte{types.Hash32(nipostRoot).Bytes()},
+		proof,
+		types.Hash32(niPostsRoot).Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		panic(err)
+	}
+	return ok
 }
 
 type NIPostV2 struct {
@@ -384,7 +455,7 @@ func (np *NIPostV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 func (np *NIPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 	tree.AddLeaf(codec.MustEncode(&np.Membership))
 	tree.AddLeaf(np.Challenge.Bytes())
-	tree.AddLeaf(np.Posts.Root(prevATXs))
+	tree.AddLeaf(types.Hash32(np.Posts.Root(prevATXs)).Bytes())
 }
 
 func (np *NIPostV2) merkleProof(leafIndex NIPostTreeIndex, prevATXs []types.ATXID) []types.Hash32 {
@@ -404,7 +475,9 @@ func (np *NIPostV2) merkleProof(leafIndex NIPostTreeIndex, prevATXs []types.ATXI
 	return proofHashes
 }
 
-func (np *NIPostV2) Root(prevATXs []types.ATXID) []byte {
+type NIPostRoot types.Hash32
+
+func (np *NIPostV2) Root(prevATXs []types.ATXID) NIPostRoot {
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
@@ -412,7 +485,7 @@ func (np *NIPostV2) Root(prevATXs []types.ATXID) []byte {
 		panic(err)
 	}
 	np.merkleTree(tree, prevATXs)
-	return tree.Root()
+	return NIPostRoot(tree.Root())
 }
 
 func (np *NIPostV2) MembershipProof(prevATXs []types.ATXID) []types.Hash32 {
@@ -423,8 +496,48 @@ func (np *NIPostV2) ChallengeProof(prevATXs []types.ATXID) []types.Hash32 {
 	return np.merkleProof(ChallengeIndex, prevATXs)
 }
 
-func (np *NIPostV2) PostsRootProof(prevATXs []types.ATXID) []types.Hash32 {
+type ChallengeProof []types.Hash32
+
+func (p ChallengeProof) Valid(nipostRoot NIPostRoot, challenge types.Hash32) bool {
+	proof := make([][]byte, len(p))
+	for i, h := range p {
+		proof[i] = h.Bytes()
+	}
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(ChallengeIndex)},
+		[][]byte{challenge.Bytes()},
+		proof,
+		types.Hash32(nipostRoot).Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		panic(err)
+	}
+	return ok
+}
+
+func (np *NIPostV2) PostsRootProof(prevATXs []types.ATXID) SubPostsRootProof {
 	return np.merkleProof(PostsRootIndex, prevATXs)
+}
+
+type SubPostsRootProof []types.Hash32
+
+func (p SubPostsRootProof) Valid(nipostRoot NIPostRoot, postsRoot SubPostsRoot) bool {
+	proof := make([][]byte, len(p))
+	for i, h := range p {
+		proof[i] = h.Bytes()
+	}
+	ok, err := merkle.ValidatePartialTree(
+		[]uint64{uint64(PostsRootIndex)},
+		[][]byte{types.Hash32(postsRoot).Bytes()},
+		proof,
+		types.Hash32(nipostRoot).Bytes(),
+		atxTreeHash,
+	)
+	if err != nil {
+		panic(err)
+	}
+	return ok
 }
 
 // MerkleProofV2 proves membership of multiple challenges in a PoET membership merkle tree.
@@ -448,7 +561,9 @@ func (sp SubPostsV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 	}
 }
 
-func (sp SubPostsV2) Root(prevATXs []types.ATXID) []byte {
+type SubPostsRoot types.Hash32
+
+func (sp SubPostsV2) Root(prevATXs []types.ATXID) SubPostsRoot {
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
@@ -456,7 +571,7 @@ func (sp SubPostsV2) Root(prevATXs []types.ATXID) []byte {
 		panic(err)
 	}
 	sp.merkleTree(tree, prevATXs)
-	return tree.Root()
+	return SubPostsRoot(tree.Root())
 }
 
 func (sp SubPostsV2) Proof(index int, prevATXs []types.ATXID) []types.Hash32 {
@@ -586,17 +701,17 @@ func (mcs MarriageCertificates) merkleTree(tree *merkle.Tree) {
 	}
 }
 
-type MarriagesRoot types.Hash32
+type MarriageCertificatesRoot types.Hash32
 
-func (mcs MarriageCertificates) Root() MarriagesRoot {
-	marriagesTree, err := merkle.NewTreeBuilder().
+func (mcs MarriageCertificates) Root() MarriageCertificatesRoot {
+	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(atxTreeHash).
 		Build()
 	if err != nil {
 		panic(err)
 	}
-	mcs.merkleTree(marriagesTree)
-	return MarriagesRoot(marriagesTree.Root())
+	mcs.merkleTree(tree)
+	return MarriageCertificatesRoot(tree.Root())
 }
 
 func (mcs MarriageCertificates) Proof(index int) MarriageCertificateProof {
@@ -622,7 +737,7 @@ func (mcs MarriageCertificates) Proof(index int) MarriageCertificateProof {
 
 type MarriageCertificateProof []types.Hash32
 
-func (p MarriageCertificateProof) Valid(marriageRoot MarriagesRoot, index int, mc MarriageCertificate) bool {
+func (p MarriageCertificateProof) Valid(marriageRoot MarriageCertificatesRoot, index int, mc MarriageCertificate) bool {
 	proof := make([][]byte, len(p))
 	for i, h := range p {
 		proof[i] = h.Bytes()

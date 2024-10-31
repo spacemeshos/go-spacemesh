@@ -53,14 +53,14 @@ func (t *MarryProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.MarriageRoot[:])
+		n, err := scale.EncodeByteArray(enc, t.MarriageCertificatesRoot[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageProof, 32)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageCertificatesProof, 32)
 		if err != nil {
 			return total, err
 		}
@@ -120,7 +120,7 @@ func (t *MarryProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.MarriageRoot[:])
+		n, err := scale.DecodeByteArray(dec, t.MarriageCertificatesRoot[:])
 		if err != nil {
 			return total, err
 		}
@@ -132,7 +132,7 @@ func (t *MarryProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.MarriageProof = field
+		t.MarriageCertificatesProof = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.CertificateReference[:])

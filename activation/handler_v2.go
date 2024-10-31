@@ -182,13 +182,13 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	}
 
 	if atx.MarriageATX == nil {
-		if len(atx.NiPosts) != 1 {
+		if len(atx.NIPosts) != 1 {
 			return errors.New("solo atx must have one nipost")
 		}
-		if len(atx.NiPosts[0].Posts) != 1 {
+		if len(atx.NIPosts[0].Posts) != 1 {
 			return errors.New("solo atx must have one post")
 		}
-		if atx.NiPosts[0].Posts[0].PrevATXIndex != 0 {
+		if atx.NIPosts[0].Posts[0].PrevATXIndex != 0 {
 			return errors.New("solo atx post must have prevATXIndex 0")
 		}
 	}
@@ -204,7 +204,7 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 			return errors.New("initial atx must not have previous atxs")
 		}
 
-		numUnits := atx.NiPosts[0].Posts[0].NumUnits
+		numUnits := atx.NIPosts[0].Posts[0].NumUnits
 		if err := h.nipostValidator.VRFNonceV2(
 			atx.SmesherID, atx.Initial.CommitmentATX, atx.VRFNonce, numUnits,
 		); err != nil {
@@ -309,7 +309,7 @@ func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []
 	}
 
 	poetRefs := make(map[types.Hash32]struct{})
-	for _, nipost := range atx.NiPosts {
+	for _, nipost := range atx.NIPosts {
 		poetRefs[nipost.Challenge] = struct{}{}
 	}
 
@@ -495,7 +495,7 @@ func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
 
 func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error {
 	seen := make(map[uint32]struct{})
-	for _, niposts := range atx.NiPosts {
+	for _, niposts := range atx.NIPosts {
 		for _, post := range niposts.Posts {
 			if _, ok := seen[post.MarriageIndex]; ok {
 				return fmt.Errorf("ID present twice (duplicated marriage index): %d", post.MarriageIndex)
@@ -540,8 +540,8 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate previous ATXs
-	nipostSizes := make(nipostSizes, len(atx.NiPosts))
-	for i, niposts := range atx.NiPosts {
+	nipostSizes := make(nipostSizes, len(atx.NIPosts))
+	for i, niposts := range atx.NIPosts {
 		nipostSizes[i] = new(nipostSize)
 		for _, post := range niposts.Posts {
 			if post.MarriageIndex >= uint32(len(equivocationSet)) {
@@ -563,7 +563,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate poet membership proofs
-	for i, niposts := range atx.NiPosts {
+	for i, niposts := range atx.NIPosts {
 		// verify PoET memberships in a single go
 		indexedChallenges := make(map[uint64][]byte)
 
@@ -608,7 +608,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 
 	// validate all niposts
 	var smesherCommitment *types.ATXID
-	for _, niposts := range atx.NiPosts {
+	for _, niposts := range atx.NIPosts {
 		for _, post := range niposts.Posts {
 			id := equivocationSet[post.MarriageIndex]
 			var commitment types.ATXID
