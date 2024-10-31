@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	"github.com/spacemeshos/go-spacemesh/api/node/server"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 )
 
@@ -150,4 +151,37 @@ func Test_StoringPoetProof(t *testing.T) {
 	}
 	mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &proof)
 	svc.StorePoetProof(context.Background(), &proof)
+}
+
+func Test_Hare(t *testing.T) {
+	svc, mock := setupE2E(t)
+	// func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
+	t.Run("total weight", func(t *testing.T) {
+		val := uint64(11)
+		mock.hare.EXPECT().TotalWeight(gomock.Any(), gomock.Any()).Return(val, nil)
+		v, err := svc.TotalWeight(context.Background(), 112)
+		require.Equal(t, v, val)
+		require.NoError(t, err)
+	})
+	t.Run("miner weight", func(t *testing.T) {
+		val := uint64(101)
+		mock.hare.EXPECT().MinerWeight(gomock.Any(), gomock.Any(), gomock.Any()).Return(val, nil)
+		v, err := svc.MinerWeight(context.Background(), 113, types.NodeID{})
+		require.Equal(t, v, val)
+		require.NoError(t, err)
+	})
+	t.Run("beacon", func(t *testing.T) {
+		beacon := types.Beacon{12, 12, 12, 12}
+		mock.hare.EXPECT().Beacon(gomock.Any(), gomock.Any()).Return(beacon, nil)
+		v, err := svc.Beacon(context.Background(), types.EpochID(15))
+		require.Equal(t, v, beacon)
+		require.NoError(t, err)
+	})
+	t.Run("hare message", func(t *testing.T) {
+		exp := make([]byte, 182)
+		mock.hare.EXPECT().RoundMessage(gomock.Any(), gomock.Any()).Return(&hare3.Message{})
+		v, err := svc.GetHareMessage(context.Background(), types.LayerID(113), hare3.IterRound{})
+		require.Equal(t, v, exp)
+		require.NoError(t, err)
+	})
 }
