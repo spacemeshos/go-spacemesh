@@ -361,7 +361,7 @@ func (h *Hare) fetchFull(ctx context.Context, peer p2p.Peer, msgId types.Hash32)
 	return resp.Ids, nil
 }
 
-func (h *Hare) handleProposalsStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+func (h *Hare) handleProposalsStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 	requestCompactHandlerCounter.Inc()
 	compactProps := &CompactIdRequest{}
 	if err := codec.Decode(msg, compactProps); err != nil {

@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
@@ -77,11 +77,7 @@ func NewP2PHashSync(
 	return s
 }
 
-func (s *P2PHashSync) serve(ctx context.Context, stream io.ReadWriter) error {
-	peer, found := server.ContextPeerID(ctx)
-	if !found {
-		panic("BUG: no peer ID found in the handler")
-	}
+func (s *P2PHashSync) serve(ctx context.Context, peer p2p.Peer, stream io.ReadWriter) error {
 	// We derive a dedicated Syncer for the peer being served to pass all the received
 	// items through the handler before adding them to the main ItemStore
 	return s.syncBase.Derive(peer).Serve(ctx, stream)

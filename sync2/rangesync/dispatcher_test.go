@@ -11,12 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
 func makeFakeDispHandler(n int) rangesync.Handler {
-	return func(ctx context.Context, stream io.ReadWriter) error {
+	return func(ctx context.Context, _ p2p.Peer, stream io.ReadWriter) error {
 		x := rangesync.KeyBytes(bytes.Repeat([]byte{byte(n)}, 32))
 		c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 		defer c.End()

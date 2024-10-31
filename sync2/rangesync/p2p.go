@@ -142,7 +142,7 @@ func (pss *PairwiseSetSyncer) Serve(ctx context.Context, stream io.ReadWriter, o
 }
 
 func (pss *PairwiseSetSyncer) Register(d *Dispatcher, os OrderedSet) {
-	d.Register(pss.name, func(ctx context.Context, s io.ReadWriter) error {
+	d.Register(pss.name, func(ctx context.Context, _ p2p.Peer, s io.ReadWriter) error {
 		return pss.Serve(ctx, s, os)
 	})
 }

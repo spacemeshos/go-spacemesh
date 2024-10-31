@@ -72,7 +72,7 @@ func (fr *fakeRequester) Run(ctx context.Context) error {
 			return nil
 		case req = <-fr.reqCh:
 		}
-		if err := fr.handler(ctx, req.initialRequest, req.stream); err != nil {
+		if err := fr.handler(ctx, p2p.Peer(""), req.initialRequest, req.stream); err != nil {
 			assert.Fail(fr.t, "handler error: %v", err)
 		}
 	}
@@ -138,7 +138,7 @@ func TestWireConduit(t *testing.T) {
 	fp := rangesync.Fingerprint(hs[2][:12])
 	srv := newFakeRequester(
 		t, "srv",
-		func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
+		func(ctx context.Context, _ p2p.Peer, initialRequest []byte, stream io.ReadWriter) error {
 			require.Equal(t, []byte("hello"), initialRequest)
 			c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 			defer c.Stop()
@@ -235,7 +235,12 @@ func TestWireConduit_Limits(t *testing.T) {
 			errCh := make(chan error)
 			srv := newFakeRequester(
 				t, "srv",
-				func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
+				func(
+					ctx context.Context,
+					_ p2p.Peer,
+					initialRequest []byte,
+					stream io.ReadWriter,
+				) error {
 					cfg := rangesync.DefaultConfig()
 					cfg.TrafficLimit = tc.trafficLimit
 					cfg.MessageLimit = tc.messageLimit
@@ -297,7 +302,7 @@ func TestWireConduit_StopSend(t *testing.T) {
 	started := make(chan struct{})
 	srv := newFakeRequester(
 		t, "srv",
-		func(ctx context.Context, initialRequest []byte, stream io.ReadWriter) error {
+		func(ctx context.Context, _ p2p.Peer, initialRequest []byte, stream io.ReadWriter) error {
 			close(started)
 			// This will hang
 			<-ctx.Done()
