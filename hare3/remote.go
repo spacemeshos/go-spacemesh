@@ -126,7 +126,6 @@ func (h *RemoteHare) onLayer(ctx context.Context, layer types.LayerID) {
 	}
 
 	h.mu.Lock()
-	// signer can't join mid session
 	s := &session{
 		lid:     layer,
 		beacon:  beacon,
@@ -174,15 +173,11 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 	walltime := h.nodeClock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
 	if active {
 		h.log.Debug("active in preround. waiting for preround delay", zap.Uint32("lid", session.lid.Uint32()))
-		// initial set is not needed if node is not active in preround
 		select {
 		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
 		case <-h.ctx.Done():
 			return h.ctx.Err()
 		}
-		start := time.Now()
-		// TODO this still has the prerequisite of handling the proposals construction correctly
-		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
 	onRound(session.proto)
 	for {

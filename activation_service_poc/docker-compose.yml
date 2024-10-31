@@ -2,7 +2,7 @@ version: '3'
 
 services:
   activation-service:
-    image: spacemeshos/go-spacemesh-dev:activation-service-poc.0
+    image: $IMAGE
     command: ["-c", "/config.json", "--node-service-address", "http://node-service:9099"]
     volumes:
       - /tmp/spacemesh-client:/tmp/spacemesh-client
@@ -11,7 +11,7 @@ services:
       - spacemesh-net
 
   node-service:
-    image: spacemeshos/go-spacemesh-dev:activation-service-poc.0
+    image: $IMAGE
     command: ["-c", "/config.json", "--smeshing-opts-datadir", "/tmp/spacemesh-node-post"]
     volumes:
       - /tmp/spacemesh-node-service:/tmp/spacemesh-node-service
