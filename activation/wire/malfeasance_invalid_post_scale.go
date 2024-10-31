@@ -38,7 +38,7 @@ func (t *ProofMergedInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := t.MarriageProof.EncodeScale(enc)
+		n, err := t.MarryProof.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -91,7 +91,7 @@ func (t *ProofMergedInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err
 		total += n
 	}
 	{
-		n, err := t.MarriageProof.DecodeScale(dec)
+		n, err := t.MarryProof.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -217,35 +217,35 @@ func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.NiPostsTreeRoot[:])
+		n, err := scale.EncodeByteArray(enc, t.NIPostsRoot[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPostsTreeProof, 32)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NIPostsRootProof, 32)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.NiPostsRoot[:])
+		n, err := scale.EncodeByteArray(enc, t.NIPostRoot[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact16(enc, uint16(t.NiPostRootIndex))
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NIPostRootProof, 32)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPostsRootProof, 32)
+		n, err := scale.EncodeCompact16(enc, uint16(t.NIPostIndex))
 		if err != nil {
 			return total, err
 		}
@@ -266,14 +266,14 @@ func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.PostsRoot[:])
+		n, err := scale.EncodeByteArray(enc, t.SubPostsRoot[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.PostsRootProof, 32)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.SubPostsRootProof, 32)
 		if err != nil {
 			return total, err
 		}
@@ -355,7 +355,7 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.MarriageATXProof = field
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.NiPostsTreeRoot[:])
+		n, err := scale.DecodeByteArray(dec, t.NIPostsRoot[:])
 		if err != nil {
 			return total, err
 		}
@@ -367,14 +367,22 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 			return total, err
 		}
 		total += n
-		t.NiPostsTreeProof = field
+		t.NIPostsRootProof = field
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.NiPostsRoot[:])
+		n, err := scale.DecodeByteArray(dec, t.NIPostRoot[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NIPostRootProof = field
 	}
 	{
 		field, n, err := scale.DecodeCompact16(dec)
@@ -382,15 +390,7 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 			return total, err
 		}
 		total += n
-		t.NiPostRootIndex = uint16(field)
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.NiPostsRootProof = field
+		t.NIPostIndex = uint16(field)
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.Challenge[:])
@@ -408,7 +408,7 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.ChallengeProof = field
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.PostsRoot[:])
+		n, err := scale.DecodeByteArray(dec, t.SubPostsRoot[:])
 		if err != nil {
 			return total, err
 		}
@@ -420,7 +420,7 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 			return total, err
 		}
 		total += n
-		t.PostsRootProof = field
+		t.SubPostsRootProof = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.SubPostRoot[:])

@@ -153,15 +153,15 @@ func Test_DoubleMarryProof(t *testing.T) {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		proof.Proofs[0].MarriageProof = slices.Clone(proof1.MarriageProof)
-		proof.Proofs[0].MarriageProof[0] = types.RandomHash()
+		proof.Proofs[0].MarriageCertificatesProof = slices.Clone(proof1.MarriageCertificatesProof)
+		proof.Proofs[0].MarriageCertificatesProof[0] = types.RandomHash()
 		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 
-		proof.Proofs[0].MarriageProof[0] = proof1.MarriageProof[0]
-		proof.Proofs[1].MarriageProof = slices.Clone(proof2.MarriageProof)
-		proof.Proofs[1].MarriageProof[0] = types.RandomHash()
+		proof.Proofs[0].MarriageCertificatesProof[0] = proof1.MarriageCertificatesProof[0]
+		proof.Proofs[1].MarriageCertificatesProof = slices.Clone(proof2.MarriageCertificatesProof)
+		proof.Proofs[1].MarriageCertificatesProof[0] = types.RandomHash()
 		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)

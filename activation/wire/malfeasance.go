@@ -17,7 +17,7 @@ const (
 	PublishEpochIndex MerkleTreeIndex = iota
 	PositioningATXIndex
 	CoinbaseIndex
-	InitialPostsRootIndex
+	InitialPostRootIndex
 	PreviousATXsRootIndex
 	NIPostsRootIndex
 	VRFNonceIndex

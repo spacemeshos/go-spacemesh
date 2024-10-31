@@ -511,7 +511,7 @@ func (v *Validator) getAtxDeps(ctx context.Context, id types.ATXID) (*atxDeps, e
 			previous:    atx.PreviousATXs,
 			commitment:  commitment,
 		}
-		for _, nipost := range atx.NiPosts {
+		for _, nipost := range atx.NIPosts {
 			for _, post := range nipost.Posts {
 				deps.niposts = append(deps.niposts, types.NIPost{
 					Post: wire.PostFromWireV1(&post.Post),

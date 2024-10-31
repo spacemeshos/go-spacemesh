@@ -33,12 +33,12 @@ type ProofMergedInvalidPost struct {
 	// Signature is the signature of the ATXID by the smesher.
 	Signature types.EdSignature
 
-	// NodeID is the node ID that created the invalid proof
+	// NodeID is the node ID that created the invalid PoST.
 	NodeID types.NodeID
 
-	// Marriage is the proof for the marriage ATX of the smesher. It proofs that NodeID agreed to marry the signer
+	// MarryProof is the proof for the marriage ATX of the smesher. It proofs that NodeID agreed to marry the signer
 	// of the ATX.
-	MarriageProof MarryProof
+	MarryProof MarryProof
 
 	// CommitmentProof is the proof for the commitment ATX of the smesher. Generated from the initial ATX of `NodeID`.
 	CommitmentProof CommitmentProof
@@ -78,257 +78,19 @@ func NewMergedInvalidPostProof(
 
 		NodeID: nodeID,
 
-		MarriageProof:    marriageProof,
+		MarryProof:       marriageProof,
 		CommitmentProof:  commitmentProof,
 		InvalidPostProof: invalidPostProof,
 	}
 	return proof, nil
 }
 
-func createCommitmentProof(atx *ActivationTxV2, nodeID types.NodeID) (CommitmentProof, error) {
-	if atx.SmesherID != nodeID {
-		return CommitmentProof{}, errors.New("node ID does not match smesher ID")
-	}
-
-	initialPostRootProof, err := initialPostRootProof(atx)
-	if err != nil {
-		return CommitmentProof{}, fmt.Errorf("failed to create initial PoST proof: %w", err)
-	}
-
-	commitmentATXProof, err := commitmentProof(atx)
-	if err != nil {
-		return CommitmentProof{}, fmt.Errorf("failed to create commitment ATX proof: %w", err)
-	}
-
-	proof := CommitmentProof{
-		InitialATXID: atx.ID(),
-
-		InitialPostRoot:  types.Hash32(atx.Initial.Root()),
-		InitialPostProof: initialPostRootProof,
-
-		CommitmentATX:      atx.Initial.CommitmentATX,
-		CommitmentATXProof: commitmentATXProof,
-
-		Signature: atx.Signature,
-	}
-	return proof, nil
-}
-
-func initialPostRootProof(atx *ActivationTxV2) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(InitialPostsRootIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func commitmentProof(atx *ActivationTxV2) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(CommitmentATXIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.Initial.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func createInvalidPostProof(atx *ActivationTxV2, nipostIndex, marriageIndex int) (InvalidPostProof, error) {
-	marriageATXProof, err := marriageATXProof(atx)
-	if err != nil {
-		return InvalidPostProof{}, fmt.Errorf("failed to create marriage ATX proof: %w", err)
-	}
-
-	niPostsTreeProof, err := niPostsTreeProof(atx)
-	if err != nil {
-		return InvalidPostProof{}, fmt.Errorf("failed to create NiPoSTs tree proof: %w", err)
-	}
-
-	niPostsRootProof, err := niPostsRootProof(atx.NiPosts, nipostIndex, atx.PreviousATXs)
-	if err != nil {
-		return InvalidPostProof{}, fmt.Errorf("failed to create NiPoSTs root proof: %w", err)
-	}
-
-	nipost := atx.NiPosts[nipostIndex]
-	challengeProof, err := challengeProof(nipost, atx.PreviousATXs)
-	if err != nil {
-		return InvalidPostProof{}, fmt.Errorf("failed to create challenge proof: %w", err)
-	}
-
-	postIndex := slices.IndexFunc(nipost.Posts, func(post SubPostV2) bool {
-		return post.MarriageIndex == uint32(marriageIndex)
-	})
-
-	postsRootProof, err := postsRootProof(nipost, atx.PreviousATXs)
-	if err != nil {
-		return InvalidPostProof{}, fmt.Errorf("failed to create PoSTs root proof: %w", err)
-	}
-
-	subPostRootProof, err := subPostRootProof(nipost.Posts, postIndex, atx.PreviousATXs)
-	if err != nil {
-		return InvalidPostProof{}, fmt.Errorf("failed to create sub PoST root proof: %w", err)
-	}
-
-	proof := InvalidPostProof{
-		MarriageATXProof: marriageATXProof,
-
-		NiPostsTreeRoot:  types.Hash32(atx.NiPosts.Root(atx.PreviousATXs)),
-		NiPostsTreeProof: niPostsTreeProof,
-
-		NiPostsRoot:      types.Hash32(nipost.Root(atx.PreviousATXs)),
-		NiPostRootIndex:  uint16(nipostIndex),
-		NiPostsRootProof: niPostsRootProof,
-
-		Challenge:      nipost.Challenge,
-		ChallengeProof: challengeProof,
-
-		PostsRoot:      types.Hash32(nipost.Posts.Root(atx.PreviousATXs)),
-		PostsRootProof: postsRootProof,
-
-		SubPostRoot:      types.Hash32(nipost.Posts[postIndex].Root(atx.PreviousATXs)),
-		SubPostRootIndex: uint16(postIndex),
-		SubPostRootProof: subPostRootProof,
-
-		MarriageIndexProof: nipost.Posts[postIndex].MarriageIndexProof(atx.PreviousATXs),
-
-		// TODO(mafa): continue with proof
-	}
-	return proof, nil
-}
-
-func niPostsTreeProof(atx *ActivationTxV2) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(NIPostsRootIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func niPostsRootProof(niposts NIPosts, index int, prevATXs []types.ATXID) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(index): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	niposts.merkleTree(tree, prevATXs)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func challengeProof(nipost NIPostV2, prevATXs []types.ATXID) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(ChallengeIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	nipost.merkleTree(tree, prevATXs)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func marriageATXProof(atx *ActivationTxV2) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(MarriageATXIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func postsRootProof(nipost NIPostV2, prevATXs []types.ATXID) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(PostsRootIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	nipost.merkleTree(tree, prevATXs)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func subPostRootProof(posts SubPostsV2, postIndex int, prevATXs []types.ATXID) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(postIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	posts.merkleTree(tree, prevATXs)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-// Valid returns true if the proof is valid. It verifies that the two proofs have the same publish epoch, smesher ID,
-// and a valid signature but different ATX IDs as well as that the provided merkle proofs are valid.
 func (p ProofMergedInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
 	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 
-	if err := p.MarriageProof.Valid(malValidator, p.NodeID); err != nil {
+	if err := p.MarryProof.Valid(malValidator, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof: %w", err)
 	}
 
@@ -342,8 +104,8 @@ func (p ProofMergedInvalidPost) Valid(ctx context.Context, malValidator Malfeasa
 		p.ATXID,
 		p.NodeID,
 		p.CommitmentProof.CommitmentATX,
-		p.MarriageProof.ATXID,
-		p.MarriageProof.CertificateIndex,
+		p.MarryProof.ATXID,
+		p.MarryProof.CertificateIndex,
 	); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
 	}
@@ -351,70 +113,60 @@ func (p ProofMergedInvalidPost) Valid(ctx context.Context, malValidator Malfeasa
 	return p.NodeID, nil
 }
 
-// CommitmentProof is a proof for the commitment ATX of a smesher. It is generated from the initial ATX of the smesher.
+// CommitmentProof is a proof for the commitment ATX of a smesher. It is generated from the initial ATX.
 type CommitmentProof struct {
 	// InitialATXID is the ID of the initial ATX of the smesher.
 	InitialATXID types.ATXID
 
-	// InitialPostRoot is the root of the initial PoST merkle tree.
-	InitialPostRoot types.Hash32
-	// InitialPostProof contains the merkle path from the root of the merkle tree to the root of the InitialPost.
-	InitialPostProof []types.Hash32 `scale:"max=32"`
+	// InitialPostRoot and its proof that it is contained in the InitialATX.
+	InitialPostRoot  InitialPostRoot
+	InitialPostProof InitialPostRootProof `scale:"max=32"`
 
-	// CommitmentATX is the ATX that was used by the identity as their commitment ATX.
-	CommitmentATX types.ATXID
-	// CommitmentATXProof contains the merkle path from the root of the merkle tree to the CommitmentATX
-	// field.
-	CommitmentATXProof []types.Hash32 `scale:"max=32"`
+	// CommitmentATX and its proof that it is contained in the InitialPostRoot.
+	CommitmentATX      types.ATXID
+	CommitmentATXProof CommitmentATXProof `scale:"max=32"`
 
 	// Signature is the signature of the ATXID by the smesher.
 	Signature types.EdSignature
 }
 
-// Valid returns no error if the proof is valid. It verifies that the signature is valid and that the merkle proofs
-// are valid.
+func createCommitmentProof(initialAtx *ActivationTxV2, nodeID types.NodeID) (CommitmentProof, error) {
+	if initialAtx.SmesherID != nodeID {
+		return CommitmentProof{}, errors.New("node ID does not match smesher ID of initial ATX")
+	}
+
+	if initialAtx.Initial == nil {
+		return CommitmentProof{}, errors.New("initial ATX does not contain initial PoST")
+	}
+
+	proof := CommitmentProof{
+		InitialATXID: initialAtx.ID(),
+
+		InitialPostRoot:  initialAtx.Initial.Root(),
+		InitialPostProof: initialAtx.InitialPostRootProof(),
+
+		CommitmentATX:      initialAtx.Initial.CommitmentATX,
+		CommitmentATXProof: initialAtx.Initial.CommitmentATXProof(),
+
+		Signature: initialAtx.Signature,
+	}
+	return proof, nil
+}
+
 func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID) error {
 	if !malValidator.Signature(signing.ATX, nodeID, p.InitialATXID.Bytes(), p.Signature) {
 		return errors.New("invalid signature")
 	}
 
-	if p.InitialPostRoot == types.EmptyHash32 {
-		return errors.New("invalid initial PoST root") // initial PoST root is empty for non-initial ATXs
+	if types.Hash32(p.InitialPostRoot) == types.EmptyHash32 {
+		return errors.New("invalid empty initial PoST root") // initial PoST root is empty for non-initial ATXs
 	}
 
-	initialPostProof := make([][]byte, len(p.InitialPostProof))
-	for i, h := range p.InitialPostProof {
-		initialPostProof[i] = h.Bytes()
-	}
-	ok, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(InitialPostsRootIndex)},
-		[][]byte{p.InitialPostRoot.Bytes()},
-		initialPostProof,
-		p.InitialATXID.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate initial PoST proof: %w", err)
-	}
-	if !ok {
+	if !p.InitialPostProof.Valid(p.InitialATXID, p.InitialPostRoot) {
 		return errors.New("invalid initial PoST proof")
 	}
 
-	proof := make([][]byte, len(p.CommitmentATXProof))
-	for i, h := range p.CommitmentATXProof {
-		proof[i] = h.Bytes()
-	}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{uint64(CommitmentATXIndex)},
-		[][]byte{p.CommitmentATX.Bytes()},
-		proof,
-		p.InitialPostRoot.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate commitment ATX proof: %w", err)
-	}
-	if !ok {
+	if !p.CommitmentATXProof.Valid(p.InitialPostRoot, p.CommitmentATX) {
 		return errors.New("invalid commitment ATX proof")
 	}
 
@@ -424,38 +176,25 @@ func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.N
 // InvalidPostProof is a proof for an invalid PoST in an ATX. It contains the PoST and the merkle proofs to verify the
 // PoST.
 type InvalidPostProof struct {
-	// --- MarriageATX ---
+	// MarriageATXProof that the ATX contains the MarriageATX from the MarryProof.
+	MarriageATXProof MarriageATXProof `scale:"max=32"`
 
-	// MarriageATXProof contains the merkle path from the NiPostsRoot to the MarriageATX field.
-	MarriageATXProof []types.Hash32 `scale:"max=32"`
+	// NIPostsRoot and its proof that it is contained in the ATX.
+	NIPostsRoot      NIPostsRoot
+	NIPostsRootProof NIPostsRootProof `scale:"max=32"`
 
-	// --- NiPost ---
+	// NIPostRoot and its proof that it is contained at the given index in the NIPostsRoot.
+	NIPostRoot      NIPostRoot
+	NIPostRootProof NIPostRootProof `scale:"max=32"`
+	NIPostIndex     uint16
 
-	// NiPostsTreeRoot is the root of the merkle tree containing the NiPoSTs of the ATX.
-	NiPostsTreeRoot types.Hash32
-	// NiPostsTreeProof contains the merkle path from the root of the ATX merkle tree (ATXID) to the Post field.
-	NiPostsTreeProof []types.Hash32 `scale:"max=32"`
+	// Challenge and its proof that it is contained in the NIPostRoot.
+	Challenge      types.Hash32
+	ChallengeProof ChallengeProof `scale:"max=32"`
 
-	// NiPostsRoot is the root of the NiPoST containing the invalid PoST.
-	NiPostsRoot types.Hash32
-	// NiPostsRootIndex is the index of the NiPoST in the NiPoSTs tree.
-	NiPostRootIndex uint16
-	// NiPostsRootProof contains the merkle path from the NiPostsTreeRoot to the NiPostRoot field.
-	NiPostsRootProof []types.Hash32 `scale:"max=32"`
-
-	// --- Challenge for PoST ---
-
-	// Challenge for the NiPoST.
-	Challenge types.Hash32
-	// ChallengeProof contains the merkle path from the NiPostsRoot to the Challenge field.
-	ChallengeProof []types.Hash32 `scale:"max=32"`
-
-	// --- PoST ---
-
-	// PostsRoot is the root of the PoST merkle tree.
-	PostsRoot types.Hash32
-	// PostsRootProof contains the merkle path from the NiPostsRoot to the PostsRoot field.
-	PostsRootProof []types.Hash32 `scale:"max=32"`
+	// SubPostsRoot and its proof that it is contained in the NIPostRoot.
+	SubPostsRoot      SubPostsRoot
+	SubPostsRootProof SubPostsRootProof `scale:"max=32"`
 
 	// SubPostRoot is the root of the sub PoST merkle tree.
 	SubPostRoot types.Hash32
@@ -480,6 +219,67 @@ type InvalidPostProof struct {
 	InvalidPostIndex uint32
 }
 
+func createInvalidPostProof(atx *ActivationTxV2, nipostIndex, marriageIndex int) (InvalidPostProof, error) {
+	if nipostIndex < 0 || nipostIndex >= len(atx.NIPosts) {
+		return InvalidPostProof{}, errors.New("invalid NIPoST index")
+	}
+
+	postIndex := slices.IndexFunc(atx.NIPosts[nipostIndex].Posts, func(post SubPostV2) bool {
+		return post.MarriageIndex == uint32(marriageIndex)
+	})
+
+	subPostRootProof, err := subPostRootProof(atx.NIPosts[nipostIndex].Posts, postIndex, atx.PreviousATXs)
+	if err != nil {
+		return InvalidPostProof{}, fmt.Errorf("failed to create sub PoST root proof: %w", err)
+	}
+
+	proof := InvalidPostProof{
+		MarriageATXProof: atx.MarriageATXProof(),
+
+		NIPostsRoot:      atx.NIPosts.Root(atx.PreviousATXs),
+		NIPostsRootProof: atx.NIPostsRootProof(),
+
+		NIPostRoot:      atx.NIPosts[nipostIndex].Root(atx.PreviousATXs),
+		NIPostRootProof: atx.NIPosts.Proof(int(nipostIndex), atx.PreviousATXs),
+		NIPostIndex:     uint16(nipostIndex),
+
+		Challenge:      atx.NIPosts[nipostIndex].Challenge,
+		ChallengeProof: atx.NIPosts[nipostIndex].ChallengeProof(atx.PreviousATXs),
+
+		SubPostsRoot:      atx.NIPosts[nipostIndex].Posts.Root(atx.PreviousATXs),
+		SubPostsRootProof: atx.NIPosts[nipostIndex].PostsRootProof(atx.PreviousATXs),
+
+		// TODO(mafa): cleanup below
+
+		SubPostRoot:      types.Hash32(atx.NIPosts[nipostIndex].Posts[postIndex].Root(atx.PreviousATXs)),
+		SubPostRootIndex: uint16(postIndex),
+		SubPostRootProof: subPostRootProof,
+
+		MarriageIndexProof: atx.NIPosts[nipostIndex].Posts[postIndex].MarriageIndexProof(atx.PreviousATXs),
+
+		// TODO(mafa): continue with proof
+	}
+	return proof, nil
+}
+
+func subPostRootProof(posts SubPostsV2, postIndex int, prevATXs []types.ATXID) ([]types.Hash32, error) {
+	tree, err := merkle.NewTreeBuilder().
+		WithLeavesToProve(map[uint64]bool{uint64(postIndex): true}).
+		WithHashFunc(atxTreeHash).
+		Build()
+	if err != nil {
+		return nil, err
+	}
+	posts.merkleTree(tree, prevATXs)
+	proof := tree.Proof()
+
+	proofHashes := make([]types.Hash32, len(proof))
+	for i, p := range proof {
+		proofHashes[i] = types.Hash32(p)
+	}
+	return proofHashes, nil
+}
+
 // Valid returns no error if the proof is valid. It verifies that the signature is valid, that the merkle proofs are
 // and that the provided post is invalid.
 func (p InvalidPostProof) Valid(
@@ -491,113 +291,37 @@ func (p InvalidPostProof) Valid(
 	marriageATX types.ATXID,
 	marriageIndex uint16,
 ) error {
-	// --- MarriageATX ---
-
-	marriageProof := make([][]byte, len(p.MarriageATXProof))
-	for i, h := range p.MarriageATXProof {
-		marriageProof[i] = h.Bytes()
-	}
-	ok, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(MarriageATXIndex)},
-		[][]byte{marriageATX.Bytes()},
-		marriageProof,
-		atxID.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate marriage ATX proof: %w", err)
-	}
-	if !ok {
+	if !p.MarriageATXProof.Valid(atxID, marriageATX) {
 		return errors.New("invalid marriage ATX proof")
 	}
 
-	// --- NiPoST ---
-
-	nipostsTreeProof := make([][]byte, len(p.NiPostsTreeProof))
-	for i, h := range p.NiPostsTreeProof {
-		nipostsTreeProof[i] = h.Bytes()
-	}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{uint64(NIPostsRootIndex)},
-		[][]byte{p.NiPostsTreeRoot.Bytes()},
-		nipostsTreeProof,
-		atxID.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate NiPoST root proof: %w", err)
-	}
-	if !ok {
-		return errors.New("invalid NiPoST root proof")
+	if !p.NIPostsRootProof.Valid(atxID, p.NIPostsRoot) {
+		return errors.New("invalid NIPosts root proof")
 	}
 
-	nipostsProof := make([][]byte, len(p.NiPostsRootProof))
-	for i, h := range p.NiPostsRootProof {
-		nipostsProof[i] = h.Bytes()
-	}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{uint64(p.NiPostRootIndex)},
-		[][]byte{p.NiPostsRoot.Bytes()},
-		nipostsProof,
-		p.NiPostsTreeRoot.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate NiPoST proof: %w", err)
-	}
-	if !ok {
-		return errors.New("invalid NiPoST proof")
+	if !p.NIPostRootProof.Valid(p.NIPostsRoot, int(p.NIPostIndex), p.NIPostRoot) {
+		return errors.New("invalid NIPoST root proof")
 	}
 
-	// --- Challenge for PoST ---
+	if !p.ChallengeProof.Valid(p.NIPostRoot, p.Challenge) {
+		return errors.New("invalid challenge proof")
+	}
 
-	challengeProof := make([][]byte, len(p.ChallengeProof))
-	for i, h := range p.ChallengeProof {
-		challengeProof[i] = h.Bytes()
-	}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{uint64(ChallengeIndex)},
-		[][]byte{p.Challenge.Bytes()},
-		challengeProof,
-		p.NiPostsRoot.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate NiPoST challenge proof: %w", err)
-	}
-	if !ok {
-		return errors.New("invalid NiPoST challenge proof")
+	if !p.SubPostsRootProof.Valid(p.NIPostRoot, p.SubPostsRoot) {
+		return errors.New("invalid sub PoSTs root proof")
 	}
 
 	// --- PoST ---
-
-	postsProof := make([][]byte, len(p.PostsRootProof))
-	for i, h := range p.PostsRootProof {
-		postsProof[i] = h.Bytes()
-	}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{uint64(PostsRootIndex)},
-		[][]byte{p.PostsRoot.Bytes()},
-		postsProof,
-		p.NiPostsTreeRoot.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate PoST root proof: %w", err)
-	}
-	if !ok {
-		return errors.New("invalid PoST root proof")
-	}
 
 	subPostProof := make([][]byte, len(p.SubPostRootProof))
 	for i, h := range p.SubPostRootProof {
 		subPostProof[i] = h.Bytes()
 	}
-	ok, err = merkle.ValidatePartialTree(
+	ok, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(p.SubPostRootIndex)},
 		[][]byte{p.SubPostRoot.Bytes()},
 		subPostProof,
-		p.PostsRoot.Bytes(),
+		types.Hash32(p.SubPostsRoot).Bytes(),
 		atxTreeHash,
 	)
 	if err != nil {

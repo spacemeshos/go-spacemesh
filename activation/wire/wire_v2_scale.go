@@ -45,7 +45,7 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPosts, 4)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NIPosts, 4)
 		if err != nil {
 			return total, err
 		}
@@ -134,7 +134,7 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 			return total, err
 		}
 		total += n
-		t.NiPosts = field
+		t.NIPosts = field
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)

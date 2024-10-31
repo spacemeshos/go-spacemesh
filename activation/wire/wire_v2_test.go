@@ -30,7 +30,7 @@ func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 		PublishEpoch:   rand.N(types.EpochID(255)),
 		PositioningATX: types.RandomATXID(),
 		PreviousATXs:   make([]types.ATXID, 1+rand.IntN(255)),
-		NiPosts: []NIPostV2{
+		NIPosts: []NIPostV2{
 			{
 				Membership: MerkleProofV2{
 					Nodes: make([]types.Hash32, 32),
@@ -78,7 +78,7 @@ func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
 			PublishEpoch:   0,
 			PositioningATX: types.RandomATXID(),
 			PreviousATXs:   make([]types.ATXID, 256),
-			NiPosts: []NIPostV2{
+			NIPosts: []NIPostV2{
 				{
 					Membership: MerkleProofV2{
 						Nodes: make([]types.Hash32, 32),
@@ -95,15 +95,15 @@ func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
 				},
 			},
 		}
-		for i := range atx.NiPosts[0].Posts {
-			atx.NiPosts[0].Posts[i].Post = PostV1{
+		for i := range atx.NIPosts[0].Posts {
+			atx.NIPosts[0].Posts[i].Post = PostV1{
 				Nonce:   0,
 				Indices: make([]byte, 800),
 				Pow:     0,
 			}
 		}
-		for i := range atx.NiPosts[1].Posts {
-			atx.NiPosts[1].Posts[i].Post = PostV1{
+		for i := range atx.NIPosts[1].Posts {
+			atx.NIPosts[1].Posts[i].Post = PostV1{
 				Nonce:   0,
 				Indices: make([]byte, 800),
 				Pow:     0,
@@ -134,13 +134,13 @@ func Test_ATXv2_SupportUpTo4Niposts(t *testing.T) {
 	f.Fuzz(atx)
 	for i := range 4 {
 		t.Run(fmt.Sprintf("supports %d poet", i), func(t *testing.T) {
-			atx.NiPosts = make([]NIPostV2, i)
+			atx.NIPosts = make([]NIPostV2, i)
 			_, err := codec.Encode(atx)
 			require.NoError(t, err)
 		})
 	}
 	t.Run("doesn't support > 5 niposts", func(t *testing.T) {
-		atx.NiPosts = make([]NIPostV2, 5)
+		atx.NIPosts = make([]NIPostV2, 5)
 		_, err := codec.Encode(atx)
 		require.Error(t, err)
 	})
