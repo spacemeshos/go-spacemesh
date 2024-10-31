@@ -423,8 +423,8 @@ func (v *VM) execute(
 		if gasLeft < 0 {
 			panic("negative gas left")
 		}
-		if err = ctx.Refund(uint64(gasLeft)); err != nil {
-			return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err)
+		if err2 := ctx.Refund(uint64(gasLeft)); err2 != nil {
+			return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err2)
 		}
 		logger.Debug("refunded gas left to principal",
 			zap.String("principal", ctx.PrincipalAddress.String()),
@@ -629,7 +629,7 @@ func parse(
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
 
 	ctx.Header.Principal = principal
-	ctx.Header.MaxGas = 100_000_000
+	ctx.Header.MaxGas = 100_000
 	// TODO(lane): fix this
 	// ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
