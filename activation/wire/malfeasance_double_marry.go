@@ -149,7 +149,7 @@ func (p ProofDoubleMarry) Valid(_ context.Context, malValidator MalfeasanceValid
 }
 
 type MarryProof struct {
-	// ATXID is the ID of the ATX being proven.
+	// ATXID is the ID of the ATX being proven to have the marriage certificate of interest.
 	ATXID types.ATXID
 
 	// MarriageRoot and its proof that it is contained in the ATX.
