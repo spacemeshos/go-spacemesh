@@ -2,6 +2,7 @@ package host
 
 import (
 	"encoding/binary"
+	"os"
 	"testing"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -15,6 +16,7 @@ import (
 )
 
 func getHost(t *testing.T) (*Host, *core.StagedCache) {
+	os.Setenv("ATHENA_LIB_PATH", "../../build")
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
 	ctx := &core.Context{Loader: cache}
 	host, err := NewHost(ctx)
@@ -89,7 +91,7 @@ func TestEmptyCode(t *testing.T) {
 		[]byte{},
 	)
 
-	require.Equal(t, athcon.Failure, err)
+	require.ErrorContains(t, err, "athcon execute: no input code")
 }
 
 func TestSetGetStorge(t *testing.T) {
@@ -102,7 +104,7 @@ func TestSetGetStorge(t *testing.T) {
 	address := types.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
 	account := types.Account{
 		Address: address,
-		Balance: 1000000,
+		Balance: 10000,
 		Storage: []types.StorageItem{
 			{Key: storageKey, Value: storageValue},
 		},

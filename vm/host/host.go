@@ -208,7 +208,21 @@ func (h *hostContext) Call(
 		}
 	}
 
-	// decode input payload
+	// if no input, this is a simple balance transfer
+	if len(input) == 0 {
+		// short-circuit: perform balance transfer and return
+		// this does not depend upon the recipient account status
+		if err = h.host.Transfer(types.Address(recipient), value); err != nil {
+			return nil, 0, athcon.Error{
+				Code: athcon.InternalError.Code,
+				Err:  fmt.Errorf("balance transfer failed: %w", err),
+			}
+		}
+		return nil, gas, nil
+	}
+
+	// there is input data, so the destination account must exist and must be spawned
+
 	var payload athcon.Payload
 	if err = gossamerScale.Unmarshal(input, &payload); err != nil {
 		return nil, 0, athcon.Error{
@@ -217,41 +231,33 @@ func (h *hostContext) Call(
 		}
 	}
 
-	// if there is input data, then the destination account must exist and must be spawned
 	template := destinationAccount.TemplateAddress
 	state := destinationAccount.State
-	var templateAccount *types.Account
-	if len(payload.Input) > 0 {
-		if template == nil || len(state) == 0 {
-			return nil, 0, athcon.Error{
-				Code: athcon.InternalError.Code,
-				Err:  errors.New("missing template information"),
-			}
+	if template == nil || len(state) == 0 {
+		return nil, 0, athcon.Error{
+			Code: athcon.InternalError.Code,
+			Err:  errors.New("missing template information"),
 		}
+	}
 
-		// read template code
-		acct, err := h.host.Get(types.Address(*template))
-		if err != nil || len(templateAccount.State) == 0 {
-			return nil, 0, athcon.Error{
-				Code: athcon.InternalError.Code,
-				Err:  fmt.Errorf("loading template account: %w", err),
-			}
+	// read template code
+	templateAccount, err := h.host.Get(types.Address(*template))
+	if err != nil || len(templateAccount.State) == 0 {
+		return nil, 0, athcon.Error{
+			Code: athcon.InternalError.Code,
+			Err:  fmt.Errorf("loading template account: %w", err),
 		}
-		templateAccount = &acct
 	}
 
 	// balance transfer
 	// this does not depend upon the recipient account status
+	// but we do it after all of the above account-related checks, since we have no easy way to
+	// roll this back in case of error.
 	if err = h.host.Transfer(types.Address(recipient), value); err != nil {
 		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  fmt.Errorf("balance transfer failed: %w", err),
 		}
-	}
-
-	if len(payload.Input) == 0 {
-		// short-circuit and return if this is a simple balance transfer
-		return nil, gas, nil
 	}
 
 	// enrich the message with the method selector and account state, then execute the call.
