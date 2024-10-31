@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/spacemeshos/merkle-tree"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -57,11 +55,6 @@ func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID typ
 }
 
 func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID) (MarryProof, error) {
-	marriageProof, err := marriageProof(atx)
-	if err != nil {
-		return MarryProof{}, fmt.Errorf("failed to create proof for ATX 1: %w", err)
-	}
-
 	marriageIndex := slices.IndexFunc(atx.Marriages, func(cert MarriageCertificate) bool {
 		if cert.ReferenceAtx == types.EmptyATXID && atx.SmesherID == nodeID {
 			// special case of the self signed certificate of the ATX publisher
@@ -76,62 +69,22 @@ func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID)
 	if marriageIndex == -1 {
 		return MarryProof{}, fmt.Errorf("does not contain a marriage certificate signed by %s", nodeID.ShortString())
 	}
-	certProof, err := certificateProof(atx.Marriages, uint64(marriageIndex))
-	if err != nil {
-		return MarryProof{}, fmt.Errorf("failed to create certificate proof for ATX 1: %w", err)
-	}
 
 	proof := MarryProof{
 		ATXID: atx.ID(),
 
-		MarriageRoot:  types.Hash32(atx.Marriages.Root()),
-		MarriageProof: marriageProof,
+		MarriageRoot:  atx.Marriages.Root(),
+		MarriageProof: atx.MarriagesRootProof(),
 
 		CertificateReference: atx.Marriages[marriageIndex].ReferenceAtx,
 		CertificateSignature: atx.Marriages[marriageIndex].Signature,
-		CertificateIndex:     uint64(marriageIndex),
-		CertificateProof:     certProof,
+		CertificateIndex:     uint16(marriageIndex),
+		CertificateProof:     atx.Marriages.Proof(marriageIndex),
 
 		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
 	}
 	return proof, nil
-}
-
-func marriageProof(atx *ActivationTxV2) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(MarriagesRootIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func certificateProof(certs MarriageCertificates, index uint64) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{index: true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	certs.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
 }
 
 func (p ProofDoubleMarry) Valid(_ context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
@@ -153,15 +106,15 @@ type MarryProof struct {
 	ATXID types.ATXID
 
 	// MarriageRoot and its proof that it is contained in the ATX.
-	MarriageRoot  types.Hash32
-	MarriageProof []types.Hash32 `scale:"max=32"`
+	MarriageRoot  MarriagesRoot
+	MarriageProof MarriagesRootProof `scale:"max=32"`
 
 	// The signature of the certificate and the proof that the certificate is contained in the MarriageRoot at
 	// the given index.
 	CertificateReference types.ATXID
 	CertificateSignature types.EdSignature
-	CertificateIndex     uint64
-	CertificateProof     []types.Hash32 `scale:"max=32"`
+	CertificateIndex     uint16
+	CertificateProof     MarriageCertificateProof `scale:"max=32"`
 
 	// SmesherID is the ID of the smesher that published the ATX.
 	SmesherID types.NodeID
@@ -178,21 +131,7 @@ func (p MarryProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID
 		return errors.New("invalid certificate signature")
 	}
 
-	proof := make([][]byte, len(p.MarriageProof))
-	for i, h := range p.MarriageProof {
-		proof[i] = h.Bytes()
-	}
-	ok, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(MarriagesRootIndex)},
-		[][]byte{p.MarriageRoot.Bytes()},
-		proof,
-		p.ATXID.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate marriage proof: %w", err)
-	}
-	if !ok {
+	if !p.MarriageProof.Valid(p.ATXID, p.MarriageRoot) {
 		return errors.New("invalid marriage proof")
 	}
 
@@ -201,21 +140,7 @@ func (p MarryProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID
 		Signature:    p.CertificateSignature,
 	}
 
-	certProof := make([][]byte, len(p.CertificateProof))
-	for i, h := range p.CertificateProof {
-		certProof[i] = h.Bytes()
-	}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{p.CertificateIndex},
-		[][]byte{mc.Root()},
-		certProof,
-		p.MarriageRoot.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate certificate proof: %w", err)
-	}
-	if !ok {
+	if !p.CertificateProof.Valid(p.MarriageRoot, int(p.CertificateIndex), mc) {
 		return errors.New("invalid certificate proof")
 	}
 	return nil
