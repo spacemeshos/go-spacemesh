@@ -138,11 +138,12 @@ func (s *dbSeq) load() error {
 	}
 
 	n := 0
-	// if the chunk size was reduced due to a short chunk before wraparound, we need
-	// to extend it back
+	// make sure the chunk is large enough
 	if cap(s.chunk) < s.chunkSize {
 		s.chunk = make([]rangesync.KeyBytes, s.chunkSize)
 	} else {
+		// if the chunk size was reduced due to a short chunk before wraparound, we need
+		// to extend it back
 		s.chunk = s.chunk[:s.chunkSize]
 	}
 	key := dbIDKey{string(s.from), s.chunkSize}
