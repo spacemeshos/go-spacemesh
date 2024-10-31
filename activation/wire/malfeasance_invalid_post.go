@@ -231,7 +231,7 @@ func niPostsTreeProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 	return proofHashes, nil
 }
 
-func niPostsRootProof(niposts NiPosts, index int, prevATXs []types.ATXID) ([]types.Hash32, error) {
+func niPostsRootProof(niposts NIPosts, index int, prevATXs []types.ATXID) ([]types.Hash32, error) {
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(map[uint64]bool{uint64(index): true}).
 		WithHashFunc(atxTreeHash).
@@ -249,7 +249,7 @@ func niPostsRootProof(niposts NiPosts, index int, prevATXs []types.ATXID) ([]typ
 	return proofHashes, nil
 }
 
-func challengeProof(nipost NiPostsV2, prevATXs []types.ATXID) ([]types.Hash32, error) {
+func challengeProof(nipost NIPostV2, prevATXs []types.ATXID) ([]types.Hash32, error) {
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(map[uint64]bool{uint64(ChallengeIndex): true}).
 		WithHashFunc(atxTreeHash).
@@ -285,7 +285,7 @@ func marriageATXProof(atx *ActivationTxV2) ([]types.Hash32, error) {
 	return proofHashes, nil
 }
 
-func postsRootProof(nipost NiPostsV2, prevATXs []types.ATXID) ([]types.Hash32, error) {
+func postsRootProof(nipost NIPostV2, prevATXs []types.ATXID) ([]types.Hash32, error) {
 	tree, err := merkle.NewTreeBuilder().
 		WithLeavesToProve(map[uint64]bool{uint64(PostsRootIndex): true}).
 		WithHashFunc(atxTreeHash).
