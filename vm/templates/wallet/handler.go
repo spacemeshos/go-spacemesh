@@ -81,11 +81,11 @@ func (*handler) Exec(host core.Host, payload core.Payload) ([]byte, int64, error
 	// Note: at this point, maxgas was already consumed from the principal account, so we don't
 	// need to check the account balance, but we still need to communicate the amount to the VM
 	// so it can short-circuit execution if the amount is exceeded.
-	maxgas := int64(host.MaxGas())
+	maxgas := int64(host.MaxGas() - host.GasSpent())
 	if maxgas < 0 {
 		return []byte{}, 0, errors.New("gas limit exceeds maximum int64 value")
 	}
-	return vmhost.Execute(
+	output, gasLeft, err := vmhost.Execute(
 		host.Layer(),
 		maxgas,
 		host.Principal(),
@@ -98,4 +98,6 @@ func (*handler) Exec(host core.Host, payload core.Payload) ([]byte, int64, error
 		0,
 		templateAccount.State,
 	)
+	host.SpendGas(uint64(maxgas) - uint64(gasLeft))
+	return output, gasLeft, err
 }

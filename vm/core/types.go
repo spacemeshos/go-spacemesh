@@ -107,6 +107,8 @@ type Host interface {
 	Payload() Payload
 	TemplateAddress() Address
 	MaxGas() uint64
+	SpendGas(uint64)
+	GasSpent() uint64
 	Handler() Handler
 	Spawn(Address, []byte) (Address, error)
 	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)

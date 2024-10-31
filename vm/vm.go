@@ -402,15 +402,13 @@ func (v *VM) execute(
 			zap.String("principal", ctx.PrincipalAddress.String()),
 			zap.Uint64("maxgas", ctx.Header.MaxGas),
 		)
-		var gasLeft int64
 		if err == nil {
-			_, gasLeft, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
+			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
 		}
 		if err != nil {
 			logger.Debug("transaction failed",
 				zap.Object("header", header),
 				zap.String("account", ctx.PrincipalAddress.String()),
-				zap.Int64("gasLeft", gasLeft),
 				zap.Error(err),
 			)
 			if errors.Is(err, core.ErrInternal) {
@@ -420,15 +418,11 @@ func (v *VM) execute(
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
 		// Refund remaining gas
-		if gasLeft < 0 {
-			panic("negative gas left")
-		}
-		if err2 := ctx.Refund(uint64(gasLeft)); err2 != nil {
+		if err2 := ctx.Refund(); err2 != nil {
 			return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err2)
 		}
 		logger.Debug("refunded gas left to principal",
 			zap.String("principal", ctx.PrincipalAddress.String()),
-			zap.Int64("gasleft", gasLeft),
 		)
 
 		rst.RawTx = txs[i].GetRaw()
@@ -557,6 +551,7 @@ func parse(
 	// is passed not explicitly as part of the tx, but implicitly in the args. This simplifies the
 	// logic here considerably.
 
+	ctx.Header.MaxGas = core.ATHENA_GAS_SPEND + core.ATHENA_GAS_VERIFY
 	if principalAccount.Address == (types.Address{}) {
 		// case 1: principal account does not exist at all
 		return nil, nil, fmt.Errorf("%w: principal account %s does not exist", core.ErrMalformed, principal)
@@ -580,6 +575,7 @@ func parse(
 		}
 		ctx.Header.TemplateAddress = wallet.TemplateAddress
 		ctx.SpawnTx = true
+		ctx.Header.MaxGas = core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
 	}
 
 	// now that we have a template handler, go ahead and parse the tx
@@ -629,9 +625,6 @@ func parse(
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
 
 	ctx.Header.Principal = principal
-	ctx.Header.MaxGas = 100_000
-	// TODO(lane): fix this
-	// ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
 

@@ -189,7 +189,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 	}
 	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
-	output, _, err := vmhost.Execute(
+	output, gasLeft, err := vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
 		s.host.Principal(),
@@ -198,6 +198,11 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 		0,
 		s.templateCode,
 	)
+
+	// consume verify gas
+	// TODO(lane): safe arithmetic/assumption checking
+	s.host.SpendGas(uint64(maxgas) - uint64(gasLeft))
+
 	return err == nil && len(output) == 1 && output[0] == 1
 }
 

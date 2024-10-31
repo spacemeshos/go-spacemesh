@@ -47,8 +47,11 @@ type Context struct {
 
 	Logger *zap.Logger
 
-	// consumed is in gas units and will be used
+	// consumed is in gas units and is actually subtracted from the principal account balance,
+	// i.e., it's a "hold" on the account funds. this includes a "hold" on maxspend.
 	consumed uint64
+	// gas spent is the number of gas units actually spent on computation.
+	gasSpent uint64
 	// fee is in coins units
 	fee uint64
 	// an amount transferred to other accounts
@@ -245,6 +248,16 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	return nil
 }
 
+// SpendGas marks gas as consumed.
+func (c *Context) SpendGas(gas uint64) {
+	c.gasSpent += gas
+}
+
+// GasSpent returns the amount of gas spent.
+func (c *Context) GasSpent() uint64 {
+	return c.gasSpent
+}
+
 // Consume gas from the account after validation passes.
 func (c *Context) Consume(gas uint64) (err error) {
 	principalAccount, err := c.PrincipalAccount()
@@ -265,20 +278,39 @@ func (c *Context) Consume(gas uint64) (err error) {
 	principalAccount.Balance -= amount
 	c.change(principalAccount)
 
+	c.Logger.Debug(
+		"consume",
+		zap.String("principal", c.PrincipalAddress.String()),
+		zap.Uint64("gas", gas),
+		zap.Uint64("fee", amount),
+		zap.Uint64("consumed", c.consumed),
+	)
+
 	return err
 }
 
 // Refund refunds gas remaining after execution
-func (c *Context) Refund(gas uint64) (err error) {
+func (c *Context) Refund() (err error) {
+	// TODO(lane): safe math
+	unspent := c.consumed - c.gasSpent
 	principalAccount, err := c.PrincipalAccount()
 	if err != nil {
 		return err
 	}
-	amount := gas * c.Header.GasPrice
-	c.consumed -= gas
+	amount := unspent * c.Header.GasPrice
+	c.consumed -= unspent
 	c.fee -= amount
 	principalAccount.Balance += amount
 	c.change(principalAccount)
+
+	c.Logger.Debug(
+		"refund",
+		zap.String("principal", c.PrincipalAddress.String()),
+		zap.Uint64("consumed", c.consumed),
+		zap.Uint64("gas spent", c.gasSpent),
+		zap.Uint64("unspent gas", unspent),
+		zap.Uint64("fee", amount),
+	)
 
 	return nil
 }
