@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -43,9 +44,10 @@ func insertRow(t testing.TB, db sql.Executor, row fooRow) {
 	require.NoError(t, err)
 }
 
-func populateFoo(t testing.TB, rows []fooRow) sql.Database {
+func populateFoo(t testing.TB, rows []fooRow) (db sql.Database, dir string) {
 	// Use file-based database for more accurate benchmarks
-	db, err := sql.Open("file:"+filepath.Join(t.TempDir(), "temp.db"),
+	dir = t.TempDir()
+	db, err := sql.Open("file:"+filepath.Join(dir, "temp.db"),
 		sql.WithNoCheckSchemaDrift())
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -61,7 +63,7 @@ func populateFoo(t testing.TB, rows []fooRow) sql.Database {
 		}
 		return nil
 	}))
-	return db
+	return db, dir
 }
 
 type syncTracer struct {
@@ -108,25 +110,39 @@ func stopTimer(tb testing.TB) {
 	}
 }
 
+func dbFromRows(t testing.TB, rows []fooRow) sql.Transaction {
+	db, _ := populateFoo(t, rows)
+	tx, err := db.Tx(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { tx.Release() })
+	return tx
+}
+
 func verifyP2P(
 	t testing.TB,
 	rowsA, rowsB []fooRow,
-	combinedItems []rangesync.KeyBytes,
+	combined []rangesync.KeyBytes,
 	clockAt time.Time,
 	receivedRecent, sentRecent bool,
 	maxDepth int,
 	cfg rangesync.RangeSetReconcilerConfig,
 ) {
 	stopTimer(t)
+	dbA := dbFromRows(t, rowsA)
+	dbB := dbFromRows(t, rowsB)
+	runSync(t, dbA, dbB, combined, clockAt, receivedRecent, sentRecent, true, maxDepth, cfg)
+}
+
+func runSync(
+	t testing.TB,
+	dbA, dbB sql.Executor,
+	combined []rangesync.KeyBytes,
+	clockAt time.Time,
+	receivedRecent, sentRecent, verify bool,
+	maxDepth int,
+	cfg rangesync.RangeSetReconcilerConfig,
+) {
 	log := zaptest.NewLogger(t)
-	dbAx := populateFoo(t, rowsA)
-	dbA, err := dbAx.Tx(context.Background())
-	require.NoError(t, err)
-	defer dbA.Release()
-	dbBx := populateFoo(t, rowsB)
-	dbB, err := dbBx.Tx(context.Background())
-	require.NoError(t, err)
-	defer dbB.Release()
 	mesh, err := mocknet.FullMeshConnected(2)
 	require.NoError(t, err)
 	proto := "itest"
@@ -136,6 +152,8 @@ func verifyP2P(
 		IDColumn:        "id",
 		TimestampColumn: "received",
 	}
+
+	t.Logf("using maxDepth %d", maxDepth)
 
 	setA := dbset.NewDBSet(dbA, st, testKeyLen, maxDepth)
 	loadStart := time.Now()
@@ -164,6 +182,7 @@ func verifyP2P(
 	// Use the following to enable verbose logging which may slow down the tests
 	// syncLogger := log
 	syncLogger := zap.NewNop()
+	cfg.MaxReconcDiff = 1 // always reconcile
 	pssA := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideA"), nil, "test", cfg, &tr, clock)
 	d := rangesync.NewDispatcher(log)
 	syncSetA := setA.Copy(false).(*dbset.DBSet)
@@ -207,24 +226,26 @@ func verifyP2P(
 	require.NoError(t, pssB.Sync(ctx, srvPeerID, syncSetB, x, x))
 	stopTimer(t)
 	t.Logf("synced in %v, sent %d, recv %d", time.Since(tStart), pssB.Sent(), pssB.Received())
-	addReceived(t, dbA, setA, syncSetA)
-	addReceived(t, dbB, setB, syncSetB)
+	if verify {
+		addReceived(t, dbA, setA, syncSetA)
+		addReceived(t, dbB, setB, syncSetB)
 
-	require.Equal(t, receivedRecent, tr.receivedItems > 0)
-	require.Equal(t, sentRecent, tr.sentItems > 0)
+		require.Equal(t, receivedRecent, tr.receivedItems > 0)
+		require.Equal(t, sentRecent, tr.sentItems > 0)
 
-	if len(combinedItems) == 0 {
-		return
+		if len(combined) == 0 {
+			return
+		}
+
+		actItemsA, err := setA.Items().Collect()
+		require.NoError(t, err)
+
+		actItemsB, err := setB.Items().Collect()
+		require.NoError(t, err)
+
+		assert.Equal(t, combined, actItemsA)
+		assert.Equal(t, actItemsA, actItemsB)
 	}
-
-	actItemsA, err := setA.Items().Collect()
-	require.NoError(t, err)
-
-	actItemsB, err := setB.Items().Collect()
-	require.NoError(t, err)
-
-	assert.Equal(t, combinedItems, actItemsA)
-	assert.Equal(t, actItemsA, actItemsB)
 }
 
 func fooR(id string, seconds int) fooRow {
@@ -234,9 +255,9 @@ func fooR(id string, seconds int) fooRow {
 	}
 }
 
-func verifyP2PRandom(t testing.TB, maxDepth, nShared, nUniqueA, nUniqueB int) {
-	combined := make([]rangesync.KeyBytes, 0, nShared+nUniqueA+nUniqueB)
-	rowsA := make([]fooRow, nShared+nUniqueA)
+func genRandomRows(nShared, nUniqueA, nUniqueB int) (rowsA, rowsB []fooRow, combined []rangesync.KeyBytes) {
+	combined = make([]rangesync.KeyBytes, 0, nShared+nUniqueA+nUniqueB)
+	rowsA = make([]fooRow, nShared+nUniqueA)
 	for i := range rowsA {
 		k := rangesync.RandomKeyBytes(testKeyLen)
 		rowsA[i] = fooRow{
@@ -245,7 +266,7 @@ func verifyP2PRandom(t testing.TB, maxDepth, nShared, nUniqueA, nUniqueB int) {
 		}
 		combined = append(combined, k)
 	}
-	rowsB := make([]fooRow, nShared+nUniqueB)
+	rowsB = make([]fooRow, nShared+nUniqueB)
 	for i := range rowsB {
 		if i < nShared {
 			rowsB[i] = fooRow{
@@ -264,7 +285,7 @@ func verifyP2PRandom(t testing.TB, maxDepth, nShared, nUniqueA, nUniqueB int) {
 	slices.SortFunc(combined, func(a, b rangesync.KeyBytes) int {
 		return a.Compare(b)
 	})
-	verifyP2P(t, rowsA, rowsB, combined, startDate, false, false, 24, rangesync.DefaultConfig())
+	return rowsA, rowsB, combined
 }
 
 func TestP2P(t *testing.T) {
@@ -474,21 +495,64 @@ func TestP2P(t *testing.T) {
 		verifyP2P(t, nil, nil, nil, startDate, false, false, maxDepth, rangesync.DefaultConfig())
 	})
 	t.Run("random test", func(t *testing.T) {
-		verifyP2PRandom(t, 24, 80000, 400, 800)
+		rowsA, rowsB, combined := genRandomRows(80000, 400, 800)
+		verifyP2P(t, rowsA, rowsB, combined, startDate, false, false, maxDepth, rangesync.DefaultConfig())
 	})
 }
 
-func BenchmarkSyncSmall(b *testing.B) {
+func setupDBRandom(
+	t testing.TB,
+	nShared, nUniqueA, nUniqueB int,
+) (dirA, dirB string) {
+	rowsA, rowsB, _ := genRandomRows(nShared, nUniqueA, nUniqueB)
+	dbA, dirA := populateFoo(t, rowsA)
+	dbA.Close()
+	dbB, dirB := populateFoo(t, rowsB)
+	dbB.Close()
+	return dirA, dirB
+}
+
+func copyDB(t testing.TB, srcDir, dstDir string) sql.Transaction {
+	require.NoError(t, os.CopyFS(dstDir, os.DirFS(srcDir)))
+	db, err := sql.Open("file:"+filepath.Join(dstDir, "temp.db"),
+		sql.WithNoCheckSchemaDrift())
+	require.NoError(t, err)
+	tx, err := db.Tx(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { tx.Release() })
+	return tx
+}
+
+func verifyP2PRandom(t testing.TB, maxDepth int, dirA, dirB string) {
+	dbA := copyDB(t, dirA, t.TempDir())
+	dbB := copyDB(t, dirB, t.TempDir())
+	runSync(t, dbA, dbB, nil, startDate, false, false, false, maxDepth, rangesync.DefaultConfig())
+}
+
+func BenchmarkSyncSmallSet(b *testing.B) {
+	dirA, dirB := setupDBRandom(b, 800, 40, 80)
 	for i := 0; i < b.N; i++ {
-		verifyP2PRandom(b, 24, 80000, 400, 800)
+		verifyP2PRandom(b, 24, dirA, dirB)
 	}
 }
 
-func BenchmarkSyncBig(b *testing.B) {
-	for depth := 16; depth <= 24; depth++ {
-		b.Run(fmt.Sprintf("depth=%d", depth), func(b *testing.B) {
+func BenchmarkSyncBigDiff(b *testing.B) {
+	dirA, dirB := setupDBRandom(b, 8_000_000, 100, 80_000)
+	for maxDepth := 16; maxDepth <= 24; maxDepth++ {
+		b.Run(fmt.Sprintf("maxDepth=%d", maxDepth), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				verifyP2PRandom(b, 24, 8_000_000, 100, 80_000)
+				verifyP2PRandom(b, maxDepth, dirA, dirB)
+			}
+		})
+	}
+}
+
+func BenchmarkSyncSmallDiff(b *testing.B) {
+	dirA, dirB := setupDBRandom(b, 8_000_000, 10, 1000)
+	for maxDepth := 16; maxDepth <= 24; maxDepth++ {
+		b.Run(fmt.Sprintf("maxDepth=%d", maxDepth), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				verifyP2PRandom(b, maxDepth, dirA, dirB)
 			}
 		})
 	}
