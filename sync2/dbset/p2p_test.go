@@ -3,7 +3,9 @@ package dbset_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -29,7 +31,7 @@ type fooRow struct {
 	ts int64
 }
 
-func insertRow(t *testing.T, db sql.Executor, row fooRow) {
+func insertRow(t testing.TB, db sql.Executor, row fooRow) {
 	_, err := db.Exec(
 		"insert into foo (id, received) values (?, ?)",
 		func(stmt *sql.Statement) {
@@ -39,8 +41,14 @@ func insertRow(t *testing.T, db sql.Executor, row fooRow) {
 	require.NoError(t, err)
 }
 
-func populateFoo(t *testing.T, rows []fooRow) sql.Database {
-	db := sql.InMemoryTest(t)
+func populateFoo(t testing.TB, rows []fooRow) sql.Database {
+	// Use file-based database for more accurate benchmarks
+	db, err := sql.Open("file:"+filepath.Join(t.TempDir(), "temp.db"),
+		sql.WithNoCheckSchemaDrift())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, db.Close())
+	})
 	require.NoError(t, db.WithTx(context.Background(), func(tx sql.Transaction) error {
 		_, err := tx.Exec(
 			"create table foo(id char(32) not null primary key, received int)",
@@ -68,7 +76,7 @@ func (tr *syncTracer) OnRecent(receivedItems, sentItems int) {
 	tr.sentItems += sentItems
 }
 
-func addReceived(t *testing.T, db sql.Executor, to, from *dbset.DBSet) {
+func addReceived(t testing.TB, db sql.Executor, to, from *dbset.DBSet) {
 	sr := from.Received()
 	for k := range sr.Seq {
 		has, err := to.Has(k)
@@ -81,15 +89,33 @@ func addReceived(t *testing.T, db sql.Executor, to, from *dbset.DBSet) {
 	require.NoError(t, to.Advance())
 }
 
+type startStopTimer interface {
+	StartTimer()
+	StopTimer()
+}
+
+func startTimer(tb testing.TB) {
+	if st, ok := tb.(startStopTimer); ok {
+		st.StartTimer()
+	}
+}
+
+func stopTimer(tb testing.TB) {
+	if st, ok := tb.(startStopTimer); ok {
+		st.StopTimer()
+	}
+}
+
 func verifyP2P(
-	t *testing.T,
+	t testing.TB,
 	rowsA, rowsB []fooRow,
 	combinedItems []rangesync.KeyBytes,
 	clockAt time.Time,
 	receivedRecent, sentRecent bool,
+	maxDepth int,
 	opts ...rangesync.RangeSetReconcilerOption,
 ) {
-	const maxDepth = 24
+	stopTimer(t)
 	log := zaptest.NewLogger(t)
 	dbAx := populateFoo(t, rowsA)
 	dbA, err := dbAx.Tx(context.Background())
@@ -150,7 +176,7 @@ func verifyP2P(
 		func(ctx context.Context, req []byte, stream io.ReadWriter) error {
 			return d.Dispatch(ctx, req, stream)
 		},
-		server.WithTimeout(10*time.Second),
+		server.WithTimeout(time.Hour), // QQQQQ: FIXME
 		server.WithLog(log))
 
 	var eg errgroup.Group
@@ -159,7 +185,7 @@ func verifyP2P(
 		func(ctx context.Context, req []byte, stream io.ReadWriter) error {
 			return errors.New("client should not receive requests")
 		},
-		server.WithTimeout(10*time.Second),
+		server.WithTimeout(time.Hour), // QQQQQ: FIXME
 		server.WithLog(log))
 
 	defer func() {
@@ -179,6 +205,7 @@ func verifyP2P(
 		return true
 	}, time.Second, 10*time.Millisecond)
 
+	startTimer(t)
 	pssB := rangesync.NewPairwiseSetSyncer(client, "test", append(
 		opts,
 		rangesync.WithMaxSendRange(1),
@@ -189,6 +216,7 @@ func verifyP2P(
 	tStart := time.Now()
 	syncSetB := setB.Copy(false).(*dbset.DBSet)
 	require.NoError(t, pssB.Sync(ctx, srvPeerID, syncSetB, x, x))
+	stopTimer(t)
 	t.Logf("synced in %v, sent %d, recv %d", time.Since(tStart), pssB.Sent(), pssB.Received())
 	addReceived(t, dbA, setA, syncSetA)
 	addReceived(t, dbB, setB, syncSetB)
@@ -217,6 +245,39 @@ func fooR(id string, seconds int) fooRow {
 	}
 }
 
+func verifyP2PRandom(t testing.TB, maxDepth, nShared, nUniqueA, nUniqueB int) {
+	combined := make([]rangesync.KeyBytes, 0, nShared+nUniqueA+nUniqueB)
+	rowsA := make([]fooRow, nShared+nUniqueA)
+	for i := range rowsA {
+		k := rangesync.RandomKeyBytes(testKeyLen)
+		rowsA[i] = fooRow{
+			id: k,
+			ts: startDate.Add(time.Duration(i) * time.Second).UnixNano(),
+		}
+		combined = append(combined, k)
+	}
+	rowsB := make([]fooRow, nShared+nUniqueB)
+	for i := range rowsB {
+		if i < nShared {
+			rowsB[i] = fooRow{
+				id: slices.Clone(rowsA[i].id),
+				ts: rowsA[i].ts,
+			}
+		} else {
+			k := rangesync.RandomKeyBytes(testKeyLen)
+			rowsB[i] = fooRow{
+				id: k,
+				ts: startDate.Add(time.Duration(i) * time.Second).UnixNano(),
+			}
+			combined = append(combined, k)
+		}
+	}
+	slices.SortFunc(combined, func(a, b rangesync.KeyBytes) int {
+		return a.Compare(b)
+	})
+	verifyP2P(t, rowsA, rowsB, combined, startDate, false, false, 24)
+}
+
 func TestP2P(t *testing.T) {
 	hexID := rangesync.MustParseHexKeyBytes
 	t.Run("predefined items", func(t *testing.T) {
@@ -243,6 +304,7 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
+			24,
 		)
 	})
 	t.Run("predefined items 2", func(t *testing.T) {
@@ -276,6 +338,7 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
+			24,
 		)
 	})
 	t.Run("predefined items 3", func(t *testing.T) {
@@ -308,6 +371,7 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
+			24,
 		)
 	})
 	t.Run("predefined items with recent", func(t *testing.T) {
@@ -335,6 +399,7 @@ func TestP2P(t *testing.T) {
 			startDate.Add(time.Minute),
 			true,
 			true,
+			24,
 			rangesync.WithRecentTimeSpan(48*time.Second),
 		)
 	})
@@ -356,6 +421,7 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
+			24,
 		)
 	})
 	t.Run("empty to non-empty with recent", func(t *testing.T) {
@@ -376,6 +442,7 @@ func TestP2P(t *testing.T) {
 			startDate.Add(time.Minute),
 			true,
 			true,
+			24,
 			rangesync.WithRecentTimeSpan(48*time.Second),
 		)
 	})
@@ -399,50 +466,30 @@ func TestP2P(t *testing.T) {
 			// no actual recent exchange happens due to the initial EmptySet message
 			false,
 			false,
+			24,
 			rangesync.WithRecentTimeSpan(48*time.Second),
 		)
 	})
 	t.Run("empty to empty", func(t *testing.T) {
-		verifyP2P(t, nil, nil, nil, startDate, false, false)
+		verifyP2P(t, nil, nil, nil, startDate, false, false, 24)
 	})
 	t.Run("random test", func(t *testing.T) {
-		// higher values for "stress testing":
-		// const nShared = 8000000
-		// const nUniqueA = 100
-		// const nUniqueB = 80000
-		const nShared = 80000
-		const nUniqueA = 400
-		const nUniqueB = 800
-
-		combined := make([]rangesync.KeyBytes, 0, nShared+nUniqueA+nUniqueB)
-		rowsA := make([]fooRow, nShared+nUniqueA)
-		for i := range rowsA {
-			k := rangesync.RandomKeyBytes(testKeyLen)
-			rowsA[i] = fooRow{
-				id: k,
-				ts: startDate.Add(time.Duration(i) * time.Second).UnixNano(),
-			}
-			combined = append(combined, k)
-		}
-		rowsB := make([]fooRow, nShared+nUniqueB)
-		for i := range rowsB {
-			if i < nShared {
-				rowsB[i] = fooRow{
-					id: slices.Clone(rowsA[i].id),
-					ts: rowsA[i].ts,
-				}
-			} else {
-				k := rangesync.RandomKeyBytes(testKeyLen)
-				rowsB[i] = fooRow{
-					id: k,
-					ts: startDate.Add(time.Duration(i) * time.Second).UnixNano(),
-				}
-				combined = append(combined, k)
-			}
-		}
-		slices.SortFunc(combined, func(a, b rangesync.KeyBytes) int {
-			return a.Compare(b)
-		})
-		verifyP2P(t, rowsA, rowsB, combined, startDate, false, false)
+		verifyP2PRandom(t, 24, 80000, 400, 800)
 	})
+}
+
+func BenchmarkSyncSmall(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		verifyP2PRandom(b, 24, 80000, 400, 800)
+	}
+}
+
+func BenchmarkSyncBig(b *testing.B) {
+	for depth := 16; depth <= 24; depth++ {
+		b.Run(fmt.Sprintf("depth=%d", depth), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				verifyP2PRandom(b, 24, 8_000_000, 100, 80_000)
+			}
+		})
+	}
 }
