@@ -123,8 +123,10 @@ func (s *dbSeq) load() error {
 	fromZero := s.from.IsZero()
 	s.chunkSize = min(s.chunkSize*2, s.maxChunkSize)
 	switch {
-	case err != nil || ierr != nil:
-		return errors.Join(ierr, err)
+	case ierr != nil:
+		return ierr
+	case err != nil:
+		return err
 	case n == 0:
 		// empty chunk
 		if fromZero {
