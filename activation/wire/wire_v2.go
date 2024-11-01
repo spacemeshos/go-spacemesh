@@ -511,8 +511,16 @@ func (p PostRootProof) Valid(subPostRoot SubPostRoot, postRoot PostRoot) bool {
 	return validateProof(types.Hash32(subPostRoot), types.Hash32(postRoot), p, uint64(PostIndex))
 }
 
-func (sp *SubPostV2) NumUnitsProof(prevATXs []types.ATXID) []types.Hash32 {
+func (sp *SubPostV2) NumUnitsProof(prevATXs []types.ATXID) NumUnitsProof {
 	return sp.merkleProof(NumUnitsIndex, prevATXs)
+}
+
+type NumUnitsProof []types.Hash32
+
+func (p NumUnitsProof) Valid(subPostRoot SubPostRoot, numUnits uint32) bool {
+	numUnitsBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(numUnitsBytes, numUnits)
+	return validateProof(types.Hash32(subPostRoot), types.Hash32(numUnitsBytes), p, uint64(NumUnitsIndex))
 }
 
 type MarriageCertificates []MarriageCertificate
