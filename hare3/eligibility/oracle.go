@@ -92,15 +92,14 @@ type Oracle struct {
 	// until graded oracle is implemented
 	synced bool
 
-	beacons        system.BeaconGetter
-	atxsdata       *atxsdata.Data
-	minerWeightFn  func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
-	totalWeightFn  func(ctx context.Context, layer types.LayerID) (uint64, error)
-	db             sql.Executor
-	vrfVerifier    vrfVerifier
-	layersPerEpoch uint32
-	cfg            Config
-	log            *zap.Logger
+	beacons       system.BeaconGetter
+	atxsdata      *atxsdata.Data
+	db            sql.Executor
+	vrfVerifier   vrfVerifier
+	cfg           Config
+	minerWeightFn func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
+	totalWeightFn func(ctx context.Context, layer types.LayerID) (uint64, error)
+	log           *zap.Logger
 }
 
 type Opt func(*Oracle)
@@ -135,7 +134,6 @@ func New(
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
-	layersPerEpoch uint32,
 	opts ...Opt,
 ) *Oracle {
 	activesCache, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
@@ -143,22 +141,21 @@ func New(
 		panic("failed to create lru cache for active set" + err.Error())
 	}
 	oracle := &Oracle{
-		beacons:        beacons,
-		db:             db,
-		atxsdata:       atxsdata,
-		vrfVerifier:    vrfVerifier,
-		layersPerEpoch: layersPerEpoch,
-		activesCache:   activesCache,
-		fallback:       map[types.EpochID][]types.ATXID{},
-		cfg:            DefaultConfig(),
-		log:            zap.NewNop(),
+		beacons:      beacons,
+		db:           db,
+		atxsdata:     atxsdata,
+		vrfVerifier:  vrfVerifier,
+		activesCache: activesCache,
+		fallback:     map[types.EpochID][]types.ATXID{},
+		cfg:          DefaultConfig(),
+		log:          zap.NewNop(),
 	}
 	oracle.minerWeightFn = oracle.minerWeight
 	oracle.totalWeightFn = oracle.totalWeight
 	for _, opt := range opts {
 		opt(oracle)
 	}
-	oracle.log.Info("hare oracle initialized", zap.Uint32("epoch size", layersPerEpoch), zap.Inline(&oracle.cfg))
+	oracle.log.Info("hare oracle initialized", zap.Inline(&oracle.cfg))
 	return oracle
 }
 
@@ -584,18 +581,10 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 	o.fallback[epoch] = activeSet
 }
 
-func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
-	totalWeight, err := o.totalWeightFn(ctx, layer)
-	if err != nil {
-		panic(err)
-	}
-	return totalWeight
+func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
+	return o.totalWeightFn(ctx, layer)
 }
 
-func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
-	minerWeight, err := o.minerWeightFn(ctx, layer, node)
-	if err != nil {
-		panic(err)
-	}
-	return minerWeight
+func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error) {
+	return o.minerWeightFn(ctx, layer, node)
 }

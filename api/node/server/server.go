@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
@@ -16,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -30,9 +30,9 @@ type poetDB interface {
 
 type hare interface {
 	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
-	TotalWeight(ctx context.Context, layer types.LayerID) uint64
-	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64
-	Beacon(ctx context.Context, epoch types.EpochID) types.Beacon
+	TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error)
+	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error)
+	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
 
 type proposalBuilder interface {
@@ -112,7 +112,7 @@ func (s *Server) GetActivationAtxAtxId(
 	id := types.BytesToATXID(idBytes)
 	atx, err := s.atxService.Atx(ctx, id)
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, activation.ErrNotFound):
 		return GetActivationAtxAtxId404Response{}, nil
 	case err != nil:
 		return nil, err
@@ -145,7 +145,7 @@ func (s *Server) GetActivationLastAtxNodeId(
 
 	atxid, err := s.atxService.LastATX(ctx, id)
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, activation.ErrNotFound):
 		return GetActivationLastAtxNodeId404Response{}, nil
 	case err != nil:
 		return nil, err
@@ -232,8 +232,14 @@ func (h *hareResponse) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.Re
 	return err
 }
 
-func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context, request GetHareRoundTemplateLayerIterRoundRequestObject) (GetHareRoundTemplateLayerIterRoundResponseObject, error) {
-	msg := s.hare.RoundMessage(types.LayerID(request.Layer), hare3.IterRound{Round: hare3.Round(request.Round), Iter: (request.Iter)})
+func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
+	request GetHareRoundTemplateLayerIterRoundRequestObject,
+) (GetHareRoundTemplateLayerIterRoundResponseObject, error) {
+	msg := s.hare.RoundMessage(types.LayerID(request.Layer),
+		hare3.IterRound{
+			Round: hare3.Round(request.Round),
+			Iter:  (request.Iter),
+		})
 	if msg == nil {
 		return &hareResponse{}, nil
 	}
@@ -250,12 +256,18 @@ type totalWeightResp struct {
 func (t *totalWeightResp) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
 	w.Header().Add("content-type", "application/octet-stream")
 	w.WriteHeader(200)
-	_, err := w.Write([]byte(fmt.Sprintf("%d", t.w)))
+	_, err := w.Write([]byte(strconv.FormatUint(t.w, 10)))
 	return err
 }
 
-func (s *Server) GetHareTotalWeightLayer(ctx context.Context, req GetHareTotalWeightLayerRequestObject) (GetHareTotalWeightLayerResponseObject, error) {
-	return &totalWeightResp{s.hare.TotalWeight(ctx, types.LayerID(req.Layer))}, nil
+func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
+	req GetHareTotalWeightLayerRequestObject,
+) (GetHareTotalWeightLayerResponseObject, error) {
+	weight, err := s.hare.TotalWeight(ctx, types.LayerID(req.Layer))
+	if err != nil {
+		return nil, err
+	}
+	return &totalWeightResp{weight}, nil
 }
 
 type nodeWeightResp struct {
@@ -265,17 +277,23 @@ type nodeWeightResp struct {
 func (n *nodeWeightResp) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
 	w.Header().Add("content-type", "application/octet-stream")
 	w.WriteHeader(200)
-	_, err := w.Write([]byte(fmt.Sprintf("%d", n.val)))
+	_, err := w.Write([]byte(strconv.FormatUint(n.val, 10)))
 	return err
 }
 
-func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWeightNodeIdLayerRequestObject) (GetHareWeightNodeIdLayerResponseObject, error) {
+func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
+	request GetHareWeightNodeIdLayerRequestObject,
+) (GetHareWeightNodeIdLayerResponseObject, error) {
 	hexBuf, err := hex.DecodeString(request.NodeId)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("decode node id: %w", err)
 	}
 	id := types.BytesToNodeID(hexBuf)
-	return &nodeWeightResp{val: s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))}, nil
+	weight, err := s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))
+	if err != nil {
+		return nil, fmt.Errorf("miner weight: %w", err)
+	}
+	return &nodeWeightResp{val: weight}, nil
 }
 
 type beaconResp struct{ b types.Beacon }
@@ -287,8 +305,13 @@ func (b *beaconResp) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) erro
 	return err
 }
 
-func (s *Server) GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error) {
-	beacon := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
+func (s *Server) GetHareBeaconEpoch(ctx context.Context,
+	request GetHareBeaconEpochRequestObject,
+) (GetHareBeaconEpochResponseObject, error) {
+	beacon, err := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
+	if err != nil {
+		return nil, err
+	}
 	return &beaconResp{b: beacon}, nil
 }
 

@@ -16,24 +16,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
-	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testDataFetch struct {
 	*syncer.DataFetch
-	mMesh     *mocks.MockmeshProvider
-	mFetcher  *mocks.Mockfetcher
-	mTortoise *smocks.MockTortoise
+	mFetcher *mocks.Mockfetcher
 }
 
-func newTestDataFetch(t *testing.T) *testDataFetch {
-	ctrl := gomock.NewController(t)
+func newTestDataFetch(tb testing.TB) *testDataFetch {
+	ctrl := gomock.NewController(tb)
 	tl := &testDataFetch{
-		mMesh:     mocks.NewMockmeshProvider(ctrl),
-		mFetcher:  mocks.NewMockfetcher(ctrl),
-		mTortoise: smocks.NewMockTortoise(ctrl),
+		mFetcher: mocks.NewMockfetcher(ctrl),
 	}
-	tl.DataFetch = syncer.NewDataFetch(tl.mMesh, tl.mFetcher, tl.mTortoise, zaptest.NewLogger(t))
+	tl.DataFetch = syncer.NewDataFetch(tl.mFetcher, zaptest.NewLogger(tb))
 	return tl
 }
 
@@ -42,19 +37,19 @@ const (
 	numMalicious = 11
 )
 
-func generateLayerOpinions(t *testing.T, bid *types.BlockID) []byte {
-	t.Helper()
+func generateLayerOpinions(tb testing.TB, bid *types.BlockID) []byte {
+	tb.Helper()
 	lo := &fetch.LayerOpinion{
 		PrevAggHash: types.RandomHash(),
 		Certified:   bid,
 	}
 	data, err := codec.Encode(lo)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return data
 }
 
-func generateLayerContent(t *testing.T) []byte {
-	t.Helper()
+func generateLayerContent(tb testing.TB) []byte {
+	tb.Helper()
 	ballotIDs := make([]types.BallotID, 0, numBallots)
 	for i := 0; i < numBallots; i++ {
 		ballotIDs = append(ballotIDs, types.RandomBallotID())
@@ -63,16 +58,16 @@ func generateLayerContent(t *testing.T) []byte {
 		Ballots: ballotIDs,
 	}
 	out, err := codec.Encode(&lb)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return out
 }
 
-func generateEmptyLayer(t *testing.T) []byte {
+func generateEmptyLayer(tb testing.TB) []byte {
 	lb := fetch.LayerData{
 		Ballots: []types.BallotID{},
 	}
 	out, err := codec.Encode(&lb)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return out
 }
 

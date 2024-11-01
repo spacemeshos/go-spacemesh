@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
+	p2pmetrics "github.com/spacemeshos/go-spacemesh/p2p/metrics"
 )
 
 type PubSub interface {
@@ -70,7 +70,7 @@ func (ps *GossipPubSub) Register(topic string, handler GossipHandler, opts ...Va
 		func(ctx context.Context, pid peer.ID, msg *pubsub.Message) pubsub.ValidationResult {
 			start := time.Now()
 			err := handler(log.WithNewRequestID(ctx), pid, msg.Data)
-			metrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
+			p2pmetrics.ProcessedMessagesDuration.WithLabelValues(topic, castResult(err)).
 				Observe(float64(time.Since(start)))
 			if err != nil {
 				ps.logger.Debug("topic validation failed", zap.String("topic", topic), zap.Error(err))
@@ -105,7 +105,7 @@ func (ps *GossipPubSub) Publish(ctx context.Context, topic string, msg []byte) e
 		ps.logger.Sugar().Panicf("Publish is called before Register for topic %s", topic)
 	}
 	if err := topich.Publish(ctx, msg); err != nil {
-		return fmt.Errorf("failed to publish to topic %v: %w", topic, err)
+		return fmt.Errorf("failed to publish to topic %s: %w", topic, err)
 	}
 	return nil
 }

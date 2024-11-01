@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -96,9 +97,7 @@ func BallotMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *wire.Malf
 			Data: &bp,
 		},
 	}
-	data, err := codec.Encode(mp)
-	require.NoError(tb, err)
-	require.NoError(tb, identities.SetMalicious(db, sig.NodeID(), data, time.Now()))
+	require.NoError(tb, identities.SetMalicious(db, sig.NodeID(), codec.MustEncode(mp), time.Now()))
 	return sig.NodeID(), mp
 }
 
@@ -143,9 +142,11 @@ func HareMalfeasance(tb testing.TB, db sql.Executor) (types.NodeID, *wire.Malfea
 func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -176,7 +177,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	require.Equal(t, nodeID, types.BytesToNodeID(resp.Proof.SmesherId.Id))
 	require.EqualValues(t, layer, resp.Proof.Layer.Number)
 	require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_BALLOT, resp.Proof.Kind)
-	require.Equal(t, events.ToMalfeasancePB(nodeID, proof, true), resp.Proof)
+	require.Equal(t, events.ToMalfeasancePB(nodeID, codec.MustEncode(proof), true), resp.Proof)
 	require.NotEmpty(t, resp.Proof.Proof)
 	var got wire.MalfeasanceProof
 	require.NoError(t, codec.Decode(resp.Proof.Proof, &got))
@@ -194,9 +195,11 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -247,15 +250,17 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	require.Equal(t, 10, hare)
 
 	id, proof := AtxMalfeasance(t, db)
-	events.ReportMalfeasance(id, proof)
+	proofBytes := codec.MustEncode(proof)
+	events.ReportMalfeasance(id, proofBytes)
 	resp, err := stream.Recv()
 	require.NoError(t, err)
-	require.Equal(t, events.ToMalfeasancePB(id, proof, false), resp.Proof)
+	require.Equal(t, events.ToMalfeasancePB(id, proofBytes, false), resp.Proof)
 	id, proof = BallotMalfeasance(t, db)
-	events.ReportMalfeasance(id, proof)
+	proofBytes = codec.MustEncode(proof)
+	events.ReportMalfeasance(id, proofBytes)
 	resp, err = stream.Recv()
 	require.NoError(t, err)
-	require.Equal(t, events.ToMalfeasancePB(id, proof, false), resp.Proof)
+	require.Equal(t, events.ToMalfeasancePB(id, proofBytes, false), resp.Proof)
 }
 
 type MeshAPIMockInstrumented struct {
@@ -300,9 +305,11 @@ func (t *ConStateAPIMockInstrumented) GetLayerStateRoot(types.LayerID) (types.Ha
 func TestReadLayer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	genTime := NewMockgenesisTimeAPI(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	srv := NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		&MeshAPIMockInstrumented{},
 		conStateAPI,
 		genTime,
@@ -324,7 +331,7 @@ func TestReadLayer(t *testing.T) {
 	require.NoError(t, err)
 
 	srv = NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,
@@ -339,7 +346,7 @@ func TestReadLayer(t *testing.T) {
 
 	// now instrument conStateAPI to return errors
 	srv = NewMeshService(
-		datastore.NewCachedDB(db, zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		&ConStateAPIMockInstrumented{*conStateAPI},
 		genTime,

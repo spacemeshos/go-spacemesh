@@ -93,7 +93,8 @@ func WithTime(t Time) Option {
 // WithContext modifies parent context that is used for all operations in Sync.
 func WithContext(ctx context.Context) Option {
 	return func(s *Sync) {
-		s.ctx = ctx
+		// TODO(mafa): fix this
+		s.ctx = ctx // nolint:fatcontext
 	}
 }
 

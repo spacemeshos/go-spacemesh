@@ -280,6 +280,7 @@ func (h *Hare) Start() {
 			case <-h.nodeClock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("lid", next.Uint32()))
 				h.onLayer(next)
+				h.cleanupLayer(next - 1)
 			case <-h.ctx.Done():
 				return nil
 			}
@@ -294,7 +295,7 @@ func (h *Hare) Running() int {
 	return len(h.sessions)
 }
 
-func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
+func (h *Hare) Handler(ctx context.Context, _ p2p.Peer, buf []byte) error {
 	msg := &Message{}
 	if err := codec.Decode(buf, msg); err != nil {
 		malformedError.Inc()
@@ -339,10 +340,10 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	if equivocation != nil && !malicious {
 		h.log.Debug("registered equivocation",
 			zap.Uint32("lid", msg.Layer.Uint32()),
-			zap.Stringer("sender", equivocation.Messages[0].SmesherID))
-		proof := equivocation.ToMalfeasanceProof()
-		if err := identities.SetMalicious(
-			h.db, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
+			zap.Stringer("sender", equivocation.Messages[0].SmesherID),
+		)
+		proof := codec.MustEncode(equivocation.ToMalfeasanceProof())
+		if err := identities.SetMalicious(h.db, equivocation.Messages[0].SmesherID, proof, time.Now()); err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))
 		}
 		h.atxsdata.SetMalicious(equivocation.Messages[0].SmesherID)
@@ -363,7 +364,6 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	beacon, err := beacons.Get(h.db, layer.GetEpoch())
-	h.log.Info("hare tried to get beacon value", zap.Error(err))
 	if err != nil || beacon == types.EmptyBeacon {
 		h.log.Debug("no beacon",
 			zap.Uint32("epoch", layer.GetEpoch().Uint32()),
@@ -657,6 +657,20 @@ type session struct {
 	vrfs    []*types.HareEligibility
 }
 
+func (h *Hare) cleanupLayer(l types.LayerID) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var rmLayer []types.LayerID
+	for layer := range h.layerResults {
+		if layer <= l {
+			rmLayer = append(rmLayer, layer)
+		}
+	}
+	for _, k := range rmLayer {
+		delete(h.layerResults, k)
+	}
+}
+
 func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -672,18 +686,14 @@ func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
 	return r.message
 }
 
-func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
+func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	return h.oracle.oracle.TotalWeight(ctx, layer)
 }
 
-func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) uint64 {
+func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) (uint64, error) {
 	return h.oracle.oracle.MinerWeight(ctx, miner, layer)
 }
 
-func (h *Hare) Beacon(ctx context.Context, epoch types.EpochID) types.Beacon {
-	beacon, err := beacons.Get(h.db, epoch)
-	if err != nil {
-		panic(err)
-	}
-	return beacon
+func (h *Hare) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
+	return beacons.Get(h.db, epoch)
 }

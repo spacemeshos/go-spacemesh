@@ -7,16 +7,17 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
-	"golang.org/x/sync/errgroup"
 )
 
-type nodeService interface {
+type NodeService interface {
 	GetHareMessage(ctx context.Context, layer types.LayerID, round IterRound) ([]byte, error)
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 	Publish(ctx context.Context, proto string, blob []byte) error
@@ -33,13 +34,17 @@ type RemoteHare struct {
 	sessions  map[types.LayerID]*protocol
 	eg        errgroup.Group
 	ctx       context.Context
-	svc       nodeService
+	svc       NodeService
 
 	log *zap.Logger
 }
 
-// type remote
-func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService, oracle oracle, log *zap.Logger) *RemoteHare {
+func NewRemoteHare(config Config,
+	nodeClock nodeClock,
+	nodeService NodeService,
+	oracle oracle,
+	log *zap.Logger,
+) *RemoteHare {
 	return &RemoteHare{
 		config:    config,
 		nodeClock: nodeClock,
@@ -53,7 +58,6 @@ func NewRemoteHare(config Config, nodeClock nodeClock, nodeService nodeService, 
 
 		sessions:  make(map[types.LayerID]*protocol),
 		eg:        errgroup.Group{},
-		ctx:       context.Background(),
 		svc:       nodeService,
 		log:       log,
 		wallClock: clockwork.NewRealClock(),
@@ -67,7 +71,7 @@ func (h *RemoteHare) Register(sig *signing.EdSigner) {
 	h.signers[string(sig.NodeID().Bytes())] = sig
 }
 
-func (h *RemoteHare) Start() {
+func (h *RemoteHare) Start(ctx context.Context) {
 	current := h.nodeClock.CurrentLayer() + 1
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
@@ -83,9 +87,9 @@ func (h *RemoteHare) Start() {
 			select {
 			case <-h.nodeClock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("layer", next.Uint32()))
-				h.onLayer(next)
-			case <-h.ctx.Done():
-				h.log.Info("remote hare processing layer - context done")
+				h.onLayer(ctx, next)
+			case <-ctx.Done():
+				h.log.Info("remote hare exiting")
 				return nil
 			}
 		}
@@ -93,12 +97,12 @@ func (h *RemoteHare) Start() {
 	})
 }
 
-func (h *RemoteHare) beacon(e types.EpochID) types.Beacon {
+func (h *RemoteHare) beacon(ctx context.Context, e types.EpochID) types.Beacon {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	b, ok := h.beacons[e]
 	if !ok {
-		bcn, err := h.svc.Beacon(context.Background(), e)
+		bcn, err := h.svc.Beacon(ctx, e)
 		if err != nil {
 			h.log.Error("error getting beacon", zap.Error(err))
 			return types.EmptyBeacon
@@ -110,20 +114,18 @@ func (h *RemoteHare) beacon(e types.EpochID) types.Beacon {
 	return b
 }
 
-func (h *RemoteHare) onLayer(layer types.LayerID) {
+func (h *RemoteHare) onLayer(ctx context.Context, layer types.LayerID) {
 	h.log.Debug("remote hare: on layer", zap.Int("layer", int(layer)))
-	beacon := h.beacon(layer.GetEpoch())
+	beacon := h.beacon(ctx, layer.GetEpoch())
 	if beacon == types.EmptyBeacon {
 		h.log.Debug("no beacon",
 			zap.Uint32("epoch", layer.GetEpoch().Uint32()),
 			zap.Uint32("lid", layer.Uint32()),
-			// zap.Error(err),
 		)
 		return
 	}
 
 	h.mu.Lock()
-	// signer can't join mid session
 	s := &session{
 		lid:     layer,
 		beacon:  beacon,
@@ -135,17 +137,14 @@ func (h *RemoteHare) onLayer(layer types.LayerID) {
 	h.mu.Unlock()
 
 	sessionStart.Inc()
-	// h.tracer.OnStart(layer)
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
-		if err := h.run(s); err != nil {
+		if err := h.run(ctx, s); err != nil {
 			h.log.Warn("failed",
 				zap.Uint32("lid", layer.Uint32()),
 				zap.Error(err),
 			)
 			exitErrors.Inc()
-			// if terminated successfully it will notify block generator
-			// and it will have to CompleteHare
 		} else {
 			h.log.Debug("terminated",
 				zap.Uint32("lid", layer.Uint32()),
@@ -159,18 +158,14 @@ func (h *RemoteHare) onLayer(layer types.LayerID) {
 	})
 }
 
-func (h *RemoteHare) selectProposals(session *session) error {
-	return nil
-}
-
-func (h *RemoteHare) run(session *session) error {
+func (h *RemoteHare) run(ctx context.Context, session *session) error {
 	var (
 		current = IterRound{Round: preround}
 		start   = time.Now()
 		active  bool
 	)
-	for i := range session.signers {
-		session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)
+	for i, signer := range session.signers {
+		session.vrfs[i] = h.oracle.active(signer, session.beacon, session.lid, current)
 		active = active || session.vrfs[i] != nil
 	}
 	activeLatency.Observe(time.Since(start).Seconds())
@@ -178,16 +173,24 @@ func (h *RemoteHare) run(session *session) error {
 	walltime := h.nodeClock.LayerToTime(session.lid).Add(h.config.PreroundDelay)
 	if active {
 		h.log.Debug("active in preround. waiting for preround delay", zap.Uint32("lid", session.lid.Uint32()))
-		// initial set is not needed if node is not active in preround
 		select {
 		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
 		case <-h.ctx.Done():
 			return h.ctx.Err()
 		}
-		start := time.Now()
-		// TODO this still has the prerequisite of handling the proposals construction correctly
-		proposalsLatency.Observe(time.Since(start).Seconds())
 	}
+	msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
+	if err != nil && active {
+		h.log.Error("get hare message on preround", zap.Error(err))
+	} else {
+		msg := &Message{}
+		if err := codec.Decode(msgBytes, msg); err != nil {
+			h.log.Error("decode remote hare message", zap.Error(err))
+		} else {
+			h.signPub(ctx, session, msg)
+		}
+	}
+
 	onRound(session.proto)
 	for {
 		if session.proto.IterRound.Iter >= h.config.IterationsLimit {
@@ -218,7 +221,7 @@ func (h *RemoteHare) run(session *session) error {
 					zap.Bool("active", active),
 				)
 
-				msgBytes, err := h.svc.GetHareMessage(context.Background(), session.lid, session.proto.IterRound)
+				msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
 				if err != nil {
 					h.log.Error("get hare message", zap.Error(err))
 					onRound(session.proto) // advance the protocol state before continuing
@@ -228,7 +231,7 @@ func (h *RemoteHare) run(session *session) error {
 				if err := codec.Decode(msgBytes, msg); err != nil {
 					h.log.Error("decode remote hare message", zap.Error(err))
 				}
-				h.signPub(session, msg)
+				h.signPub(ctx, session, msg)
 			}
 
 			onRound(session.proto) // advance the protocol state before continuing
@@ -238,7 +241,7 @@ func (h *RemoteHare) run(session *session) error {
 	}
 }
 
-func (h *RemoteHare) signPub(session *session, message *Message) {
+func (h *RemoteHare) signPub(ctx context.Context, session *session, message *Message) {
 	for i, vrf := range session.vrfs {
 		if vrf == nil {
 			continue
@@ -248,7 +251,7 @@ func (h *RemoteHare) signPub(session *session, message *Message) {
 		msg.Eligibility = *vrf
 		msg.Sender = session.signers[i].NodeID()
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
-		if err := h.svc.Publish(h.ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
+		if err := h.svc.Publish(ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
 			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}
 	}
@@ -256,9 +259,6 @@ func (h *RemoteHare) signPub(session *session, message *Message) {
 
 func onRound(p *protocol) {
 	if p.Round == preround && p.Iter == 0 {
-		// skips hardlock unlike softlock in the paper.
-		// this makes no practical difference from correctness.
-		// but allows to simplify assignment in validValues
 		p.Round = softlock
 	} else if p.Round == notify {
 		p.Round = hardlock

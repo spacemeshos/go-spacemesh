@@ -22,6 +22,7 @@ import (
 type MockpoetDB struct {
 	ctrl     *gomock.Controller
 	recorder *MockpoetDBMockRecorder
+	isgomock struct{}
 }
 
 // MockpoetDBMockRecorder is the mock recorder for MockpoetDB.
@@ -83,6 +84,7 @@ func (c *MockpoetDBValidateAndStoreCall) DoAndReturn(f func(context.Context, *ty
 type Mockhare struct {
 	ctrl     *gomock.Controller
 	recorder *MockhareMockRecorder
+	isgomock struct{}
 }
 
 // MockhareMockRecorder is the mock recorder for Mockhare.
@@ -103,11 +105,12 @@ func (m *Mockhare) EXPECT() *MockhareMockRecorder {
 }
 
 // Beacon mocks base method.
-func (m *Mockhare) Beacon(ctx context.Context, epoch types.EpochID) types.Beacon {
+func (m *Mockhare) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Beacon", ctx, epoch)
 	ret0, _ := ret[0].(types.Beacon)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Beacon indicates an expected call of Beacon.
@@ -123,29 +126,30 @@ type MockhareBeaconCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareBeaconCall) Return(arg0 types.Beacon) *MockhareBeaconCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockhareBeaconCall) Return(arg0 types.Beacon, arg1 error) *MockhareBeaconCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareBeaconCall) Do(f func(context.Context, types.EpochID) types.Beacon) *MockhareBeaconCall {
+func (c *MockhareBeaconCall) Do(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockhareBeaconCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) types.Beacon) *MockhareBeaconCall {
+func (c *MockhareBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockhareBeaconCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // MinerWeight mocks base method.
-func (m *Mockhare) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) uint64 {
+func (m *Mockhare) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MinerWeight", ctx, node, layer)
 	ret0, _ := ret[0].(uint64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // MinerWeight indicates an expected call of MinerWeight.
@@ -161,19 +165,19 @@ type MockhareMinerWeightCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareMinerWeightCall) Return(arg0 uint64) *MockhareMinerWeightCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockhareMinerWeightCall) Return(arg0 uint64, arg1 error) *MockhareMinerWeightCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareMinerWeightCall) Do(f func(context.Context, types.NodeID, types.LayerID) uint64) *MockhareMinerWeightCall {
+func (c *MockhareMinerWeightCall) Do(f func(context.Context, types.NodeID, types.LayerID) (uint64, error)) *MockhareMinerWeightCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.NodeID, types.LayerID) uint64) *MockhareMinerWeightCall {
+func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.NodeID, types.LayerID) (uint64, error)) *MockhareMinerWeightCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -217,11 +221,12 @@ func (c *MockhareRoundMessageCall) DoAndReturn(f func(types.LayerID, hare3.IterR
 }
 
 // TotalWeight mocks base method.
-func (m *Mockhare) TotalWeight(ctx context.Context, layer types.LayerID) uint64 {
+func (m *Mockhare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TotalWeight", ctx, layer)
 	ret0, _ := ret[0].(uint64)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // TotalWeight indicates an expected call of TotalWeight.
@@ -237,19 +242,19 @@ type MockhareTotalWeightCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareTotalWeightCall) Return(arg0 uint64) *MockhareTotalWeightCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockhareTotalWeightCall) Return(arg0 uint64, arg1 error) *MockhareTotalWeightCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareTotalWeightCall) Do(f func(context.Context, types.LayerID) uint64) *MockhareTotalWeightCall {
+func (c *MockhareTotalWeightCall) Do(f func(context.Context, types.LayerID) (uint64, error)) *MockhareTotalWeightCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.LayerID) uint64) *MockhareTotalWeightCall {
+func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.LayerID) (uint64, error)) *MockhareTotalWeightCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -258,6 +263,7 @@ func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.Laye
 type MockproposalBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockproposalBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockproposalBuilderMockRecorder is the mock recorder for MockproposalBuilder.
@@ -278,9 +284,9 @@ func (m *MockproposalBuilder) EXPECT() *MockproposalBuilderMockRecorder {
 }
 
 // BuildFor mocks base method.
-func (m *MockproposalBuilder) BuildFor(layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error) {
+func (m *MockproposalBuilder) BuildFor(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BuildFor", layer, node)
+	ret := m.ctrl.Call(m, "BuildFor", ctx, layer, node)
 	ret0, _ := ret[0].(*types.Proposal)
 	ret1, _ := ret[1].(types.VRFPostIndex)
 	ret2, _ := ret[2].(error)
@@ -288,9 +294,9 @@ func (m *MockproposalBuilder) BuildFor(layer types.LayerID, node types.NodeID) (
 }
 
 // BuildFor indicates an expected call of BuildFor.
-func (mr *MockproposalBuilderMockRecorder) BuildFor(layer, node any) *MockproposalBuilderBuildForCall {
+func (mr *MockproposalBuilderMockRecorder) BuildFor(ctx, layer, node any) *MockproposalBuilderBuildForCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildFor", reflect.TypeOf((*MockproposalBuilder)(nil).BuildFor), layer, node)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildFor", reflect.TypeOf((*MockproposalBuilder)(nil).BuildFor), ctx, layer, node)
 	return &MockproposalBuilderBuildForCall{Call: call}
 }
 
@@ -306,13 +312,13 @@ func (c *MockproposalBuilderBuildForCall) Return(arg0 *types.Proposal, arg1 type
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockproposalBuilderBuildForCall) Do(f func(types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
+func (c *MockproposalBuilderBuildForCall) Do(f func(context.Context, types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockproposalBuilderBuildForCall) DoAndReturn(f func(types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
+func (c *MockproposalBuilderBuildForCall) DoAndReturn(f func(context.Context, types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

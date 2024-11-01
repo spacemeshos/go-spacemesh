@@ -14,8 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	"github.com/spacemeshos/go-spacemesh/api/node/server"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare3"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 )
 
@@ -24,6 +24,7 @@ const retries = 3
 type mocks struct {
 	atxService *activation.MockAtxService
 	poetDb     *server.MockpoetDB
+	hare       *server.Mockhare
 	publisher  *pubsub.MockPublisher
 }
 
@@ -34,10 +35,11 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 	m := &mocks{
 		atxService: activation.NewMockAtxService(ctrl),
 		poetDb:     server.NewMockpoetDB(ctrl),
+		hare:       server.NewMockhare(ctrl),
 		publisher:  pubsub.NewMockPublisher(ctrl),
 	}
 
-	activationServiceServer := server.NewServer(m.atxService, m.publisher, m.poetDb, log.Named("server"))
+	activationServiceServer := server.NewServer(m.atxService, m.publisher, m.poetDb, m.hare, log.Named("server"))
 
 	listener, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
@@ -65,9 +67,9 @@ func Test_ActivationService_Atx(t *testing.T) {
 	atxid := types.ATXID{1, 2, 3, 4}
 
 	t.Run("not found", func(t *testing.T) {
-		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(nil, common.ErrNotFound)
+		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(nil, activation.ErrNotFound)
 		_, err := svc.Atx(context.Background(), atxid)
-		require.ErrorIs(t, err, common.ErrNotFound)
+		require.ErrorIs(t, err, activation.ErrNotFound)
 	})
 
 	t.Run("found", func(t *testing.T) {
@@ -117,9 +119,9 @@ func Test_ActivationService_LastATX(t *testing.T) {
 	nodeid := types.NodeID{5, 6, 7, 8}
 
 	t.Run("not found", func(t *testing.T) {
-		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(nil, common.ErrNotFound)
+		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(nil, activation.ErrNotFound)
 		_, err := svc.LastATX(context.Background(), nodeid)
-		require.ErrorIs(t, err, common.ErrNotFound)
+		require.ErrorIs(t, err, activation.ErrNotFound)
 	})
 
 	t.Run("found", func(t *testing.T) {
@@ -149,4 +151,36 @@ func Test_StoringPoetProof(t *testing.T) {
 	}
 	mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &proof)
 	svc.StorePoetProof(context.Background(), &proof)
+}
+
+func Test_Hare(t *testing.T) {
+	svc, mock := setupE2E(t)
+	t.Run("total weight", func(t *testing.T) {
+		val := uint64(11)
+		mock.hare.EXPECT().TotalWeight(gomock.Any(), gomock.Any()).Return(val, nil)
+		v, err := svc.TotalWeight(context.Background(), 112)
+		require.Equal(t, v, val)
+		require.NoError(t, err)
+	})
+	t.Run("miner weight", func(t *testing.T) {
+		val := uint64(101)
+		mock.hare.EXPECT().MinerWeight(gomock.Any(), gomock.Any(), gomock.Any()).Return(val, nil)
+		v, err := svc.MinerWeight(context.Background(), 113, types.NodeID{})
+		require.Equal(t, v, val)
+		require.NoError(t, err)
+	})
+	t.Run("beacon", func(t *testing.T) {
+		beacon := types.Beacon{12, 12, 12, 12}
+		mock.hare.EXPECT().Beacon(gomock.Any(), gomock.Any()).Return(beacon, nil)
+		v, err := svc.Beacon(context.Background(), types.EpochID(15))
+		require.Equal(t, v, beacon)
+		require.NoError(t, err)
+	})
+	t.Run("hare message", func(t *testing.T) {
+		exp := make([]byte, 182)
+		mock.hare.EXPECT().RoundMessage(gomock.Any(), gomock.Any()).Return(&hare3.Message{})
+		v, err := svc.GetHareMessage(context.Background(), types.LayerID(113), hare3.IterRound{})
+		require.Equal(t, exp, v)
+		require.NoError(t, err)
+	})
 }

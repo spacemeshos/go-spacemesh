@@ -291,6 +291,7 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 
 func (h *Hare) Start() {
 	h.pubsub.Register(h.config.ProtocolName, h.Handler, pubsub.WithValidatorInline(true))
+	h.eg.Go(func() error { return h.p2p.Run(h.ctx) })
 	current := h.nodeClock.CurrentLayer() + 1
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
@@ -548,10 +549,10 @@ func (h *Hare) Handler(ctx context.Context, peer p2p.Peer, buf []byte) error {
 	if equivocation != nil && !malicious {
 		h.log.Debug("registered equivocation",
 			zap.Uint32("lid", msg.Layer.Uint32()),
-			zap.Stringer("sender", equivocation.Messages[0].SmesherID))
-		proof := equivocation.ToMalfeasanceProof()
-		if err := identities.SetMalicious(
-			h.db, equivocation.Messages[0].SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
+			zap.Stringer("sender", equivocation.Messages[0].SmesherID),
+		)
+		proof := codec.MustEncode(equivocation.ToMalfeasanceProof())
+		if err := identities.SetMalicious(h.db, equivocation.Messages[0].SmesherID, proof, time.Now()); err != nil {
 			h.log.Error("failed to save malicious identity", zap.Error(err))
 		}
 		h.atxsdata.SetMalicious(equivocation.Messages[0].SmesherID)

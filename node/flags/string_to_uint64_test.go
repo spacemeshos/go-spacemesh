@@ -53,8 +53,7 @@ func TestStringToUint64Value(t *testing.T) {
 				full += arg + ","
 				err := parser.Set(arg)
 				if len(tc.err) > 0 {
-					require.Error(t, err)
-					require.Contains(t, err.Error(), tc.err)
+					require.ErrorContains(t, err, tc.err)
 				} else {
 					require.NoError(t, err)
 				}
@@ -67,8 +66,7 @@ func TestStringToUint64Value(t *testing.T) {
 				require.Equal(t, tc.expected, value)
 				require.Equal(t, tc.expected, valFull)
 			} else {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), tc.err)
+				require.ErrorContains(t, err, tc.err)
 			}
 		})
 	}

@@ -46,7 +46,7 @@ func newHandler(
 
 // handleMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, error) {
-	nodes, err := identities.GetMalicious(h.cdb)
+	nodes, err := identities.AllMalicious(h.cdb)
 	if err != nil {
 		return nil, fmt.Errorf("getting malicious IDs: %w", err)
 	}
@@ -54,16 +54,12 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 	malicious := &MaliciousIDs{
 		NodeIDs: nodes,
 	}
-	data, err := codec.Encode(malicious)
-	if err != nil {
-		h.logger.Fatal("failed to encode malicious IDs", zap.Error(err))
-	}
-	return data, nil
+	return codec.MustEncode(malicious), nil
 }
 
 func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		nodeIDs, err := identities.GetMalicious(h.cdb)
+		nodeIDs, err := identities.AllMalicious(h.cdb)
 		if err != nil {
 			return fmt.Errorf("getting malicious IDs: %w", err)
 		}
@@ -343,7 +339,7 @@ func (h *handler) doHandleHashReqStream(
 ) error {
 	var requestBatch RequestBatch
 	if err := codec.Decode(msg, &requestBatch); err != nil {
-		return fmt.Errorf("%w: decooding request: %w", errBadRequest, err)
+		return fmt.Errorf("%w: decoding request: %w", errBadRequest, err)
 	}
 
 	if hint != datastore.NoHint && len(requestBatch.Requests) > 1 {

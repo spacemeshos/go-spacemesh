@@ -54,7 +54,7 @@ type testOracle struct {
 }
 
 func defaultOracle(tb testing.TB) *testOracle {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 
 	ctrl := gomock.NewController(tb)
@@ -67,7 +67,6 @@ func defaultOracle(tb testing.TB) *testOracle {
 			db,
 			atxsdata,
 			mVerifier,
-			defLayersPerEpoch,
 			WithConfig(Config{ConfidenceParam: confidenceParam}),
 			WithLogger(zaptest.NewLogger(tb)),
 		),

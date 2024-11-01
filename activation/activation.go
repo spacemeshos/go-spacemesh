@@ -15,11 +15,11 @@ import (
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -27,14 +27,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/localatxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
-var (
-	ErrNotFound    = errors.New("not found")
-	errNilVrfNonce = errors.New("nil VRF nonce")
-)
+var errNilVrfNonce = errors.New("nil VRF nonce")
 
 // PoetConfig is the configuration to interact with the poet server.
 type PoetConfig struct {
@@ -54,6 +51,7 @@ type PoetConfig struct {
 	InfoCacheTTL                   time.Duration `mapstructure:"info-cache-ttl"`
 	PowParamsCacheTTL              time.Duration `mapstructure:"pow-params-cache-ttl"`
 	MaxRequestRetries              int           `mapstructure:"retry-max"`
+	PoetProofsCache                int           `mapstructure:"poet-proofs-cache"`
 }
 
 func DefaultPoetConfig() PoetConfig {
@@ -62,6 +60,7 @@ func DefaultPoetConfig() PoetConfig {
 		MaxRequestRetries: 10,
 		InfoCacheTTL:      5 * time.Minute,
 		PowParamsCacheTTL: 5 * time.Minute,
+		PoetProofsCache:   200,
 	}
 }
 
@@ -76,7 +75,7 @@ type Config struct {
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
-// it is responsible for initializing post, receiving poet proof and orchestrating nipost. after which it will
+// it is responsible for initializing post, receiving poet proof and orchestrating nipost after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
 	accountLock     sync.RWMutex
@@ -111,14 +110,15 @@ type Builder struct {
 	stop          context.CancelFunc
 }
 
+type foundPosAtx struct {
+	id         types.ATXID
+	forPublish types.EpochID
+}
+
 type positioningAtxFinder struct {
-	finding sync.Mutex
-	found   *struct {
-		id         types.ATXID
-		forPublish types.EpochID
-	}
-	golden types.ATXID
-	logger *zap.Logger
+	finding singleflight.Group
+	found   foundPosAtx
+	logger  *zap.Logger
 }
 
 type BuilderOption func(*Builder)
@@ -134,7 +134,8 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 // WithContext modifies parent context for background job.
 func WithContext(ctx context.Context) BuilderOption {
 	return func(b *Builder) {
-		b.parentCtx = ctx
+		// TODO(mafa): fix this
+		b.parentCtx = ctx // nolint:fatcontext
 	}
 }
 
@@ -192,7 +193,6 @@ func NewBuilder(
 		postStates:        NewPostStates(log),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
-			golden: conf.GoldenATXID,
 			logger: log,
 		},
 	}
@@ -346,7 +346,7 @@ func (b *Builder) BuildInitialPost(ctx context.Context, nodeID types.NodeID) err
 	case err == nil:
 		b.logger.Info("load initial post from db")
 		return nil
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, sql.ErrNotFound):
 		b.logger.Info("creating initial post")
 	default:
 		return fmt.Errorf("get initial post: %w", err)
@@ -522,7 +522,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case err == nil:
 		currentEpochId = max(currentEpochId, prevAtx.PublishEpoch)
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, ErrNotFound):
 		// no previous ATX
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
@@ -550,6 +550,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Time("waiting until", wait),
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
+		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -571,14 +572,12 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 
 	var challenge *types.NIPostChallenge
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, ErrNotFound):
 		logger.Info("no previous ATX found, creating an initial nipost challenge")
-
 		challenge, err = b.buildInitialNIPostChallenge(ctx, logger, nodeID, publishEpochId)
 		if err != nil {
 			return nil, err
 		}
-
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	default:
@@ -609,7 +608,7 @@ func (b *Builder) getExistingChallenge(
 	challenge, err := nipost.Challenge(b.localDB, nodeID)
 
 	switch {
-	case errors.Is(err, common.ErrNotFound):
+	case errors.Is(err, sql.ErrNotFound):
 		return nil, nil
 
 	case err != nil:
@@ -649,7 +648,8 @@ func (b *Builder) buildInitialNIPostChallenge(
 ) (*types.NIPostChallenge, error) {
 	post, err := nipost.GetPost(b.localDB, nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("get initial post: %w", err)
+		// if initial post is not found, declare it invalid so it is regenerated
+		return nil, ErrInvalidInitialPost
 	}
 	logger.Info("verifying the initial post")
 	initialPost := &types.Post{
@@ -658,7 +658,12 @@ func (b *Builder) buildInitialNIPostChallenge(
 		Pow:     post.Pow,
 	}
 	err = b.validator.PostV2(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
-	if err != nil {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return nil, err
+	case errors.Is(err, context.DeadlineExceeded):
+		return nil, err
+	case err != nil:
 		logger.Error("initial POST is invalid", zap.Error(err))
 		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
 			logger.Fatal("failed to remove initial post", zap.Error(err))
@@ -730,7 +735,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	case <-b.layerClock.AwaitLayer(challenge.PublishEpoch.FirstLayer()):
 	}
 
-	err = atxs.AddBlob(b.localDB, challenge.PublishEpoch, atx.ID(), sig.NodeID(), codec.MustEncode(atx))
+	err = localatxs.AddBlob(b.localDB, challenge.PublishEpoch, atx.ID(), sig.NodeID(), codec.MustEncode(atx))
 	if err != nil {
 		b.logger.Warn("failed to persist built ATX into the local DB - regossiping won't work", zap.Error(err))
 	}
@@ -909,34 +914,26 @@ func (f *positioningAtxFinder) find(
 	ctx context.Context,
 	atxs AtxService,
 	publish types.EpochID,
-) types.ATXID {
+) (types.ATXID, error) {
 	logger := f.logger.With(zap.Uint32("publish epoch", publish.Uint32()))
 
-	f.finding.Lock()
-	defer f.finding.Unlock()
+	atx, err, _ := f.finding.Do(publish.String(), func() (any, error) {
+		if f.found.forPublish == publish {
+			logger.Debug("using cached positioning atx", log.ZShortStringer("atx_id", f.found.id))
+			return f.found.id, nil
+		}
 
-	if found := f.found; found != nil && found.forPublish == publish {
-		logger.Debug("using cached positioning atx", log.ZShortStringer("atx_id", found.id))
-		return found.id
-	}
+		id, err := atxs.PositioningATX(ctx, publish-1)
+		if err != nil {
+			return types.EmptyATXID, err
+		}
 
-	id, err := atxs.PositioningATX(ctx, publish-1)
-	if err != nil {
-		logger.Warn("failed to get positioning ATX - falling back to golden", zap.Error(err))
-		f.found = &struct {
-			id         types.ATXID
-			forPublish types.EpochID
-		}{f.golden, publish}
-		return f.golden
-	}
+		logger.Debug("found candidate positioning atx", log.ZShortStringer("id", id))
+		f.found = foundPosAtx{id, publish}
+		return id, nil
+	})
 
-	logger.Debug("found candidate positioning atx", log.ZShortStringer("id", id))
-
-	f.found = &struct {
-		id         types.ATXID
-		forPublish types.EpochID
-	}{id, publish}
-	return id
+	return atx.(types.ATXID), err
 }
 
 // getPositioningAtx returns the positioning ATX.
@@ -948,7 +945,11 @@ func (b *Builder) getPositioningAtx(
 	publish types.EpochID,
 	previous *types.ActivationTx,
 ) (types.ATXID, error) {
-	id := b.posAtxFinder.find(ctx, b.atxSvc, publish)
+	id, err := b.posAtxFinder.find(ctx, b.atxSvc, publish)
+	if err != nil {
+		b.logger.Warn("failed to find positioning ATX - falling back to golden", zap.Error(err))
+		id = b.conf.GoldenATXID
+	}
 
 	if previous == nil {
 		b.logger.Info("selected positioning atx",
@@ -968,7 +969,8 @@ func (b *Builder) getPositioningAtx(
 
 	candidate, err := b.atxSvc.Atx(ctx, id)
 	if err != nil {
-		return types.EmptyATXID, fmt.Errorf("get candidate pos ATX %s: %w", id.ShortString(), err)
+		b.logger.Warn("failed to get candidate pos ATX - falling back to previous", zap.Error(err))
+		return previous.ID(), nil
 	}
 
 	if previous.TickHeight() >= candidate.TickHeight() {
@@ -986,8 +988,8 @@ func (b *Builder) getPositioningAtx(
 
 func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	epoch := b.layerClock.CurrentLayer().GetEpoch()
-	id, blob, err := atxs.AtxBlob(b.localDB, epoch, nodeID)
-	if errors.Is(err, common.ErrNotFound) {
+	id, blob, err := localatxs.AtxBlob(b.localDB, epoch, nodeID)
+	if errors.Is(err, sql.ErrNotFound) {
 		return nil
 	} else if err != nil {
 		return err

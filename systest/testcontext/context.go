@@ -66,12 +66,17 @@ var (
 	imageFlag = parameters.String(
 		"image",
 		"go-spacemesh image",
-		"spacemeshos/go-spacemesh-dev:2beaf443f",
+		"", // repo doesn't have a `latest` tag we can default to
+	)
+	oldImageFlag = parameters.String(
+		"old-image",
+		"old go-spacemesh image to test compatibility against",
+		"spacemeshos/go-spacemesh-dev:v1.7.4", // repo doesn't have a `latest` tag we can default to
 	)
 	bsImage = parameters.String(
 		"bs-image",
 		"bootstrapper image",
-		"spacemeshos/spacemesh-dev-bs:2beaf443f",
+		"", // repo doesn't have a `latest` tag we can default to
 	)
 	certifierImage = parameters.String(
 		"certifier-image",
@@ -81,17 +86,17 @@ var (
 	poetImage = parameters.String(
 		"poet-image",
 		"poet server image",
-		"spacemeshos/poet:87608eda8307b44984c191afc65cdbcec0d8d1c4",
+		"spacemeshos/poet:latest",
 	)
 	postServiceImage = parameters.String(
 		"post-service-image",
 		"post service image",
-		"spacemeshos/post-service:v0.6.5",
+		"spacemeshos/post-service:latest",
 	)
 	postInitImage = parameters.String(
 		"post-init-image",
 		"post init image",
-		"spacemeshos/postcli:v0.10.4",
+		"spacemeshos/postcli:latest",
 	)
 	namespaceFlag = parameters.String(
 		"namespace",
@@ -166,12 +171,14 @@ type Context struct {
 	BootnodeSize      int
 	RemoteSize        int
 	PoetSize          int
+	OldSize           int
 	BootstrapperSize  int
 	Generic           client.Client
 	TestID            string
 	Keep              bool
 	Namespace         string
 	Image             string
+	OldImage          string
 	BootstrapperImage string
 	CertifierImage    string
 	PoetImage         string
@@ -308,7 +315,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	config.RateLimiter = flowcontrol.NewTokenBucketRateLimiter(50, 300)
 	require.NoError(t, err)
 
-	clientset, err := kubernetes.NewForConfig(config)
+	clientSet, err := kubernetes.NewForConfig(config)
 	require.NoError(t, err)
 
 	scheme := runtime.NewScheme()
@@ -324,7 +331,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 
 	podns, err := os.ReadFile(nsfile)
 	require.NoError(t, err, "reading nsfile at %s", nsfile)
-	paramsData, err := clientset.CoreV1().ConfigMaps(string(podns)).Get(ctx, *configname, apimetav1.GetOptions{})
+	paramsData, err := clientSet.CoreV1().ConfigMaps(string(podns)).Get(ctx, *configname, apimetav1.GetOptions{})
 	require.NoError(t, err, "get cfgmap %s/%s", string(podns), *configname)
 
 	p := parameters.FromValues(paramsData.Data)
@@ -337,14 +344,17 @@ func New(t *testing.T, opts ...Opt) *Context {
 		ns = "test-" + rngName()
 	}
 	clSize := clusterSize.Get(p)
-	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.IncreaseLevel(logLevel), zap.AddCaller(),
-		zap.AddStacktrace(zap.FatalLevel)))
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(
+		zap.IncreaseLevel(logLevel),
+		zap.AddCaller(),
+		zap.AddStacktrace(zap.FatalLevel),
+	))
 	cctx := &Context{
 		Context:           ctx,
 		Parameters:        p,
 		Namespace:         ns,
 		BootstrapDuration: bootstrapDuration.Get(p),
-		Client:            clientset,
+		Client:            clientSet,
 		Generic:           generic,
 		TestID:            testid.Get(p),
 		Keep:              keep.Get(p),
@@ -352,8 +362,10 @@ func New(t *testing.T, opts ...Opt) *Context {
 		BootnodeSize:      max(2, (clSize/1000)*2),
 		RemoteSize:        0,
 		PoetSize:          poetSize.Get(p),
+		OldSize:           0,
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
+		OldImage:          oldImageFlag.Get(p),
 		BootstrapperImage: bsImage.Get(p),
 		CertifierImage:    certifierImage.Get(p),
 		PoetImage:         poetImage.Get(p),

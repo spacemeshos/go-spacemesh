@@ -48,7 +48,7 @@ func (e *HareEligibility) MarshalLogObject(encoder zapcore.ObjectEncoder) error 
 }
 
 // VotingEligibility includes the required values that, along with the smeshers VRF public key,
-// allow non-interactive voting eligibility validation. this proof provides eligibility for both voting and
+// allow non-interactive voting eligibility validation. This proof provides eligibility for both voting and
 // making proposals.
 type VotingEligibility struct {
 	// the counter value used to generate this eligibility proof. if the value of J is 3, this is the smeshers

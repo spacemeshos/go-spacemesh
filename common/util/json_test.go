@@ -17,28 +17,14 @@
 package util
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"testing"
-)
 
-func checkError(t *testing.T, input string, got, want error) bool {
-	if got == nil {
-		if want != nil {
-			t.Errorf("input %s: got no error, want %q", input, want)
-			return false
-		}
-		return true
-	}
-	if want == nil {
-		t.Errorf("input %s: unexpected error %q", input, got)
-	} else if got.Error() != want.Error() {
-		t.Errorf("input %s: got error %q, want %q", input, got, want)
-	}
-	return false
-}
+	"github.com/stretchr/testify/require"
+)
 
 func referenceBytes(s string) []byte {
 	b, err := hex.DecodeString(s)
@@ -48,18 +34,18 @@ func referenceBytes(s string) []byte {
 	return b
 }
 
-var errJSONEOF = errors.New("unexpected end of JSON input")
-
-var unmarshalBytesTests = []unmarshalTest{
+var unmarshalBytesErrorTests = []unmarshalTest{
 	// invalid encoding
-	{input: "", wantErr: errJSONEOF},
+	{input: "", wantErr: errors.New("unexpected end of JSON input")},
 	{input: "null", wantErr: errNonString(bytesT)},
 	{input: "10", wantErr: errNonString(bytesT)},
 	{input: `"0"`, wantErr: wrapTypeError(ErrMissingPrefix, bytesT)},
 	{input: `"0x0"`, wantErr: wrapTypeError(ErrOddLength, bytesT)},
 	{input: `"0xxx"`, wantErr: wrapTypeError(ErrSyntax, bytesT)},
 	{input: `"0x01zz01"`, wantErr: wrapTypeError(ErrSyntax, bytesT)},
+}
 
+var unmarshalBytesTests = []unmarshalTest{
 	// valid encoding
 	{input: `""`, want: referenceBytes("")},
 	{input: `"0x"`, want: referenceBytes("")},
@@ -73,16 +59,17 @@ var unmarshalBytesTests = []unmarshalTest{
 }
 
 func TestUnmarshalBytes(t *testing.T) {
+	for _, test := range unmarshalBytesErrorTests {
+		var v Bytes
+		err := json.Unmarshal([]byte(test.input), &v)
+		require.EqualError(t, err, test.wantErr.Error())
+	}
+
 	for _, test := range unmarshalBytesTests {
 		var v Bytes
 		err := json.Unmarshal([]byte(test.input), &v)
-		if !checkError(t, test.input, err, test.wantErr) {
-			continue
-		}
-		if !bytes.Equal(test.want.([]byte), []byte(v)) {
-			t.Errorf("input %s: value mismatch: got %x, want %x", test.input, &v, test.want)
-			continue
-		}
+		require.NoError(t, err)
+		require.Equal(t, test.want.([]byte), []byte(v))
 	}
 }
 
@@ -100,17 +87,8 @@ func TestMarshalBytes(t *testing.T) {
 	for _, test := range encodeBytesTests {
 		in := test.input.([]byte)
 		out, err := json.Marshal(Bytes(in))
-		if err != nil {
-			t.Errorf("%x: %v", in, err)
-			continue
-		}
-		if want := `"` + test.want + `"`; string(out) != want {
-			t.Errorf("%x: MarshalJSON output mismatch: got %q, want %q", in, out, want)
-			continue
-		}
-		if out := Bytes(in).String(); out != test.want {
-			t.Errorf("%x: String mismatch: got %q, want %q", in, out, test.want)
-			continue
-		}
+		require.NoError(t, err)
+		require.Equal(t, strconv.Quote(test.want), string(out))
+		require.Equal(t, test.want, Bytes(in).String())
 	}
 }

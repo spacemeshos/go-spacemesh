@@ -13,7 +13,7 @@ import (
 const baseEpoch = 3
 
 func TestGet(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	beacons := []types.Beacon{
 		types.HexToBeacon("0x1"),
@@ -36,7 +36,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestAdd(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	_, err := Get(db, types.EpochID(baseEpoch))
 	require.ErrorIs(t, err, sql.ErrNotFound)
@@ -51,7 +51,7 @@ func TestAdd(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	_, err := Get(db, types.EpochID(baseEpoch))
 	require.ErrorIs(t, err, sql.ErrNotFound)

@@ -21,7 +21,7 @@ const MethodDrainVault = 17
 // Register vesting templates.
 func Register(reg *registry.Registry) {
 	reg.Register(TemplateAddress, &handler{
-		multisig: multisig.NewHandler(TemplateAddress),
+		multisig: multisig.NewHandler(),
 	})
 }
 
@@ -34,7 +34,7 @@ func (h *handler) Parse(method uint8, decoder *scale.Decoder) (output core.Parse
 	return h.multisig.Parse(method, decoder)
 }
 
-// New instatiates vesting state, note that the state is the same as multisig.
+// New instantiates vesting state, note that the state is the same as multisig.
 // The difference is that vesting supports one more transaction type.
 func (h *handler) New(args any) (core.Template, error) {
 	template, err := h.multisig.New(args)

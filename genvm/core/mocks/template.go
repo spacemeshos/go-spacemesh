@@ -21,6 +21,7 @@ import (
 type MockTemplate struct {
 	ctrl     *gomock.Controller
 	recorder *MockTemplateMockRecorder
+	isgomock struct{}
 }
 
 // MockTemplateMockRecorder is the mock recorder for MockTemplate.
@@ -41,7 +42,7 @@ func (m *MockTemplate) EXPECT() *MockTemplateMockRecorder {
 }
 
 // BaseGas mocks base method.
-func (m *MockTemplate) BaseGas(arg0 byte) uint64 {
+func (m *MockTemplate) BaseGas(arg0 uint8) uint64 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BaseGas", arg0)
 	ret0, _ := ret[0].(uint64)
@@ -67,30 +68,30 @@ func (c *MockTemplateBaseGasCall) Return(arg0 uint64) *MockTemplateBaseGasCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTemplateBaseGasCall) Do(f func(byte) uint64) *MockTemplateBaseGasCall {
+func (c *MockTemplateBaseGasCall) Do(f func(uint8) uint64) *MockTemplateBaseGasCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateBaseGasCall) DoAndReturn(f func(byte) uint64) *MockTemplateBaseGasCall {
+func (c *MockTemplateBaseGasCall) DoAndReturn(f func(uint8) uint64) *MockTemplateBaseGasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // EncodeScale mocks base method.
-func (m *MockTemplate) EncodeScale(arg0 *scale.Encoder) (int, error) {
+func (m *MockTemplate) EncodeScale(enc *scale.Encoder) (int, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EncodeScale", arg0)
+	ret := m.ctrl.Call(m, "EncodeScale", enc)
 	ret0, _ := ret[0].(int)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // EncodeScale indicates an expected call of EncodeScale.
-func (mr *MockTemplateMockRecorder) EncodeScale(arg0 any) *MockTemplateEncodeScaleCall {
+func (mr *MockTemplateMockRecorder) EncodeScale(enc any) *MockTemplateEncodeScaleCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeScale", reflect.TypeOf((*MockTemplate)(nil).EncodeScale), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeScale", reflect.TypeOf((*MockTemplate)(nil).EncodeScale), enc)
 	return &MockTemplateEncodeScaleCall{Call: call}
 }
 
@@ -118,7 +119,7 @@ func (c *MockTemplateEncodeScaleCall) DoAndReturn(f func(*scale.Encoder) (int, e
 }
 
 // ExecGas mocks base method.
-func (m *MockTemplate) ExecGas(arg0 byte) uint64 {
+func (m *MockTemplate) ExecGas(arg0 uint8) uint64 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ExecGas", arg0)
 	ret0, _ := ret[0].(uint64)
@@ -144,13 +145,13 @@ func (c *MockTemplateExecGasCall) Return(arg0 uint64) *MockTemplateExecGasCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTemplateExecGasCall) Do(f func(byte) uint64) *MockTemplateExecGasCall {
+func (c *MockTemplateExecGasCall) Do(f func(uint8) uint64) *MockTemplateExecGasCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateExecGasCall) DoAndReturn(f func(byte) uint64) *MockTemplateExecGasCall {
+func (c *MockTemplateExecGasCall) DoAndReturn(f func(uint8) uint64) *MockTemplateExecGasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -194,7 +195,7 @@ func (c *MockTemplateLoadGasCall) DoAndReturn(f func() uint64) *MockTemplateLoad
 }
 
 // MaxSpend mocks base method.
-func (m *MockTemplate) MaxSpend(arg0 byte, arg1 any) (uint64, error) {
+func (m *MockTemplate) MaxSpend(arg0 uint8, arg1 any) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "MaxSpend", arg0, arg1)
 	ret0, _ := ret[0].(uint64)
@@ -221,13 +222,13 @@ func (c *MockTemplateMaxSpendCall) Return(arg0 uint64, arg1 error) *MockTemplate
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTemplateMaxSpendCall) Do(f func(byte, any) (uint64, error)) *MockTemplateMaxSpendCall {
+func (c *MockTemplateMaxSpendCall) Do(f func(uint8, any) (uint64, error)) *MockTemplateMaxSpendCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateMaxSpendCall) DoAndReturn(f func(byte, any) (uint64, error)) *MockTemplateMaxSpendCall {
+func (c *MockTemplateMaxSpendCall) DoAndReturn(f func(uint8, any) (uint64, error)) *MockTemplateMaxSpendCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

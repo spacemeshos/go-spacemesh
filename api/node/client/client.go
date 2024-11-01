@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	externalRef0 "github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -26,13 +25,13 @@ import (
 
 type NodeService struct {
 	client *ClientWithResponses
-	logger *zap.Logger
 }
 
 var (
 	_ activation.AtxService   = (*NodeService)(nil)
 	_ activation.PoetDbStorer = (*NodeService)(nil)
 	_ pubsub.Publisher        = (*NodeService)(nil)
+	_ hare3.NodeService       = (*NodeService)(nil)
 )
 
 type Config struct {
@@ -56,7 +55,6 @@ func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*Node
 	}
 	return &NodeService{
 		client: client,
-		logger: logger,
 	}, nil
 }
 
@@ -68,7 +66,7 @@ func (s *NodeService) Atx(ctx context.Context, id types.ATXID) (*types.Activatio
 	switch resp.StatusCode() {
 	case http.StatusOK:
 	case http.StatusNotFound:
-		return nil, common.ErrNotFound
+		return nil, activation.ErrNotFound
 	default:
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status())
 	}
@@ -83,7 +81,7 @@ func (s *NodeService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.
 	switch resp.StatusCode() {
 	case http.StatusOK:
 	case http.StatusNotFound:
-		return nil, common.ErrNotFound
+		return nil, activation.ErrNotFound
 	default:
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status())
 	}
@@ -131,7 +129,10 @@ func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProof
 }
 
 func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
-	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx, externalRef0.LayerID(layer), externalRef0.HareIter(round.Iter), externalRef0.HareRound(round.Round))
+	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx,
+		externalRef0.LayerID(layer),
+		externalRef0.HareIter(round.Iter),
+		externalRef0.HareRound(round.Round))
 	if err != nil {
 		return nil, err
 	}

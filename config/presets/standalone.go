@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/multiformats/go-multiaddr"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -36,6 +36,7 @@ func standalone() config.Config {
 	conf.LayerDuration = 6 * time.Second
 	conf.Sync.Interval = 3 * time.Second
 	conf.LayersPerEpoch = 10
+
 	conf.HARE3.Enable = true
 	conf.HARE3.PreroundDelay = 1 * time.Second
 	conf.HARE3.RoundDuration = 100 * time.Millisecond
@@ -94,8 +95,8 @@ func standalone() config.Config {
 	conf.API.PrivateListener = "127.0.0.1:10093"
 	conf.API.PostListener = "127.0.0.1:0"
 
-	addr, _ := multiaddr.NewMultiaddr("/ip4/0.0.0.0/tcp/17513")
-	conf.P2P.Listen = []multiaddr.Multiaddr{addr}
+	addr, _ := ma.NewMultiaddr("/ip4/0.0.0.0/tcp/17513")
+	conf.P2P.Listen = []ma.Multiaddr{addr}
 	conf.P2P.AdvertiseAddress = conf.P2P.Listen
 
 	return conf

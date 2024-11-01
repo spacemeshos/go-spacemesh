@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+// TestPostMalfeasanceProof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
@@ -107,10 +108,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	}).AnyTimes()
 
 	// 1. Initialize
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zap.NewNop())
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
-		datastore.NewCachedDB(statesql.InMemory(), zap.NewNop()),
+		cdb,
 		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,
@@ -156,17 +160,18 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
-	db := statesql.InMemory()
-	localDb := localsql.InMemory()
+	localDb := localsql.InMemoryTest(t)
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
-	poetDb := activation.NewPoetDb(db, zap.NewNop())
+	poetDb, err := activation.NewPoetDb(db, zap.NewNop())
+	require.NoError(t, err)
 	poetService, err := activation.NewPoetService(
 		poetDb,
 		types.PoetServer{
 			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
 		}, cfg.POET,
 		logger,
+		1,
 		activation.WithCertifier(certifier),
 	)
 	require.NoError(t, err)

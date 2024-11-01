@@ -90,66 +90,66 @@ func TestMain(m *testing.M) {
 	os.Exit(res)
 }
 
-func checkUpdate1(t *testing.T, got *bootstrap.VerifiedUpdate) {
-	require.EqualValues(t, 1, got.Data.Epoch)
-	require.EqualValues(t, "6fe7c971", got.Data.Beacon.String())
-	require.Len(t, got.Data.ActiveSet, 2)
+func checkUpdate1(tb testing.TB, got *bootstrap.VerifiedUpdate) {
+	require.EqualValues(tb, 1, got.Data.Epoch)
+	require.EqualValues(tb, "6fe7c971", got.Data.Beacon.String())
+	require.Len(tb, got.Data.ActiveSet, 2)
 	require.Equal(
-		t,
+		tb,
 		types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"),
 		got.Data.ActiveSet[0].Hash32(),
 	)
 	require.Equal(
-		t,
+		tb,
 		types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"),
 		got.Data.ActiveSet[1].Hash32(),
 	)
 }
 
-func checkUpdate2(t *testing.T, got *bootstrap.VerifiedUpdate) {
-	require.EqualValues(t, 2, got.Data.Epoch)
-	require.Equal(t, types.EmptyBeacon, got.Data.Beacon)
-	require.Len(t, got.Data.ActiveSet, 2)
+func checkUpdate2(tb testing.TB, got *bootstrap.VerifiedUpdate) {
+	require.EqualValues(tb, 2, got.Data.Epoch)
+	require.Equal(tb, types.EmptyBeacon, got.Data.Beacon)
+	require.Len(tb, got.Data.ActiveSet, 2)
 	require.Equal(
-		t,
+		tb,
 		types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"),
 		got.Data.ActiveSet[0].Hash32(),
 	)
 	require.Equal(
-		t,
+		tb,
 		types.HexToHash32("39125fbda7aac3edcef469b2ad9e6465af4350d28f3d953c6c6660e379546988"),
 		got.Data.ActiveSet[1].Hash32(),
 	)
 }
 
-func checkUpdate3(t *testing.T, got *bootstrap.VerifiedUpdate) {
-	require.EqualValues(t, 3, got.Data.Epoch)
-	require.EqualValues(t, "f70cf90b", got.Data.Beacon.String())
-	require.Nil(t, got.Data.ActiveSet)
+func checkUpdate3(tb testing.TB, got *bootstrap.VerifiedUpdate) {
+	require.EqualValues(tb, 3, got.Data.Epoch)
+	require.EqualValues(tb, "f70cf90b", got.Data.Beacon.String())
+	require.Nil(tb, got.Data.ActiveSet)
 }
 
-func checkUpdate4(t *testing.T, got *bootstrap.VerifiedUpdate) {
-	require.EqualValues(t, 4, got.Data.Epoch)
-	require.Equal(t, types.EmptyBeacon, got.Data.Beacon)
-	require.Len(t, got.Data.ActiveSet, 3)
+func checkUpdate4(tb testing.TB, got *bootstrap.VerifiedUpdate) {
+	require.EqualValues(tb, 4, got.Data.Epoch)
+	require.Equal(tb, types.EmptyBeacon, got.Data.Beacon)
+	require.Len(tb, got.Data.ActiveSet, 3)
 	require.Equal(
-		t,
+		tb,
 		types.HexToHash32("65af4350d28f3d953c6c6660e37954698839125fbda7aac3edcef469b2ad9e64"),
 		got.Data.ActiveSet[0].Hash32(),
 	)
 	require.Equal(
-		t,
+		tb,
 		types.HexToHash32("e46b23d64140357b16d18eace600b28ab767bfd7b51c8e9977a342b71c3a23dd"),
 		got.Data.ActiveSet[1].Hash32(),
 	)
 	require.Equal(
-		t,
+		tb,
 		types.HexToHash32("85de8823d6a0cd251aa62ce9315459302ea31ce9701531d3677ac8ba548a4210"),
 		got.Data.ActiveSet[2].Hash32(),
 	)
 }
 
-type checkFunc func(*testing.T, *bootstrap.VerifiedUpdate)
+type checkFunc func(testing.TB, *bootstrap.VerifiedUpdate)
 
 func TestLoad(t *testing.T) {
 	t.Parallel()

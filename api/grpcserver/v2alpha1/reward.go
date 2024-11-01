@@ -61,30 +61,14 @@ func (s *RewardStreamService) Stream(
 		}
 	}
 
-	dbChan := make(chan *types.Reward, 100)
-	errChan := make(chan error, 1)
-
 	ops, err := toRewardOperations(toRewardRequest(request))
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	// send db data to chan to avoid buffer overflow
-	go func() {
-		defer close(dbChan)
-		if err := rewards.IterateRewardsOps(s.db, ops, func(rwd *types.Reward) bool {
-			select {
-			case dbChan <- rwd:
-				return true
-			case <-ctx.Done():
-				// exit if the stream context is canceled
-				return false
-			}
-		}); err != nil {
-			errChan <- status.Error(codes.Internal, err.Error())
-			return
-		}
-	}()
+	ctx, cancel := context.WithCancel(stream.Context())
+	defer cancel()
+	dbChan, errChan := s.fetchFromDB(ctx, ops)
 
 	var eventsOut <-chan types.Reward
 	var eventsFull <-chan struct{}
@@ -137,6 +121,31 @@ func (s *RewardStreamService) Stream(
 			}
 		}
 	}
+}
+
+func (s *RewardStreamService) fetchFromDB(
+	ctx context.Context,
+	ops builder.Operations,
+) (<-chan *types.Reward, <-chan error) {
+	dbChan := make(chan *types.Reward)
+	errChan := make(chan error, 1) // buffered to avoid blocking, routine should exit immediately after sending an error
+
+	go func() {
+		defer close(dbChan)
+		if err := rewards.IterateRewardsOps(s.db, ops, func(rwd *types.Reward) bool {
+			select {
+			case dbChan <- rwd:
+				return true
+			case <-ctx.Done():
+				// exit if the context is canceled
+				return false
+			}
+		}); err != nil {
+			errChan <- status.Error(codes.Internal, err.Error())
+		}
+	}()
+
+	return dbChan, errChan
 }
 
 func (s *RewardStreamService) String() string {
