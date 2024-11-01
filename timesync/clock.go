@@ -184,7 +184,6 @@ func (t *NodeClock) AwaitLayer(layerID types.LayerID) <-chan struct{} {
 		ch = make(chan struct{})
 		t.layerChannels[layerID] = ch
 	}
-
 	if t.minLayer.After(layerID) {
 		t.minLayer = layerID
 	}

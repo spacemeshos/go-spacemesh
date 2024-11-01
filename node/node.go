@@ -405,6 +405,7 @@ type App struct {
 	clock              *timesync.NodeClock
 	hare3              *hare3.Hare
 	hare4              *hare4.Hare
+	remoteHare         *hare3.RemoteHare
 	hareResultsChan    chan hare4.ConsensusOutput
 	hOracle            *eligibility.Oracle
 	blockGen           *blocks.Generator
@@ -802,15 +803,20 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host.ID(),
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
-
+	extraOpts := []eligibility.Opt{
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+	}
+	if nodeServiceClient != nil {
+		extraOpts = append(extraOpts, eligibility.WithTotalWeightFunc(nodeServiceClient.TotalWeight))
+		extraOpts = append(extraOpts, eligibility.WithMinerWeightFunc(nodeServiceClient.MinerWeight))
+	}
 	app.hOracle = eligibility.New(
 		beaconProtocol,
 		app.db,
 		app.atxsdata,
 		vrfVerifier,
-		app.Config.LayersPerEpoch,
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+		extraOpts...,
 	)
 	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 
@@ -908,67 +914,80 @@ func (app *App) initServices(ctx context.Context) error {
 
 	// should be removed after hare4 transition is complete
 	app.hareResultsChan = make(chan hare4.ConsensusOutput, 32)
-	if app.Config.HARE3.Enable {
-		app.hare3 = hare3.New(
+	if nodeServiceClient != nil {
+		app.remoteHare = hare3.NewRemoteHare(
+			app.Config.HARE3,
 			app.clock,
-			app.host,
-			app.db,
-			app.atxsdata,
-			proposalsStore,
-			app.edVerifier,
+			nodeServiceClient,
 			app.hOracle,
-			newSyncer,
-			patrol,
-			hare3.WithLogger(logger),
-			hare3.WithConfig(app.Config.HARE3),
-			hare3.WithResultsChan(app.hareResultsChan),
+			logger,
 		)
 		for _, sig := range app.signers {
-			app.hare3.Register(sig)
+			app.remoteHare.Register(sig)
 		}
-		app.hare3.Start()
-		app.eg.Go(func() error {
-			compat.ReportWeakcoin(
-				ctx,
-				logger,
-				app.hare3.Coins(),
-				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+		app.remoteHare.Start(ctx)
+	} else {
+		if app.Config.HARE3.Enable {
+			app.hare3 = hare3.New(
+				app.clock,
+				app.host,
+				app.db,
+				app.atxsdata,
+				proposalsStore,
+				app.edVerifier,
+				app.hOracle,
+				newSyncer,
+				patrol,
+				hare3.WithLogger(logger),
+				hare3.WithConfig(app.Config.HARE3),
+				hare3.WithResultsChan(app.hareResultsChan),
 			)
-			return nil
-		})
-	}
-
-	if app.Config.HARE4.Enable {
-		app.hare4 = hare4.New(
-			app.clock,
-			app.host,
-			app.db,
-			app.atxsdata,
-			proposalsStore,
-			app.edVerifier,
-			app.hOracle,
-			newSyncer,
-			patrol,
-			app.host,
-			hare4.WithLogger(logger),
-			hare4.WithConfig(app.Config.HARE4),
-			hare4.WithResultsChan(app.hareResultsChan),
-		)
-		for _, sig := range app.signers {
-			app.hare4.Register(sig)
+			for _, sig := range app.signers {
+				app.hare3.Register(sig)
+			}
+			app.hare3.Start()
+			app.eg.Go(func() error {
+				compat.ReportWeakcoin(
+					ctx,
+					logger,
+					app.hare3.Coins(),
+					tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+				)
+				return nil
+			})
 		}
-		app.hare4.Start()
-		app.eg.Go(func() error {
-			compat.ReportWeakcoin(
-				ctx,
-				logger,
-				app.hare4.Coins(),
-				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-			)
-			return nil
-		})
-	}
 
+		if app.Config.HARE4.Enable {
+			app.hare4 = hare4.New(
+				app.clock,
+				app.host,
+				app.db,
+				app.atxsdata,
+				proposalsStore,
+				app.edVerifier,
+				app.hOracle,
+				newSyncer,
+				patrol,
+				app.host,
+				hare4.WithLogger(logger),
+				hare4.WithConfig(app.Config.HARE4),
+				hare4.WithResultsChan(app.hareResultsChan),
+			)
+			for _, sig := range app.signers {
+				app.hare4.Register(sig)
+			}
+			app.hare4.Start()
+			app.eg.Go(func() error {
+				compat.ReportWeakcoin(
+					ctx,
+					logger,
+					app.hare4.Coins(),
+					tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+				)
+				return nil
+			})
+		}
+	}
 	propHare := &proposalConsumerHare{
 		hare3:          app.hare3,
 		h3DisableLayer: app.Config.HARE3.DisableLayer,
@@ -1892,7 +1911,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		golden := types.ATXID(app.Config.Genesis.GoldenATX())
 		logger := app.addLogger(NodeServiceLogger, app.log).Zap()
 		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
-		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, logger)
+		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, app.hare3, logger)
 
 		app.nodeServiceServer = &http.Server{
 			Handler: server.IntoHandler(http.NewServeMux()),

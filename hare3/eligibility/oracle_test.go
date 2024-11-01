@@ -67,7 +67,6 @@ func defaultOracle(tb testing.TB) *testOracle {
 			db,
 			atxsdata,
 			mVerifier,
-			defLayersPerEpoch,
 			WithConfig(Config{ConfidenceParam: confidenceParam}),
 			WithLogger(zaptest.NewLogger(tb)),
 		),
