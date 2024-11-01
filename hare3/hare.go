@@ -280,6 +280,7 @@ func (h *Hare) Start() {
 			case <-h.nodeClock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("lid", next.Uint32()))
 				h.onLayer(next)
+				h.cleanupLayer(next - 1)
 			case <-h.ctx.Done():
 				return nil
 			}
@@ -363,7 +364,6 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		return
 	}
 	beacon, err := beacons.Get(h.db, layer.GetEpoch())
-	h.log.Info("hare tried to get beacon value", zap.Error(err))
 	if err != nil || beacon == types.EmptyBeacon {
 		h.log.Debug("no beacon",
 			zap.Uint32("epoch", layer.GetEpoch().Uint32()),
@@ -655,6 +655,20 @@ type session struct {
 	beacon  types.Beacon
 	signers []*signing.EdSigner
 	vrfs    []*types.HareEligibility
+}
+
+func (h *Hare) cleanupLayer(l types.LayerID) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	var rmLayer []types.LayerID
+	for layer := range h.layerResults {
+		if layer <= l {
+			rmLayer = append(rmLayer, layer)
+		}
+	}
+	for _, k := range rmLayer {
+		delete(h.layerResults, k)
+	}
 }
 
 func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {

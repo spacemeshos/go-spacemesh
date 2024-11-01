@@ -164,8 +164,8 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 		start   = time.Now()
 		active  bool
 	)
-	for i := range session.signers {
-		session.vrfs[i] = h.oracle.active(session.signers[i], session.beacon, session.lid, current)
+	for i, signer := range session.signers {
+		session.vrfs[i] = h.oracle.active(signer, session.beacon, session.lid, current)
 		active = active || session.vrfs[i] != nil
 	}
 	activeLatency.Observe(time.Since(start).Seconds())
