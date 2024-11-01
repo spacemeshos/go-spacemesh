@@ -32,8 +32,10 @@ const (
 	sendQueueSize = 200000
 )
 
-var ErrTrafficLimitExceeded = errors.New("sync traffic limit exceeded")
-var ErrMessageLimitExceeded = errors.New("sync message limit exceeded")
+var (
+	ErrTrafficLimitExceeded = errors.New("sync traffic limit exceeded")
+	ErrMessageLimitExceeded = errors.New("sync message limit exceeded")
+)
 
 // wireConduit is an implementation of the Conduit interface that sends and receives
 // messages over a stream represented by an io.ReadWriter.
