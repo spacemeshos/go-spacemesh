@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync2"
-	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
@@ -47,7 +46,7 @@ func (fh *fakeHandler) Receive(k rangesync.KeyBytes, peer p2p.Peer) (bool, error
 	return true, nil
 }
 
-func (fh *fakeHandler) Commit(peer p2p.Peer, base, new multipeer.OrderedSet) error {
+func (fh *fakeHandler) Commit(peer p2p.Peer, base, new rangesync.OrderedSet) error {
 	fh.mtx.Lock()
 	defer fh.mtx.Unlock()
 	for k := range fh.synced {
@@ -102,7 +101,7 @@ func TestP2P(t *testing.T) {
 			synced:      make(map[addedKey]struct{}),
 			committed:   make(map[string]struct{}),
 		}
-		os := multipeer.NewDumbHashSet()
+		var os rangesync.DumbSet
 		d := rangesync.NewDispatcher(logger)
 		srv := d.SetupServer(host, "sync2test", server.WithLog(logger))
 		ctx, cancel := context.WithCancel(context.Background())
@@ -110,9 +109,9 @@ func TestP2P(t *testing.T) {
 		eg.Go(func() error { return srv.Run(ctx) })
 		hs[n] = sync2.NewP2PHashSync(
 			logger.Named(fmt.Sprintf("node%d", n)),
-			d, "test", os, keyLen, maxDepth, ps, handlers[n], cfg, srv)
+			d, "test", &os, keyLen, maxDepth, ps, handlers[n], cfg, srv)
 		require.NoError(t, hs[n].Load())
-		is := hs[n].Set().(*multipeer.DumbSet)
+		is := hs[n].Set().(*rangesync.DumbSet)
 		is.SetAllowMultiReceive(true)
 		if n == 0 {
 			for _, h := range initialSet {
@@ -131,7 +130,7 @@ func TestP2P(t *testing.T) {
 			}
 			os := hsync.Set().Copy(false)
 			for _, k := range handlers[n].committedItems() {
-				os.(*multipeer.DumbSet).AddUnchecked(k)
+				os.(*rangesync.DumbSet).AddUnchecked(k)
 			}
 			empty, err := os.Empty()
 			require.NoError(t, err)
@@ -153,7 +152,7 @@ func TestP2P(t *testing.T) {
 		hsync.Stop()
 		os := hsync.Set().Copy(false)
 		for _, k := range handlers[n].committedItems() {
-			os.(*multipeer.DumbSet).AddUnchecked(k)
+			os.(*rangesync.DumbSet).AddUnchecked(k)
 		}
 		actualItems, err := os.Items().Collect()
 		require.NoError(t, err)

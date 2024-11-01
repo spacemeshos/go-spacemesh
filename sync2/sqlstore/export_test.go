@@ -2,10 +2,7 @@ package sqlstore
 
 import "github.com/spacemeshos/go-spacemesh/sql/expr"
 
-var (
-	NewLRU       = newLRU
-	IDSFromTable = idsFromTable
-)
+var IDSFromTable = idsFromTable
 
 func (st *SyncedTable) GenSelectAll() expr.Statement      { return st.genSelectAll() }
 func (st *SyncedTable) GenCount() expr.Statement          { return st.genCount() }

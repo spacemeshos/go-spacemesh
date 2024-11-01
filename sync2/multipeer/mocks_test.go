@@ -13,536 +13,12 @@ import (
 	context "context"
 	io "io"
 	reflect "reflect"
-	time "time"
 
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	multipeer "github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	rangesync "github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 	gomock "go.uber.org/mock/gomock"
 )
-
-// MockOrderedSet is a mock of OrderedSet interface.
-type MockOrderedSet struct {
-	ctrl     *gomock.Controller
-	recorder *MockOrderedSetMockRecorder
-	isgomock struct{}
-}
-
-// MockOrderedSetMockRecorder is the mock recorder for MockOrderedSet.
-type MockOrderedSetMockRecorder struct {
-	mock *MockOrderedSet
-}
-
-// NewMockOrderedSet creates a new mock instance.
-func NewMockOrderedSet(ctrl *gomock.Controller) *MockOrderedSet {
-	mock := &MockOrderedSet{ctrl: ctrl}
-	mock.recorder = &MockOrderedSetMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockOrderedSet) EXPECT() *MockOrderedSetMockRecorder {
-	return m.recorder
-}
-
-// Add mocks base method.
-func (m *MockOrderedSet) Add(k rangesync.KeyBytes) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", k)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Add indicates an expected call of Add.
-func (mr *MockOrderedSetMockRecorder) Add(k any) *MockOrderedSetAddCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockOrderedSet)(nil).Add), k)
-	return &MockOrderedSetAddCall{Call: call}
-}
-
-// MockOrderedSetAddCall wrap *gomock.Call
-type MockOrderedSetAddCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetAddCall) Return(arg0 error) *MockOrderedSetAddCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetAddCall) Do(f func(rangesync.KeyBytes) error) *MockOrderedSetAddCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetAddCall) DoAndReturn(f func(rangesync.KeyBytes) error) *MockOrderedSetAddCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Advance mocks base method.
-func (m *MockOrderedSet) Advance() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Advance")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Advance indicates an expected call of Advance.
-func (mr *MockOrderedSetMockRecorder) Advance() *MockOrderedSetAdvanceCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Advance", reflect.TypeOf((*MockOrderedSet)(nil).Advance))
-	return &MockOrderedSetAdvanceCall{Call: call}
-}
-
-// MockOrderedSetAdvanceCall wrap *gomock.Call
-type MockOrderedSetAdvanceCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetAdvanceCall) Return(arg0 error) *MockOrderedSetAdvanceCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetAdvanceCall) Do(f func() error) *MockOrderedSetAdvanceCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetAdvanceCall) DoAndReturn(f func() error) *MockOrderedSetAdvanceCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Copy mocks base method.
-func (m *MockOrderedSet) Copy(syncScope bool) rangesync.OrderedSet {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Copy", syncScope)
-	ret0, _ := ret[0].(rangesync.OrderedSet)
-	return ret0
-}
-
-// Copy indicates an expected call of Copy.
-func (mr *MockOrderedSetMockRecorder) Copy(syncScope any) *MockOrderedSetCopyCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Copy", reflect.TypeOf((*MockOrderedSet)(nil).Copy), syncScope)
-	return &MockOrderedSetCopyCall{Call: call}
-}
-
-// MockOrderedSetCopyCall wrap *gomock.Call
-type MockOrderedSetCopyCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetCopyCall) Return(arg0 rangesync.OrderedSet) *MockOrderedSetCopyCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetCopyCall) Do(f func(bool) rangesync.OrderedSet) *MockOrderedSetCopyCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetCopyCall) DoAndReturn(f func(bool) rangesync.OrderedSet) *MockOrderedSetCopyCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Empty mocks base method.
-func (m *MockOrderedSet) Empty() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Empty")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Empty indicates an expected call of Empty.
-func (mr *MockOrderedSetMockRecorder) Empty() *MockOrderedSetEmptyCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Empty", reflect.TypeOf((*MockOrderedSet)(nil).Empty))
-	return &MockOrderedSetEmptyCall{Call: call}
-}
-
-// MockOrderedSetEmptyCall wrap *gomock.Call
-type MockOrderedSetEmptyCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetEmptyCall) Return(arg0 bool, arg1 error) *MockOrderedSetEmptyCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetEmptyCall) Do(f func() (bool, error)) *MockOrderedSetEmptyCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetEmptyCall) DoAndReturn(f func() (bool, error)) *MockOrderedSetEmptyCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// EnsureLoaded mocks base method.
-func (m *MockOrderedSet) EnsureLoaded() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "EnsureLoaded")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// EnsureLoaded indicates an expected call of EnsureLoaded.
-func (mr *MockOrderedSetMockRecorder) EnsureLoaded() *MockOrderedSetEnsureLoadedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureLoaded", reflect.TypeOf((*MockOrderedSet)(nil).EnsureLoaded))
-	return &MockOrderedSetEnsureLoadedCall{Call: call}
-}
-
-// MockOrderedSetEnsureLoadedCall wrap *gomock.Call
-type MockOrderedSetEnsureLoadedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetEnsureLoadedCall) Return(arg0 error) *MockOrderedSetEnsureLoadedCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetEnsureLoadedCall) Do(f func() error) *MockOrderedSetEnsureLoadedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetEnsureLoadedCall) DoAndReturn(f func() error) *MockOrderedSetEnsureLoadedCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// GetRangeInfo mocks base method.
-func (m *MockOrderedSet) GetRangeInfo(x, y rangesync.KeyBytes) (rangesync.RangeInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRangeInfo", x, y)
-	ret0, _ := ret[0].(rangesync.RangeInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRangeInfo indicates an expected call of GetRangeInfo.
-func (mr *MockOrderedSetMockRecorder) GetRangeInfo(x, y any) *MockOrderedSetGetRangeInfoCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeInfo", reflect.TypeOf((*MockOrderedSet)(nil).GetRangeInfo), x, y)
-	return &MockOrderedSetGetRangeInfoCall{Call: call}
-}
-
-// MockOrderedSetGetRangeInfoCall wrap *gomock.Call
-type MockOrderedSetGetRangeInfoCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetGetRangeInfoCall) Return(arg0 rangesync.RangeInfo, arg1 error) *MockOrderedSetGetRangeInfoCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetGetRangeInfoCall) Do(f func(rangesync.KeyBytes, rangesync.KeyBytes) (rangesync.RangeInfo, error)) *MockOrderedSetGetRangeInfoCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetGetRangeInfoCall) DoAndReturn(f func(rangesync.KeyBytes, rangesync.KeyBytes) (rangesync.RangeInfo, error)) *MockOrderedSetGetRangeInfoCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Has mocks base method.
-func (m *MockOrderedSet) Has(arg0 rangesync.KeyBytes) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Has", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Has indicates an expected call of Has.
-func (mr *MockOrderedSetMockRecorder) Has(arg0 any) *MockOrderedSetHasCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*MockOrderedSet)(nil).Has), arg0)
-	return &MockOrderedSetHasCall{Call: call}
-}
-
-// MockOrderedSetHasCall wrap *gomock.Call
-type MockOrderedSetHasCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetHasCall) Return(arg0 bool, arg1 error) *MockOrderedSetHasCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetHasCall) Do(f func(rangesync.KeyBytes) (bool, error)) *MockOrderedSetHasCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetHasCall) DoAndReturn(f func(rangesync.KeyBytes) (bool, error)) *MockOrderedSetHasCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Items mocks base method.
-func (m *MockOrderedSet) Items() rangesync.SeqResult {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Items")
-	ret0, _ := ret[0].(rangesync.SeqResult)
-	return ret0
-}
-
-// Items indicates an expected call of Items.
-func (mr *MockOrderedSetMockRecorder) Items() *MockOrderedSetItemsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Items", reflect.TypeOf((*MockOrderedSet)(nil).Items))
-	return &MockOrderedSetItemsCall{Call: call}
-}
-
-// MockOrderedSetItemsCall wrap *gomock.Call
-type MockOrderedSetItemsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetItemsCall) Return(arg0 rangesync.SeqResult) *MockOrderedSetItemsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetItemsCall) Do(f func() rangesync.SeqResult) *MockOrderedSetItemsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetItemsCall) DoAndReturn(f func() rangesync.SeqResult) *MockOrderedSetItemsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Receive mocks base method.
-func (m *MockOrderedSet) Receive(k rangesync.KeyBytes) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Receive", k)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Receive indicates an expected call of Receive.
-func (mr *MockOrderedSetMockRecorder) Receive(k any) *MockOrderedSetReceiveCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Receive", reflect.TypeOf((*MockOrderedSet)(nil).Receive), k)
-	return &MockOrderedSetReceiveCall{Call: call}
-}
-
-// MockOrderedSetReceiveCall wrap *gomock.Call
-type MockOrderedSetReceiveCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetReceiveCall) Return(arg0 error) *MockOrderedSetReceiveCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetReceiveCall) Do(f func(rangesync.KeyBytes) error) *MockOrderedSetReceiveCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetReceiveCall) DoAndReturn(f func(rangesync.KeyBytes) error) *MockOrderedSetReceiveCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Received mocks base method.
-func (m *MockOrderedSet) Received() rangesync.SeqResult {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Received")
-	ret0, _ := ret[0].(rangesync.SeqResult)
-	return ret0
-}
-
-// Received indicates an expected call of Received.
-func (mr *MockOrderedSetMockRecorder) Received() *MockOrderedSetReceivedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Received", reflect.TypeOf((*MockOrderedSet)(nil).Received))
-	return &MockOrderedSetReceivedCall{Call: call}
-}
-
-// MockOrderedSetReceivedCall wrap *gomock.Call
-type MockOrderedSetReceivedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetReceivedCall) Return(arg0 rangesync.SeqResult) *MockOrderedSetReceivedCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetReceivedCall) Do(f func() rangesync.SeqResult) *MockOrderedSetReceivedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetReceivedCall) DoAndReturn(f func() rangesync.SeqResult) *MockOrderedSetReceivedCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Recent mocks base method.
-func (m *MockOrderedSet) Recent(since time.Time) (rangesync.SeqResult, int) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Recent", since)
-	ret0, _ := ret[0].(rangesync.SeqResult)
-	ret1, _ := ret[1].(int)
-	return ret0, ret1
-}
-
-// Recent indicates an expected call of Recent.
-func (mr *MockOrderedSetMockRecorder) Recent(since any) *MockOrderedSetRecentCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Recent", reflect.TypeOf((*MockOrderedSet)(nil).Recent), since)
-	return &MockOrderedSetRecentCall{Call: call}
-}
-
-// MockOrderedSetRecentCall wrap *gomock.Call
-type MockOrderedSetRecentCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetRecentCall) Return(arg0 rangesync.SeqResult, arg1 int) *MockOrderedSetRecentCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetRecentCall) Do(f func(time.Time) (rangesync.SeqResult, int)) *MockOrderedSetRecentCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetRecentCall) DoAndReturn(f func(time.Time) (rangesync.SeqResult, int)) *MockOrderedSetRecentCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Release mocks base method.
-func (m *MockOrderedSet) Release() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Release")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Release indicates an expected call of Release.
-func (mr *MockOrderedSetMockRecorder) Release() *MockOrderedSetReleaseCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockOrderedSet)(nil).Release))
-	return &MockOrderedSetReleaseCall{Call: call}
-}
-
-// MockOrderedSetReleaseCall wrap *gomock.Call
-type MockOrderedSetReleaseCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetReleaseCall) Return(arg0 error) *MockOrderedSetReleaseCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetReleaseCall) Do(f func() error) *MockOrderedSetReleaseCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetReleaseCall) DoAndReturn(f func() error) *MockOrderedSetReleaseCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// SplitRange mocks base method.
-func (m *MockOrderedSet) SplitRange(x, y rangesync.KeyBytes, count int) (rangesync.SplitInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SplitRange", x, y, count)
-	ret0, _ := ret[0].(rangesync.SplitInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// SplitRange indicates an expected call of SplitRange.
-func (mr *MockOrderedSetMockRecorder) SplitRange(x, y, count any) *MockOrderedSetSplitRangeCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SplitRange", reflect.TypeOf((*MockOrderedSet)(nil).SplitRange), x, y, count)
-	return &MockOrderedSetSplitRangeCall{Call: call}
-}
-
-// MockOrderedSetSplitRangeCall wrap *gomock.Call
-type MockOrderedSetSplitRangeCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetSplitRangeCall) Return(arg0 rangesync.SplitInfo, arg1 error) *MockOrderedSetSplitRangeCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetSplitRangeCall) Do(f func(rangesync.KeyBytes, rangesync.KeyBytes, int) (rangesync.SplitInfo, error)) *MockOrderedSetSplitRangeCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetSplitRangeCall) DoAndReturn(f func(rangesync.KeyBytes, rangesync.KeyBytes, int) (rangesync.SplitInfo, error)) *MockOrderedSetSplitRangeCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
 
 // MockSyncBase is a mock of SyncBase interface.
 type MockSyncBase struct {
@@ -608,10 +84,10 @@ func (c *MockSyncBaseCountCall) DoAndReturn(f func() (int, error)) *MockSyncBase
 }
 
 // Derive mocks base method.
-func (m *MockSyncBase) Derive(p p2p.Peer) multipeer.Syncer {
+func (m *MockSyncBase) Derive(p p2p.Peer) multipeer.PeerSyncer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Derive", p)
-	ret0, _ := ret[0].(multipeer.Syncer)
+	ret0, _ := ret[0].(multipeer.PeerSyncer)
 	return ret0
 }
 
@@ -628,19 +104,19 @@ type MockSyncBaseDeriveCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockSyncBaseDeriveCall) Return(arg0 multipeer.Syncer) *MockSyncBaseDeriveCall {
+func (c *MockSyncBaseDeriveCall) Return(arg0 multipeer.PeerSyncer) *MockSyncBaseDeriveCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncBaseDeriveCall) Do(f func(p2p.Peer) multipeer.Syncer) *MockSyncBaseDeriveCall {
+func (c *MockSyncBaseDeriveCall) Do(f func(p2p.Peer) multipeer.PeerSyncer) *MockSyncBaseDeriveCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncBaseDeriveCall) DoAndReturn(f func(p2p.Peer) multipeer.Syncer) *MockSyncBaseDeriveCall {
+func (c *MockSyncBaseDeriveCall) DoAndReturn(f func(p2p.Peer) multipeer.PeerSyncer) *MockSyncBaseDeriveCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -722,32 +198,32 @@ func (c *MockSyncBaseWaitCall) DoAndReturn(f func() error) *MockSyncBaseWaitCall
 	return c
 }
 
-// MockSyncer is a mock of Syncer interface.
-type MockSyncer struct {
+// MockPeerSyncer is a mock of PeerSyncer interface.
+type MockPeerSyncer struct {
 	ctrl     *gomock.Controller
-	recorder *MockSyncerMockRecorder
+	recorder *MockPeerSyncerMockRecorder
 	isgomock struct{}
 }
 
-// MockSyncerMockRecorder is the mock recorder for MockSyncer.
-type MockSyncerMockRecorder struct {
-	mock *MockSyncer
+// MockPeerSyncerMockRecorder is the mock recorder for MockPeerSyncer.
+type MockPeerSyncerMockRecorder struct {
+	mock *MockPeerSyncer
 }
 
-// NewMockSyncer creates a new mock instance.
-func NewMockSyncer(ctrl *gomock.Controller) *MockSyncer {
-	mock := &MockSyncer{ctrl: ctrl}
-	mock.recorder = &MockSyncerMockRecorder{mock}
+// NewMockPeerSyncer creates a new mock instance.
+func NewMockPeerSyncer(ctrl *gomock.Controller) *MockPeerSyncer {
+	mock := &MockPeerSyncer{ctrl: ctrl}
+	mock.recorder = &MockPeerSyncerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockSyncer) EXPECT() *MockSyncerMockRecorder {
+func (m *MockPeerSyncer) EXPECT() *MockPeerSyncerMockRecorder {
 	return m.recorder
 }
 
 // Peer mocks base method.
-func (m *MockSyncer) Peer() p2p.Peer {
+func (m *MockPeerSyncer) Peer() p2p.Peer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Peer")
 	ret0, _ := ret[0].(p2p.Peer)
@@ -755,37 +231,37 @@ func (m *MockSyncer) Peer() p2p.Peer {
 }
 
 // Peer indicates an expected call of Peer.
-func (mr *MockSyncerMockRecorder) Peer() *MockSyncerPeerCall {
+func (mr *MockPeerSyncerMockRecorder) Peer() *MockPeerSyncerPeerCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Peer", reflect.TypeOf((*MockSyncer)(nil).Peer))
-	return &MockSyncerPeerCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Peer", reflect.TypeOf((*MockPeerSyncer)(nil).Peer))
+	return &MockPeerSyncerPeerCall{Call: call}
 }
 
-// MockSyncerPeerCall wrap *gomock.Call
-type MockSyncerPeerCall struct {
+// MockPeerSyncerPeerCall wrap *gomock.Call
+type MockPeerSyncerPeerCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockSyncerPeerCall) Return(arg0 p2p.Peer) *MockSyncerPeerCall {
+func (c *MockPeerSyncerPeerCall) Return(arg0 p2p.Peer) *MockPeerSyncerPeerCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncerPeerCall) Do(f func() p2p.Peer) *MockSyncerPeerCall {
+func (c *MockPeerSyncerPeerCall) Do(f func() p2p.Peer) *MockPeerSyncerPeerCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncerPeerCall) DoAndReturn(f func() p2p.Peer) *MockSyncerPeerCall {
+func (c *MockPeerSyncerPeerCall) DoAndReturn(f func() p2p.Peer) *MockPeerSyncerPeerCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Release mocks base method.
-func (m *MockSyncer) Release() error {
+func (m *MockPeerSyncer) Release() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Release")
 	ret0, _ := ret[0].(error)
@@ -793,37 +269,37 @@ func (m *MockSyncer) Release() error {
 }
 
 // Release indicates an expected call of Release.
-func (mr *MockSyncerMockRecorder) Release() *MockSyncerReleaseCall {
+func (mr *MockPeerSyncerMockRecorder) Release() *MockPeerSyncerReleaseCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockSyncer)(nil).Release))
-	return &MockSyncerReleaseCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockPeerSyncer)(nil).Release))
+	return &MockPeerSyncerReleaseCall{Call: call}
 }
 
-// MockSyncerReleaseCall wrap *gomock.Call
-type MockSyncerReleaseCall struct {
+// MockPeerSyncerReleaseCall wrap *gomock.Call
+type MockPeerSyncerReleaseCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockSyncerReleaseCall) Return(arg0 error) *MockSyncerReleaseCall {
+func (c *MockPeerSyncerReleaseCall) Return(arg0 error) *MockPeerSyncerReleaseCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncerReleaseCall) Do(f func() error) *MockSyncerReleaseCall {
+func (c *MockPeerSyncerReleaseCall) Do(f func() error) *MockPeerSyncerReleaseCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncerReleaseCall) DoAndReturn(f func() error) *MockSyncerReleaseCall {
+func (c *MockPeerSyncerReleaseCall) DoAndReturn(f func() error) *MockPeerSyncerReleaseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Serve mocks base method.
-func (m *MockSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
+func (m *MockPeerSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Serve", ctx, stream)
 	ret0, _ := ret[0].(error)
@@ -831,37 +307,37 @@ func (m *MockSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
 }
 
 // Serve indicates an expected call of Serve.
-func (mr *MockSyncerMockRecorder) Serve(ctx, stream any) *MockSyncerServeCall {
+func (mr *MockPeerSyncerMockRecorder) Serve(ctx, stream any) *MockPeerSyncerServeCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serve", reflect.TypeOf((*MockSyncer)(nil).Serve), ctx, stream)
-	return &MockSyncerServeCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serve", reflect.TypeOf((*MockPeerSyncer)(nil).Serve), ctx, stream)
+	return &MockPeerSyncerServeCall{Call: call}
 }
 
-// MockSyncerServeCall wrap *gomock.Call
-type MockSyncerServeCall struct {
+// MockPeerSyncerServeCall wrap *gomock.Call
+type MockPeerSyncerServeCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockSyncerServeCall) Return(arg0 error) *MockSyncerServeCall {
+func (c *MockPeerSyncerServeCall) Return(arg0 error) *MockPeerSyncerServeCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncerServeCall) Do(f func(context.Context, io.ReadWriter) error) *MockSyncerServeCall {
+func (c *MockPeerSyncerServeCall) Do(f func(context.Context, io.ReadWriter) error) *MockPeerSyncerServeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncerServeCall) DoAndReturn(f func(context.Context, io.ReadWriter) error) *MockSyncerServeCall {
+func (c *MockPeerSyncerServeCall) DoAndReturn(f func(context.Context, io.ReadWriter) error) *MockPeerSyncerServeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Sync mocks base method.
-func (m *MockSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
+func (m *MockPeerSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Sync", ctx, x, y)
 	ret0, _ := ret[0].(error)
@@ -869,31 +345,31 @@ func (m *MockSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
 }
 
 // Sync indicates an expected call of Sync.
-func (mr *MockSyncerMockRecorder) Sync(ctx, x, y any) *MockSyncerSyncCall {
+func (mr *MockPeerSyncerMockRecorder) Sync(ctx, x, y any) *MockPeerSyncerSyncCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockSyncer)(nil).Sync), ctx, x, y)
-	return &MockSyncerSyncCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockPeerSyncer)(nil).Sync), ctx, x, y)
+	return &MockPeerSyncerSyncCall{Call: call}
 }
 
-// MockSyncerSyncCall wrap *gomock.Call
-type MockSyncerSyncCall struct {
+// MockPeerSyncerSyncCall wrap *gomock.Call
+type MockPeerSyncerSyncCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockSyncerSyncCall) Return(arg0 error) *MockSyncerSyncCall {
+func (c *MockPeerSyncerSyncCall) Return(arg0 error) *MockPeerSyncerSyncCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncerSyncCall) Do(f func(context.Context, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockSyncerSyncCall {
+func (c *MockPeerSyncerSyncCall) Do(f func(context.Context, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockPeerSyncerSyncCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncerSyncCall) DoAndReturn(f func(context.Context, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockSyncerSyncCall {
+func (c *MockPeerSyncerSyncCall) DoAndReturn(f func(context.Context, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockPeerSyncerSyncCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -923,7 +399,7 @@ func (m *MockSyncKeyHandler) EXPECT() *MockSyncKeyHandlerMockRecorder {
 }
 
 // Commit mocks base method.
-func (m *MockSyncKeyHandler) Commit(peer p2p.Peer, base, new multipeer.OrderedSet) error {
+func (m *MockSyncKeyHandler) Commit(peer p2p.Peer, base, new rangesync.OrderedSet) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Commit", peer, base, new)
 	ret0, _ := ret[0].(error)
@@ -949,13 +425,13 @@ func (c *MockSyncKeyHandlerCommitCall) Return(arg0 error) *MockSyncKeyHandlerCom
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncKeyHandlerCommitCall) Do(f func(p2p.Peer, multipeer.OrderedSet, multipeer.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
+func (c *MockSyncKeyHandlerCommitCall) Do(f func(p2p.Peer, rangesync.OrderedSet, rangesync.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncKeyHandlerCommitCall) DoAndReturn(f func(p2p.Peer, multipeer.OrderedSet, multipeer.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
+func (c *MockSyncKeyHandlerCommitCall) DoAndReturn(f func(p2p.Peer, rangesync.OrderedSet, rangesync.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

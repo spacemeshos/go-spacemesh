@@ -8,11 +8,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync/mocks"
 )
 
 type setSyncBaseTester struct {
@@ -20,14 +22,14 @@ type setSyncBaseTester struct {
 	ctrl    *gomock.Controller
 	ps      *MockPairwiseSyncer
 	handler *MockSyncKeyHandler
-	os      *MockOrderedSet
+	os      *mocks.MockOrderedSet
 	ssb     *multipeer.SetSyncBase
 	waitMtx sync.Mutex
 	waitChs map[string]chan error
 	doneCh  chan rangesync.KeyBytes
 }
 
-func newSetSyncBaseTester(t *testing.T, os multipeer.OrderedSet) *setSyncBaseTester {
+func newSetSyncBaseTester(t *testing.T, os rangesync.OrderedSet) *setSyncBaseTester {
 	ctrl := gomock.NewController(t)
 	st := &setSyncBaseTester{
 		T:       t,
@@ -37,7 +39,7 @@ func newSetSyncBaseTester(t *testing.T, os multipeer.OrderedSet) *setSyncBaseTes
 		doneCh:  make(chan rangesync.KeyBytes),
 	}
 	if os == nil {
-		st.os = NewMockOrderedSet(ctrl)
+		st.os = mocks.NewMockOrderedSet(ctrl)
 		st.os.EXPECT().Items().DoAndReturn(func() rangesync.SeqResult {
 			return rangesync.EmptySeqResult()
 		}).AnyTimes()
@@ -50,7 +52,7 @@ func newSetSyncBaseTester(t *testing.T, os multipeer.OrderedSet) *setSyncBaseTes
 			st.doneCh <- k
 			return true, err
 		}).AnyTimes()
-	st.ssb = multipeer.NewSetSyncBase(st.ps, os, st.handler)
+	st.ssb = multipeer.NewSetSyncBase(zaptest.NewLogger(t), st.ps, os, st.handler)
 	return st
 }
 
@@ -65,8 +67,8 @@ func (st *setSyncBaseTester) getWaitCh(k rangesync.KeyBytes) chan error {
 	return ch
 }
 
-func (st *setSyncBaseTester) expectCopy(addedKeys ...rangesync.KeyBytes) *MockOrderedSet {
-	copy := NewMockOrderedSet(st.ctrl)
+func (st *setSyncBaseTester) expectCopy(addedKeys ...rangesync.KeyBytes) *mocks.MockOrderedSet {
+	copy := mocks.NewMockOrderedSet(st.ctrl)
 	st.os.EXPECT().Copy(true).DoAndReturn(func(bool) rangesync.OrderedSet {
 		copy.EXPECT().Items().DoAndReturn(func() rangesync.SeqResult {
 			return rangesync.EmptySeqResult()
@@ -83,7 +85,7 @@ func (st *setSyncBaseTester) expectCopy(addedKeys ...rangesync.KeyBytes) *MockOr
 
 func (st *setSyncBaseTester) expectSync(
 	p p2p.Peer,
-	ss multipeer.Syncer,
+	ss multipeer.PeerSyncer,
 	addedKeys ...rangesync.KeyBytes,
 ) {
 	st.ps.EXPECT().Sync(gomock.Any(), p, ss, nil, nil).
@@ -228,12 +230,11 @@ func TestSetSyncBase(t *testing.T) {
 		st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any())
 		st.os.EXPECT().Advance()
 		require.NoError(t, ss.Sync(context.Background(), nil, nil))
-		handlerErr := errors.New("fail")
-		st.getWaitCh(k1) <- handlerErr
+		st.getWaitCh(k1) <- errors.New("fail")
 		close(st.getWaitCh(k2))
 
 		handledKeys, err := st.wait(2)
-		require.ErrorIs(t, err, handlerErr)
+		require.ErrorContains(t, err, "some key handlers failed")
 		require.ElementsMatch(t, []rangesync.KeyBytes{k1, k2}, handledKeys)
 	})
 
@@ -243,27 +244,26 @@ func TestSetSyncBase(t *testing.T) {
 		for n := range hs {
 			hs[n] = rangesync.RandomKeyBytes(32)
 		}
-		os := multipeer.NewDumbHashSet()
+		var os rangesync.DumbSet
 		os.AddUnchecked(hs[0])
 		os.AddUnchecked(hs[1])
-		st := newSetSyncBaseTester(t, os)
+		st := newSetSyncBaseTester(t, &os)
 		ss := st.ssb.Derive(p2p.Peer("p1"))
 		ss.(rangesync.OrderedSet).Receive(hs[2])
 		ss.(rangesync.OrderedSet).Add(hs[2])
 		ss.(rangesync.OrderedSet).Receive(hs[3])
 		ss.(rangesync.OrderedSet).Add(hs[3])
-		// syncer's cloned ItemStore has new key immediately
-		has, err := ss.(multipeer.OrderedSet).Has(hs[2])
+		// syncer's cloned set has new key immediately
+		has, err := ss.(rangesync.OrderedSet).Has(hs[2])
 		require.NoError(t, err)
 		require.True(t, has)
-		has, err = ss.(multipeer.OrderedSet).Has(hs[3])
+		has, err = ss.(rangesync.OrderedSet).Has(hs[3])
 		require.NoError(t, err)
 		require.True(t, has)
-		handlerErr := errors.New("fail")
-		st.getWaitCh(hs[2]) <- handlerErr
+		st.getWaitCh(hs[2]) <- errors.New("fail")
 		close(st.getWaitCh(hs[3]))
 		handledKeys, err := st.wait(2)
-		require.ErrorIs(t, err, handlerErr)
+		require.ErrorContains(t, err, "some key handlers failed")
 		require.ElementsMatch(t, hs[2:], handledKeys)
 		// only successfully handled keys propagate the syncBase
 		received, err := os.Received().Collect()

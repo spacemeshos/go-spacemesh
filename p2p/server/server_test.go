@@ -46,12 +46,10 @@ func TestServer(t *testing.T) {
 	request := []byte("test request")
 	testErr := errors.New("test error")
 
-	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
-		peerID, found := ContextPeerID(ctx)
-		require.True(t, found)
+	handler := func(ctx context.Context, peerID peer.ID, msg []byte) ([]byte, error) {
 		return append(msg, []byte(peerID)...), nil
 	}
-	errhandler := func(_ context.Context, _ []byte) ([]byte, error) {
+	errhandler := func(_ context.Context, _ peer.ID, _ []byte) ([]byte, error) {
 		return nil, testErr
 	}
 	opts := []Opt{
@@ -84,9 +82,6 @@ func TestServer(t *testing.T) {
 		append(opts, WithRequestSizeLimit(limit))...,
 	)
 	ctx, cancel := context.WithCancel(context.Background())
-	noPeerID, found := ContextPeerID(ctx)
-	require.Equal(t, peer.ID(""), noPeerID)
-	require.False(t, found)
 	var eg errgroup.Group
 	eg.Go(func() error {
 		return srv1.Run(ctx)
@@ -196,7 +191,7 @@ func Test_Queued(t *testing.T) {
 	srv := New(
 		wrapHost(t, mesh.Hosts()[1]),
 		proto,
-		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, _ peer.ID, msg []byte) ([]byte, error) {
 			wg.Done()
 			<-stop
 			return msg, nil
@@ -248,7 +243,7 @@ func Test_RequestInterval(t *testing.T) {
 	srv := New(
 		wrapHost(t, mesh.Hosts()[1]),
 		proto,
-		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, _ peer.ID, msg []byte) ([]byte, error) {
 			return msg, nil
 		}),
 		WithRequestsPerInterval(maxReq, maxReqTime),

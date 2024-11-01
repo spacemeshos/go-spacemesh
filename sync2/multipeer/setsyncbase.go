@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 
+	"go.uber.org/zap"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -19,8 +20,9 @@ import (
 // has not been yet received and validated.
 type SetSyncBase struct {
 	mtx     sync.Mutex
+	logger  *zap.Logger
 	ps      PairwiseSyncer
-	os      OrderedSet
+	os      rangesync.OrderedSet
 	handler SyncKeyHandler
 	waiting []<-chan singleflight.Result
 	g       singleflight.Group
@@ -29,8 +31,14 @@ type SetSyncBase struct {
 var _ SyncBase = &SetSyncBase{}
 
 // NewSetSyncBase creates a new SetSyncBase.
-func NewSetSyncBase(ps PairwiseSyncer, os OrderedSet, handler SyncKeyHandler) *SetSyncBase {
+func NewSetSyncBase(
+	logger *zap.Logger,
+	ps PairwiseSyncer,
+	os rangesync.OrderedSet,
+	handler SyncKeyHandler,
+) *SetSyncBase {
 	return &SetSyncBase{
+		logger:  logger,
 		ps:      ps,
 		os:      os,
 		handler: handler,
@@ -53,18 +61,18 @@ func (ssb *SetSyncBase) Count() (int, error) {
 	}
 	info, err := ssb.os.GetRangeInfo(x, x)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get range info: %w", err)
 	}
 	return info.Count, nil
 }
 
 // Derive implements SyncBase.
-func (ssb *SetSyncBase) Derive(p p2p.Peer) Syncer {
+func (ssb *SetSyncBase) Derive(p p2p.Peer) PeerSyncer {
 	ssb.mtx.Lock()
 	defer ssb.mtx.Unlock()
-	return &setSyncer{
+	return &peerSetSyncer{
 		SetSyncBase: ssb,
-		OrderedSet:  ssb.os.Copy(true).(OrderedSet),
+		OrderedSet:  ssb.os.Copy(true),
 		p:           p,
 		handler:     ssb.handler,
 	}
@@ -76,13 +84,13 @@ func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (rangesync.ProbeR
 	ssb.mtx.Lock()
 	os := ssb.os.Copy(true)
 	ssb.mtx.Unlock()
-	defer os.(OrderedSet).Release()
 
 	pr, err := ssb.ps.Probe(ctx, p, os, nil, nil)
 	if err != nil {
-		return rangesync.ProbeResult{}, err
+		os.Release()
+		return rangesync.ProbeResult{}, fmt.Errorf("probing peer %s: %w", p, err)
 	}
-	return pr, os.(OrderedSet).Release()
+	return pr, os.Release()
 }
 
 func (ssb *SetSyncBase) receiveKey(k rangesync.KeyBytes, p p2p.Peer) error {
@@ -91,7 +99,7 @@ func (ssb *SetSyncBase) receiveKey(k rangesync.KeyBytes, p p2p.Peer) error {
 	key := k.String()
 	has, err := ssb.os.Has(k)
 	if err != nil {
-		return err
+		return fmt.Errorf("checking if the key is present: %w", err)
 	}
 	if !has {
 		ssb.waiting = append(ssb.waiting,
@@ -118,13 +126,20 @@ func (ssb *SetSyncBase) Wait() error {
 	waiting := ssb.waiting
 	ssb.waiting = nil
 	ssb.mtx.Unlock()
-	var errs []error
+	gotError := false
 	for _, w := range waiting {
 		r := <-w
-		ssb.g.Forget(r.Val.(string))
-		errs = append(errs, r.Err)
+		key := r.Val.(string)
+		ssb.g.Forget(key)
+		if r.Err != nil {
+			gotError = true
+			ssb.logger.Error("error from key handler", zap.String("key", key), zap.Error(r.Err))
+		}
 	}
-	return errors.Join(errs...)
+	if gotError {
+		return errors.New("some key handlers failed")
+	}
+	return nil
 }
 
 func (ssb *SetSyncBase) advance() error {
@@ -133,50 +148,50 @@ func (ssb *SetSyncBase) advance() error {
 	return ssb.os.Advance()
 }
 
-type setSyncer struct {
+type peerSetSyncer struct {
 	*SetSyncBase
-	OrderedSet
+	rangesync.OrderedSet
 	p       p2p.Peer
 	handler SyncKeyHandler
 }
 
 var (
-	_ Syncer     = &setSyncer{}
-	_ OrderedSet = &setSyncer{}
+	_ PeerSyncer           = &peerSetSyncer{}
+	_ rangesync.OrderedSet = &peerSetSyncer{}
 )
 
 // Peer implements Syncer.
-func (ss *setSyncer) Peer() p2p.Peer {
-	return ss.p
+func (pss *peerSetSyncer) Peer() p2p.Peer {
+	return pss.p
 }
 
 // Sync implements Syncer.
-func (ss *setSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
-	if err := ss.ps.Sync(ctx, ss.p, ss, x, y); err != nil {
+func (pss *peerSetSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
+	if err := pss.ps.Sync(ctx, pss.p, pss, x, y); err != nil {
 		return err
 	}
-	return ss.commit()
+	return pss.commit()
 }
 
 // Serve implements Syncer.
-func (ss *setSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
-	if err := ss.ps.Serve(ctx, stream, ss); err != nil {
+func (pss *peerSetSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
+	if err := pss.ps.Serve(ctx, stream, pss); err != nil {
 		return err
 	}
-	return ss.commit()
+	return pss.commit()
 }
 
 // Receive implements OrderedSet.
-func (ss *setSyncer) Receive(k rangesync.KeyBytes) error {
-	if err := ss.receiveKey(k, ss.p); err != nil {
+func (pss *peerSetSyncer) Receive(k rangesync.KeyBytes) error {
+	if err := pss.receiveKey(k, pss.p); err != nil {
 		return err
 	}
-	return ss.OrderedSet.Receive(k)
+	return pss.OrderedSet.Receive(k)
 }
 
-func (ss *setSyncer) commit() error {
-	if err := ss.handler.Commit(ss.p, ss.SetSyncBase.os, ss.OrderedSet); err != nil {
+func (pss *peerSetSyncer) commit() error {
+	if err := pss.handler.Commit(pss.p, pss.SetSyncBase.os, pss.OrderedSet); err != nil {
 		return err
 	}
-	return ss.SetSyncBase.advance()
+	return pss.SetSyncBase.advance()
 }

@@ -12,12 +12,11 @@ type (
 )
 
 var (
-	WithSyncRunner = withSyncRunner
-	WithClock      = withClock
-	GetDelimiters  = getDelimiters
-	NewSyncQueue   = newSyncQueue
-	NewSplitSync   = newSplitSync
-	NewSyncList    = newSyncList
+	GetDelimiters                  = getDelimiters
+	NewSyncQueue                   = newSyncQueue
+	NewSplitSync                   = newSplitSync
+	NewSyncList                    = newSyncList
+	NewMultiPeerReconcilerInternal = newMultiPeerReconciler
 )
 
 func (mpr *MultiPeerReconciler) FullSync(ctx context.Context, syncPeers []p2p.Peer) error {

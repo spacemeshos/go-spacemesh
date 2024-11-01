@@ -112,28 +112,12 @@ func WithDecayingTag(tag DecayingTagSpec) Opt {
 	}
 }
 
-type peerIDKey struct{}
-
-func withPeerID(ctx context.Context, peerID peer.ID) context.Context {
-	return context.WithValue(ctx, peerIDKey{}, peerID)
-}
-
-// ContextPeerID retrieves the ID of the peer being served from the context and a boolean
-// value indicating that the context contains peer ID. If there's no peer ID associated
-// with the context, the function returns an empty peer ID and false.
-func ContextPeerID(ctx context.Context) (peer.ID, bool) {
-	if v := ctx.Value(peerIDKey{}); v != nil {
-		return v.(peer.ID), true
-	}
-	return peer.ID(""), false
-}
-
 // Handler is a handler to be defined by the application.
-type Handler func(context.Context, []byte) ([]byte, error)
+type Handler func(context.Context, peer.ID, []byte) ([]byte, error)
 
 // StreamHandler is a handler that writes the response to the stream directly instead of
 // buffering the serialized representation.
-type StreamHandler func(context.Context, []byte, io.ReadWriter) error
+type StreamHandler func(context.Context, peer.ID, []byte, io.ReadWriter) error
 
 // StreamRequestCallback is a function that executes a streamed request.
 type StreamRequestCallback func(context.Context, io.ReadWriter) error
@@ -283,7 +267,7 @@ func (s *Server) Run(ctx context.Context) error {
 				return nil
 			}
 			peer := req.stream.Conn().RemotePeer()
-			ctx, cancel := context.WithCancel(withPeerID(ctx, peer))
+			ctx, cancel := context.WithCancel(ctx)
 			eg.Go(func() error {
 				<-ctx.Done()
 				s.sem.Release(1)
@@ -296,7 +280,7 @@ func (s *Server) Run(ctx context.Context) error {
 				if s.decayingTag != nil {
 					s.decayingTag.Bump(peer, s.decayingTagSpec.Inc)
 				}
-				ok := s.queueHandler(ctx, req.stream)
+				ok := s.queueHandler(ctx, peer, req.stream)
 				duration := time.Since(req.received)
 				if s.peerInfo() != nil {
 					info := s.peerInfo().EnsurePeerInfo(conn.RemotePeer())
@@ -316,7 +300,7 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
+func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.Stream) bool {
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer dadj.Close()
 	rd := bufio.NewReader(dadj)
@@ -353,7 +337,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 		return false
 	}
 	start := time.Now()
-	if err = s.handler(log.WithNewRequestID(ctx), buf, dadj); err != nil {
+	if err = s.handler(log.WithNewRequestID(ctx), peer, buf, dadj); err != nil {
 		s.logger.Debug("handler reported error",
 			zap.String("protocol", s.protocol),
 			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
@@ -562,8 +546,8 @@ func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, er
 }
 
 func WrapHandler(handler Handler) StreamHandler {
-	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-		buf, hErr := handler(ctx, req)
+	return func(ctx context.Context, peer peer.ID, req []byte, stream io.ReadWriter) error {
+		buf, hErr := handler(ctx, peer, req)
 		var resp Response
 		if hErr != nil {
 			resp.Error = hErr.Error()
