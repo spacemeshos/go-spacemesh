@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"fmt"
 	"math"
 
@@ -146,7 +145,10 @@ func (c *Context) Spawn(template Address, blob []byte) (Address, error) {
 		return Address{}, err
 	}
 	// the account is already spawned and contains different code. this should not happen.
-	if len(account.State) > 0 && !bytes.Equal(account.State, blob) {
+	// if len(account.State) > 0 && !bytes.Equal(account.State, blob) {
+
+	// do not allow an already-spawned account to be spawned again
+	if account.TemplateAddress != nil {
 		return Address{}, ErrSpawned
 	}
 

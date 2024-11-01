@@ -226,6 +226,12 @@ func (h *hostContext) Call(
 		// short-circuit: perform balance transfer and return
 		// this does not depend upon the recipient account status
 		if err = h.host.Transfer(types.Address(recipient), value); err != nil {
+			if errors.Is(err, core.ErrNoBalance) {
+				return nil, 0, athcon.Error{
+					Code: athcon.InsufficientBalance.Code,
+					Err:  fmt.Errorf("balance transfer failed: %w", err),
+				}
+			}
 			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
 				Err:  fmt.Errorf("balance transfer failed: %w", err),

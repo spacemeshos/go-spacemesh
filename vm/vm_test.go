@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	// "github.com/spacemeshos/economics/rewards"
+	"github.com/spacemeshos/economics/rewards"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -739,259 +740,259 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 			},
 		},
-		// {
-		// 	desc: "BlockGasLimit",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				&spendTx{0, 10, 100},
-		// 				&spendTx{0, 11, 100},
-		// 				&spendTx{0, 12, 100},
-		// 			},
-		// 			gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
-		// 				ref.estimateSpendGas(0, 10, 100, 1)),
-		// 			ineffective: []int{2, 3},
-		// 			expected: map[int]change{
-		// 				0:  spent{amount: 100 + ref.estimateSpawnGas(0, 0) + ref.estimateSpendGas(0, 10, 100, 1)},
-		// 				10: earned{amount: 100},
-		// 				11: same{},
-		// 				12: same{},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "BlockGasLimitIsNotConsumedByIneffective",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				&spendTx{0, 10, 80_000}, // send enough to cover intrinsic cost but not whole transaction
-		// 				&selfSpawnTx{10},
-		// 				&spendTx{0, 11, 100},
-		// 			},
-		// 			gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
-		// 				ref.estimateSpendGas(0, 10, 80_000, 1) +
-		// 				ref.estimateSpawnGas(10, 10)),
-		// 			failed:      map[int]error{2: core.ErrOutOfGas},
-		// 			ineffective: []int{3},
-		// 			expected: map[int]change{
-		// 				0: spent{amount: 80_000 +
-		// 					ref.estimateSpawnGas(0, 0) +
-		// 					ref.estimateSpendGas(0, 10, 80_000, 1)},
-		// 				10: nonce{increased: 1},
-		// 				11: same{},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "BadNonceOrder",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				spendTx{0, 11, 100}.withNonce(2),
-		// 				spendTx{0, 10, 100}.withNonce(1),
-		// 			},
-		// 			ineffective: []int{2},
-		// 			headers: map[int]struct{}{
-		// 				2: {},
-		// 			},
-		// 			expected: map[int]change{
-		// 				0: spawned{
-		// 					template: template,
-		// 					change: spent{
-		// 						amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0, 0)+
-		// 							ref.estimateSpendGas(0, 11, 100, 2)),
-		// 					},
-		// 				},
-		// 				10: same{},
-		// 				11: earned{amount: 100},
-		// 			},
-		// 		},
-		// 		{
-		// 			txs: []testTx{
-		// 				spendTx{0, 10, 100}.withNonce(3),
-		// 				spendTx{0, 12, 100}.withNonce(6),
-		// 			},
-		// 			expected: map[int]change{
-		// 				0: spent{amount: 2*100 + defaultGasPrice*(ref.estimateSpendGas(0, 10, 100, 3)+
-		// 					ref.estimateSpendGas(0, 10, 100, 6))},
-		// 				10: earned{amount: 100},
-		// 				12: earned{amount: 100},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "SpendRewards",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 			},
-		// 			rewards: []reward{{address: 10, share: 1}},
-		// 			expected: map[int]change{
-		// 				10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSpawnGas(0, 0)},
-		// 			},
-		// 		},
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{10},
-		// 			},
-		// 			rewards: []reward{{address: 10, share: 1}},
-		// 			expected: map[int]change{
-		// 				10: spawned{template: template},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "DistributeRewards",
-		// 	layers: []layertc{
-		// 		{
-		// 			rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
-		// 			expected: map[int]change{
-		// 				10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
-		// 				11: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
-		// 			},
-		// 		},
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 			},
-		// 			rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
-		// 			expected: map[int]change{
-		// 				10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(10, 10)) / 2},
-		// 				11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(11, 11)) / 2},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "SkippedTransactionsNotRewarded",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				spendTx{0, 10, 100}.withNonce(5),
-		// 			},
-		// 		},
-		// 		{
-		// 			txs: []testTx{
-		// 				spendTx{0, 10, 100}.withNonce(2),
-		// 				spendTx{0, 11, 100}.withNonce(3),
-		// 			},
-		// 			ineffective: []int{0, 1},
-		// 			headers:     map[int]struct{}{0: {}, 1: {}},
-		// 			rewards:     []reward{{address: 10, share: 1}},
-		// 			expected: map[int]change{
-		// 				10: earned{amount: int(rewards.TotalSubsidyAtLayer(1))},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "FailVerify",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 			},
-		// 		},
-		// 		{
-		// 			txs: []testTx{
-		// 				corruptSig{&spendTx{0, 10, 100}},
-		// 			},
-		// 			ineffective: []int{0},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "RetrySpend",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
-		// 				&selfSpawnTx{11},
-		// 				&spendTx{11, 12, 1_000},
-		// 			},
-		// 			failed: map[int]error{3: core.ErrNoBalance},
-		// 			expected: map[int]change{
-		// 				11: spawned{template: template, change: nonce{increased: 2}},
-		// 				12: same{},
-		// 			},
-		// 		},
-		// 		{
-		// 			txs: []testTx{
-		// 				&spendTx{0, 11, 200_000},
-		// 				&spendTx{11, 12, 1_000},
-		// 			},
-		// 			expected: map[int]change{
-		// 				0: spent{
-		// 					amount: ref.estimateSpendGas(0, 11, 200_000, 2) + 200_000,
-		// 					change: nonce{increased: 1},
-		// 				},
-		// 				11: nonce{increased: 1},
-		// 				12: earned{amount: 1_000},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "RetrySelfSpawn",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
-		// 				&selfSpawnTx{11},
-		// 			},
-		// 			failed: map[int]error{2: core.ErrOutOfGas},
-		// 			expected: map[int]change{
-		// 				0: spent{amount: ref.estimateSpawnGas(11, 11) - 1 +
-		// 					ref.estimateSpawnGas(0, 0) +
-		// 					ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1)},
-		// 				11: nonce{increased: 1},
-		// 			},
-		// 		},
-		// 		{
-		// 			txs: []testTx{
-		// 				&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11))},
-		// 				&selfSpawnTx{11},
-		// 			},
-		// 			expected: map[int]change{
-		// 				0: spent{amount: ref.estimateSpawnGas(11, 11) +
-		// 					ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11), 2)},
-		// 				11: spawned{template: template, change: nonce{increased: 1}},
-		// 			},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "SelfSpawnFailed",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				&selfSpawnTx{0},
-		// 			},
-		// 			failed: map[int]error{1: core.ErrSpawned},
-		// 			expected: map[int]change{
-		// 				0: spawned{
-		// 					template: template,
-		// 					change: nonce{
-		// 						increased: 2,
-		// 						change:    spent{amount: 2 * ref.estimateSpawnGas(0, 0)},
-		// 					},
-		// 				},
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			desc: "BlockGasLimit",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spendTx{0, 10, 100},
+						&spendTx{0, 11, 100},
+						&spendTx{0, 12, 100},
+					},
+					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
+						ref.estimateSpendGas(0, 10, 100, 1)),
+					ineffective: []int{2, 3},
+					expected: map[int]change{
+						0:  spent{amount: 100 + ref.estimateSpawnGas(0, 0) + ref.estimateSpendGas(0, 10, 100, 1)},
+						10: earned{amount: 100},
+						11: same{},
+						12: same{},
+					},
+				},
+			},
+		},
+		{
+			desc: "BlockGasLimitIsNotConsumedByIneffective",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spendTx{0, 10, uint64(ref.estimateSpawnGas(10, 10)) - 1}, // send enough to cover intrinsic cost but not whole transaction
+						&selfSpawnTx{10},
+						&spendTx{0, 11, 100},
+					},
+					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
+						ref.estimateSpendGas(0, 10, 80_000, 1) +
+						ref.estimateSpawnGas(10, 10)),
+					failed:      map[int]error{2: core.ErrOutOfGas},
+					ineffective: []int{3},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateSpawnGas(10, 10) - 1 +
+							ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 10, ref.estimateSpawnGas(10, 10)-1, 1)},
+						10: nonce{increased: 1},
+						11: same{},
+					},
+				},
+			},
+		},
+		{
+			desc: "BadNonceOrder",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						spendTx{0, 11, 100}.withNonce(2),
+						spendTx{0, 10, 100}.withNonce(1),
+					},
+					ineffective: []int{2},
+					headers: map[int]struct{}{
+						2: {},
+					},
+					expected: map[int]change{
+						0: spawned{
+							template: template,
+							change: spent{
+								amount: 100 + defaultGasPrice*(ref.estimateSpawnGas(0, 0)+
+									ref.estimateSpendGas(0, 11, 100, 2)),
+							},
+						},
+						10: same{},
+						11: earned{amount: 100},
+					},
+				},
+				{
+					txs: []testTx{
+						spendTx{0, 10, 100}.withNonce(3),
+						spendTx{0, 12, 100}.withNonce(6),
+					},
+					expected: map[int]change{
+						0: spent{amount: 2*100 + defaultGasPrice*(ref.estimateSpendGas(0, 10, 100, 3)+
+							ref.estimateSpendGas(0, 10, 100, 6))},
+						10: earned{amount: 100},
+						12: earned{amount: 100},
+					},
+				},
+			},
+		},
+		{
+			desc: "SpendRewards",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+					},
+					rewards: []reward{{address: 10, share: 1}},
+					expected: map[int]change{
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSpawnGas(0, 0)},
+					},
+				},
+				{
+					txs: []testTx{
+						&selfSpawnTx{10},
+					},
+					rewards: []reward{{address: 10, share: 1}},
+					expected: map[int]change{
+						10: spawned{template: template},
+					},
+				},
+			},
+		},
+		{
+			desc: "DistributeRewards",
+			layers: []layertc{
+				{
+					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
+					expected: map[int]change{
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
+						11: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
+					},
+				},
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+					},
+					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
+					expected: map[int]change{
+						10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(10, 10)) / 2},
+						11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(11, 11)) / 2},
+					},
+				},
+			},
+		},
+		{
+			desc: "SkippedTransactionsNotRewarded",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						spendTx{0, 10, 100}.withNonce(5),
+					},
+				},
+				{
+					txs: []testTx{
+						spendTx{0, 10, 100}.withNonce(2),
+						spendTx{0, 11, 100}.withNonce(3),
+					},
+					ineffective: []int{0, 1},
+					headers:     map[int]struct{}{0: {}, 1: {}},
+					rewards:     []reward{{address: 10, share: 1}},
+					expected: map[int]change{
+						10: earned{amount: int(rewards.TotalSubsidyAtLayer(1))},
+					},
+				},
+			},
+		},
+		{
+			desc: "FailVerify",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+					},
+				},
+				{
+					txs: []testTx{
+						corruptSig{&spendTx{0, 10, 100}},
+					},
+					ineffective: []int{0},
+				},
+			},
+		},
+		{
+			desc: "RetrySpend",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
+						&selfSpawnTx{11},
+						&spendTx{11, 12, 1_000},
+					},
+					failed: map[int]error{3: athcon.InsufficientBalance},
+					expected: map[int]change{
+						11: spawned{template: template, change: nonce{increased: 2}},
+						12: same{},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{0, 11, 200_000},
+						&spendTx{11, 12, 1_000},
+					},
+					expected: map[int]change{
+						0: spent{
+							amount: ref.estimateSpendGas(0, 11, 200_000, 2) + 200_000,
+							change: nonce{increased: 1},
+						},
+						11: nonce{increased: 1},
+						12: earned{amount: 1_000},
+					},
+				},
+			},
+		},
+		{
+			desc: "RetrySelfSpawn",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
+						&selfSpawnTx{11},
+					},
+					failed: map[int]error{2: core.ErrOutOfGas},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateSpawnGas(11, 11) - 1 +
+							ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1)},
+						11: nonce{increased: 1},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11))},
+						&selfSpawnTx{11},
+					},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateSpawnGas(11, 11) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11), 2)},
+						11: spawned{template: template, change: nonce{increased: 1}},
+					},
+				},
+			},
+		},
+		{
+			desc: "DuplicateSpawnFailed",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						&selfSpawnTx{0},
+					},
+					failed: map[int]error{1: core.ErrSpawned},
+					expected: map[int]change{
+						0: spawned{
+							template: template,
+							change: nonce{
+								increased: 2,
+								change:    spent{amount: 2 * ref.estimateSpawnGas(0, 0)},
+							},
+						},
+					},
+				},
+			},
+		},
 		// {
 		// 	desc: "FailedFeesAndGas",
 		// 	layers: []layertc{
