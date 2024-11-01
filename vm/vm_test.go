@@ -439,7 +439,8 @@ type nonce struct {
 }
 
 func (ch nonce) verify(tb testing.TB, prev, current *core.Account) {
-	require.Equal(tb, ch.increased, int(current.NextNonce-prev.NextNonce))
+	require.Equal(tb, ch.increased, int(current.NextNonce-prev.NextNonce),
+		"previous nonce %d new nonce %d expected increase of %d", prev.NextNonce, current.NextNonce, ch.increased)
 	if ch.change != nil {
 		ch.change.verify(tb, prev, current)
 	}
@@ -980,13 +981,18 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{0},
 						&selfSpawnTx{0},
 					},
-					failed: map[int]error{1: core.ErrSpawned},
+					// this would be a failure in spacemesh, but it's ineffective in athena.
+					// Lane: I think this is fine.
+					ineffective: []int{1},
+					// failed: map[int]error{1: core.ErrSpawned},
 					expected: map[int]change{
 						0: spawned{
 							template: template,
 							change: nonce{
-								increased: 2,
-								change:    spent{amount: 2 * ref.estimateSpawnGas(0, 0)},
+								increased: 1,
+								// increased: 2,
+								change: spent{amount: ref.estimateSpawnGas(0, 0)},
+								// change:    spent{amount: 2 * ref.estimateSpawnGas(0, 0)},
 							},
 						},
 					},

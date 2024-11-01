@@ -601,6 +601,15 @@ func parse(
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
 	}
+
+	// one more sanity check: if this is a spawn for an account that was already spawned, we may
+	// have assumed above that it was not a spawn. now we can make sure.
+	if spawnSelector, err := athcon.FromString("athexp_spawn"); err != nil {
+		return nil, nil, fmt.Errorf("%w: failed to create spawn selector: %w", core.ErrInternal, err)
+	} else if principalAccount.TemplateAddress != nil && *unmarshaled.MethodSelector == spawnSelector {
+		return nil, nil, fmt.Errorf("%w: principal account already spawned", core.ErrMalformed)
+	}
+
 	computedPrincipal, err := core.ComputePrincipalFromPubkey(
 		ctx.Header.TemplateAddress,
 		unmarshaled.PublicKey,

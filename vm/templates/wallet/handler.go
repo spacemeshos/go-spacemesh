@@ -75,6 +75,11 @@ func (*handler) Exec(host core.Host, payload core.Payload) ([]byte, int64, error
 	if err != nil {
 		return []byte{}, 0, fmt.Errorf("failed to load principal account: %w", err)
 	}
+
+	// sanity check - verify should have failed for this tx
+	if host.IsSpawn() && len(principalAccount.State) > 0 {
+		return []byte{}, 0, errors.New("wallet account state is not empty for spawn")
+	}
 	executionPayload := athcon.EncodedExecutionPayload(principalAccount.State, payload)
 
 	// Execute the transaction in the VM

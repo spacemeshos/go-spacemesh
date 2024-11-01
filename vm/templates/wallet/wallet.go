@@ -31,22 +31,18 @@ func New(host core.Host) (*Wallet, error) {
 	} else if len(walletAccount.State) == 0 && !host.IsSpawn() {
 		// If this is a spawn we expect the current state to be empty
 		return nil, errors.New("new wallet template: wallet account state is empty for non-spawn")
+	} else if len(walletAccount.State) != 0 && host.IsSpawn() {
+		// If this is a spawn we expect the current state to be empty
+		return nil, errors.New("new wallet template: wallet account state is not empty for spawn")
 	}
 	walletState := walletAccount.State
-
-	// // Instantiate the VM
-	// vmhost, err := vmhost.NewHost(host)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("loading Athena VM: %w", err)
-	// }
 
 	return &Wallet{host, templateCode, walletState}, nil
 }
 
 // Wallet is a single-key wallet.
 type Wallet struct {
-	host core.Host
-	// vmhost       core.VMHost
+	host         core.Host
 	templateCode []byte
 	walletState  []byte
 }
