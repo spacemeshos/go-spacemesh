@@ -231,7 +231,7 @@ func (parts *InitialAtxPartsV2) MarshalLogObject(encoder zapcore.ObjectEncoder) 
 
 func (parts *InitialAtxPartsV2) merkleTree(tree *merkle.Tree) {
 	tree.AddLeaf(parts.CommitmentATX.Bytes())
-	tree.AddLeaf(parts.Post.Root().Bytes())
+	tree.AddLeaf(types.Hash32(parts.Post.Root()).Bytes())
 }
 
 func (parts *InitialAtxPartsV2) merkleProof(leafIndex InitialPostTreeIndex) []types.Hash32 {
@@ -460,7 +460,7 @@ func (sp *SubPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 	binary.LittleEndian.PutUint64(leafIndex[:], sp.MembershipLeafIndex)
 	tree.AddLeaf(leafIndex[:])
 
-	tree.AddLeaf(sp.Post.Root().Bytes())
+	tree.AddLeaf(types.Hash32(sp.Post.Root()).Bytes())
 
 	numUnits := make([]byte, 4)
 	binary.LittleEndian.PutUint32(numUnits, sp.NumUnits)
@@ -501,8 +501,14 @@ func (sp *SubPostV2) MembershipLeafIndexProof(prevATXs []types.ATXID) []types.Ha
 	return sp.merkleProof(MembershipLeafIndex, prevATXs)
 }
 
-func (sp *SubPostV2) PostProof(prevATXs []types.ATXID) []types.Hash32 {
+func (sp *SubPostV2) PostProof(prevATXs []types.ATXID) PostRootProof {
 	return sp.merkleProof(PostIndex, prevATXs)
+}
+
+type PostRootProof []types.Hash32
+
+func (p PostRootProof) Valid(subPostRoot SubPostRoot, postRoot PostRoot) bool {
+	return validateProof(types.Hash32(subPostRoot), types.Hash32(postRoot), p, uint64(PostIndex))
 }
 
 func (sp *SubPostV2) NumUnitsProof(prevATXs []types.ATXID) []types.Hash32 {

@@ -201,13 +201,13 @@ type InvalidPostProof struct {
 	SubPostRootProof SubPostRootProof `scale:"max=32"`
 	SubPostRootIndex uint16
 
-	// MarriageIndexProof contains the merkle path from the SubPostRoot to the MarriageIndex field.
+	// MarriageIndexProof is the proof that the MarriageIndex (CertificateIndex from MarryProof) is contained in the
+	// SubPostRoot.
 	MarriageIndexProof MarriageIndexProof `scale:"max=32"`
 
-	// Post is the invalid PoST.
-	Post PostV1
-	// PostProof contains the merkle path from the SubPostRoot to the PoST field.
-	PostProof []types.Hash32 `scale:"max=32"`
+	// Post is the invalid PoST and its proof that it is contained in the SubPostRoot.
+	Post      PostV1
+	PostProof PostRootProof `scale:"max=32"`
 
 	// NumUnits is the number of units in the PoST.
 	NumUnits uint32
@@ -251,6 +251,9 @@ func createInvalidPostProof(atx *ActivationTxV2, nipostIndex, marriageIndex int)
 		SubPostRootIndex: uint16(postIndex),
 
 		MarriageIndexProof: atx.NIPosts[nipostIndex].Posts[postIndex].MarriageIndexProof(atx.PreviousATXs),
+
+		Post:      atx.NIPosts[nipostIndex].Posts[postIndex].Post,
+		PostProof: atx.NIPosts[nipostIndex].Posts[postIndex].PostProof(atx.PreviousATXs),
 
 		// TODO(mafa): continue with proof
 	}
@@ -296,25 +299,11 @@ func (p InvalidPostProof) Valid(
 		return errors.New("invalid marriage index proof")
 	}
 
-	// TODO(mafa): continue with proof
-
-	postProof := make([][]byte, len(p.PostProof))
-	for i, h := range p.PostProof {
-		postProof[i] = h.Bytes()
-	}
-	ok, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(PostIndex)},
-		[][]byte{p.Post.Root().Bytes()},
-		postProof,
-		types.Hash32(p.SubPostRoot).Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate PoST proof: %w", err)
-	}
-	if !ok {
+	if !p.PostProof.Valid(p.SubPostRoot, p.Post.Root()) {
 		return errors.New("invalid PoST proof")
 	}
+
+	// TODO(mafa): continue with proof
 
 	numUnits := make([]byte, 4)
 	binary.LittleEndian.PutUint32(numUnits, p.NumUnits)
@@ -323,11 +312,11 @@ func (p InvalidPostProof) Valid(
 	for i, h := range p.NumUnitsProof {
 		numUnitsProof[i] = h.Bytes()
 	}
-	ok, err = merkle.ValidatePartialTree(
+	ok, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(NumUnitsIndex)},
 		[][]byte{numUnits},
 		numUnitsProof,
-		p.Post.Root().Bytes(),
+		types.Hash32(p.Post.Root()).Bytes(),
 		atxTreeHash,
 	)
 	if err != nil {
