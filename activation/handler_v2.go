@@ -643,7 +643,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 					zap.Stringer("id", atx.ID()),
 					zap.Int("index", invalidIdx.Index),
 				)
-				// TODO(mafa): finish proof
+				// TODO(mafa): publish solo or merged invalid post malfeasance proof
 				var proof wire.Proof
 				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
 					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
