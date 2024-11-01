@@ -14,9 +14,11 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/dbset"
@@ -113,7 +115,7 @@ func verifyP2P(
 	clockAt time.Time,
 	receivedRecent, sentRecent bool,
 	maxDepth int,
-	opts ...rangesync.RangeSetReconcilerOption,
+	cfg rangesync.RangeSetReconcilerConfig,
 ) {
 	stopTimer(t)
 	log := zaptest.NewLogger(t)
@@ -156,36 +158,28 @@ func verifyP2P(
 	}
 
 	var tr syncTracer
-	opts = append(opts,
-		rangesync.WithClock(clockwork.NewFakeClockAt(clockAt)),
-		rangesync.WithTracer(&tr),
-	)
-	opts = opts[:len(opts):len(opts)]
 
 	srvPeerID := mesh.Hosts()[0].ID()
-	pssA := rangesync.NewPairwiseSetSyncer(nil, "test", append(
-		opts,
-		rangesync.WithMaxSendRange(1),
-		// uncomment to enable verbose logging which may slow down tests
-		// rangesync.WithLogger(log.Named("sideA")),
-	), nil)
+	clock := clockwork.NewFakeClockAt(clockAt)
+	// Use the following to enable verbose logging which may slow down the tests
+	// syncLogger := log
+	syncLogger := zap.NewNop()
+	pssA := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideA"), nil, "test", cfg, &tr, clock)
 	d := rangesync.NewDispatcher(log)
 	syncSetA := setA.Copy(false).(*dbset.DBSet)
 	pssA.Register(d, syncSetA)
 	srv := server.New(mesh.Hosts()[0], proto,
-		func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-			return d.Dispatch(ctx, req, stream)
-		},
-		server.WithTimeout(time.Hour), // QQQQQ: FIXME
+		d.Dispatch,
+		server.WithTimeout(time.Minute),
 		server.WithLog(log))
 
 	var eg errgroup.Group
 
 	client := server.New(mesh.Hosts()[1], proto,
-		func(ctx context.Context, req []byte, stream io.ReadWriter) error {
+		func(_ context.Context, _ p2p.Peer, _ []byte, _ io.ReadWriter) error {
 			return errors.New("client should not receive requests")
 		},
-		server.WithTimeout(time.Hour), // QQQQQ: FIXME
+		server.WithTimeout(time.Minute),
 		server.WithLog(log))
 
 	defer func() {
@@ -206,12 +200,7 @@ func verifyP2P(
 	}, time.Second, 10*time.Millisecond)
 
 	startTimer(t)
-	pssB := rangesync.NewPairwiseSetSyncer(client, "test", append(
-		opts,
-		rangesync.WithMaxSendRange(1),
-		// uncomment to enable verbose logging which may slow down tests
-		// rangesync.WithLogger(log.Named("sideB")),
-	), nil)
+	pssB := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideB"), client, "test", cfg, &tr, clock)
 
 	tStart := time.Now()
 	syncSetB := setB.Copy(false).(*dbset.DBSet)
@@ -275,10 +264,11 @@ func verifyP2PRandom(t testing.TB, maxDepth, nShared, nUniqueA, nUniqueB int) {
 	slices.SortFunc(combined, func(a, b rangesync.KeyBytes) int {
 		return a.Compare(b)
 	})
-	verifyP2P(t, rowsA, rowsB, combined, startDate, false, false, 24)
+	verifyP2P(t, rowsA, rowsB, combined, startDate, false, false, 24, rangesync.DefaultConfig())
 }
 
 func TestP2P(t *testing.T) {
+	const maxDepth = 24
 	hexID := rangesync.MustParseHexKeyBytes
 	t.Run("predefined items", func(t *testing.T) {
 		verifyP2P(
@@ -304,7 +294,8 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
-			24,
+			maxDepth,
+			rangesync.DefaultConfig(),
 		)
 	})
 	t.Run("predefined items 2", func(t *testing.T) {
@@ -338,7 +329,8 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
-			24,
+			maxDepth,
+			rangesync.DefaultConfig(),
 		)
 	})
 	t.Run("predefined items 3", func(t *testing.T) {
@@ -371,10 +363,13 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
-			24,
+			maxDepth,
+			rangesync.DefaultConfig(),
 		)
 	})
 	t.Run("predefined items with recent", func(t *testing.T) {
+		cfg := rangesync.DefaultConfig()
+		cfg.RecentTimeSpan = 48 * time.Second
 		verifyP2P(
 			t, []fooRow{
 				fooR("80e95b39faa731eb50eae7585a8b1cae98f503481f950fdb690e60ff86c21236", 10),
@@ -399,8 +394,8 @@ func TestP2P(t *testing.T) {
 			startDate.Add(time.Minute),
 			true,
 			true,
-			24,
-			rangesync.WithRecentTimeSpan(48*time.Second),
+			maxDepth,
+			cfg,
 		)
 	})
 	t.Run("empty to non-empty", func(t *testing.T) {
@@ -421,10 +416,13 @@ func TestP2P(t *testing.T) {
 			startDate,
 			false,
 			false,
-			24,
+			maxDepth,
+			rangesync.DefaultConfig(),
 		)
 	})
 	t.Run("empty to non-empty with recent", func(t *testing.T) {
+		cfg := rangesync.DefaultConfig()
+		cfg.RecentTimeSpan = 48 * time.Second
 		verifyP2P(
 			t, nil,
 			[]fooRow{
@@ -442,11 +440,13 @@ func TestP2P(t *testing.T) {
 			startDate.Add(time.Minute),
 			true,
 			true,
-			24,
-			rangesync.WithRecentTimeSpan(48*time.Second),
+			maxDepth,
+			cfg,
 		)
 	})
 	t.Run("non-empty to empty with recent", func(t *testing.T) {
+		cfg := rangesync.DefaultConfig()
+		cfg.RecentTimeSpan = 48 * time.Second
 		verifyP2P(
 			t,
 			[]fooRow{
@@ -466,12 +466,12 @@ func TestP2P(t *testing.T) {
 			// no actual recent exchange happens due to the initial EmptySet message
 			false,
 			false,
-			24,
-			rangesync.WithRecentTimeSpan(48*time.Second),
+			maxDepth,
+			cfg,
 		)
 	})
 	t.Run("empty to empty", func(t *testing.T) {
-		verifyP2P(t, nil, nil, nil, startDate, false, false, 24)
+		verifyP2P(t, nil, nil, nil, startDate, false, false, maxDepth, rangesync.DefaultConfig())
 	})
 	t.Run("random test", func(t *testing.T) {
 		verifyP2PRandom(t, 24, 80000, 400, 800)
