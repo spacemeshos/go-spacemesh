@@ -26,6 +26,7 @@ type mocks struct {
 	poetDb     *server.MockpoetDB
 	hare       *server.Mockhare
 	publisher  *pubsub.MockPublisher
+	proposals  *server.MockproposalBuilder
 }
 
 func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
@@ -37,9 +38,10 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 		poetDb:     server.NewMockpoetDB(ctrl),
 		hare:       server.NewMockhare(ctrl),
 		publisher:  pubsub.NewMockPublisher(ctrl),
+		proposals:  server.NewMockproposalBuilder(ctrl),
 	}
 
-	activationServiceServer := server.NewServer(m.atxService, m.publisher, m.poetDb, m.hare, log.Named("server"))
+	activationServiceServer := server.NewServer(m.atxService, m.publisher, m.poetDb, m.hare, m.proposals, log.Named("server"))
 
 	listener, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
