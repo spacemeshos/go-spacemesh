@@ -25,6 +25,21 @@ func withMarriageCertificate(sig *signing.EdSigner, refAtx types.ATXID, atxPubli
 	}
 }
 
+func withMarriageATX(id types.ATXID) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.MarriageATX = &id
+	}
+}
+
+func withInitial(commitAtx types.ATXID, post PostV1) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.Initial = &InitialAtxPartsV2{
+			CommitmentATX: commitAtx,
+			Post:          post,
+		}
+	}
+}
+
 func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 	atx := &ActivationTxV2{
 		PublishEpoch:   rand.N(types.EpochID(255)),
