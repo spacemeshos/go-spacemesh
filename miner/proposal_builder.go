@@ -620,12 +620,9 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 		return nil, 0, err
 	}
 
-	// don't accept registration in the middle of computing proposals
 	signer := &signerSession{}
 	encodeVotesOnce := sync.OnceValues(func() (*types.Opinion, error) {
 		pb.tortoise.TallyVotes(lid)
-		// TODO(dshulyak) get rid from the EncodeVotesWithCurrent option in a followup
-		// there are some dependencies in the tests
 		opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))
 		if err != nil {
 			return nil, fmt.Errorf("encoding votes: %w", err)
@@ -649,21 +646,8 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 		return nil
 	})
 
-	// Two stage pipeline, with the stages running in parallel.
-	// 1. Initializes signers. Runs limited number of goroutines because the initialization is CPU and DB bound.
-	// 2. Collects eligible signers' sessions from the stage 1 and creates and publishes proposals.
-
-	// Used to pass eligible singers from stage 1 → 2.
-	// Buffered with capacity for all signers so that writes don't block.
 	eligible := make(chan *signerSession, 2)
-
-	// Stage 1
-	// Use a semaphore instead of eg.SetLimit so that the stage 2 starts immediately after
-	// scheduling all signers in the stage 1. Otherwise, stage 2 would wait for all stage 1
-	// goroutines to at least start, which is not what we want. We want to start stage 2 as soon as possible.
-	// limiter := semaphore.NewWeighted(int64(pb.cfg.workersLimit))
 	var eg errgroup.Group
-	// for _, ss := range signers {
 	eg.Go(func() error {
 		if err := pb.initSignerDataFor(ctx, signer, lid, nodeID); err != nil {
 			if errors.Is(err, errAtxNotAvailable) {
@@ -697,7 +681,6 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, node
 		eligible <- signer // won't block
 		return nil
 	})
-	//}
 
 	var stage1Err error
 	go func() {
@@ -921,7 +904,6 @@ func createPartialProposal(
 					OpinionHash: opinion.Hash,
 				},
 				Votes: opinion.Votes,
-				// EligibilityProofs: eligibility,
 			},
 			TxIDs:    txs,
 			MeshHash: meshHash,
@@ -938,9 +920,6 @@ func createPartialProposal(
 		p.Ballot.RefBallot = session.ref
 	}
 	p.SmesherID = smesher
-	// p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-	// p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
-	// p.MustInitialize()
 
 	return p
 }

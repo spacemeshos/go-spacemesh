@@ -159,7 +159,7 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 		proposal.Ballot.Signature = signer.signer.Sign(signing.BALLOT, proposal.Ballot.SignedBytes())
 		proposal.Signature = signer.signer.Sign(signing.PROPOSAL, proposal.SignedBytes())
 		proposal.MustInitialize()
-		pb.logger.Info("did all the proposal stuff nicely, publishing", zap.Inline(proposal))
+		pb.logger.Info("publishing proposal", zap.Inline(proposal))
 		if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
 			pb.logger.Error("failed to publish proposal",
 				log.ZContext(ctx),
@@ -168,7 +168,6 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 				zap.Error(err),
 			)
 		}
-		pb.logger.Info("proposal published successfully")
 	}
 	return nil
 }
