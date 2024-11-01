@@ -332,7 +332,9 @@ func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) 
 	return err
 }
 
-func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (GetProposalLayerNodeResponseObject, error) {
+func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (
+	GetProposalLayerNodeResponseObject, error,
+) {
 	hexBuf, err := hex.DecodeString(request.Node)
 	if err != nil {
 		return &proposalResp{}, err

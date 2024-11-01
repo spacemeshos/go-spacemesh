@@ -7,14 +7,15 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
-	"golang.org/x/sync/errgroup"
 )
 
 type nodeService interface {
@@ -31,7 +32,6 @@ type RemoteProposalBuilder struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
-	shared sharedSession
 }
 
 // New creates a struct of block builder type.
@@ -153,7 +153,9 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 		}
 
 		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		rng.Shuffle(len(proposal.TxIDs), func(i, j int) { proposal.TxIDs[i], proposal.TxIDs[j] = proposal.TxIDs[j], proposal.TxIDs[i] })
+		rng.Shuffle(len(proposal.TxIDs), func(i, j int) {
+			proposal.TxIDs[i], proposal.TxIDs[j] = proposal.TxIDs[j], proposal.TxIDs[i]
+		})
 
 		proposal.EligibilityProofs = eligibilities
 		proposal.Ballot.Signature = signer.signer.Sign(signing.BALLOT, proposal.Ballot.SignedBytes())

@@ -41,7 +41,12 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 		proposals:  server.NewMockproposalBuilder(ctrl),
 	}
 
-	activationServiceServer := server.NewServer(m.atxService, m.publisher, m.poetDb, m.hare, m.proposals, log.Named("server"))
+	activationServiceServer := server.NewServer(m.atxService,
+		m.publisher,
+		m.poetDb,
+		m.hare,
+		m.proposals,
+		log.Named("server"))
 
 	listener, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)

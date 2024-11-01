@@ -193,7 +193,9 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 	return v, nil
 }
 
-func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error) {
+func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
+	*types.Proposal, uint64, error,
+) {
 	resp, err := s.client.GetProposalLayerNode(ctx, externalRef0.LayerID(layer), node.String())
 	if err != nil {
 		return nil, 0, err
@@ -215,7 +217,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 
 	prop := types.Proposal{}
 	codec.MustDecode(bytes, &prop)
-	atxNonce := resp.Header.Get("x-spacemesh-atx-nonce")
+	atxNonce := resp.Header.Get("X-Spacemesh-Atx-Nonce")
 	if atxNonce == "" {
 		return nil, 0, errors.New("atx nonce header not found")
 	}

@@ -567,7 +567,11 @@ func (pb *ProposalBuilder) initSignerData(ss *signerSession, lid types.LayerID) 
 	return nil
 }
 
-func (pb *ProposalBuilder) initSignerDataFor(ctx context.Context, ss *signerSession, lid types.LayerID, nodeID types.NodeID) error {
+func (pb *ProposalBuilder) initSignerDataFor(ctx context.Context,
+	ss *signerSession,
+	lid types.LayerID,
+	nodeID types.NodeID,
+) error {
 	if ss.session.epoch != lid.GetEpoch() {
 		ss.session = session{epoch: lid.GetEpoch()}
 	}
@@ -615,7 +619,10 @@ func (pb *ProposalBuilder) initSignerDataFor(ctx context.Context, ss *signerSess
 	return nil
 }
 
-func (pb *ProposalBuilder) BuildFor(ctx context.Context, lid types.LayerID, nodeID types.NodeID) (*types.Proposal, types.VRFPostIndex, error) {
+func (pb *ProposalBuilder) BuildFor(ctx context.Context,
+	lid types.LayerID,
+	nodeID types.NodeID,
+) (*types.Proposal, types.VRFPostIndex, error) {
 	if err := pb.initSharedData(ctx, lid); err != nil {
 		return nil, 0, err
 	}
