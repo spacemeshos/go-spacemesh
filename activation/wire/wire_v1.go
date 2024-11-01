@@ -44,18 +44,22 @@ type PostV1 struct {
 	Pow     uint64
 }
 
-func (p *PostV1) Root() types.Hash32 {
-	return createRoot(func(tree *merkle.Tree) {
-		nonce := make([]byte, 4)
-		binary.LittleEndian.PutUint32(nonce, p.Nonce)
-		tree.AddLeaf(nonce)
+func (p *PostV1) merkleTree(tree *merkle.Tree) {
+	nonce := make([]byte, 4)
+	binary.LittleEndian.PutUint32(nonce, p.Nonce)
+	tree.AddLeaf(nonce)
 
-		tree.AddLeaf(p.Indices)
+	tree.AddLeaf(p.Indices)
 
-		pow := make([]byte, 8)
-		binary.LittleEndian.PutUint64(pow, p.Pow)
-		tree.AddLeaf(pow)
-	})
+	pow := make([]byte, 8)
+	binary.LittleEndian.PutUint64(pow, p.Pow)
+	tree.AddLeaf(pow)
+}
+
+type PostRoot types.Hash32
+
+func (p *PostV1) Root() PostRoot {
+	return PostRoot(createRoot(p.merkleTree))
 }
 
 type MerkleProofV1 struct {
