@@ -4,33 +4,9 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/hashicorp/golang-lru/v2/simplelru"
-
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
-
-// dbIDKey is a key for the LRU cache of ID chunks.
-type dbIDKey struct {
-	//nolint:unused
-	id string
-	//nolint:unused
-	chunkSize int
-}
-
-// LRU cache for ID chunks.
-type lru = simplelru.LRU[dbIDKey, []rangesync.KeyBytes]
-
-const lruCacheSize = 1024 * 1024
-
-// newLRU creates a new LRU cache for ID chunks.
-func newLRU() *lru {
-	cache, err := simplelru.NewLRU[dbIDKey, []rangesync.KeyBytes](lruCacheSize, nil)
-	if err != nil {
-		panic("BUG: failed to create LRU cache: " + err.Error())
-	}
-	return cache
-}
 
 // dbSeq represents a sequence of IDs from a database table.
 type dbSeq struct {
@@ -56,8 +32,6 @@ type dbSeq struct {
 	// true if there is only a single chunk in the sequence.
 	// It is set after loading the initial chunk and finding that it's the only one.
 	singleChunk bool
-	// LRU cache for ID chunks
-	cache *lru
 }
 
 // idsFromTable iterates over the id field values in a database table.
@@ -68,7 +42,6 @@ func idsFromTable(
 	ts int64,
 	chunkSize int,
 	maxChunkSize int,
-	lru *lru,
 ) rangesync.SeqResult {
 	if from == nil {
 		panic("BUG: makeDBIterator: nil from")
@@ -94,7 +67,6 @@ func idsFromTable(
 				keyLen:       len(from),
 				chunk:        make([]rangesync.KeyBytes, maxChunkSize),
 				singleChunk:  false,
-				cache:        lru,
 			}
 			if err = s.load(); err != nil {
 				return
@@ -105,27 +77,6 @@ func idsFromTable(
 			return err
 		},
 	}
-}
-
-// loadCached loads a chunk of IDs from the LRU cache,
-// if possible.
-func (s *dbSeq) loadCached(key dbIDKey) (bool, int) {
-	if s.cache == nil {
-		return false, 0
-	}
-	chunk, ok := s.cache.Get(key)
-	if !ok {
-		return false, 0
-	}
-
-	for n, id := range s.chunk[:len(chunk)] {
-		if id == nil {
-			id = make([]byte, s.keyLen)
-			s.chunk[n] = id
-		}
-		copy(id, chunk[n])
-	}
-	return true, len(chunk)
 }
 
 // load makes sure the current chunk is loaded.
@@ -146,38 +97,29 @@ func (s *dbSeq) load() error {
 		// to extend it back
 		s.chunk = s.chunk[:s.chunkSize]
 	}
-	key := dbIDKey{string(s.from), s.chunkSize}
+
 	var ierr, err error
-	found, n := s.loadCached(key)
-	if !found {
-		dec := func(stmt *sql.Statement) bool {
-			if n >= len(s.chunk) {
-				ierr = errors.New("too many rows")
-				return false
-			}
-			// we reuse existing slices when possible for retrieving new IDs
-			id := s.chunk[n]
-			if id == nil {
-				id = make([]byte, s.keyLen)
-				s.chunk[n] = id
-			}
-			stmt.ColumnBytes(0, id)
-			n++
-			return true
+	dec := func(stmt *sql.Statement) bool {
+		if n >= len(s.chunk) {
+			ierr = errors.New("too many rows")
+			return false
 		}
-		if s.ts <= 0 {
-			err = s.sts.LoadRange(s.db, s.from, s.chunkSize, dec)
-		} else {
-			err = s.sts.LoadRecent(s.db, s.from, s.chunkSize, s.ts, dec)
+		// we reuse existing slices when possible for retrieving new IDs
+		id := s.chunk[n]
+		if id == nil {
+			id = make([]byte, s.keyLen)
+			s.chunk[n] = id
 		}
-		if err == nil && ierr == nil && s.cache != nil {
-			cached := make([]rangesync.KeyBytes, n)
-			for n, id := range s.chunk[:n] {
-				cached[n] = slices.Clone(id)
-			}
-			s.cache.Add(key, cached)
-		}
+		stmt.ColumnBytes(0, id)
+		n++
+		return true
 	}
+	if s.ts <= 0 {
+		err = s.sts.LoadRange(s.db, s.from, s.chunkSize, dec)
+	} else {
+		err = s.sts.LoadRecent(s.db, s.from, s.chunkSize, s.ts, dec)
+	}
+
 	fromZero := s.from.IsZero()
 	s.chunkSize = min(s.chunkSize*2, s.maxChunkSize)
 	switch {

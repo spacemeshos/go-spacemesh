@@ -13,7 +13,6 @@ type SQLIDStore struct {
 	db     sql.Executor
 	sts    *SyncedTableSnapshot
 	keyLen int
-	cache  *lru
 }
 
 var _ IDStore = &SQLIDStore{}
@@ -24,7 +23,6 @@ func NewSQLIDStore(db sql.Executor, sts *SyncedTableSnapshot, keyLen int) *SQLID
 		db:     db,
 		sts:    sts,
 		keyLen: keyLen,
-		cache:  newLRU(),
 	}
 }
 
@@ -54,7 +52,7 @@ func (s *SQLIDStore) From(from rangesync.KeyBytes, sizeHint int) rangesync.SeqRe
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
 	}
-	return idsFromTable(s.db, s.sts, from, -1, sizeHint, sqlMaxChunkSize, s.cache)
+	return idsFromTable(s.db, s.sts, from, -1, sizeHint, sqlMaxChunkSize)
 }
 
 // Since returns IDs in the store starting from the given key and timestamp.
@@ -69,13 +67,12 @@ func (s *SQLIDStore) Since(from rangesync.KeyBytes, since int64) (rangesync.SeqR
 	if count == 0 {
 		return rangesync.EmptySeqResult(), 0
 	}
-	return idsFromTable(s.db, s.sts, from, since, 1, sqlMaxChunkSize, nil), count
+	return idsFromTable(s.db, s.sts, from, since, 1, sqlMaxChunkSize), count
 }
 
 // Sets the table snapshot to use for the store.
 func (s *SQLIDStore) SetSnapshot(sts *SyncedTableSnapshot) {
 	s.sts = sts
-	s.cache.Purge()
 }
 
 // Release is a no-op for SQLIDStore.

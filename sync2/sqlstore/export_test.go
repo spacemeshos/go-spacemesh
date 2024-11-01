@@ -3,7 +3,6 @@ package sqlstore
 import "github.com/spacemeshos/go-spacemesh/sql/expr"
 
 var (
-	NewLRU       = newLRU
 	IDSFromTable = idsFromTable
 )
 

@@ -220,7 +220,6 @@ func TestDBRangeIterator(t *testing.T) {
 		t.Run("", func(t *testing.T) {
 			db := sqlstore.CreateDB(t, 4)
 			sqlstore.InsertDBItems(t, db, tc.items)
-			cache := sqlstore.NewLRU()
 			st := &sqlstore.SyncedTable{
 				TableName: "foo",
 				IDColumn:  "id",
@@ -230,7 +229,7 @@ func TestDBRangeIterator(t *testing.T) {
 			for startChunkSize := 1; startChunkSize < 12; startChunkSize++ {
 				for maxChunkSize := 1; maxChunkSize < 12; maxChunkSize++ {
 					sr := sqlstore.IDSFromTable(db, sts, tc.from, -1,
-						startChunkSize, maxChunkSize, cache)
+						startChunkSize, maxChunkSize)
 					// when there are no items, errEmptySet is returned
 					for range 3 { // make sure the sequence is reusable
 						var collected []rangesync.KeyBytes
