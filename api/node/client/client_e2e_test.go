@@ -180,7 +180,7 @@ func Test_Hare(t *testing.T) {
 		exp := make([]byte, 182)
 		mock.hare.EXPECT().RoundMessage(gomock.Any(), gomock.Any()).Return(&hare3.Message{})
 		v, err := svc.GetHareMessage(context.Background(), types.LayerID(113), hare3.IterRound{})
-		require.Equal(t, v, exp)
+		require.Equal(t, exp, v)
 		require.NoError(t, err)
 	})
 }
