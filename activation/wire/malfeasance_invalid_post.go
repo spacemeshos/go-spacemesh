@@ -2,12 +2,9 @@ package wire
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"slices"
-
-	"github.com/spacemeshos/merkle-tree"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -55,6 +52,7 @@ func NewMergedInvalidPostProof(
 	atx, marriageATX, initialATX *ActivationTxV2,
 	nodeID types.NodeID,
 	nipostIndex int,
+	invalidPostIndex uint32,
 ) (*ProofMergedInvalidPost, error) {
 	marriageProof, err := createMarryProof(db, marriageATX, nodeID)
 	if err != nil {
@@ -66,7 +64,12 @@ func NewMergedInvalidPostProof(
 		return nil, fmt.Errorf("commitment proof: %w", err)
 	}
 
-	invalidPostProof, err := createInvalidPostProof(atx, nipostIndex, int(marriageProof.CertificateIndex))
+	invalidPostProof, err := createInvalidPostProof(
+		atx,
+		nipostIndex,
+		int(marriageProof.CertificateIndex),
+		invalidPostIndex,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post proof: %w", err)
 	}
@@ -209,16 +212,19 @@ type InvalidPostProof struct {
 	Post      PostV1
 	PostProof PostRootProof `scale:"max=32"`
 
-	// NumUnits is the number of units in the PoST.
-	NumUnits uint32
-	// NumUnitsProof contains the merkle path from the PoST to the NumUnits field.
-	NumUnitsProof []types.Hash32 `scale:"max=32"`
+	// NumUnits and its proof that it is contained in the SubPostRoot.
+	NumUnits      uint32
+	NumUnitsProof NumUnitsProof `scale:"max=32"`
 
 	// InvalidPostIndex is the index of the leaf that was identified to be invalid.
 	InvalidPostIndex uint32
 }
 
-func createInvalidPostProof(atx *ActivationTxV2, nipostIndex, marriageIndex int) (InvalidPostProof, error) {
+func createInvalidPostProof(atx *ActivationTxV2,
+	nipostIndex,
+	marriageIndex int,
+	invalidPostIndex uint32,
+) (InvalidPostProof, error) {
 	if nipostIndex < 0 || nipostIndex >= len(atx.NIPosts) {
 		return InvalidPostProof{}, errors.New("invalid NIPoST index")
 	}
@@ -255,7 +261,10 @@ func createInvalidPostProof(atx *ActivationTxV2, nipostIndex, marriageIndex int)
 		Post:      atx.NIPosts[nipostIndex].Posts[postIndex].Post,
 		PostProof: atx.NIPosts[nipostIndex].Posts[postIndex].PostProof(atx.PreviousATXs),
 
-		// TODO(mafa): continue with proof
+		NumUnits:      atx.NIPosts[nipostIndex].Posts[postIndex].NumUnits,
+		NumUnitsProof: atx.NIPosts[nipostIndex].Posts[postIndex].NumUnitsProof(atx.PreviousATXs),
+
+		InvalidPostIndex: invalidPostIndex,
 	}
 	return proof, nil
 }
@@ -303,27 +312,8 @@ func (p InvalidPostProof) Valid(
 		return errors.New("invalid PoST proof")
 	}
 
-	// TODO(mafa): continue with proof
-
-	numUnits := make([]byte, 4)
-	binary.LittleEndian.PutUint32(numUnits, p.NumUnits)
-
-	numUnitsProof := make([][]byte, len(p.NumUnitsProof))
-	for i, h := range p.NumUnitsProof {
-		numUnitsProof[i] = h.Bytes()
-	}
-	ok, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(NumUnitsIndex)},
-		[][]byte{numUnits},
-		numUnitsProof,
-		types.Hash32(p.Post.Root()).Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate PoST num units proof: %w", err)
-	}
-	if !ok {
-		return errors.New("invalid PoST num units proof")
+	if !p.NumUnitsProof.Valid(p.SubPostRoot, p.NumUnits) {
+		return errors.New("invalid num units proof")
 	}
 
 	if err := malValidator.PostIndex(
