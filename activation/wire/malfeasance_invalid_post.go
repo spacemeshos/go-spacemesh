@@ -196,15 +196,14 @@ type InvalidPostProof struct {
 	SubPostsRoot      SubPostsRoot
 	SubPostsRootProof SubPostsRootProof `scale:"max=32"`
 
-	// SubPostRoot is the root of the sub PoST merkle tree.
-	SubPostRoot types.Hash32
-	// SubPostRootIndex is the index of the sub PoST in the NiPoST.
+	// SubPostRoot and its proof that is contained at the given index in the SubPostsRoot.
+	SubPostRoot      SubPostRoot
+	SubPostRootProof SubPostRootProof `scale:"max=32"`
 	SubPostRootIndex uint16
-	// SubPostRootProof contains the merkle path from the PostsRoot to the SubPostRoot field.
-	SubPostRootProof []types.Hash32 `scale:"max=32"`
 
 	// MarriageIndexProof contains the merkle path from the SubPostRoot to the MarriageIndex field.
-	MarriageIndexProof []types.Hash32 `scale:"max=32"`
+	MarriageIndexProof MarriageIndexProof `scale:"max=32"`
+
 	// Post is the invalid PoST.
 	Post PostV1
 	// PostProof contains the merkle path from the SubPostRoot to the PoST field.
@@ -227,10 +226,8 @@ func createInvalidPostProof(atx *ActivationTxV2, nipostIndex, marriageIndex int)
 	postIndex := slices.IndexFunc(atx.NIPosts[nipostIndex].Posts, func(post SubPostV2) bool {
 		return post.MarriageIndex == uint32(marriageIndex)
 	})
-
-	subPostRootProof, err := subPostRootProof(atx.NIPosts[nipostIndex].Posts, postIndex, atx.PreviousATXs)
-	if err != nil {
-		return InvalidPostProof{}, fmt.Errorf("failed to create sub PoST root proof: %w", err)
+	if postIndex == -1 {
+		return InvalidPostProof{}, fmt.Errorf("does not contain PoST with marriage index %d", marriageIndex)
 	}
 
 	proof := InvalidPostProof{
@@ -249,35 +246,15 @@ func createInvalidPostProof(atx *ActivationTxV2, nipostIndex, marriageIndex int)
 		SubPostsRoot:      atx.NIPosts[nipostIndex].Posts.Root(atx.PreviousATXs),
 		SubPostsRootProof: atx.NIPosts[nipostIndex].PostsRootProof(atx.PreviousATXs),
 
-		// TODO(mafa): cleanup below
-
-		SubPostRoot:      types.Hash32(atx.NIPosts[nipostIndex].Posts[postIndex].Root(atx.PreviousATXs)),
+		SubPostRoot:      atx.NIPosts[nipostIndex].Posts[postIndex].Root(atx.PreviousATXs),
+		SubPostRootProof: atx.NIPosts[nipostIndex].Posts.Proof(postIndex, atx.PreviousATXs),
 		SubPostRootIndex: uint16(postIndex),
-		SubPostRootProof: subPostRootProof,
 
 		MarriageIndexProof: atx.NIPosts[nipostIndex].Posts[postIndex].MarriageIndexProof(atx.PreviousATXs),
 
 		// TODO(mafa): continue with proof
 	}
 	return proof, nil
-}
-
-func subPostRootProof(posts SubPostsV2, postIndex int, prevATXs []types.ATXID) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(postIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	posts.merkleTree(tree, prevATXs)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
 }
 
 // Valid returns no error if the proof is valid. It verifies that the signature is valid, that the merkle proofs are
@@ -289,7 +266,7 @@ func (p InvalidPostProof) Valid(
 	nodeID types.NodeID,
 	commitmentATX types.ATXID,
 	marriageATX types.ATXID,
-	marriageIndex uint16,
+	marriageIndex uint32,
 ) error {
 	if !p.MarriageATXProof.Valid(atxID, marriageATX) {
 		return errors.New("invalid marriage ATX proof")
@@ -311,53 +288,25 @@ func (p InvalidPostProof) Valid(
 		return errors.New("invalid sub PoSTs root proof")
 	}
 
-	// --- PoST ---
-
-	subPostProof := make([][]byte, len(p.SubPostRootProof))
-	for i, h := range p.SubPostRootProof {
-		subPostProof[i] = h.Bytes()
-	}
-	ok, err := merkle.ValidatePartialTree(
-		[]uint64{uint64(p.SubPostRootIndex)},
-		[][]byte{p.SubPostRoot.Bytes()},
-		subPostProof,
-		types.Hash32(p.SubPostsRoot).Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate sub PoST root proof: %w", err)
-	}
-	if !ok {
+	if !p.SubPostRootProof.Valid(p.SubPostsRoot, int(p.SubPostRootIndex), p.SubPostRoot) {
 		return errors.New("invalid sub PoST root proof")
 	}
 
-	marriageIndexProof := make([][]byte, len(p.MarriageIndexProof))
-	for i, h := range p.MarriageIndexProof {
-		marriageIndexProof[i] = h.Bytes()
+	if !p.MarriageIndexProof.Valid(p.SubPostRoot, marriageIndex) {
+		return errors.New("invalid marriage index proof")
 	}
-	ok, err = merkle.ValidatePartialTree(
-		[]uint64{uint64(marriageIndex)},
-		[][]byte{p.Post.Root().Bytes()},
-		marriageIndexProof,
-		p.SubPostRoot.Bytes(),
-		atxTreeHash,
-	)
-	if err != nil {
-		return fmt.Errorf("validate PoST marriage index proof: %w", err)
-	}
-	if !ok {
-		return errors.New("invalid PoST marriage index proof")
-	}
+
+	// TODO(mafa): continue with proof
 
 	postProof := make([][]byte, len(p.PostProof))
 	for i, h := range p.PostProof {
 		postProof[i] = h.Bytes()
 	}
-	ok, err = merkle.ValidatePartialTree(
+	ok, err := merkle.ValidatePartialTree(
 		[]uint64{uint64(PostIndex)},
 		[][]byte{p.Post.Root().Bytes()},
 		postProof,
-		p.SubPostRoot.Bytes(),
+		types.Hash32(p.SubPostRoot).Bytes(),
 		atxTreeHash,
 	)
 	if err != nil {
