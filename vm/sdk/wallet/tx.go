@@ -57,6 +57,10 @@ func Spawn(
 	}
 	payload := core.Payload(athenaPayload)
 
+	// The payload is already encoded. Why, might you ask, are we encoding it again?
+	// Short answer: because, when decoding txs, go-spacemesh can only decode SCALE-encoded data.
+	// Fixing this, and allowing a tx to be partially SCALE-encoded, partially raw bytes,
+	// is a lot of work for a tiny bit of gain.
 	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
 	// tx := encode(&sdk.TxVersion, &principal, &meta)
 	// tx = append(tx, payload...)

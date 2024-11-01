@@ -999,36 +999,36 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 			},
 		},
-		// {
-		// 	desc: "FailedFeesAndGas",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTx{0},
-		// 				// gas will be higher than fixed, but less than max gas
-		// 				&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
-		// 				// it will cause this transaction to be failed
-		// 				&selfSpawnTx{11},
-		// 			},
-		// 			gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
-		// 				ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
-		// 				ref.estimateSpawnGas(11, 11)),
-		// 			failed:  map[int]error{2: core.ErrOutOfGas},
-		// 			rewards: []reward{{address: 20, share: 1}},
-		// 			expected: map[int]change{
-		// 				0: spent{amount: ref.estimateSpawnGas(0, 0) +
-		// 					ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
-		// 					ref.estimateSpawnGas(11, 11) - 1},
-		// 				11: nonce{increased: 1},
-		// 				// fees from every transaction (including failed) + testBaseReward
-		// 				20: earned{amount: ref.estimateSpawnGas(0, 0) +
-		// 					ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
-		// 					ref.estimateSpawnGas(11, 11) - 1 +
-		// 					int(rewards.TotalSubsidyAtLayer(0))},
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			desc: "FailedFeesAndGas",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTx{0},
+						// gas will be higher than fixed, but less than max gas
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
+						// it will cause this transaction to be failed
+						&selfSpawnTx{11},
+					},
+					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
+						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
+						ref.estimateSpawnGas(11, 11)),
+					failed:  map[int]error{2: core.ErrOutOfGas},
+					rewards: []reward{{address: 20, share: 1}},
+					expected: map[int]change{
+						0: spent{amount: ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
+							ref.estimateSpawnGas(11, 11) - 1},
+						11: nonce{increased: 1},
+						// fees from every transaction (including failed) + testBaseReward
+						20: earned{amount: ref.estimateSpawnGas(0, 0) +
+							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
+							ref.estimateSpawnGas(11, 11) - 1 +
+							int(rewards.TotalSubsidyAtLayer(0))},
+					},
+				},
+			},
+		},
 		// {
 		// 	desc: "Spawn",
 		// 	layers: []layertc{
