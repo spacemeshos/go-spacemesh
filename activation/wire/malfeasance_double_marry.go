@@ -78,10 +78,9 @@ type MarryProof struct {
 
 	// The signature of the certificate and the proof that the certificate is contained in the MarriageRoot at
 	// the given index.
-	CertificateReference types.ATXID
-	CertificateSignature types.EdSignature
-	CertificateIndex     uint16
-	CertificateProof     MarriageCertificateProof `scale:"max=32"`
+	Certificate      MarriageCertificate
+	CertificateProof MarriageCertificateProof `scale:"max=32"`
+	CertificateIndex uint32
 
 	// SmesherID is the ID of the smesher that published the ATX.
 	SmesherID types.NodeID
@@ -111,10 +110,9 @@ func createMarryProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID)
 		MarriageCertificatesRoot:  atx.Marriages.Root(),
 		MarriageCertificatesProof: atx.MarriagesRootProof(),
 
-		CertificateReference: atx.Marriages[marriageIndex].ReferenceAtx,
-		CertificateSignature: atx.Marriages[marriageIndex].Signature,
-		CertificateIndex:     uint16(marriageIndex),
-		CertificateProof:     atx.Marriages.Proof(marriageIndex),
+		Certificate:      atx.Marriages[marriageIndex],
+		CertificateProof: atx.Marriages.Proof(marriageIndex),
+		CertificateIndex: uint32(marriageIndex),
 
 		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
@@ -127,7 +125,7 @@ func (p MarryProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID
 		return errors.New("invalid ATX signature")
 	}
 
-	if !malValidator.Signature(signing.MARRIAGE, nodeID, p.SmesherID.Bytes(), p.CertificateSignature) {
+	if !malValidator.Signature(signing.MARRIAGE, nodeID, p.SmesherID.Bytes(), p.Certificate.Signature) {
 		return errors.New("invalid certificate signature")
 	}
 
@@ -135,12 +133,7 @@ func (p MarryProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID
 		return errors.New("invalid marriage proof")
 	}
 
-	mc := MarriageCertificate{
-		ReferenceAtx: p.CertificateReference,
-		Signature:    p.CertificateSignature,
-	}
-
-	if !p.CertificateProof.Valid(p.MarriageCertificatesRoot, int(p.CertificateIndex), mc) {
+	if !p.CertificateProof.Valid(p.MarriageCertificatesRoot, int(p.CertificateIndex), p.Certificate) {
 		return errors.New("invalid certificate proof")
 	}
 	return nil

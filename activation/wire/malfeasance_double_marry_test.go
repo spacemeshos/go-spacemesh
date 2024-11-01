@@ -290,13 +290,13 @@ func Test_DoubleMarryProof(t *testing.T) {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		proof.Proofs[0].CertificateSignature = types.RandomEdSignature()
+		proof.Proofs[0].Certificate.Signature = types.RandomEdSignature()
 		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate signature")
 		require.Equal(t, types.EmptyNodeID, id)
 
-		proof.Proofs[0].CertificateSignature = atx1.Marriages[1].Signature
-		proof.Proofs[1].CertificateSignature = types.RandomEdSignature()
+		proof.Proofs[0].Certificate.Signature = atx1.Marriages[1].Signature
+		proof.Proofs[1].Certificate.Signature = types.RandomEdSignature()
 		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate signature")
 		require.Equal(t, types.EmptyNodeID, id)

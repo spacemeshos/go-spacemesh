@@ -390,7 +390,7 @@ func (sp SubPostsV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 		// this will still generate a valid ID for the ATX,
 		// but syntactical validation will catch the invalid subPost and
 		// consider the ATX invalid
-		tree.AddLeaf(subPost.Root(prevATXs).Bytes())
+		tree.AddLeaf(types.Hash32(subPost.Root(prevATXs)).Bytes())
 	}
 	for i := len(sp); i < 256; i++ {
 		tree.AddLeaf(types.EmptyHash32.Bytes())
@@ -405,13 +405,19 @@ func (sp SubPostsV2) Root(prevATXs []types.ATXID) SubPostsRoot {
 	}))
 }
 
-func (sp SubPostsV2) Proof(index int, prevATXs []types.ATXID) []types.Hash32 {
+func (sp SubPostsV2) Proof(index int, prevATXs []types.ATXID) SubPostRootProof {
 	if index < 0 || index >= len(sp) {
 		panic("index out of range")
 	}
 	return createProof(uint64(index), func(tree *merkle.Tree) {
 		sp.merkleTree(tree, prevATXs)
 	})
+}
+
+type SubPostRootProof []types.Hash32
+
+func (p SubPostRootProof) Valid(subPostsRoot SubPostsRoot, index int, subPostRoot SubPostRoot) bool {
+	return validateProof(types.Hash32(subPostsRoot), types.Hash32(subPostRoot), p, uint64(index))
 }
 
 type SubPostV2 struct {
@@ -467,14 +473,24 @@ func (sp *SubPostV2) merkleProof(leafIndex SubPostTreeIndex, prevATXs []types.AT
 	})
 }
 
-func (sp *SubPostV2) Root(prevATXs []types.ATXID) types.Hash32 {
-	return createRoot(func(tree *merkle.Tree) {
+type SubPostRoot types.Hash32
+
+func (sp *SubPostV2) Root(prevATXs []types.ATXID) SubPostRoot {
+	return SubPostRoot(createRoot(func(tree *merkle.Tree) {
 		sp.merkleTree(tree, prevATXs)
-	})
+	}))
 }
 
-func (sp *SubPostV2) MarriageIndexProof(prevATXs []types.ATXID) []types.Hash32 {
+func (sp *SubPostV2) MarriageIndexProof(prevATXs []types.ATXID) MarriageIndexProof {
 	return sp.merkleProof(MarriageIndex, prevATXs)
+}
+
+type MarriageIndexProof []types.Hash32
+
+func (p MarriageIndexProof) Valid(subPostRoot SubPostRoot, marriageIndex uint32) bool {
+	marriageLeaf := make([]byte, 4)
+	binary.LittleEndian.PutUint32(marriageLeaf, marriageIndex)
+	return validateProof(types.Hash32(subPostRoot), types.Hash32(marriageLeaf), p, uint64(MarriageIndex))
 }
 
 func (sp *SubPostV2) PrevATXIndexProof(prevATXs []types.ATXID) []types.Hash32 {

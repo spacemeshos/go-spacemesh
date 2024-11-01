@@ -287,14 +287,14 @@ func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeCompact16(enc, uint16(t.SubPostRootIndex))
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.SubPostRootProof, 32)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.SubPostRootProof, 32)
+		n, err := scale.EncodeCompact16(enc, uint16(t.SubPostRootIndex))
 		if err != nil {
 			return total, err
 		}
@@ -430,20 +430,20 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		total += n
 	}
 	{
-		field, n, err := scale.DecodeCompact16(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.SubPostRootIndex = uint16(field)
-	}
-	{
 		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
 		if err != nil {
 			return total, err
 		}
 		total += n
 		t.SubPostRootProof = field
+	}
+	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.SubPostRootIndex = uint16(field)
 	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
