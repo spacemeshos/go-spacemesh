@@ -212,23 +212,23 @@ func TestWireConduit_Limits(t *testing.T) {
 		name         string
 		trafficLimit int
 		messageLimit int
-		error        bool
+		error        error
 	}{
 		{
 			name:         "message limit hit",
 			messageLimit: 10,
-			error:        true,
+			error:        rangesync.ErrMessageLimitExceeded,
 		},
 		{
 			name:         "traffic limit hit",
 			trafficLimit: 100,
-			error:        true,
+			error:        rangesync.ErrTrafficLimitExceeded,
 		},
 		{
 			name:         "limits not hit",
 			trafficLimit: 10000,
 			messageLimit: 1000,
-			error:        false,
+			error:        nil,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -289,8 +289,8 @@ func TestWireConduit_Limits(t *testing.T) {
 				return nil
 			})
 
-			if tc.error {
-				require.ErrorIs(t, <-errCh, rangesync.ErrLimitExceeded)
+			if tc.error != nil {
+				require.ErrorIs(t, <-errCh, tc.error)
 			} else {
 				require.NoError(t, <-errCh)
 			}
