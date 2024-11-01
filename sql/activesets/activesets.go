@@ -18,7 +18,7 @@ func Add(db sql.Executor, id types.Hash32, set *types.EpochActiveSet) error {
 		(id, epoch, active_set)
 		values (?1, ?2, ?3);`,
 		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, id[:])
+			stmt.BindBytes(1, id.Bytes())
 			stmt.BindInt64(2, int64(set.Epoch))
 			stmt.BindBytes(3, codec.MustEncode(set))
 		}, nil)
@@ -100,9 +100,7 @@ func getBlob(ctx context.Context, db sql.Executor, id []byte) ([]byte, error) {
 
 func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
 	_, err := db.Exec("delete from activesets where epoch < ?1;",
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(epoch))
-		},
+		func(stmt *sql.Statement) { stmt.BindInt64(1, int64(epoch)) },
 		nil,
 	)
 	if err != nil {
@@ -111,10 +109,9 @@ func DeleteBeforeEpoch(db sql.Executor, epoch types.EpochID) error {
 	return nil
 }
 
-func Has(db sql.Executor, id []byte) (bool, error) {
-	rows, err := db.Exec(
-		"select 1 from activesets where id = ?1;",
-		func(stmt *sql.Statement) { stmt.BindBytes(1, id) },
+func Has(db sql.Executor, id types.Hash32) (bool, error) {
+	rows, err := db.Exec("select 1 from activesets where id = ?1;",
+		func(stmt *sql.Statement) { stmt.BindBytes(1, id.Bytes()) },
 		nil,
 	)
 	if err != nil {

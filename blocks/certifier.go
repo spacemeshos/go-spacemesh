@@ -564,7 +564,7 @@ func (c *Certifier) save(
 	if len(valid)+len(invalid) == 0 {
 		return certificates.Add(c.db, lid, cert)
 	}
-	return c.db.WithTx(ctx, func(dbtx sql.Transaction) error {
+	return c.db.WithTxImmediate(ctx, func(dbtx sql.Transaction) error {
 		if err := certificates.Add(dbtx, lid, cert); err != nil {
 			return err
 		}

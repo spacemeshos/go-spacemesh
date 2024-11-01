@@ -43,7 +43,7 @@ func TestTransactionService_List(t *testing.T) {
 
 	gen := fixture.NewTransactionResultGenerator().WithAddresses(2)
 	txsList := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(ctx, func(dtx sql.Transaction) error {
 		for i := range txsList {
 			tx := gen.Next()
 
