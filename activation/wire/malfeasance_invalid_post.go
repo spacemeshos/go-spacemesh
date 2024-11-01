@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 //go:generate scalegen
@@ -49,11 +50,28 @@ var _ Proof = &ProofMergedInvalidPost{}
 
 func NewMergedInvalidPostProof(
 	db sql.Executor,
-	atx, marriageATX, initialATX *ActivationTxV2,
+	atx, initialATX *ActivationTxV2,
 	nodeID types.NodeID,
 	nipostIndex int,
 	invalidPostIndex uint32,
 ) (*ProofMergedInvalidPost, error) {
+	if atx.MarriageATX == nil {
+		return nil, errors.New("ATX is not a merged ATX")
+	}
+
+	var blob sql.Blob
+	v, err := atxs.LoadBlob(context.Background(), db, atx.MarriageATX.Bytes(), &blob)
+	if err != nil {
+		return nil, fmt.Errorf("get marriage ATX: %w", err)
+	}
+	if v != types.AtxV2 {
+		return nil, errors.New("invalid ATX version for marriage ATX")
+	}
+	marriageATX, err := DecodeAtxV2(blob.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("decode marriage ATX: %w", err)
+	}
+
 	marriageProof, err := createMarryProof(db, marriageATX, nodeID)
 	if err != nil {
 		return nil, fmt.Errorf("marriage proof: %w", err)

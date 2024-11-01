@@ -45,15 +45,17 @@ type PostV1 struct {
 }
 
 func (p *PostV1) merkleTree(tree *merkle.Tree) {
-	nonce := make([]byte, 4)
-	binary.LittleEndian.PutUint32(nonce, p.Nonce)
-	tree.AddLeaf(nonce)
+	var nonce types.Hash32
+	binary.LittleEndian.PutUint32(nonce[:], p.Nonce)
+	tree.AddLeaf(nonce.Bytes())
 
-	tree.AddLeaf(p.Indices)
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
+	tree.AddLeaf(hasher.Sum(p.Indices))
 
-	pow := make([]byte, 8)
-	binary.LittleEndian.PutUint64(pow, p.Pow)
-	tree.AddLeaf(pow)
+	var pow types.Hash32
+	binary.LittleEndian.PutUint64(pow[:], p.Pow)
+	tree.AddLeaf(pow.Bytes())
 }
 
 type PostRoot types.Hash32

@@ -4,11 +4,11 @@ import (
 	"encoding/binary"
 
 	"github.com/spacemeshos/merkle-tree"
-	"github.com/zeebo/blake3"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -118,7 +118,10 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 	binary.LittleEndian.PutUint32(publishEpoch[:], atx.PublishEpoch.Uint32())
 	tree.AddLeaf(publishEpoch.Bytes())
 	tree.AddLeaf(atx.PositioningATX.Bytes())
-	tree.AddLeaf(atx.Coinbase.Bytes())
+
+	var coinbase types.Hash32
+	copy(coinbase[:], atx.Coinbase.Bytes())
+	tree.AddLeaf(coinbase.Bytes())
 
 	if atx.Initial != nil {
 		tree.AddLeaf(types.Hash32(atx.Initial.Root()).Bytes())
@@ -447,9 +450,9 @@ func (post *SubPostV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 }
 
 func (sp *SubPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
-	marriageIndex := make([]byte, 4)
-	binary.LittleEndian.PutUint32(marriageIndex, sp.MarriageIndex)
-	tree.AddLeaf(marriageIndex)
+	var marriageIndex types.Hash32
+	binary.LittleEndian.PutUint32(marriageIndex[:], sp.MarriageIndex)
+	tree.AddLeaf(marriageIndex.Bytes())
 
 	if int(sp.PrevATXIndex) < len(prevATXs) {
 		// if prevATXIndex is out of range, it will be detected by syntactical validation
@@ -462,9 +465,9 @@ func (sp *SubPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 
 	tree.AddLeaf(types.Hash32(sp.Post.Root()).Bytes())
 
-	numUnits := make([]byte, 4)
-	binary.LittleEndian.PutUint32(numUnits, sp.NumUnits)
-	tree.AddLeaf(numUnits)
+	var numUnits types.Hash32
+	binary.LittleEndian.PutUint32(numUnits[:], sp.NumUnits)
+	tree.AddLeaf(numUnits.Bytes())
 }
 
 func (sp *SubPostV2) merkleProof(leafIndex SubPostTreeIndex, prevATXs []types.ATXID) []types.Hash32 {
@@ -488,9 +491,9 @@ func (sp *SubPostV2) MarriageIndexProof(prevATXs []types.ATXID) MarriageIndexPro
 type MarriageIndexProof []types.Hash32
 
 func (p MarriageIndexProof) Valid(subPostRoot SubPostRoot, marriageIndex uint32) bool {
-	marriageLeaf := make([]byte, 4)
-	binary.LittleEndian.PutUint32(marriageLeaf, marriageIndex)
-	return validateProof(types.Hash32(subPostRoot), types.Hash32(marriageLeaf), p, uint64(MarriageIndex))
+	var marriageIndexBytes types.Hash32
+	binary.LittleEndian.PutUint32(marriageIndexBytes[:], marriageIndex)
+	return validateProof(types.Hash32(subPostRoot), marriageIndexBytes, p, uint64(MarriageIndex))
 }
 
 func (sp *SubPostV2) PrevATXIndexProof(prevATXs []types.ATXID) []types.Hash32 {
@@ -518,9 +521,9 @@ func (sp *SubPostV2) NumUnitsProof(prevATXs []types.ATXID) NumUnitsProof {
 type NumUnitsProof []types.Hash32
 
 func (p NumUnitsProof) Valid(subPostRoot SubPostRoot, numUnits uint32) bool {
-	numUnitsBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(numUnitsBytes, numUnits)
-	return validateProof(types.Hash32(subPostRoot), types.Hash32(numUnitsBytes), p, uint64(NumUnitsIndex))
+	var numUnitsBytes types.Hash32
+	binary.LittleEndian.PutUint32(numUnitsBytes[:], numUnits)
+	return validateProof(types.Hash32(subPostRoot), numUnitsBytes, p, uint64(NumUnitsIndex))
 }
 
 type MarriageCertificates []MarriageCertificate
@@ -598,11 +601,12 @@ func (mc *MarriageCertificate) SignatureProof() []types.Hash32 {
 }
 
 func atxTreeHash(buf, lChild, rChild []byte) []byte {
-	hash := blake3.New()
-	hash.Write([]byte{0x01})
-	hash.Write(lChild)
-	hash.Write(rChild)
-	return hash.Sum(buf)
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
+	hasher.Write([]byte{0x01})
+	hasher.Write(lChild)
+	hasher.Write(rChild)
+	return hasher.Sum(buf)
 }
 
 func createRoot(addLeaves func(tree *merkle.Tree)) types.Hash32 {
