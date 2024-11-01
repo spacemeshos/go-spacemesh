@@ -409,7 +409,8 @@ type earned struct {
 
 func (ch earned) verify(tb testing.TB, prev, current *core.Account) {
 	tb.Helper()
-	require.Equal(tb, ch.amount, int(current.Balance-prev.Balance))
+	require.Equal(tb, ch.amount, int(current.Balance-prev.Balance),
+		"expected earn amount %d to equal balance diff %d", ch.amount, current.Balance-prev.Balance)
 
 	prev.Balance = current.Balance
 	if ch.change != nil {
@@ -1007,7 +1008,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{0},
 						// gas will be higher than fixed, but less than max gas
 						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
-						// it will cause this transaction to be failed
+						// it will cause this transaction fail
 						&selfSpawnTx{11},
 					},
 					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
