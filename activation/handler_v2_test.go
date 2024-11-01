@@ -1540,6 +1540,8 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 				gomock.Any(),
 			).
 			Return(verifying.ErrInvalidIndex{Index: 7})
+
+		// TODO(mafa): update assertion to expect a malfeasance proof that can be verified
 		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), sig.NodeID(), gomock.Any())
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		vErr := &verifying.ErrInvalidIndex{}
