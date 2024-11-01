@@ -155,7 +155,6 @@ func Test_StoringPoetProof(t *testing.T) {
 
 func Test_Hare(t *testing.T) {
 	svc, mock := setupE2E(t)
-	// func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
 	t.Run("total weight", func(t *testing.T) {
 		val := uint64(11)
 		mock.hare.EXPECT().TotalWeight(gomock.Any(), gomock.Any()).Return(val, nil)
