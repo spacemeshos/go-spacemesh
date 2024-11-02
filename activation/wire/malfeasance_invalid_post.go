@@ -102,8 +102,16 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 
-	if err := p.MarriageProof.Valid(malValidator, p.ATXID, p.NodeID, p.SmesherID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof: %w", err)
+	if p.NodeID != p.SmesherID && p.MarriageProof == nil {
+		return types.EmptyNodeID, errors.New("missing marriage proof")
+	}
+
+	var marriageIndex *uint32
+	if p.MarriageProof != nil {
+		if err := p.MarriageProof.Valid(malValidator, p.ATXID, p.NodeID, p.SmesherID); err != nil {
+			return types.EmptyNodeID, fmt.Errorf("invalid marriage proof: %w", err)
+		}
+		marriageIndex = &p.MarriageProof.NodeIDMarryProof.CertificateIndex
 	}
 
 	if err := p.CommitmentProof.Valid(malValidator, p.NodeID); err != nil {
@@ -116,7 +124,7 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 		p.ATXID,
 		p.NodeID,
 		p.CommitmentProof.CommitmentATX,
-		p.MarriageProof.NodeIDMarryProof.CertificateIndex,
+		marriageIndex,
 	); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
 	}
@@ -287,7 +295,7 @@ type InvalidPostProof struct {
 
 	// MarriageIndexProof is the proof that the MarriageIndex (CertificateIndex from MarryProof) is contained in the
 	// SubPostRoot.
-	MarriageIndexProof MarriageIndexProof `scale:"max=32"` // TODO(mafa): include this with marriage ATX proof
+	MarriageIndexProof MarriageIndexProof `scale:"max=32"`
 
 	// Post is the invalid PoST and its proof that it is contained in the SubPostRoot.
 	Post      PostV1
@@ -350,7 +358,7 @@ func (p InvalidPostProof) Valid(
 	atxID types.ATXID,
 	nodeID types.NodeID,
 	commitmentATX types.ATXID,
-	marriageIndex uint32,
+	marriageIndex *uint32,
 ) error {
 	if !p.NIPostsRootProof.Valid(atxID, p.NIPostsRoot) {
 		return errors.New("invalid NIPosts root proof")
@@ -372,8 +380,10 @@ func (p InvalidPostProof) Valid(
 		return errors.New("invalid sub PoST root proof")
 	}
 
-	if !p.MarriageIndexProof.Valid(p.SubPostRoot, marriageIndex) {
-		return errors.New("invalid marriage index proof")
+	if marriageIndex != nil {
+		if !p.MarriageIndexProof.Valid(p.SubPostRoot, *marriageIndex) {
+			return errors.New("invalid marriage index proof")
+		}
 	}
 
 	if !p.PostProof.Valid(p.SubPostRoot, p.Post.Root()) {
