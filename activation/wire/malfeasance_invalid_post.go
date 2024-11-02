@@ -34,9 +34,22 @@ type ProofMergedInvalidPost struct {
 	// NodeID is the node ID that created the invalid PoST.
 	NodeID types.NodeID
 
-	// MarryProof is the proof for the marriage ATX of the smesher. It proofs that NodeID agreed to marry the signer
-	// of the ATX.
-	MarryProof MarryProof
+	// -- Begin MarriageProof -- // make optional: only needed when SmesherID != NodeID
+
+	// MarriageATX and its proof that it is contained in the ATX.
+	MarriageATX      types.ATXID
+	MarriageATXProof MarriageATXProof `scale:"max=32"`
+	// MarriageATXSmesherID is the ID of the smesher that published the marriage ATX.
+	MarriageATXSmesherID types.NodeID
+	// MarriageATXSignature is the signature of the marriage ATX by the smesher.
+	MarriageATXSignature types.EdSignature
+
+	// NodeIDMarryProof is the proof that NodeID married in MarriageATX.
+	NodeIDMarryProof MarryProof
+	// SmesherIDMarryProof is the proof that SmesherID married in MarriageATX.
+	SmesherIDMarryProof MarryProof
+
+	// -- End MarriageProof --
 
 	// CommitmentProof is the proof for the commitment ATX of the smesher. Generated from the initial ATX of `NodeID`.
 	CommitmentProof CommitmentProof
@@ -48,7 +61,7 @@ type ProofMergedInvalidPost struct {
 
 var _ Proof = &ProofMergedInvalidPost{}
 
-func NewMergedInvalidPostProof(
+func NewInvalidPostProof(
 	db sql.Executor,
 	atx, initialATX *ActivationTxV2,
 	nodeID types.NodeID,
@@ -72,9 +85,14 @@ func NewMergedInvalidPostProof(
 		return nil, fmt.Errorf("decode marriage ATX: %w", err)
 	}
 
-	marriageProof, err := createMarryProof(db, marriageATX, nodeID)
+	nodeIDmarriageProof, err := createMarryProof(db, marriageATX, nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("marriage proof: %w", err)
+		return nil, fmt.Errorf("NodeID marriage proof: %w", err)
+	}
+
+	smesherIDmarriageProof, err := createMarryProof(db, marriageATX, atx.SmesherID)
+	if err != nil {
+		return nil, fmt.Errorf("SmesherID marriage proof: %w", err)
 	}
 
 	commitmentProof, err := createCommitmentProof(initialATX, nodeID)
@@ -85,7 +103,7 @@ func NewMergedInvalidPostProof(
 	invalidPostProof, err := createInvalidPostProof(
 		atx,
 		nipostIndex,
-		int(marriageProof.CertificateIndex),
+		int(nodeIDmarriageProof.CertificateIndex),
 		invalidPostIndex,
 	)
 	if err != nil {
@@ -99,7 +117,17 @@ func NewMergedInvalidPostProof(
 
 		NodeID: nodeID,
 
-		MarryProof:       marriageProof,
+		// -- Begin MarriageProof --
+		MarriageATX:      *atx.MarriageATX,
+		MarriageATXProof: atx.MarriageATXProof(),
+
+		MarriageATXSmesherID: marriageATX.SmesherID,
+		MarriageATXSignature: marriageATX.Signature,
+
+		NodeIDMarryProof:    nodeIDmarriageProof,
+		SmesherIDMarryProof: smesherIDmarriageProof,
+		// -- End MarriageProof --
+
 		CommitmentProof:  commitmentProof,
 		InvalidPostProof: invalidPostProof,
 	}
@@ -111,8 +139,16 @@ func (p ProofMergedInvalidPost) Valid(ctx context.Context, malValidator Malfeasa
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 
-	if err := p.MarryProof.Valid(malValidator, p.NodeID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof: %w", err)
+	if !p.MarriageATXProof.Valid(p.ATXID, p.MarriageATX) {
+		return types.EmptyNodeID, errors.New("invalid marriage ATX proof")
+	}
+
+	if err := p.NodeIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, p.NodeID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof for NodeID: %w", err)
+	}
+
+	if err := p.SmesherIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, p.SmesherID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof for SmesherID: %w", err)
 	}
 
 	if err := p.CommitmentProof.Valid(malValidator, p.NodeID); err != nil {
@@ -125,8 +161,8 @@ func (p ProofMergedInvalidPost) Valid(ctx context.Context, malValidator Malfeasa
 		p.ATXID,
 		p.NodeID,
 		p.CommitmentProof.CommitmentATX,
-		p.MarryProof.ATXID,
-		p.MarryProof.CertificateIndex,
+		p.MarriageATX,
+		p.NodeIDMarryProof.CertificateIndex,
 	); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
 	}
@@ -197,9 +233,6 @@ func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.N
 // InvalidPostProof is a proof for an invalid PoST in an ATX. It contains the PoST and the merkle proofs to verify the
 // PoST.
 type InvalidPostProof struct {
-	// MarriageATXProof that the ATX contains the MarriageATX from the MarryProof.
-	MarriageATXProof MarriageATXProof `scale:"max=32"`
-
 	// NIPostsRoot and its proof that it is contained in the ATX.
 	NIPostsRoot      NIPostsRoot
 	NIPostsRootProof NIPostsRootProof `scale:"max=32"`
@@ -224,7 +257,7 @@ type InvalidPostProof struct {
 
 	// MarriageIndexProof is the proof that the MarriageIndex (CertificateIndex from MarryProof) is contained in the
 	// SubPostRoot.
-	MarriageIndexProof MarriageIndexProof `scale:"max=32"`
+	MarriageIndexProof MarriageIndexProof `scale:"max=32"` // TODO(mafa): include this with marriage ATX proof
 
 	// Post is the invalid PoST and its proof that it is contained in the SubPostRoot.
 	Post      PostV1
@@ -255,8 +288,6 @@ func createInvalidPostProof(atx *ActivationTxV2,
 	}
 
 	proof := InvalidPostProof{
-		MarriageATXProof: atx.MarriageATXProof(),
-
 		NIPostsRoot:      atx.NIPosts.Root(atx.PreviousATXs),
 		NIPostsRootProof: atx.NIPostsRootProof(),
 
@@ -298,10 +329,6 @@ func (p InvalidPostProof) Valid(
 	marriageATX types.ATXID,
 	marriageIndex uint32,
 ) error {
-	if !p.MarriageATXProof.Valid(atxID, marriageATX) {
-		return errors.New("invalid marriage ATX proof")
-	}
-
 	if !p.NIPostsRootProof.Valid(atxID, p.NIPostsRoot) {
 		return errors.New("invalid NIPosts root proof")
 	}
