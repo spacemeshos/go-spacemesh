@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 //go:generate scalegen
@@ -34,10 +33,8 @@ type ProofInvalidPost struct {
 
 	// MarriageProof is the proof that NodeID and SmesherID are married. It is nil if NodeID == SmesherID.
 	MarriageProof *MarriageProof
-
 	// CommitmentProof is the proof for the commitment ATX of the smesher. Generated from the initial ATX of NodeID.
 	CommitmentProof CommitmentProof
-
 	// InvalidPostProof is the proof for the invalid PoST of the ATX. It contains the PoST and the merkle proofs to
 	// verify the PoST.
 	InvalidPostProof InvalidPostProof
@@ -76,13 +73,12 @@ func NewInvalidPostProof(
 	if err != nil {
 		return nil, fmt.Errorf("commitment proof: %w", err)
 	}
-
 	invalidPostProof, err := createInvalidPostProof(atx, nipostIndex, postIndex, invalidPostIndex)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post proof: %w", err)
 	}
 
-	proof := &ProofInvalidPost{
+	return &ProofInvalidPost{
 		ATXID:     atx.ID(),
 		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
@@ -93,8 +89,7 @@ func NewInvalidPostProof(
 
 		CommitmentProof:  commitmentProof,
 		InvalidPostProof: invalidPostProof,
-	}
-	return proof, nil
+	}, nil
 }
 
 func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
@@ -132,82 +127,6 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 	return p.NodeID, nil
 }
 
-// MarriageProof is a proof for two identities to be married via a marriage ATX.
-type MarriageProof struct {
-	// MarriageATX and its proof that it is contained in the ATX.
-	MarriageATX      types.ATXID
-	MarriageATXProof MarriageATXProof `scale:"max=32"`
-	// MarriageATXSmesherID is the ID of the smesher that published the marriage ATX.
-	MarriageATXSmesherID types.NodeID
-
-	// NodeIDMarryProof is the proof that NodeID married in MarriageATX.
-	NodeIDMarryProof MarryProof
-	// SmesherIDMarryProof is the proof that SmesherID married in MarriageATX.
-	SmesherIDMarryProof MarryProof
-}
-
-func createMarriageProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID) (MarriageProof, error) {
-	if nodeID == atx.SmesherID {
-		// we don't need a marriage proof if the node ID is the same as the smesher ID
-		return MarriageProof{}, errors.New("node ID is the same as smesher ID")
-	}
-
-	var blob sql.Blob
-	v, err := atxs.LoadBlob(context.Background(), db, atx.MarriageATX.Bytes(), &blob)
-	if err != nil {
-		return MarriageProof{}, fmt.Errorf("get marriage ATX: %w", err)
-	}
-	if v != types.AtxV2 {
-		return MarriageProof{}, errors.New("invalid ATX version for marriage ATX")
-	}
-	marriageATX, err := DecodeAtxV2(blob.Bytes)
-	if err != nil {
-		return MarriageProof{}, fmt.Errorf("decode marriage ATX: %w", err)
-	}
-
-	nodeIDmarriageProof, err := createMarryProof(db, marriageATX, nodeID)
-	if err != nil {
-		return MarriageProof{}, fmt.Errorf("NodeID marriage proof: %w", err)
-	}
-
-	smesherIDmarriageProof, err := createMarryProof(db, marriageATX, atx.SmesherID)
-	if err != nil {
-		return MarriageProof{}, fmt.Errorf("SmesherID marriage proof: %w", err)
-	}
-
-	proof := MarriageProof{
-		MarriageATX:      marriageATX.ID(),
-		MarriageATXProof: atx.MarriageATXProof(),
-
-		MarriageATXSmesherID: marriageATX.SmesherID,
-
-		NodeIDMarryProof:    nodeIDmarriageProof,
-		SmesherIDMarryProof: smesherIDmarriageProof,
-	}
-	return proof, nil
-}
-
-func (p MarriageProof) Valid(
-	malValidator MalfeasanceValidator,
-	atxID types.ATXID,
-	nodeID,
-	smesherID types.NodeID,
-) error {
-	if !p.MarriageATXProof.Valid(atxID, p.MarriageATX) {
-		return errors.New("invalid marriage ATX proof")
-	}
-
-	if err := p.NodeIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, nodeID); err != nil {
-		return fmt.Errorf("invalid marriage proof for NodeID: %w", err)
-	}
-
-	if err := p.SmesherIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, smesherID); err != nil {
-		return fmt.Errorf("invalid marriage proof for SmesherID: %w", err)
-	}
-
-	return nil
-}
-
 // CommitmentProof is a proof for the commitment ATX of a smesher. It is generated from the initial ATX.
 type CommitmentProof struct {
 	// InitialATXID is the ID of the initial ATX of the smesher.
@@ -229,12 +148,11 @@ func createCommitmentProof(initialAtx *ActivationTxV2, nodeID types.NodeID) (Com
 	if initialAtx.SmesherID != nodeID {
 		return CommitmentProof{}, errors.New("node ID does not match smesher ID of initial ATX")
 	}
-
 	if initialAtx.Initial == nil {
 		return CommitmentProof{}, errors.New("initial ATX does not contain initial PoST")
 	}
 
-	proof := CommitmentProof{
+	return CommitmentProof{
 		InitialATXID: initialAtx.ID(),
 
 		InitialPostRoot:  initialAtx.Initial.Root(),
@@ -244,8 +162,7 @@ func createCommitmentProof(initialAtx *ActivationTxV2, nodeID types.NodeID) (Com
 		CommitmentATXProof: initialAtx.Initial.CommitmentATXProof(),
 
 		Signature: initialAtx.Signature,
-	}
-	return proof, nil
+	}, nil
 }
 
 func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID) error {
@@ -260,7 +177,6 @@ func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.N
 	if !p.InitialPostProof.Valid(p.InitialATXID, p.InitialPostRoot) {
 		return errors.New("invalid initial PoST proof")
 	}
-
 	if !p.CommitmentATXProof.Valid(p.InitialPostRoot, p.CommitmentATX) {
 		return errors.New("invalid commitment ATX proof")
 	}
@@ -319,7 +235,7 @@ func createInvalidPostProof(
 		return InvalidPostProof{}, errors.New("invalid NIPoST index")
 	}
 
-	proof := InvalidPostProof{
+	return InvalidPostProof{
 		NIPostsRoot:      atx.NIPosts.Root(atx.PreviousATXs),
 		NIPostsRootProof: atx.NIPostsRootProof(),
 
@@ -346,8 +262,7 @@ func createInvalidPostProof(
 		NumUnitsProof: atx.NIPosts[nipostIndex].Posts[postIndex].NumUnitsProof(atx.PreviousATXs),
 
 		InvalidPostIndex: invalidPostIndex,
-	}
-	return proof, nil
+	}, nil
 }
 
 // Valid returns no error if the proof is valid. It verifies that the signature is valid, that the merkle proofs are
@@ -363,33 +278,26 @@ func (p InvalidPostProof) Valid(
 	if !p.NIPostsRootProof.Valid(atxID, p.NIPostsRoot) {
 		return errors.New("invalid NIPosts root proof")
 	}
-
 	if !p.NIPostRootProof.Valid(p.NIPostsRoot, int(p.NIPostIndex), p.NIPostRoot) {
 		return errors.New("invalid NIPoST root proof")
 	}
-
 	if !p.ChallengeProof.Valid(p.NIPostRoot, p.Challenge) {
 		return errors.New("invalid challenge proof")
 	}
-
 	if !p.SubPostsRootProof.Valid(p.NIPostRoot, p.SubPostsRoot) {
 		return errors.New("invalid sub PoSTs root proof")
 	}
-
 	if !p.SubPostRootProof.Valid(p.SubPostsRoot, int(p.SubPostRootIndex), p.SubPostRoot) {
 		return errors.New("invalid sub PoST root proof")
 	}
-
 	if marriageIndex != nil {
 		if !p.MarriageIndexProof.Valid(p.SubPostRoot, *marriageIndex) {
 			return errors.New("invalid marriage index proof")
 		}
 	}
-
 	if !p.PostProof.Valid(p.SubPostRoot, p.Post.Root()) {
 		return errors.New("invalid PoST proof")
 	}
-
 	if !p.NumUnitsProof.Valid(p.SubPostRoot, p.NumUnits) {
 		return errors.New("invalid num units proof")
 	}

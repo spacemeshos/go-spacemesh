@@ -5,7 +5,6 @@ package wire
 
 import (
 	"github.com/spacemeshos/go-scale"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func (t *ProofDoubleMarry) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -138,87 +137,6 @@ func (t *ProofDoubleMarry) DecodeScale(dec *scale.Decoder) (total int, err error
 			return total, err
 		}
 		total += n
-	}
-	return total, nil
-}
-
-func (t *MarryProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.MarriageCertificatesRoot[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageCertificatesProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.Certificate.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.CertificateProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.CertificateIndex))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *MarryProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.MarriageCertificatesRoot[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.MarriageCertificatesProof = field
-	}
-	{
-		n, err := t.Certificate.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.CertificateProof = field
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.CertificateIndex = uint32(field)
 	}
 	return total, nil
 }
