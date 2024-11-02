@@ -1,6 +1,7 @@
 package fptree_test
 
 import (
+	"context"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -625,13 +626,16 @@ func makeInMemoryFPTree(t *testing.T) []*fptree.FPTree {
 
 func makeDBBackedFPTree(t *testing.T) []*fptree.FPTree {
 	db := sqlstore.CreateDB(t, testKeyLen)
-	st := sqlstore.SyncedTable{
+	st := &sqlstore.SyncedTable{
 		TableName: "foo",
 		IDColumn:  "id",
 	}
-	sts, err := st.Snapshot(db)
+	tx, err := db.Tx(context.Background())
 	require.NoError(t, err)
-	store := fptree.NewDBBackedStore(db, sts, 0, testKeyLen)
+	t.Cleanup(func() { tx.Release() })
+	sts, err := st.Snapshot(tx)
+	require.NoError(t, err)
+	store := fptree.NewDBBackedStore(tx, sts, 0, testKeyLen)
 	ft := fptree.NewFPTree(0, store, testKeyLen, testDepth)
 	return []*fptree.FPTree{ft, store.FPTree}
 }
