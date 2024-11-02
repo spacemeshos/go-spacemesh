@@ -15,7 +15,7 @@ import (
 func TestSyncedTable_GenSQL(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
-		st          sqlstore.SyncedTable
+		st          *sqlstore.SyncedTable
 		all         string
 		count       string
 		maxRowID    string
@@ -25,7 +25,7 @@ func TestSyncedTable_GenSQL(t *testing.T) {
 	}{
 		{
 			name: "no filter",
-			st: sqlstore.SyncedTable{
+			st: &sqlstore.SyncedTable{
 				TableName:       "atxs",
 				IDColumn:        "id",
 				TimestampColumn: "received",
@@ -42,7 +42,7 @@ func TestSyncedTable_GenSQL(t *testing.T) {
 		},
 		{
 			name: "filter",
-			st: sqlstore.SyncedTable{
+			st: &sqlstore.SyncedTable{
 				TableName:       "atxs",
 				IDColumn:        "id",
 				Filter:          expr.MustParse("epoch = ?"),

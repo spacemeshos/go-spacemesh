@@ -23,7 +23,37 @@ type SyncedTable struct {
 	// The filter expression.
 	Filter expr.Expr
 	// The binder function for the bind parameters appearing in the filter expression.
-	Binder Binder
+	Binder  Binder
+	queries map[string]string
+}
+
+func (st *SyncedTable) cacheQuery(name string, gen func() expr.Statement) string {
+	s, ok := st.queries[name]
+	if ok {
+		return s
+	}
+	if st.queries == nil {
+		st.queries = make(map[string]string)
+	}
+	s = gen().String()
+	st.queries[name] = s
+	return s
+}
+
+func (st *SyncedTable) exec(
+	db sql.Executor,
+	name string,
+	gen func() expr.Statement,
+	enc sql.Encoder,
+	dec sql.Decoder,
+) error {
+	_, err := db.Exec(st.cacheQuery(name, gen), func(stmt *sql.Statement) {
+		if st.Binder != nil {
+			st.Binder(stmt)
+		}
+		enc(stmt)
+	}, dec)
+	return err
 }
 
 // genSelectMaxRowID generates a SELECT statement that returns the maximum rowid in the
@@ -118,7 +148,7 @@ func (st *SyncedTable) genSelectRecent() expr.Statement {
 // loadMaxRowID returns the max rowid in the table.
 func (st *SyncedTable) loadMaxRowID(db sql.Executor) (maxRowID int64, err error) {
 	nRows, err := db.Exec(
-		st.genSelectMaxRowID().String(), nil,
+		st.cacheQuery("selectMaxRowID", st.genSelectMaxRowID), nil,
 		func(st *sql.Statement) bool {
 			maxRowID = st.ColumnInt64(0)
 			return true
@@ -153,16 +183,9 @@ func (sts *SyncedTableSnapshot) Load(
 	db sql.Executor,
 	dec func(stmt *sql.Statement) bool,
 ) error {
-	_, err := db.Exec(
-		sts.genSelectAll().String(),
-		func(stmt *sql.Statement) {
-			if sts.Binder != nil {
-				sts.Binder(stmt)
-			}
-			stmt.BindInt64(stmt.BindParamCount(), sts.maxRowID)
-		},
-		dec)
-	return err
+	return sts.exec(db, "selectAll", sts.genSelectAll, func(stmt *sql.Statement) {
+		stmt.BindInt64(stmt.BindParamCount(), sts.maxRowID)
+	}, dec)
 }
 
 // LoadCount returns the number of rows in the snapshot.
@@ -170,12 +193,9 @@ func (sts *SyncedTableSnapshot) LoadCount(
 	db sql.Executor,
 ) (int, error) {
 	var count int
-	_, err := db.Exec(
-		sts.genCount().String(),
+	err := sts.exec(
+		db, "count", sts.genCount,
 		func(stmt *sql.Statement) {
-			if sts.Binder != nil {
-				sts.Binder(stmt)
-			}
 			stmt.BindInt64(stmt.BindParamCount(), sts.maxRowID)
 		},
 		func(stmt *sql.Statement) bool {
@@ -191,18 +211,14 @@ func (sts *SyncedTableSnapshot) LoadSinceSnapshot(
 	prev *SyncedTableSnapshot,
 	dec func(stmt *sql.Statement) bool,
 ) error {
-	_, err := db.Exec(
-		sts.genSelectAllSinceSnapshot().String(),
+	return sts.exec(
+		db, "selectAllSinceSnapshot", sts.genSelectAllSinceSnapshot,
 		func(stmt *sql.Statement) {
-			if sts.Binder != nil {
-				sts.Binder(stmt)
-			}
 			nParams := stmt.BindParamCount()
 			stmt.BindInt64(nParams-1, prev.maxRowID+1)
 			stmt.BindInt64(nParams, sts.maxRowID)
 		},
 		dec)
-	return err
 }
 
 // LoadRange loads ids starting from the specified one.
@@ -213,19 +229,15 @@ func (sts *SyncedTableSnapshot) LoadRange(
 	limit int,
 	dec func(stmt *sql.Statement) bool,
 ) error {
-	_, err := db.Exec(
-		sts.genSelectRange().String(),
+	return sts.exec(
+		db, "selectRange", sts.genSelectRange,
 		func(stmt *sql.Statement) {
-			if sts.Binder != nil {
-				sts.Binder(stmt)
-			}
 			nParams := stmt.BindParamCount()
 			stmt.BindBytes(nParams-2, fromID)
 			stmt.BindInt64(nParams-1, sts.maxRowID)
 			stmt.BindInt64(nParams, int64(limit))
 		},
 		dec)
-	return err
 }
 
 var errNoTimestampColumn = errors.New("no timestamp column")
@@ -239,12 +251,9 @@ func (sts *SyncedTableSnapshot) LoadRecentCount(
 		return 0, errNoTimestampColumn
 	}
 	var count int
-	_, err := db.Exec(
-		sts.genRecentCount().String(),
+	err := sts.exec(
+		db, "genRecentCount", sts.genRecentCount,
 		func(stmt *sql.Statement) {
-			if sts.Binder != nil {
-				sts.Binder(stmt)
-			}
 			nParams := stmt.BindParamCount()
 			stmt.BindInt64(nParams-1, sts.maxRowID)
 			stmt.BindInt64(nParams, since)
@@ -267,12 +276,9 @@ func (sts *SyncedTableSnapshot) LoadRecent(
 	if sts.TimestampColumn == "" {
 		return errNoTimestampColumn
 	}
-	_, err := db.Exec(
-		sts.genSelectRecent().String(),
+	return sts.exec(
+		db, "selectRecent", sts.genSelectRecent,
 		func(stmt *sql.Statement) {
-			if sts.Binder != nil {
-				sts.Binder(stmt)
-			}
 			nParams := stmt.BindParamCount()
 			stmt.BindBytes(nParams-3, fromID)
 			stmt.BindInt64(nParams-2, sts.maxRowID)
@@ -280,5 +286,4 @@ func (sts *SyncedTableSnapshot) LoadRecent(
 			stmt.BindInt64(nParams, int64(limit))
 		},
 		dec)
-	return err
 }
