@@ -47,7 +47,7 @@ func TestDBBackedStore(t *testing.T) {
 			}, nil)
 		require.NoError(t, err)
 	}
-	st := sqlstore.SyncedTable{
+	st := &sqlstore.SyncedTable{
 		TableName:       "foo",
 		IDColumn:        "id",
 		TimestampColumn: "received",
