@@ -319,7 +319,7 @@ func (ft *FPTree) traverse(idx nodeIndex, yield func(rangesync.KeyBytes) bool) (
 	if l == noIndex && r == noIndex {
 		v := ft.np.value(idx)
 		if v != nil {
-			ft.log("yield value %s", v.ShortString())
+			ft.log("yield value %s", shortened(v))
 		}
 		if v != nil && !yield(v) {
 			return false
@@ -347,7 +347,7 @@ func (ft *FPTree) traverseFrom(
 	if p == emptyPrefix || ft.np.leaf(idx) {
 		v := ft.np.value(idx)
 		if v != nil && v.Compare(from) >= 0 {
-			ft.log("yield value %s", v.ShortString())
+			ft.log("yield value %s", shortened(v))
 			if !yield(v) {
 				return false
 			}
@@ -812,7 +812,7 @@ func (ft *FPTree) aggregateLeft(
 	p prefix,
 	ac *aggContext,
 ) (cont bool, err error) {
-	ft.enter("aggregateLeft: idx %d k %s p %s limit %d", idx, k.ShortString(), p, ac.limit)
+	ft.enter("aggregateLeft: idx %d k %s p %s limit %d", idx, shortened(k), p, ac.limit)
 	defer func() {
 		ft.leave(ac.fp, ac.count0, ac.count, err)
 	}()
@@ -862,7 +862,7 @@ func (ft *FPTree) aggregateRight(
 	p prefix,
 	ac *aggContext,
 ) (cont bool, err error) {
-	ft.enter("aggregateRight: idx %d k %s p %s limit %d", idx, k.ShortString(), p, ac.limit)
+	ft.enter("aggregateRight: idx %d k %s p %s limit %d", idx, shortened(k), p, ac.limit)
 	defer func() {
 		ft.leave(ac.fp, ac.count0, ac.count, err)
 	}()
@@ -1251,7 +1251,7 @@ func (ft *FPTree) dumpNode(w io.Writer, idx nodeIndex, indent, dir string) {
 	}
 	var valStr string
 	if v := ft.np.value(idx); v != nil {
-		valStr = fmt.Sprintf(" <val:%s>", v.ShortString())
+		valStr = fmt.Sprintf(" <val:%s>", shortened(v))
 	}
 	fmt.Fprintf(w, "%s%sidx=%d %s %s [%d]%s\n", indent, dir, idx, fp, countStr, ft.np.refCount(idx), valStr)
 	if !leaf {
