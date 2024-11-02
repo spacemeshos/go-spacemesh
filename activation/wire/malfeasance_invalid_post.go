@@ -14,16 +14,14 @@ import (
 
 //go:generate scalegen
 
-// ProofMergedInvalidPost is a proof that a merged ATX with an invalid Post was published by a smesher.
+// ProofInvalidPost is a proof that a merged ATX with an invalid Post was published by a smesher.
 //
 // We are proofing the following:
-// 1. The provided Post is invalid for the given SmesherID.
-// 2. The ATX has a valid signature.
-//
-// For this we need additional information:
-// 1. The initial ATX of the smesher for the Commitment ATX
-// 2. The marriage ATX of the smesher in the case the smesher is part of an equivocation set.
-type ProofMergedInvalidPost struct {
+// 1. The ATX has a valid signature.
+// 2. If NodeID is different from SmesherID, we prove that NodeID and SmesherID are married.
+// 3. The commitment ATX of NodeID used for the invalid PoST based on their initial ATX.
+// 4. The provided Post is invalid for the given NodeID.
+type ProofInvalidPost struct {
 	// ATXID is the ID of the ATX containing the invalid PoST.
 	ATXID types.ATXID
 	// SmesherID is the ID of the smesher that published the ATX.
@@ -34,24 +32,10 @@ type ProofMergedInvalidPost struct {
 	// NodeID is the node ID that created the invalid PoST.
 	NodeID types.NodeID
 
-	// -- Begin MarriageProof -- // make optional: only needed when SmesherID != NodeID
+	// MarriageProof is the proof that NodeID and SmesherID are married. It is nil if NodeID == SmesherID.
+	MarriageProof *MarriageProof
 
-	// MarriageATX and its proof that it is contained in the ATX.
-	MarriageATX      types.ATXID
-	MarriageATXProof MarriageATXProof `scale:"max=32"`
-	// MarriageATXSmesherID is the ID of the smesher that published the marriage ATX.
-	MarriageATXSmesherID types.NodeID
-	// MarriageATXSignature is the signature of the marriage ATX by the smesher.
-	MarriageATXSignature types.EdSignature
-
-	// NodeIDMarryProof is the proof that NodeID married in MarriageATX.
-	NodeIDMarryProof MarryProof
-	// SmesherIDMarryProof is the proof that SmesherID married in MarriageATX.
-	SmesherIDMarryProof MarryProof
-
-	// -- End MarriageProof --
-
-	// CommitmentProof is the proof for the commitment ATX of the smesher. Generated from the initial ATX of `NodeID`.
+	// CommitmentProof is the proof for the commitment ATX of the smesher. Generated from the initial ATX of NodeID.
 	CommitmentProof CommitmentProof
 
 	// InvalidPostProof is the proof for the invalid PoST of the ATX. It contains the PoST and the merkle proofs to
@@ -59,7 +43,7 @@ type ProofMergedInvalidPost struct {
 	InvalidPostProof InvalidPostProof
 }
 
-var _ Proof = &ProofMergedInvalidPost{}
+var _ Proof = &ProofInvalidPost{}
 
 func NewInvalidPostProof(
 	db sql.Executor,
@@ -67,32 +51,25 @@ func NewInvalidPostProof(
 	nodeID types.NodeID,
 	nipostIndex int,
 	invalidPostIndex uint32,
-) (*ProofMergedInvalidPost, error) {
-	if atx.MarriageATX == nil {
-		return nil, errors.New("ATX is not a merged ATX")
+) (*ProofInvalidPost, error) {
+	if atx.SmesherID != nodeID && atx.MarriageATX == nil {
+		return nil, errors.New("ATX is not a merged ATX, but NodeID is different from SmesherID")
 	}
 
-	var blob sql.Blob
-	v, err := atxs.LoadBlob(context.Background(), db, atx.MarriageATX.Bytes(), &blob)
-	if err != nil {
-		return nil, fmt.Errorf("get marriage ATX: %w", err)
-	}
-	if v != types.AtxV2 {
-		return nil, errors.New("invalid ATX version for marriage ATX")
-	}
-	marriageATX, err := DecodeAtxV2(blob.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("decode marriage ATX: %w", err)
-	}
-
-	nodeIDmarriageProof, err := createMarryProof(db, marriageATX, nodeID)
-	if err != nil {
-		return nil, fmt.Errorf("NodeID marriage proof: %w", err)
-	}
-
-	smesherIDmarriageProof, err := createMarryProof(db, marriageATX, atx.SmesherID)
-	if err != nil {
-		return nil, fmt.Errorf("SmesherID marriage proof: %w", err)
+	postIndex := 0
+	var marriageProof *MarriageProof
+	if atx.SmesherID != nodeID {
+		proof, err := createMarriageProof(db, atx, nodeID)
+		if err != nil {
+			return nil, fmt.Errorf("marriage proof: %w", err)
+		}
+		marriageProof = &proof
+		postIndex = slices.IndexFunc(atx.NIPosts[nipostIndex].Posts, func(post SubPostV2) bool {
+			return post.MarriageIndex == proof.NodeIDMarryProof.CertificateIndex
+		})
+		if postIndex == -1 {
+			return nil, errors.New("marriage index not found in PoSTs of ATX")
+		}
 	}
 
 	commitmentProof, err := createCommitmentProof(initialATX, nodeID)
@@ -100,33 +77,19 @@ func NewInvalidPostProof(
 		return nil, fmt.Errorf("commitment proof: %w", err)
 	}
 
-	invalidPostProof, err := createInvalidPostProof(
-		atx,
-		nipostIndex,
-		int(nodeIDmarriageProof.CertificateIndex),
-		invalidPostIndex,
-	)
+	invalidPostProof, err := createInvalidPostProof(atx, nipostIndex, postIndex, invalidPostIndex)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post proof: %w", err)
 	}
 
-	proof := &ProofMergedInvalidPost{
+	proof := &ProofInvalidPost{
 		ATXID:     atx.ID(),
 		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
 
 		NodeID: nodeID,
 
-		// -- Begin MarriageProof --
-		MarriageATX:      *atx.MarriageATX,
-		MarriageATXProof: atx.MarriageATXProof(),
-
-		MarriageATXSmesherID: marriageATX.SmesherID,
-		MarriageATXSignature: marriageATX.Signature,
-
-		NodeIDMarryProof:    nodeIDmarriageProof,
-		SmesherIDMarryProof: smesherIDmarriageProof,
-		// -- End MarriageProof --
+		MarriageProof: marriageProof,
 
 		CommitmentProof:  commitmentProof,
 		InvalidPostProof: invalidPostProof,
@@ -134,21 +97,13 @@ func NewInvalidPostProof(
 	return proof, nil
 }
 
-func (p ProofMergedInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
+func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
 	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 
-	if !p.MarriageATXProof.Valid(p.ATXID, p.MarriageATX) {
-		return types.EmptyNodeID, errors.New("invalid marriage ATX proof")
-	}
-
-	if err := p.NodeIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, p.NodeID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof for NodeID: %w", err)
-	}
-
-	if err := p.SmesherIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, p.SmesherID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof for SmesherID: %w", err)
+	if err := p.MarriageProof.Valid(malValidator, p.ATXID, p.NodeID, p.SmesherID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("invalid marriage proof: %w", err)
 	}
 
 	if err := p.CommitmentProof.Valid(malValidator, p.NodeID); err != nil {
@@ -161,13 +116,88 @@ func (p ProofMergedInvalidPost) Valid(ctx context.Context, malValidator Malfeasa
 		p.ATXID,
 		p.NodeID,
 		p.CommitmentProof.CommitmentATX,
-		p.MarriageATX,
-		p.NodeIDMarryProof.CertificateIndex,
+		p.MarriageProof.NodeIDMarryProof.CertificateIndex,
 	); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
 	}
 
 	return p.NodeID, nil
+}
+
+// MarriageProof is a proof for two identities to be married via a marriage ATX.
+type MarriageProof struct {
+	// MarriageATX and its proof that it is contained in the ATX.
+	MarriageATX      types.ATXID
+	MarriageATXProof MarriageATXProof `scale:"max=32"`
+	// MarriageATXSmesherID is the ID of the smesher that published the marriage ATX.
+	MarriageATXSmesherID types.NodeID
+
+	// NodeIDMarryProof is the proof that NodeID married in MarriageATX.
+	NodeIDMarryProof MarryProof
+	// SmesherIDMarryProof is the proof that SmesherID married in MarriageATX.
+	SmesherIDMarryProof MarryProof
+}
+
+func createMarriageProof(db sql.Executor, atx *ActivationTxV2, nodeID types.NodeID) (MarriageProof, error) {
+	if nodeID == atx.SmesherID {
+		// we don't need a marriage proof if the node ID is the same as the smesher ID
+		return MarriageProof{}, errors.New("node ID is the same as smesher ID")
+	}
+
+	var blob sql.Blob
+	v, err := atxs.LoadBlob(context.Background(), db, atx.MarriageATX.Bytes(), &blob)
+	if err != nil {
+		return MarriageProof{}, fmt.Errorf("get marriage ATX: %w", err)
+	}
+	if v != types.AtxV2 {
+		return MarriageProof{}, errors.New("invalid ATX version for marriage ATX")
+	}
+	marriageATX, err := DecodeAtxV2(blob.Bytes)
+	if err != nil {
+		return MarriageProof{}, fmt.Errorf("decode marriage ATX: %w", err)
+	}
+
+	nodeIDmarriageProof, err := createMarryProof(db, marriageATX, nodeID)
+	if err != nil {
+		return MarriageProof{}, fmt.Errorf("NodeID marriage proof: %w", err)
+	}
+
+	smesherIDmarriageProof, err := createMarryProof(db, marriageATX, atx.SmesherID)
+	if err != nil {
+		return MarriageProof{}, fmt.Errorf("SmesherID marriage proof: %w", err)
+	}
+
+	proof := MarriageProof{
+		MarriageATX:      marriageATX.ID(),
+		MarriageATXProof: atx.MarriageATXProof(),
+
+		MarriageATXSmesherID: marriageATX.SmesherID,
+
+		NodeIDMarryProof:    nodeIDmarriageProof,
+		SmesherIDMarryProof: smesherIDmarriageProof,
+	}
+	return proof, nil
+}
+
+func (p MarriageProof) Valid(
+	malValidator MalfeasanceValidator,
+	atxID types.ATXID,
+	nodeID,
+	smesherID types.NodeID,
+) error {
+	if !p.MarriageATXProof.Valid(atxID, p.MarriageATX) {
+		return errors.New("invalid marriage ATX proof")
+	}
+
+	if err := p.NodeIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, nodeID); err != nil {
+		return fmt.Errorf("invalid marriage proof for NodeID: %w", err)
+	}
+
+	if err := p.SmesherIDMarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, smesherID); err != nil {
+		return fmt.Errorf("invalid marriage proof for SmesherID: %w", err)
+	}
+
+	return nil
 }
 
 // CommitmentProof is a proof for the commitment ATX of a smesher. It is generated from the initial ATX.
@@ -271,20 +301,14 @@ type InvalidPostProof struct {
 	InvalidPostIndex uint32
 }
 
-func createInvalidPostProof(atx *ActivationTxV2,
+func createInvalidPostProof(
+	atx *ActivationTxV2,
 	nipostIndex,
-	marriageIndex int,
+	postIndex int,
 	invalidPostIndex uint32,
 ) (InvalidPostProof, error) {
 	if nipostIndex < 0 || nipostIndex >= len(atx.NIPosts) {
 		return InvalidPostProof{}, errors.New("invalid NIPoST index")
-	}
-
-	postIndex := slices.IndexFunc(atx.NIPosts[nipostIndex].Posts, func(post SubPostV2) bool {
-		return post.MarriageIndex == uint32(marriageIndex)
-	})
-	if postIndex == -1 {
-		return InvalidPostProof{}, fmt.Errorf("does not contain PoST with marriage index %d", marriageIndex)
 	}
 
 	proof := InvalidPostProof{
@@ -326,7 +350,6 @@ func (p InvalidPostProof) Valid(
 	atxID types.ATXID,
 	nodeID types.NodeID,
 	commitmentATX types.ATXID,
-	marriageATX types.ATXID,
 	marriageIndex uint32,
 ) error {
 	if !p.NIPostsRootProof.Valid(atxID, p.NIPostsRoot) {
