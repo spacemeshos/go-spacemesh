@@ -19,21 +19,78 @@ func Test_InvalidPostProof(t *testing.T) {
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
-	// pubSig is the identity that publishes the ATX with the invalid PoST
-	pubSig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	// marrySig is the identity that publishes the marriage ATX
-	marrySig, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
 	edVerifier := signing.NewEdVerifier()
 
 	t.Run("valid", func(t *testing.T) {
-		// TODO(mafa): implement
+		db := statesql.InMemoryTest(t)
+
+		wInitialAtx := newActivationTxV2(
+			withInitial(types.RandomATXID(), PostV1{}),
+		)
+		wInitialAtx.Sign(sig)
+		initialAtx := &types.ActivationTx{
+			CommitmentATX: &wInitialAtx.Initial.CommitmentATX,
+		}
+		initialAtx.SetID(wInitialAtx.ID())
+		initialAtx.SmesherID = sig.NodeID()
+		require.NoError(t, atxs.Add(db, initialAtx, wInitialAtx.Blob()))
+
+		nipostChallenge := types.RandomHash()
+		invalidPost := PostV1{
+			Nonce:   rand.Uint32(),
+			Indices: types.RandomBytes(11),
+			Pow:     rand.Uint64(),
+		}
+		const numUnits = uint32(11)
+		const invalidPostIndex = 7
+		atx := newActivationTxV2(
+			withPreviousATXs(wInitialAtx.ID()),
+			withNIPost(
+				withNIPostChallenge(nipostChallenge),
+				withNIPostSubPost(SubPostV2{
+					MarriageIndex: 0,
+					PrevATXIndex:  0,
+					Post:          invalidPost,
+					NumUnits:      numUnits,
+				}),
+			),
+		)
+		atx.Sign(sig)
+
+		proof, err := NewInvalidPostProof(db, atx, wInitialAtx, sig.NodeID(), 0, invalidPostIndex)
+		require.NoError(t, err)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			*initialAtx.CommitmentATX,
+			PostFromWireV1(&invalidPost),
+			nipostChallenge.Bytes(),
+			numUnits,
+			invalidPostIndex,
+		).Return(errors.New("invalid post"))
+
+		id, err := proof.Valid(context.Background(), verifier)
+		require.NoError(t, err)
+		require.Equal(t, sig.NodeID(), id)
 	})
 
 	t.Run("valid merged atx", func(t *testing.T) {
+		// pubSig is the identity that publishes the ATX with the invalid PoST
+		pubSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		// marrySig is the identity that publishes the marriage ATX
+		marrySig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
 		db := statesql.InMemoryTest(t)
 
 		wInitialAtx := newActivationTxV2(
