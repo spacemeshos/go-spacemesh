@@ -65,7 +65,7 @@ func idsFromTable(
 				ts:           ts,
 				maxChunkSize: maxChunkSize,
 				keyLen:       len(from),
-				chunk:        make([]rangesync.KeyBytes, maxChunkSize),
+				chunk:        make([]rangesync.KeyBytes, 1),
 				singleChunk:  false,
 			}
 			if err = s.load(); err != nil {
