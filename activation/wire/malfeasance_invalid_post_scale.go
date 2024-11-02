@@ -38,7 +38,42 @@ func (t *ProofMergedInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := t.MarryProof.EncodeScale(enc)
+		n, err := scale.EncodeByteArray(enc, t.MarriageATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.MarriageATXSmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.MarriageATXSignature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.NodeIDMarryProof.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.SmesherIDMarryProof.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -91,7 +126,43 @@ func (t *ProofMergedInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err
 		total += n
 	}
 	{
-		n, err := t.MarryProof.DecodeScale(dec)
+		n, err := scale.DecodeByteArray(dec, t.MarriageATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MarriageATXProof = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.MarriageATXSmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.MarriageATXSignature[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.NodeIDMarryProof.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.SmesherIDMarryProof.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
@@ -209,13 +280,6 @@ func (t *CommitmentProof) DecodeScale(dec *scale.Decoder) (total int, err error)
 }
 
 func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
 	{
 		n, err := scale.EncodeByteArray(enc, t.NIPostsRoot[:])
 		if err != nil {
@@ -346,14 +410,6 @@ func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error
 }
 
 func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.MarriageATXProof = field
-	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.NIPostsRoot[:])
 		if err != nil {
