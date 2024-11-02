@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func (t *ProofMergedInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
 		if err != nil {
@@ -38,42 +38,7 @@ func (t *ProofMergedInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.MarriageATX[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.MarriageATXSmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.MarriageATXSignature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.NodeIDMarryProof.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.SmesherIDMarryProof.EncodeScale(enc)
+		n, err := scale.EncodeOption(enc, t.MarriageProof)
 		if err != nil {
 			return total, err
 		}
@@ -96,7 +61,7 @@ func (t *ProofMergedInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err
 	return total, nil
 }
 
-func (t *ProofMergedInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
 		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
 		if err != nil {
@@ -126,6 +91,71 @@ func (t *ProofMergedInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err
 		total += n
 	}
 	{
+		field, n, err := scale.DecodeOption[MarriageProof](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MarriageProof = field
+	}
+	{
+		n, err := t.CommitmentProof.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.InvalidPostProof.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MarriageProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeByteArray(enc, t.MarriageATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.MarriageATXSmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.NodeIDMarryProof.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.SmesherIDMarryProof.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *MarriageProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
 		n, err := scale.DecodeByteArray(dec, t.MarriageATX[:])
 		if err != nil {
 			return total, err
@@ -148,13 +178,6 @@ func (t *ProofMergedInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.MarriageATXSignature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := t.NodeIDMarryProof.DecodeScale(dec)
 		if err != nil {
 			return total, err
@@ -163,20 +186,6 @@ func (t *ProofMergedInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err
 	}
 	{
 		n, err := t.SmesherIDMarryProof.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.CommitmentProof.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := t.InvalidPostProof.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}

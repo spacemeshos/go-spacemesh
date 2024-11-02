@@ -40,12 +40,55 @@ func withInitial(commitAtx types.ATXID, post PostV1) testAtxV2Opt {
 	}
 }
 
+func withPreviousATXs(atxs ...types.ATXID) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.PreviousATXs = atxs
+	}
+}
+
+func withNIPost(opts ...testNIPostV2Opt) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		nipost := &NIPostV2{}
+		for _, opt := range opts {
+			opt(nipost)
+		}
+		atx.NIPosts = append(atx.NIPosts, *nipost)
+	}
+}
+
+type testNIPostV2Opt func(*NIPostV2)
+
+func withNIPostChallenge(challenge types.Hash32) testNIPostV2Opt {
+	return func(nipost *NIPostV2) {
+		nipost.Challenge = challenge
+	}
+}
+
+func withNIPostMembershipProof(proof MerkleProofV2) testNIPostV2Opt {
+	return func(nipost *NIPostV2) {
+		nipost.Membership = proof
+	}
+}
+
+func withNIPostSubPost(subPost SubPostV2) testNIPostV2Opt {
+	return func(nipost *NIPostV2) {
+		nipost.Posts = append(nipost.Posts, subPost)
+	}
+}
+
 func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 	atx := &ActivationTxV2{
 		PublishEpoch:   rand.N(types.EpochID(255)),
 		PositioningATX: types.RandomATXID(),
-		PreviousATXs:   make([]types.ATXID, 1+rand.IntN(255)),
-		NIPosts: []NIPostV2{
+	}
+	for _, opt := range opts {
+		opt(atx)
+	}
+	if atx.PreviousATXs == nil {
+		atx.PreviousATXs = make([]types.ATXID, 1+rand.IntN(255))
+	}
+	if atx.NIPosts == nil {
+		atx.NIPosts = []NIPostV2{
 			{
 				Membership: MerkleProofV2{
 					Nodes: make([]types.Hash32, 32),
@@ -63,10 +106,7 @@ func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 					},
 				},
 			},
-		},
-	}
-	for _, opt := range opts {
-		opt(atx)
+		}
 	}
 	return atx
 }

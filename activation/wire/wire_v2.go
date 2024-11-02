@@ -336,7 +336,7 @@ func (np *NIPostV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 }
 
 func (np *NIPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
-	tree.AddLeaf(codec.MustEncode(&np.Membership))
+	tree.AddLeaf(np.Membership.Root().Bytes())
 	tree.AddLeaf(np.Challenge.Bytes())
 	tree.AddLeaf(types.Hash32(np.Posts.Root(prevATXs)).Bytes())
 }
@@ -383,6 +383,16 @@ func (p SubPostsRootProof) Valid(nipostRoot NIPostRoot, postsRoot SubPostsRoot) 
 type MerkleProofV2 struct {
 	// Nodes on path from leaf to root (not including leaf)
 	Nodes []types.Hash32 `scale:"max=32"`
+}
+
+func (mp MerkleProofV2) Root() types.Hash32 {
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
+	hasher.Write([]byte{0x01})
+	for _, node := range mp.Nodes {
+		hasher.Write(node.Bytes())
+	}
+	return types.Hash32(hasher.Sum(nil))
 }
 
 type SubPostsV2 []SubPostV2
