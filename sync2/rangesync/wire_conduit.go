@@ -32,7 +32,10 @@ const (
 	sendQueueSize = 200000
 )
 
-var ErrLimitExceeded = errors.New("sync traffic/message limit exceeded")
+var (
+	ErrTrafficLimitExceeded = errors.New("sync traffic limit exceeded")
+	ErrMessageLimitExceeded = errors.New("sync message limit exceeded")
+)
 
 // wireConduit is an implementation of the Conduit interface that sends and receives
 // messages over a stream represented by an io.ReadWriter.
@@ -117,10 +120,10 @@ func (c *wireConduit) End() {
 // checkLimits checks if the traffic or message limits have been exceeded.
 func (c *wireConduit) checkLimits() error {
 	if c.cfg.TrafficLimit > 0 && c.bytesSent()+c.bytesReceived() > c.cfg.TrafficLimit {
-		return ErrLimitExceeded
+		return ErrTrafficLimitExceeded
 	}
-	if c.cfg.MessageLimit > 0 && c.messagesSent()+c.messagesReceived() > c.cfg.TrafficLimit {
-		return ErrLimitExceeded
+	if c.cfg.MessageLimit > 0 && c.messagesSent()+c.messagesReceived() > c.cfg.MessageLimit {
+		return ErrMessageLimitExceeded
 	}
 	return nil
 }

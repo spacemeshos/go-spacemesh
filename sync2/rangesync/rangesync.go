@@ -32,8 +32,10 @@ type RangeSetReconcilerConfig struct {
 	MaxReconcDiff float64 `mapstructure:"max-reconc-diff"`
 	// Time span for recent sync.
 	RecentTimeSpan time.Duration `mapstructure:"recent-time-span"`
-	TrafficLimit   int
-	MessageLimit   int
+	// Traffic limit in bytes.
+	TrafficLimit int `mapstructure:"traffic-limit"`
+	// Message count limit.
+	MessageLimit int `mapstructure:"message-limit"`
 }
 
 // DefaultConfig returns the default configuration for the RangeSetReconciler.
@@ -43,7 +45,7 @@ func DefaultConfig() RangeSetReconcilerConfig {
 		ItemChunkSize: DefaultItemChunkSize,
 		SampleSize:    DefaultSampleSize,
 		MaxReconcDiff: 0.01,
-		TrafficLimit:  200_000_000,
+		TrafficLimit:  300_000_000,
 		MessageLimit:  20_000_000,
 	}
 }

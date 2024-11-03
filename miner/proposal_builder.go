@@ -65,7 +65,7 @@ type ProposalBuilder struct {
 	logger *zap.Logger
 	cfg    config
 
-	db        sql.Executor
+	db        sql.StateDatabase
 	localdb   sql.Executor
 	atxsdata  atxsData
 	clock     layerClock
@@ -204,7 +204,7 @@ func WithLayerSize(size uint32) Opt {
 	}
 }
 
-// WithWorkersLimit configures paralelization factor for builder operation when working with
+// WithWorkersLimit configures parallelization factor for builder operation when working with
 // more than one signer.
 func WithWorkersLimit(limit int) Opt {
 	return func(pb *ProposalBuilder) {
@@ -270,7 +270,7 @@ func WithActivesetPreparation(prep ActiveSetPreparation) Opt {
 // New creates a struct of block builder type.
 func New(
 	clock layerClock,
-	db sql.Executor,
+	db sql.StateDatabase,
 	localdb sql.Executor,
 	atxsdata atxsData,
 	publisher pubsub.Publisher,
@@ -449,7 +449,7 @@ func (pb *ProposalBuilder) UpdateActiveSet(target types.EpochID, set []types.ATX
 	pb.activeGen.updateFallback(target, set)
 }
 
-func (pb *ProposalBuilder) initSharedData(current types.LayerID) error {
+func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.LayerID) error {
 	if pb.shared.epoch != current.GetEpoch() {
 		pb.shared = sharedSession{epoch: current.GetEpoch()}
 	}
@@ -476,7 +476,27 @@ func (pb *ProposalBuilder) initSharedData(current types.LayerID) error {
 	pb.shared.active.id = id
 	pb.shared.active.set = set
 	pb.shared.active.weight = weight
-	return nil
+
+	// Ideally we only persist the active set when we are actually eligible with at least one identity in at least one
+	// layer, but since at the moment we use a bootstrapped activeset, `activesets.Has` will always return
+	// true anyways.
+	//
+	// Additionally all activesets that are older than 2 epochs are deleted at the beginning of an epoch anyway, but
+	// maybe we should revisit this when activesets are no longer bootstrapped.
+	return pb.db.WithTx(ctx, func(tx sql.Transaction) error {
+		yes, err := activesets.Has(tx, pb.shared.active.id)
+		if err != nil {
+			return err
+		}
+		if yes {
+			return nil
+		}
+
+		return activesets.Add(tx, pb.shared.active.id, &types.EpochActiveSet{
+			Epoch: pb.shared.epoch,
+			Set:   pb.shared.active.set,
+		})
+	})
 }
 
 func (pb *ProposalBuilder) initSignerData(ss *signerSession, lid types.LayerID) error {
@@ -548,7 +568,7 @@ func (pb *ProposalBuilder) initSignerData(ss *signerSession, lid types.LayerID) 
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	buildStartTime := time.Now()
-	if err := pb.initSharedData(lid); err != nil {
+	if err := pb.initSharedData(ctx, lid); err != nil {
 		return err
 	}
 
@@ -576,17 +596,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			ss.latency.hash = duration
 		}
 		return meshHash
-	})
-
-	persistActiveSetOnce := sync.OnceValue(func() error {
-		err := activesets.Add(pb.db, pb.shared.active.id, &types.EpochActiveSet{
-			Epoch: pb.shared.epoch,
-			Set:   pb.shared.active.set,
-		})
-		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return err
-		}
-		return nil
 	})
 
 	// Two stage pipeline, with the stages running in parallel.
@@ -662,14 +671,6 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 			ss.latency.hash = time.Since(start)
 
 			eg2.Go(func() error {
-				// needs to be saved before publishing, as we will query it in handler
-				if ss.session.ref == types.EmptyBallotID {
-					start := time.Now()
-					if err := persistActiveSetOnce(); err != nil {
-						return err
-					}
-					ss.latency.activeSet = time.Since(start)
-				}
 				proofs := ss.session.eligibilities.proofs[lid]
 
 				start = time.Now()

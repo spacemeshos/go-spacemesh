@@ -138,7 +138,7 @@ func Recover(
 	}
 	defer localDB.Close()
 	logger.Info("clearing atx and malfeasance sync metadata from local database")
-	if err := localDB.WithTx(ctx, func(tx sql.Transaction) error {
+	if err := localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if err := atxsync.Clear(tx); err != nil {
 			return err
 		}
@@ -274,7 +274,7 @@ func RecoverFromLocalFile(
 		zap.Int("num accounts", len(data.accounts)),
 		zap.Int("num atxs", len(data.atxs)),
 	)
-	if err = newDB.WithTx(ctx, func(tx sql.Transaction) error {
+	if err = newDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		for _, acct := range data.accounts {
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)

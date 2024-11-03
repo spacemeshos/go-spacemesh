@@ -851,7 +851,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
-	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
+	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			newMarriageID, err := marriage.NewID(tx)
 			if err != nil {
@@ -927,7 +927,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 	atxs.AtxAdded(h.cdb, atx)
 
 	malicious := false
-	err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
+	err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious

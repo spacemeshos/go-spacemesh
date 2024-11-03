@@ -433,7 +433,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 		require.Equal(t, 11, db.QueryCount())
 	}
 
-	require.NoError(t, db.WithTx(context.Background(), func(tx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
 		atxs.Add(tx, atx5, types.AtxBlob{})
 		return nil
 	}))
@@ -445,7 +445,7 @@ func TestGetIDsByEpochCached(t *testing.T) {
 	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
 	require.Equal(t, 13, db.QueryCount()) // not incremented after Add
 
-	require.Error(t, db.WithTx(context.Background(), func(tx sql.Transaction) error {
+	require.Error(t, db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
 		atxs.Add(tx, atx6, types.AtxBlob{})
 		return errors.New("fail") // rollback
 	}))

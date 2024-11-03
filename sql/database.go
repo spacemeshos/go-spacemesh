@@ -627,6 +627,8 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	}
 	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn, freeConn: cancel}
 	if err := tx.begin(initstmt); err != nil {
+		cancel()
+		db.pool.Put(conn)
 		return nil, err
 	}
 	return tx, nil
@@ -696,7 +698,7 @@ func (db *sqliteDatabase) Tx(ctx context.Context) (Transaction, error) {
 // WithTx will pass initialized deferred transaction to exec callback.
 // Will commit only if error is nil.
 func (db *sqliteDatabase) WithTx(ctx context.Context, exec func(Transaction) error) error {
-	return db.withTx(ctx, beginImmediate, exec)
+	return db.withTx(ctx, beginDefault, exec)
 }
 
 // TxImmediate creates immediate transaction.
@@ -710,10 +712,7 @@ func (db *sqliteDatabase) TxImmediate(ctx context.Context) (Transaction, error) 
 
 // WithTxImmediate will pass initialized immediate transaction to exec callback.
 // Will commit only if error is nil.
-func (db *sqliteDatabase) WithTxImmediate(
-	ctx context.Context,
-	exec func(Transaction) error,
-) error {
+func (db *sqliteDatabase) WithTxImmediate(ctx context.Context, exec func(Transaction) error) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 

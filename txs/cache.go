@@ -688,7 +688,7 @@ func (c *Cache) ApplyLayer(
 
 	// commit results before reporting them
 	// TODO(dshulyak) save results in vm
-	if err := db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	if err := db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, rst := range results {
 			err := transactions.AddResult(dbtx, rst.ID, &rst.TransactionResult)
 			if err != nil {
@@ -835,7 +835,7 @@ func checkApplyOrder(logger *zap.Logger, db sql.StateDatabase, toApply types.Lay
 }
 
 func addToProposal(db sql.StateDatabase, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, tid := range tids {
 			if err := transactions.AddToProposal(dbtx, tid, lid, pid); err != nil {
 				return fmt.Errorf("add2prop %w", err)
@@ -846,7 +846,7 @@ func addToProposal(db sql.StateDatabase, lid types.LayerID, pid types.ProposalID
 }
 
 func addToBlock(db sql.StateDatabase, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, tid := range tids {
 			if err := transactions.AddToBlock(dbtx, tid, lid, bid); err != nil {
 				return fmt.Errorf("add2block %w", err)
@@ -857,7 +857,7 @@ func addToBlock(db sql.StateDatabase, lid types.LayerID, bid types.BlockID, tids
 }
 
 func undoLayers(db sql.StateDatabase, from types.LayerID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		err := transactions.UndoLayers(dbtx, from)
 		if err != nil {
 			return fmt.Errorf("undo %w", err)
