@@ -155,6 +155,44 @@ func (c *MockHostConsumeCall) DoAndReturn(f func(uint64) error) *MockHostConsume
 	return c
 }
 
+// GasSpent mocks base method.
+func (m *MockHost) GasSpent() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GasSpent")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// GasSpent indicates an expected call of GasSpent.
+func (mr *MockHostMockRecorder) GasSpent() *MockHostGasSpentCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GasSpent", reflect.TypeOf((*MockHost)(nil).GasSpent))
+	return &MockHostGasSpentCall{Call: call}
+}
+
+// MockHostGasSpentCall wrap *gomock.Call
+type MockHostGasSpentCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostGasSpentCall) Return(arg0 uint64) *MockHostGasSpentCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostGasSpentCall) Do(f func() uint64) *MockHostGasSpentCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostGasSpentCall) DoAndReturn(f func() uint64) *MockHostGasSpentCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Get mocks base method.
 func (m *MockHost) Get(arg0 types.Address) (types.Account, error) {
 	m.ctrl.T.Helper()
@@ -611,6 +649,42 @@ func (c *MockHostSpawnCall) Do(f func(types.Address, []byte) (types.Address, err
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockHostSpawnCall) DoAndReturn(f func(types.Address, []byte) (types.Address, error)) *MockHostSpawnCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SpendGas mocks base method.
+func (m *MockHost) SpendGas(arg0 uint64) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SpendGas", arg0)
+}
+
+// SpendGas indicates an expected call of SpendGas.
+func (mr *MockHostMockRecorder) SpendGas(arg0 any) *MockHostSpendGasCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SpendGas", reflect.TypeOf((*MockHost)(nil).SpendGas), arg0)
+	return &MockHostSpendGasCall{Call: call}
+}
+
+// MockHostSpendGasCall wrap *gomock.Call
+type MockHostSpendGasCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostSpendGasCall) Return() *MockHostSpendGasCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostSpendGasCall) Do(f func(uint64)) *MockHostSpendGasCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostSpendGasCall) DoAndReturn(f func(uint64)) *MockHostSpendGasCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
