@@ -24,7 +24,7 @@ import (
 
 var errBadRequest = errors.New("invalid request")
 
-// GetAtxs gets the data for given atx IDs and validates them. returns an error if at least one ATX cannot be fetched.
+// GetAtxs gets the data for given atx IDs and validates them. Returns an error if at least one ATX cannot be fetched.
 func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.GetAtxOpt) error {
 	if len(ids) == 0 {
 		return nil

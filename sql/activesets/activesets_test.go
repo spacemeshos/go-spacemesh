@@ -20,7 +20,7 @@ func TestActiveSet(t *testing.T) {
 		Epoch: 2,
 		Set:   []types.ATXID{{1}, {2}},
 	}
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	require.NoError(t, Add(db, ids[0], set))
 	require.ErrorIs(t, Add(db, ids[0], set), sql.ErrObjectExists)
@@ -69,7 +69,7 @@ func TestCachedActiveSet(t *testing.T) {
 		Epoch: 2,
 		Set:   []types.ATXID{{3}, {4}},
 	}
-	db := statesql.InMemory(sql.WithQueryCache(true))
+	db := statesql.InMemoryTest(t, sql.WithQueryCache(true))
 
 	require.NoError(t, Add(db, ids[0], set0))
 	require.NoError(t, Add(db, ids[1], set1))

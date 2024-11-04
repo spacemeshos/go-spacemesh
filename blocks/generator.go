@@ -116,7 +116,8 @@ func NewGenerator(
 // Start starts listening to hare output.
 func (g *Generator) Start(ctx context.Context) {
 	g.once.Do(func() {
-		ctx, g.stop = context.WithCancel(ctx)
+		// TODO(mafa): fix this
+		ctx, g.stop = context.WithCancel(ctx) // nolint:fatcontext
 		g.eg.Go(func() error {
 			return g.run(ctx)
 		})

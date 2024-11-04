@@ -28,6 +28,7 @@ import (
 type MockAtxReceiver struct {
 	ctrl     *gomock.Controller
 	recorder *MockAtxReceiverMockRecorder
+	isgomock struct{}
 }
 
 // MockAtxReceiverMockRecorder is the mock recorder for MockAtxReceiver.
@@ -87,6 +88,7 @@ func (c *MockAtxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTx)) *Moc
 type MockPostVerifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockPostVerifierMockRecorder
+	isgomock struct{}
 }
 
 // MockPostVerifierMockRecorder is the mock recorder for MockPostVerifier.
@@ -191,6 +193,7 @@ func (c *MockPostVerifierVerifyCall) DoAndReturn(f func(context.Context, *shared
 type Mockscaler struct {
 	ctrl     *gomock.Controller
 	recorder *MockscalerMockRecorder
+	isgomock struct{}
 }
 
 // MockscalerMockRecorder is the mock recorder for Mockscaler.
@@ -250,6 +253,7 @@ func (c *MockscalerscaleCall) DoAndReturn(f func(int)) *MockscalerscaleCall {
 type MocknipostValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MocknipostValidatorMockRecorder
+	isgomock struct{}
 }
 
 // MocknipostValidatorMockRecorder is the mock recorder for MocknipostValidator.
@@ -751,6 +755,7 @@ func (c *MocknipostValidatorVerifyChainCall) DoAndReturn(f func(context.Context,
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerClockMockRecorder
+	isgomock struct{}
 }
 
 // MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
@@ -888,6 +893,7 @@ func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.T
 type MocknipostBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MocknipostBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MocknipostBuilderMockRecorder is the mock recorder for MocknipostBuilder.
@@ -1028,6 +1034,7 @@ func (c *MocknipostBuilderResetStateCall) DoAndReturn(f func(types.NodeID) error
 type Mocksyncer struct {
 	ctrl     *gomock.Controller
 	recorder *MocksyncerMockRecorder
+	isgomock struct{}
 }
 
 // MocksyncerMockRecorder is the mock recorder for Mocksyncer.
@@ -1089,6 +1096,7 @@ func (c *MocksyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{
 type MockmalfeasancePublisher struct {
 	ctrl     *gomock.Controller
 	recorder *MockmalfeasancePublisherMockRecorder
+	isgomock struct{}
 }
 
 // MockmalfeasancePublisherMockRecorder is the mock recorder for MockmalfeasancePublisher.
@@ -1150,6 +1158,7 @@ func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context
 type MockatxProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockatxProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
@@ -1212,6 +1221,7 @@ func (c *MockatxProviderGetAtxCall) DoAndReturn(f func(types.ATXID) (*types.Acti
 type MockpostSetupProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockpostSetupProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockpostSetupProviderMockRecorder is the mock recorder for MockpostSetupProvider.
@@ -1387,6 +1397,7 @@ func (c *MockpostSetupProviderStatusCall) DoAndReturn(f func() *PostSetupStatus)
 type MockSmeshingProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockSmeshingProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockSmeshingProviderMockRecorder is the mock recorder for MockSmeshingProvider.
@@ -1636,6 +1647,7 @@ func (c *MockSmeshingProviderStopSmeshingCall) DoAndReturn(f func(bool) error) *
 type MockPoetService struct {
 	ctrl     *gomock.Controller
 	recorder *MockPoetServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockPoetServiceMockRecorder is the mock recorder for MockPoetService.
@@ -1811,10 +1823,49 @@ func (c *MockPoetServiceSubmitCall) DoAndReturn(f func(context.Context, time.Tim
 	return c
 }
 
+// TickSize mocks base method.
+func (m *MockPoetService) TickSize() uint64 {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TickSize")
+	ret0, _ := ret[0].(uint64)
+	return ret0
+}
+
+// TickSize indicates an expected call of TickSize.
+func (mr *MockPoetServiceMockRecorder) TickSize() *MockPoetServiceTickSizeCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TickSize", reflect.TypeOf((*MockPoetService)(nil).TickSize))
+	return &MockPoetServiceTickSizeCall{Call: call}
+}
+
+// MockPoetServiceTickSizeCall wrap *gomock.Call
+type MockPoetServiceTickSizeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPoetServiceTickSizeCall) Return(arg0 uint64) *MockPoetServiceTickSizeCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPoetServiceTickSizeCall) Do(f func() uint64) *MockPoetServiceTickSizeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPoetServiceTickSizeCall) DoAndReturn(f func() uint64) *MockPoetServiceTickSizeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockcertifierClient is a mock of certifierClient interface.
 type MockcertifierClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockcertifierClientMockRecorder
+	isgomock struct{}
 }
 
 // MockcertifierClientMockRecorder is the mock recorder for MockcertifierClient.
@@ -1877,6 +1928,7 @@ func (c *MockcertifierClientCertifyCall) DoAndReturn(f func(context.Context, typ
 type MockcertifierService struct {
 	ctrl     *gomock.Controller
 	recorder *MockcertifierServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockcertifierServiceMockRecorder is the mock recorder for MockcertifierService.
@@ -1977,6 +2029,7 @@ func (c *MockcertifierServiceDeleteCertificateCall) DoAndReturn(f func(types.Nod
 type MockpoetDbAPI struct {
 	ctrl     *gomock.Controller
 	recorder *MockpoetDbAPIMockRecorder
+	isgomock struct{}
 }
 
 // MockpoetDbAPIMockRecorder is the mock recorder for MockpoetDbAPI.
@@ -2117,6 +2170,7 @@ func (c *MockpoetDbAPIValidateAndStoreCall) DoAndReturn(f func(context.Context, 
 type MockAtxBuilder struct {
 	ctrl     *gomock.Controller
 	recorder *MockAtxBuilderMockRecorder
+	isgomock struct{}
 }
 
 // MockAtxBuilderMockRecorder is the mock recorder for MockAtxBuilder.
@@ -2176,6 +2230,7 @@ func (c *MockAtxBuilderRegisterCall) DoAndReturn(f func(*signing.EdSigner)) *Moc
 type MockpostService struct {
 	ctrl     *gomock.Controller
 	recorder *MockpostServiceMockRecorder
+	isgomock struct{}
 }
 
 // MockpostServiceMockRecorder is the mock recorder for MockpostService.
@@ -2238,6 +2293,7 @@ func (c *MockpostServiceClientCall) DoAndReturn(f func(types.NodeID) (PostClient
 type MockPostClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockPostClientMockRecorder
+	isgomock struct{}
 }
 
 // MockPostClientMockRecorder is the mock recorder for MockPostClient.
@@ -2340,6 +2396,7 @@ func (c *MockPostClientProofCall) DoAndReturn(f func(context.Context, []byte) (*
 type MockPostStates struct {
 	ctrl     *gomock.Controller
 	recorder *MockPostStatesMockRecorder
+	isgomock struct{}
 }
 
 // MockPostStatesMockRecorder is the mock recorder for MockPostStates.

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -30,6 +31,8 @@ var (
 	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
+	// ErrConflict is returned if database constraints didn't allow to update an object.
+	ErrConflict = errors.New("database: conflict")
 	// ErrTooNew is returned if database version is newer than expected.
 	ErrTooNew = errors.New("database version is too new")
 	// ErrOldSchema is returned when the database version differs from the expected one
@@ -41,13 +44,6 @@ const (
 	beginDefault   = "BEGIN;"
 	beginImmediate = "BEGIN IMMEDIATE;"
 )
-
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/sql Executor
-
-// Executor is an interface for executing raw statement.
-type Executor interface {
-	Exec(string, Encoder, Decoder) (int, error)
-}
 
 // Statement is an sqlite statement.
 type Statement = sqlite.Stmt
@@ -93,6 +89,7 @@ type conf struct {
 	temp                       bool
 	handleIncompleteMigrations bool
 	exclusive                  bool
+	readOnly                   bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -214,6 +211,13 @@ func WithExclusive() Opt {
 	}
 }
 
+// WithReadOnly specifies that the database is to be open in read-only mode.
+func WithReadOnly() Opt {
+	return func(c *conf) {
+		c.readOnly = true
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
@@ -230,6 +234,15 @@ func InMemory(opts ...Opt) *sqliteDatabase {
 	if err != nil {
 		panic(err)
 	}
+	return db
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...Opt) *sqliteDatabase {
+	// When using empty DB schema, we don't want to check for schema drift due to
+	// "PRAGMA user_version = 0;" in the initial schema retrieved from the DB.
+	db := InMemory(append(opts, WithNoCheckSchemaDrift())...)
+	tb.Cleanup(func() { db.Close() })
 	return db
 }
 
@@ -256,8 +269,7 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 	logger := config.logger.With(zap.String("uri", config.uri))
 	var flags sqlite.OpenFlags
 	if !config.forceFresh {
-		flags = sqlite.SQLITE_OPEN_READWRITE |
-			sqlite.SQLITE_OPEN_URI |
+		flags = sqlite.SQLITE_OPEN_URI |
 			sqlite.SQLITE_OPEN_NOMUTEX
 		if !config.temp {
 			// Note that SQLITE_OPEN_WAL is not handled by SQLITE api itself,
@@ -267,7 +279,13 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 			// using any journal
 			flags |= sqlite.SQLITE_OPEN_WAL
 		}
+		if !config.readOnly {
+			flags |= sqlite.SQLITE_OPEN_READWRITE
+		} else {
+			flags |= sqlite.SQLITE_OPEN_READONLY
+		}
 	}
+
 	freshDB := config.forceFresh
 	if config.exclusive {
 		config.connections = 1
@@ -601,12 +619,16 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	if db.closed {
 		return nil, ErrClosed
 	}
-	conn := db.getConn(ctx)
+	conCtx, cancel := context.WithCancel(ctx)
+	conn := db.getConn(conCtx)
 	if conn == nil {
+		cancel()
 		return nil, ErrNoConnection
 	}
-	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn}
+	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn, freeConn: cancel}
 	if err := tx.begin(initstmt); err != nil {
+		cancel()
+		db.pool.Put(conn)
 		return nil, err
 	}
 	return tx, nil
@@ -676,7 +698,7 @@ func (db *sqliteDatabase) Tx(ctx context.Context) (Transaction, error) {
 // WithTx will pass initialized deferred transaction to exec callback.
 // Will commit only if error is nil.
 func (db *sqliteDatabase) WithTx(ctx context.Context, exec func(Transaction) error) error {
-	return db.withTx(ctx, beginImmediate, exec)
+	return db.withTx(ctx, beginDefault, exec)
 }
 
 // TxImmediate creates immediate transaction.
@@ -690,10 +712,7 @@ func (db *sqliteDatabase) TxImmediate(ctx context.Context) (Transaction, error) 
 
 // WithTxImmediate will pass initialized immediate transaction to exec callback.
 // Will commit only if error is nil.
-func (db *sqliteDatabase) WithTxImmediate(
-	ctx context.Context,
-	exec func(Transaction) error,
-) error {
+func (db *sqliteDatabase) WithTxImmediate(ctx context.Context, exec func(Transaction) error) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
@@ -990,6 +1009,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		encoder(stmt)
 	}
 	defer stmt.ClearBindings()
+	defer stmt.Reset()
 
 	rows := 0
 	for {
@@ -1019,6 +1039,7 @@ type sqliteTx struct {
 	*queryCache
 	db        *sqliteDatabase
 	conn      *sqlite.Conn
+	freeConn  func()
 	committed bool
 	err       error
 }
@@ -1047,10 +1068,12 @@ func (tx *sqliteTx) Commit() error {
 func (tx *sqliteTx) Release() error {
 	defer tx.db.pool.Put(tx.conn)
 	if tx.committed {
+		tx.freeConn()
 		return nil
 	}
 	stmt := tx.conn.Prep("ROLLBACK")
 	_, tx.err = stmt.Step()
+	tx.freeConn()
 	return mapSqliteError(tx.err)
 }
 
@@ -1149,15 +1172,18 @@ func GetBlobSizes(db Executor, cmd string, ids [][]byte) (sizes []int, err error
 
 // LoadBlob loads an encoded blob.
 func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
-	if rows, err := db.Exec(cmd,
+	rows, err := db.Exec(cmd,
 		func(stmt *Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *Statement) bool {
 			blob.FromColumn(stmt, 0)
 			return true
-		}); err != nil {
+		},
+	)
+	if err != nil {
 		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
+	}
+	if rows == 0 {
 		return fmt.Errorf("%w: object %s", ErrNotFound, hex.EncodeToString(id))
 	}
 	return nil

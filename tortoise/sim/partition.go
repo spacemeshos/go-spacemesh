@@ -84,6 +84,7 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 		share := total * part.Nominator / part.Denominator
 
 		gens[i] = New(
+			g.tb,
 			withRng(g.rng),
 			withConf(g.conf),
 			WithLogger(g.logger),

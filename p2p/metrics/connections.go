@@ -37,9 +37,9 @@ var (
 )
 
 // ConnectionsMeeter stores the number of connections for node.
-// number of connections
-// number of streams per each protocol
-// histogram for server request durations for each protocol.
+// - Number of connections
+// - Number of streams per each protocol
+// - Histogram for server request durations for each protocol.
 type ConnectionsMeeter struct{}
 
 // NewConnectionsMeeter returns a new ConnectionsMeeter.

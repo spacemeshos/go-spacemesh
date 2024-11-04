@@ -24,6 +24,7 @@ import (
 type MockmeshProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockmeshProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
@@ -162,6 +163,7 @@ func (c *MockmeshProviderProcessedLayerCall) DoAndReturn(f func() types.LayerID)
 type MockeligibilityValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MockeligibilityValidatorMockRecorder
+	isgomock struct{}
 }
 
 // MockeligibilityValidatorMockRecorder is the mock recorder for MockeligibilityValidator.
@@ -223,6 +225,7 @@ func (c *MockeligibilityValidatorCheckEligibilityCall) DoAndReturn(f func(contex
 type MocktortoiseProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MocktortoiseProviderMockRecorder
+	isgomock struct{}
 }
 
 // MocktortoiseProviderMockRecorder is the mock recorder for MocktortoiseProvider.
@@ -361,6 +364,7 @@ func (c *MocktortoiseProviderStoreBallotCall) DoAndReturn(f func(*tortoise.Decod
 type MockvrfVerifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockvrfVerifierMockRecorder
+	isgomock struct{}
 }
 
 // MockvrfVerifierMockRecorder is the mock recorder for MockvrfVerifier.
@@ -422,6 +426,7 @@ func (c *MockvrfVerifierVerifyCall) DoAndReturn(f func(types.NodeID, []byte, typ
 type MocklayerClock struct {
 	ctrl     *gomock.Controller
 	recorder *MocklayerClockMockRecorder
+	isgomock struct{}
 }
 
 // MocklayerClockMockRecorder is the mock recorder for MocklayerClock.
@@ -521,6 +526,7 @@ func (c *MocklayerClockLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.T
 type MockproposalsConsumer struct {
 	ctrl     *gomock.Controller
 	recorder *MockproposalsConsumerMockRecorder
+	isgomock struct{}
 }
 
 // MockproposalsConsumerMockRecorder is the mock recorder for MockproposalsConsumer.

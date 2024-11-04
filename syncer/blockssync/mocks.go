@@ -21,6 +21,7 @@ import (
 type MockblockFetcher struct {
 	ctrl     *gomock.Controller
 	recorder *MockblockFetcherMockRecorder
+	isgomock struct{}
 }
 
 // MockblockFetcherMockRecorder is the mock recorder for MockblockFetcher.

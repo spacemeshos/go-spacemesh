@@ -25,8 +25,8 @@ type testHandler struct {
 	mockMesh     *mocks.MockmeshProvider
 }
 
-func createTestHandler(t *testing.T) *testHandler {
-	ctrl := gomock.NewController(t)
+func createTestHandler(tb testing.TB) *testHandler {
+	ctrl := gomock.NewController(tb)
 	th := &testHandler{
 		mockFetcher:  smocks.NewMockFetcher(ctrl),
 		mockTortoise: mocks.NewMocktortoiseProvider(ctrl),
@@ -34,10 +34,10 @@ func createTestHandler(t *testing.T) *testHandler {
 	}
 	th.Handler = NewHandler(
 		th.mockFetcher,
-		statesql.InMemory(),
+		statesql.InMemoryTest(tb),
 		th.mockTortoise,
 		th.mockMesh,
-		WithLogger(zaptest.NewLogger(t)),
+		WithLogger(zaptest.NewLogger(tb)),
 	)
 	return th
 }

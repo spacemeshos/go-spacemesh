@@ -33,11 +33,11 @@ const ENV_LONGEVITY_TESTS = "LONGEVITY_TESTS"
 // an environment variable to be set. If you need to manually
 // run the tests locally, just comment out the check or define the
 // environment variable.
-func checkAllowed(t *testing.T) {
-	t.Helper()
+func checkAllowed(tb testing.TB) {
+	tb.Helper()
 	val := os.Getenv(ENV_LONGEVITY_TESTS)
 	if val == "" || val == "false" || val == "0" {
-		t.Skip("test skipped. please define LONGEVITY_TESTS env var to run this test")
+		tb.Skip("test skipped. please define LONGEVITY_TESTS env var to run this test")
 	}
 }
 

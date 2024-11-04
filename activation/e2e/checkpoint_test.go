@@ -46,8 +46,9 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 
 	opts := testPostSetupOpts(t)
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
@@ -58,7 +59,8 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	initPost(t, cfg, opts, sig, goldenATX, grpcCfg, svc)
 	syncer := syncedSyncer(t)
 
-	poetDb := activation.NewPoetDb(db, logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	verifier, err := activation.NewPostVerifier(cfg, logger.Named("verifier"))
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, verifier.Close()) })
@@ -72,7 +74,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 	client := ae2e.NewTestPoetClient(1, poetCfg)
-	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	// ensure that genesis aligns with layer timings
 	genesis := time.Now().Add(layerDuration).Round(layerDuration)
@@ -85,7 +87,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
-	localDB := localsql.InMemory()
+	localDB := localsql.InMemoryTest(t)
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -186,15 +188,17 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	defer newDB.Close()
 
 	// 3. Spawn new ATX handler and builder using the new DB
-	poetDb = activation.NewPoetDb(newDB, logger.Named("poetDb"))
-	cdb = datastore.NewCachedDB(newDB, logger)
-	atxdata, err = atxsdata.Warm(newDB, 1, logger)
-	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetDb, err = activation.NewPoetDb(newDB, logger.Named("poetDb"))
+	require.NoError(t, err)
+	newCdb := datastore.NewCachedDB(newDB, logger)
+	t.Cleanup(func() { assert.NoError(t, newCdb.Close()) })
+	atxdata, err = atxsdata.Warm(newDB, 1, logger, sig)
+	poetService = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
 	atxHdlr = activation.NewHandler(
 		"local",
-		cdb,
+		newCdb,
 		atxdata,
 		edVerifier,
 		clock,

@@ -662,7 +662,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger *zap.Logger, target 
 	)
 
 	checker := createProposalChecker(logger, pd.config, w1, w1+w2)
-	pd.states[target] = newState(logger, pd.config, active, epochWeight, miners, checker)
+	pd.states[target] = newState(logger, active, epochWeight, miners, checker)
 	return pd.states[target], nil
 }
 

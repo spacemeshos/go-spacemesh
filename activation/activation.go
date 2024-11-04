@@ -54,6 +54,7 @@ type PoetConfig struct {
 	InfoCacheTTL                   time.Duration `mapstructure:"info-cache-ttl"`
 	PowParamsCacheTTL              time.Duration `mapstructure:"pow-params-cache-ttl"`
 	MaxRequestRetries              int           `mapstructure:"retry-max"`
+	PoetProofsCache                int           `mapstructure:"poet-proofs-cache"`
 }
 
 func DefaultPoetConfig() PoetConfig {
@@ -62,6 +63,7 @@ func DefaultPoetConfig() PoetConfig {
 		MaxRequestRetries: 10,
 		InfoCacheTTL:      5 * time.Minute,
 		PowParamsCacheTTL: 5 * time.Minute,
+		PoetProofsCache:   200,
 	}
 }
 
@@ -76,7 +78,7 @@ type Config struct {
 }
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
-// it is responsible for initializing post, receiving poet proof and orchestrating nipost. after which it will
+// it is responsible for initializing post, receiving poet proof and orchestrating nipost after which it will
 // calculate total weight and providing relevant view as proof.
 type Builder struct {
 	accountLock       sync.RWMutex
@@ -140,7 +142,8 @@ func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 // WithContext modifies parent context for background job.
 func WithContext(ctx context.Context) BuilderOption {
 	return func(b *Builder) {
-		b.parentCtx = ctx
+		// TODO(mafa): fix this
+		b.parentCtx = ctx // nolint:fatcontext
 	}
 }
 
@@ -559,6 +562,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 			zap.Time("waiting until", wait),
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
+		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -582,12 +586,10 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		logger.Info("no previous ATX found, creating an initial nipost challenge")
-
 		challenge, err = b.buildInitialNIPostChallenge(ctx, logger, nodeID, publishEpochId)
 		if err != nil {
 			return nil, err
 		}
-
 	case err != nil:
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	default:
@@ -658,7 +660,8 @@ func (b *Builder) buildInitialNIPostChallenge(
 ) (*types.NIPostChallenge, error) {
 	post, err := nipost.GetPost(b.localDB, nodeID)
 	if err != nil {
-		return nil, fmt.Errorf("get initial post: %w", err)
+		// if initial post is not found, declare it invalid so it is regenerated
+		return nil, ErrInvalidInitialPost
 	}
 	logger.Info("verifying the initial post")
 	initialPost := &types.Post{
@@ -667,7 +670,12 @@ func (b *Builder) buildInitialNIPostChallenge(
 		Pow:     post.Pow,
 	}
 	err = b.validator.PostV2(ctx, nodeID, post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits)
-	if err != nil {
+	switch {
+	case errors.Is(err, context.Canceled):
+		return nil, err
+	case errors.Is(err, context.DeadlineExceeded):
+		return nil, err
+	case err != nil:
 		logger.Error("initial POST is invalid", zap.Error(err))
 		if err := nipost.RemovePost(b.localDB, nodeID); err != nil {
 			logger.Fatal("failed to remove initial post", zap.Error(err))
@@ -866,7 +874,7 @@ func (b *Builder) createAtx(
 			PositioningATX: challenge.PositioningATX,
 			Coinbase:       b.Coinbase(),
 			VRFNonce:       (uint64)(nipostState.VRFNonce),
-			NiPosts: []wire.NiPostsV2{
+			NIPosts: []wire.NIPostV2{
 				{
 					Membership: wire.MerkleProofV2{
 						Nodes: nipostState.Membership.Nodes,
@@ -912,7 +920,7 @@ func (b *Builder) broadcast(ctx context.Context, atx scale.Encodable) (int, erro
 }
 
 // searchPositioningAtx returns atx id with the highest tick height.
-// publish epoch is used for caching the positioning atx.
+// Publish epoch is used for caching the positioning atx.
 func (b *Builder) searchPositioningAtx(
 	ctx context.Context,
 	nodeID types.NodeID,

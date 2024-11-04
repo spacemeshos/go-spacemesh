@@ -94,7 +94,7 @@ func (ac *accountCache) availBalance() uint64 {
 	return ac.txsByNonce.Back().Value.(*candidate).postBalance
 }
 
-func (ac *accountCache) precheck(logger *zap.Logger, ntx *NanoTX) (*list.Element, *candidate, error) {
+func (ac *accountCache) precheck(ntx *NanoTX) (*list.Element, *candidate, error) {
 	if ac.txsByNonce.Len() >= maxTXsPerAcct {
 		ac.moreInDB = true
 		return nil, nil, fmt.Errorf("%w: len %d", errTooManyNonce, ac.txsByNonce.Len())
@@ -127,7 +127,7 @@ func (ac *accountCache) accept(logger *zap.Logger, ntx *NanoTX, blockSeed []byte
 		replaced    *NanoTX
 		err         error
 	)
-	prev, cand, err = ac.precheck(logger, ntx)
+	prev, cand, err = ac.precheck(ntx)
 	if err != nil {
 		return err
 	}
@@ -262,7 +262,7 @@ func findBest(ntxs []*NanoTX, balance uint64, blockSeed []byte) *NanoTX {
 	return best
 }
 
-// adding a tx to the account cache. possible outcomes:
+// Adding a tx to the account cache. Possible outcomes:
 //   - nonce is smaller than the next nonce in state: reject from cache
 //   - too many txs present: reject from cache
 //   - nonce already exists in the cache:
@@ -337,8 +337,8 @@ func (ac *accountCache) addPendingFromNonce(
 	return ac.addBatch(logger, byPrincipal[ac.addr], nil)
 }
 
-// find the first nonce without a layer.
-// a nonce with a valid layer indicates that it's already packed in a proposal/block.
+// Find the first nonce without a layer.
+// A nonce with a valid layer indicates that it's already packed in a proposal/block.
 func (ac *accountCache) getMempool(logger *zap.Logger) []*NanoTX {
 	bests := make([]*NanoTX, 0, maxTXsPerAcct)
 	offset := 0
@@ -688,7 +688,7 @@ func (c *Cache) ApplyLayer(
 
 	// commit results before reporting them
 	// TODO(dshulyak) save results in vm
-	if err := db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	if err := db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, rst := range results {
 			err := transactions.AddResult(dbtx, rst.ID, &rst.TransactionResult)
 			if err != nil {
@@ -835,7 +835,7 @@ func checkApplyOrder(logger *zap.Logger, db sql.StateDatabase, toApply types.Lay
 }
 
 func addToProposal(db sql.StateDatabase, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, tid := range tids {
 			if err := transactions.AddToProposal(dbtx, tid, lid, pid); err != nil {
 				return fmt.Errorf("add2prop %w", err)
@@ -846,7 +846,7 @@ func addToProposal(db sql.StateDatabase, lid types.LayerID, pid types.ProposalID
 }
 
 func addToBlock(db sql.StateDatabase, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, tid := range tids {
 			if err := transactions.AddToBlock(dbtx, tid, lid, bid); err != nil {
 				return fmt.Errorf("add2block %w", err)
@@ -857,7 +857,7 @@ func addToBlock(db sql.StateDatabase, lid types.LayerID, bid types.BlockID, tids
 }
 
 func undoLayers(db sql.StateDatabase, from types.LayerID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		err := transactions.UndoLayers(dbtx, from)
 		if err != nil {
 			return fmt.Errorf("undo %w", err)

@@ -23,19 +23,19 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func createPeer(t *testing.T) (peer.ID, crypto.PrivKey) {
+func createPeer(tb testing.TB) (peer.ID, crypto.PrivKey) {
 	pk, _, err := crypto.GenerateECDSAKeyPair(rand.Reader)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	id, err := peer.IDFromPrivateKey(pk)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return id, pk
 }
 
-func newConnManager(t *testing.T, opts ...quicreuse.Option) *quicreuse.ConnManager {
-	t.Helper()
+func newConnManager(tb testing.TB, opts ...quicreuse.Option) *quicreuse.ConnManager {
+	tb.Helper()
 	cm, err := quicreuse.NewConnManager(quicgo.StatelessResetKey{}, quicgo.TokenGeneratorKey{}, opts...)
-	require.NoError(t, err)
-	t.Cleanup(func() { cm.Close() })
+	require.NoError(tb, err)
+	tb.Cleanup(func() { cm.Close() })
 	return cm
 }
 

@@ -25,8 +25,8 @@ type ActivationTxV1 struct {
 	blob []byte
 }
 
-// InnerActivationTxV1 is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
-// structure is serialized and signed.
+// InnerActivationTxV1 is the set of all fields of an ATX that are used to calculate the ATX ID. It contains all fields
+// besides the Signature and the Smesher ID.
 type InnerActivationTxV1 struct {
 	NIPostChallengeV1
 
@@ -44,23 +44,24 @@ type PostV1 struct {
 	Pow     uint64
 }
 
-func (p *PostV1) Root() []byte {
-	tree, err := merkle.NewTreeBuilder().
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		panic(err)
-	}
-	nonce := make([]byte, 4)
-	binary.LittleEndian.PutUint32(nonce, p.Nonce)
-	tree.AddLeaf(nonce)
+func (p *PostV1) merkleTree(tree *merkle.Tree) {
+	var nonce types.Hash32
+	binary.LittleEndian.PutUint32(nonce[:], p.Nonce)
+	tree.AddLeaf(nonce.Bytes())
 
-	tree.AddLeaf(p.Indices)
+	hasher := hash.GetHasher()
+	defer hash.PutHasher(hasher)
+	tree.AddLeaf(hasher.Sum(p.Indices))
 
-	pow := make([]byte, 8)
-	binary.LittleEndian.PutUint64(pow, p.Pow)
-	tree.AddLeaf(pow)
-	return tree.Root()
+	var pow types.Hash32
+	binary.LittleEndian.PutUint64(pow[:], p.Pow)
+	tree.AddLeaf(pow.Bytes())
+}
+
+type PostRoot types.Hash32
+
+func (p *PostV1) Root() PostRoot {
+	return PostRoot(createRoot(p.merkleTree))
 }
 
 type MerkleProofV1 struct {

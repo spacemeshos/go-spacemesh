@@ -17,14 +17,98 @@ func (t *ProofDoubleMerge) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructArray(enc, t.Proofs[:])
+		n, err := scale.EncodeByteArray(enc, t.MarriageATX[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := t.MarriageProof.EncodeScale(enc)
+		n, err := scale.EncodeByteArray(enc, t.MarriageATXSmesherID[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.ATXID1[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID1[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Signature1[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PublishEpochProof1, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXProof1, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.SmesherID1MarryProof.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.ATXID2[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SmesherID2[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Signature2[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PublishEpochProof2, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXProof2, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.SmesherID2MarryProof.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
@@ -43,71 +127,35 @@ func (t *ProofDoubleMerge) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.PublishEpoch = types.EpochID(field)
 	}
 	{
-		n, err := scale.DecodeStructArray(dec, t.Proofs[:])
+		n, err := scale.DecodeByteArray(dec, t.MarriageATX[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := t.MarriageProof.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *MergeProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
+		n, err := scale.DecodeByteArray(dec, t.MarriageATXSmesherID[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		n, err := scale.DecodeByteArray(dec, t.ATXID1[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		n, err := scale.DecodeByteArray(dec, t.SmesherID1[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.FieldsProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *MergeProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		n, err := scale.DecodeByteArray(dec, t.Signature1[:])
 		if err != nil {
 			return total, err
 		}
@@ -119,88 +167,39 @@ func (t *MergeProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.FieldsProof = field
+		t.PublishEpochProof1 = field
 	}
-	return total, nil
-}
-
-func (t *MarriageProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MarriageATXProof1 = field
+	}
+	{
+		n, err := t.SmesherID1MarryProof.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
+		n, err := scale.DecodeByteArray(dec, t.ATXID2[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		n, err := scale.DecodeByteArray(dec, t.SmesherID2[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.MarriageRoot[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructArray(enc, t.CertificatesData[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.CertificateProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *MarriageProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.MarriageRoot[:])
+		n, err := scale.DecodeByteArray(dec, t.Signature2[:])
 		if err != nil {
 			return total, err
 		}
@@ -212,14 +211,7 @@ func (t *MarriageProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.MarriageProof = field
-	}
-	{
-		n, err := scale.DecodeStructArray(dec, t.CertificatesData[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
+		t.PublishEpochProof2 = field
 	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
@@ -227,44 +219,14 @@ func (t *MarriageProof) DecodeScale(dec *scale.Decoder) (total int, err error) {
 			return total, err
 		}
 		total += n
-		t.CertificateProof = field
+		t.MarriageATXProof2 = field
 	}
-	return total, nil
-}
-
-func (t *MarriageCertificateData) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.Certificate.EncodeScale(enc)
+		n, err := t.SmesherID2MarryProof.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
-	}
-	{
-		n, err := scale.EncodeCompact64(enc, uint64(t.Index))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *MarriageCertificateData) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := t.Certificate.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		field, n, err := scale.DecodeCompact64(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Index = uint64(field)
 	}
 	return total, nil
 }

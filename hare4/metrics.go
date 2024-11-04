@@ -63,34 +63,34 @@ var (
 	)
 	proposalsLatency      = protocolLatency.WithLabelValues("proposals")
 	activeLatency         = protocolLatency.WithLabelValues("active")
-	requestCompactCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+	requestCompactCounter = metrics.NewSimpleCounter(
 		namespace,
 		"request_compact_count",
 		"number of times we needed to go into a clarifying round",
-	))
-	requestCompactErrorCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+	)
+	requestCompactErrorCounter = metrics.NewSimpleCounter(
 		namespace,
 		"request_compact_error_count",
 		"number of errors got when requesting compact proposals from peer",
-	))
-	requestCompactHandlerCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+	)
+	requestCompactHandlerCounter = metrics.NewSimpleCounter(
 		namespace,
 		"request_compact_handler_count",
 		"number of requests handled on the compact stream handler",
-	))
-	messageCacheMiss = prometheus.NewCounter(metrics.NewCounterOpts(
+	)
+	messageCacheMiss = metrics.NewSimpleCounter(
 		namespace,
 		"message_cache_miss",
 		"number of message cache misses",
-	))
-	messageCompactsCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+	)
+	messageCompactsCounter = metrics.NewSimpleCounter(
 		namespace,
 		"message_compacts_count",
 		"number of compact proposals that arrived to be checked in a message",
-	))
-	preroundSigFailCounter = prometheus.NewCounter(metrics.NewCounterOpts(
+	)
+	preroundSigFailCounter = metrics.NewSimpleCounter(
 		namespace,
 		"preround_signature_fail_count",
 		"counter for signature fails on preround with compact message",
-	))
+	)
 )

@@ -98,7 +98,7 @@ type syncer interface {
 // The provider of that interface ensures that only valid proofs are published (invalid ones return an error).
 // Proofs against an identity that is managed by the node will also return an error and will not be gossiped.
 //
-// Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them.
+// Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them
 // and mark the associated identity as malfeasant.
 type malfeasancePublisher interface {
 	Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error
@@ -149,6 +149,9 @@ type PoetService interface {
 
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
+
+	// TickSize returns tickSize configured for particular PoET service
+	TickSize() uint64
 }
 
 // A certifier client that the certifierService uses to obtain certificates

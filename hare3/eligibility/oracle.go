@@ -92,13 +92,12 @@ type Oracle struct {
 	// until graded oracle is implemented
 	synced bool
 
-	beacons        system.BeaconGetter
-	atxsdata       *atxsdata.Data
-	db             sql.Executor
-	vrfVerifier    vrfVerifier
-	layersPerEpoch uint32
-	cfg            Config
-	log            *zap.Logger
+	beacons     system.BeaconGetter
+	atxsdata    *atxsdata.Data
+	db          sql.Executor
+	vrfVerifier vrfVerifier
+	cfg         Config
+	log         *zap.Logger
 }
 
 type Opt func(*Oracle)
@@ -129,15 +128,14 @@ func New(
 		panic("failed to create lru cache for active set" + err.Error())
 	}
 	oracle := &Oracle{
-		beacons:        beacons,
-		db:             db,
-		atxsdata:       atxsdata,
-		vrfVerifier:    vrfVerifier,
-		layersPerEpoch: layersPerEpoch,
-		activesCache:   activesCache,
-		fallback:       map[types.EpochID][]types.ATXID{},
-		cfg:            DefaultConfig(),
-		log:            zap.NewNop(),
+		beacons:      beacons,
+		db:           db,
+		atxsdata:     atxsdata,
+		vrfVerifier:  vrfVerifier,
+		activesCache: activesCache,
+		fallback:     map[types.EpochID][]types.ATXID{},
+		cfg:          DefaultConfig(),
+		log:          zap.NewNop(),
 	}
 	for _, opt := range opts {
 		opt(oracle)

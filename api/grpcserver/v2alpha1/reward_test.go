@@ -20,26 +20,28 @@ import (
 )
 
 func TestRewardService_List(t *testing.T) {
-	db := statesql.InMemory()
-	ctx := context.Background()
+	setup := func(t *testing.T) (spacemeshv2alpha1.RewardServiceClient, []types.Reward) {
+		db := statesql.InMemoryTest(t)
 
-	gen := fixture.NewRewardsGenerator().WithAddresses(100).WithUniqueCoinbase()
-	rwds := make([]types.Reward, 100)
-	for i := range rwds {
-		rwd := gen.Next()
-		require.NoError(t, rewards.Add(db, rwd))
-		rwds[i] = *rwd
+		gen := fixture.NewRewardsGenerator().WithAddresses(90).WithUniqueCoinbase()
+		rwds := make([]types.Reward, 90)
+		for i := range rwds {
+			rwd := gen.Next()
+			require.NoError(t, rewards.Add(db, rwd))
+			rwds[i] = *rwd
+		}
+
+		svc := NewRewardService(db)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		return spacemeshv2alpha1.NewRewardServiceClient(conn), rwds
 	}
 
-	svc := NewRewardService(db)
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	conn := dialGrpc(t, cfg)
-	client := spacemeshv2alpha1.NewRewardServiceClient(conn)
-
 	t.Run("limit set too high", func(t *testing.T) {
-		_, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{Limit: 200})
+		client, _ := setup(t)
+		_, err := client.List(context.Background(), &spacemeshv2alpha1.RewardRequest{Limit: 200})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -49,7 +51,8 @@ func TestRewardService_List(t *testing.T) {
 	})
 
 	t.Run("no limit set", func(t *testing.T) {
-		_, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{})
+		client, _ := setup(t)
+		_, err := client.List(context.Background(), &spacemeshv2alpha1.RewardRequest{})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -59,7 +62,8 @@ func TestRewardService_List(t *testing.T) {
 	})
 
 	t.Run("limit and offset", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{
+		client, _ := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.RewardRequest{
 			Limit:  25,
 			Offset: 50,
 		})
@@ -68,13 +72,15 @@ func TestRewardService_List(t *testing.T) {
 	})
 
 	t.Run("all", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{Limit: 100})
+		client, rwds := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.RewardRequest{Limit: 100})
 		require.NoError(t, err)
-		require.Len(t, rwds, len(list.Rewards))
+		require.Len(t, list.Rewards, len(rwds))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{
+		client, rwds := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.RewardRequest{
 			Limit:      1,
 			StartLayer: rwds[3].Layer.Uint32(),
 			EndLayer:   rwds[3].Layer.Uint32(),
@@ -88,7 +94,8 @@ func TestRewardService_List(t *testing.T) {
 	})
 
 	t.Run("smesher", func(t *testing.T) {
-		list, err := client.List(ctx, &spacemeshv2alpha1.RewardRequest{
+		client, rwds := setup(t)
+		list, err := client.List(context.Background(), &spacemeshv2alpha1.RewardRequest{
 			Limit:      1,
 			StartLayer: rwds[4].Layer.Uint32(),
 			EndLayer:   rwds[4].Layer.Uint32(),
@@ -103,29 +110,32 @@ func TestRewardService_List(t *testing.T) {
 }
 
 func TestRewardStreamService_Stream(t *testing.T) {
-	db := statesql.InMemory()
-	ctx := context.Background()
+	setup := func(t *testing.T) spacemeshv2alpha1.RewardStreamServiceClient {
+		db := statesql.InMemoryTest(t)
 
-	gen := fixture.NewRewardsGenerator()
-	rwds := make([]types.Reward, 100)
-	for i := range rwds {
-		rwd := gen.Next()
-		require.NoError(t, rewards.Add(db, rwd))
-		rwds[i] = *rwd
+		gen := fixture.NewRewardsGenerator()
+		rwds := make([]types.Reward, 100)
+		for i := range rwds {
+			rwd := gen.Next()
+			require.NoError(t, rewards.Add(db, rwd))
+			rwds[i] = *rwd
+		}
+
+		svc := NewRewardStreamService(db)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		return spacemeshv2alpha1.NewRewardStreamServiceClient(conn)
 	}
-
-	svc := NewRewardStreamService(db)
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	conn := dialGrpc(t, cfg)
-	client := spacemeshv2alpha1.NewRewardStreamServiceClient(conn)
 
 	t.Run("all", func(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
 
-		stream, err := client.Stream(ctx, &spacemeshv2alpha1.RewardStreamRequest{})
+		client := setup(t)
+
+		stream, err := client.Stream(context.Background(), &spacemeshv2alpha1.RewardStreamRequest{})
 		require.NoError(t, err)
 
 		var i int
@@ -136,19 +146,21 @@ func TestRewardStreamService_Stream(t *testing.T) {
 			}
 			i++
 		}
-		require.Len(t, rwds, i)
+		require.Equal(t, 100, i)
 	})
 
 	t.Run("watch", func(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
 
+		client := setup(t)
+
 		const (
 			start = 100
 			n     = 10
 		)
 
-		gen = fixture.NewRewardsGenerator().WithLayers(start, 10)
+		gen := fixture.NewRewardsGenerator().WithLayers(start, 10)
 		var streamed []types.Reward
 		for i := 0; i < n; i++ {
 			rwd := gen.Next()
@@ -183,7 +195,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 			},
 		} {
 			t.Run(tc.desc, func(t *testing.T) {
-				stream, err := client.Stream(ctx, tc.request)
+				stream, err := client.Stream(context.Background(), tc.request)
 				require.NoError(t, err)
 				_, err = stream.Header()
 				require.NoError(t, err)
@@ -191,7 +203,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 				var expect []*types.Reward
 				for _, rst := range streamed {
 					require.NoError(t, events.ReportRewardReceived(rst))
-					matcher := rewardsMatcher{tc.request, ctx}
+					matcher := rewardsMatcher{tc.request, context.Background()}
 					if matcher.match(&rst) {
 						expect = append(expect, &rst)
 					}

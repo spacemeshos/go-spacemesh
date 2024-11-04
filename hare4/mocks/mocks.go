@@ -24,6 +24,7 @@ import (
 type MockstreamRequester struct {
 	ctrl     *gomock.Controller
 	recorder *MockstreamRequesterMockRecorder
+	isgomock struct{}
 }
 
 // MockstreamRequesterMockRecorder is the mock recorder for MockstreamRequester.
@@ -41,6 +42,44 @@ func NewMockstreamRequester(ctrl *gomock.Controller) *MockstreamRequester {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockstreamRequester) EXPECT() *MockstreamRequesterMockRecorder {
 	return m.recorder
+}
+
+// Run mocks base method.
+func (m *MockstreamRequester) Run(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Run", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Run indicates an expected call of Run.
+func (mr *MockstreamRequesterMockRecorder) Run(ctx any) *MockstreamRequesterRunCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockstreamRequester)(nil).Run), ctx)
+	return &MockstreamRequesterRunCall{Call: call}
+}
+
+// MockstreamRequesterRunCall wrap *gomock.Call
+type MockstreamRequesterRunCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockstreamRequesterRunCall) Return(arg0 error) *MockstreamRequesterRunCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockstreamRequesterRunCall) Do(f func(context.Context) error) *MockstreamRequesterRunCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockstreamRequesterRunCall) DoAndReturn(f func(context.Context) error) *MockstreamRequesterRunCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // StreamRequest mocks base method.
@@ -90,6 +129,7 @@ func (c *MockstreamRequesterStreamRequestCall) DoAndReturn(f func(context.Contex
 type Mockverifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockverifierMockRecorder
+	isgomock struct{}
 }
 
 // MockverifierMockRecorder is the mock recorder for Mockverifier.

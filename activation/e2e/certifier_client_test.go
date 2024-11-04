@@ -34,8 +34,8 @@ func TestCertification(t *testing.T) {
 	require.NoError(t, err)
 
 	cfg := testPostConfig()
-	db := statesql.InMemory()
-	localDb := localsql.InMemory()
+	db := statesql.InMemoryTest(t)
+	localDb := localsql.InMemoryTest(t)
 
 	opts := testPostSetupOpts(t)
 	logger := zaptest.NewLogger(t)
@@ -171,26 +171,26 @@ func (c *testCertifier) certify(w http.ResponseWriter, r *http.Request) {
 }
 
 func spawnTestCertifier(
-	t *testing.T,
+	tb testing.TB,
 	cfg activation.PostConfig,
 	// optional - if nil, will create valid certs
 	makeCert func(nodeID []byte) *poetShared.Cert,
 	opts ...verifying.OptionFunc,
 ) (ed25519.PublicKey, net.Addr) {
-	t.Helper()
+	tb.Helper()
 
 	pub, private, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	postVerifier, err := activation.NewPostVerifier(
 		cfg,
-		zaptest.NewLogger(t),
+		zaptest.NewLogger(tb),
 		activation.WithVerifyingOpts(activation.DefaultTestPostVerifyingOpts()),
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	var eg errgroup.Group
 	l, err := net.Listen("tcp", ":0")
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	eg.Go(func() error {
 		certifier := &testCertifier{
 			privKey:      private,
@@ -205,9 +205,9 @@ func spawnTestCertifier(
 		http.Serve(l, mux)
 		return nil
 	})
-	t.Cleanup(func() {
-		require.NoError(t, l.Close())
-		require.NoError(t, eg.Wait())
+	tb.Cleanup(func() {
+		require.NoError(tb, l.Close())
+		require.NoError(tb, eg.Wait())
 	})
 
 	return pub, l.Addr()

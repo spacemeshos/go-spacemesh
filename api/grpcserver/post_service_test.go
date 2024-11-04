@@ -58,7 +58,7 @@ func launchPostSupervisor(
 		close(ch)
 		return ch
 	})
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	logger := log.Named("post manager")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
@@ -102,7 +102,7 @@ func launchPostSupervisorTLS(
 		close(ch)
 		return ch
 	})
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	logger := log.Named("post supervisor")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)

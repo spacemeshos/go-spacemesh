@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"reflect"
 	"strconv"
+	"testing"
 
 	"go.uber.org/zap"
 
@@ -14,11 +15,12 @@ type model interface {
 	OnMessage(Messenger, Message)
 }
 
-func newCluster(logger *zap.Logger, rng *rand.Rand) *cluster {
-	return &cluster{logger: logger, rng: rng}
+func newCluster(tb testing.TB, logger *zap.Logger, rng *rand.Rand) *cluster {
+	return &cluster{tb: tb, logger: logger, rng: rng}
 }
 
 type cluster struct {
+	tb     testing.TB
 	rng    *rand.Rand
 	logger *zap.Logger
 	models []model
@@ -35,7 +37,7 @@ func (r *cluster) add(m model) *cluster {
 
 func (r *cluster) addCore() *cluster {
 	id := r.nextid()
-	return r.add(newCore(r.rng, id, r.logger.Named("core-"+id)))
+	return r.add(newCore(r.tb, r.rng, id, r.logger.Named("core-"+id)))
 }
 
 func (r *cluster) addHare() *cluster {

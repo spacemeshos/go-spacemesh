@@ -340,7 +340,7 @@ type gossipInput struct {
 	otherReceived *IterRound
 }
 
-// Protocol 1. graded-gossip. page 10.
+// Protocol 1. Graded-gossip. Page 10.
 type gossip struct {
 	threshold uint16
 	state     map[messageKey]*gossipInput
@@ -382,7 +382,7 @@ type gset struct {
 	smallest types.VrfSignature
 }
 
-// Protocol 2. gradecast. page 13.
+// Protocol 2. Gradecast. Page 13.
 func (g *gossip) gradecast(target IterRound) []gset {
 	// unlike paper we use 5-graded gossip for gradecast as well
 	var rst []gset
@@ -433,8 +433,8 @@ func tallyProposals(all map[types.ProposalID]proposalTally, inp *gossipInput) {
 	}
 }
 
-// Protocol 3. thresh-gossip. Page 15.
-// output returns union of sorted proposals received
+// Protocol 3. Thresh-gossip. Page 15.
+// Output returns union of sorted proposals received
 // in the given round with minimal specified grade.
 func (g *gossip) thresholdGossip(filter IterRound, grade grade) []types.ProposalID {
 	rst := thresholdGossip(thresholdTallies(g.state, filter, grade, tallyProposals), g.threshold)

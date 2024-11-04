@@ -29,7 +29,7 @@ func TestValidator_Validate(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))
 
@@ -50,9 +50,10 @@ func TestValidator_Validate(t *testing.T) {
 		GracePeriod: epoch / 4,
 	}
 
-	poetDb := activation.NewPoetDb(statesql.InMemory(), logger.Named("poetDb"))
+	poetDb, err := activation.NewPoetDb(db, logger.Named("poetDb"))
+	require.NoError(t, err)
 	client := ae2e.NewTestPoetClient(1, poetCfg)
-	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetService := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	mclock := activation.NewMocklayerClock(ctrl)
 	mclock.EXPECT().LayerToTime(gomock.Any()).AnyTimes().DoAndReturn(
@@ -67,7 +68,7 @@ func TestValidator_Validate(t *testing.T) {
 
 	challenge := types.RandomHash()
 	nb, err := activation.NewNIPostBuilder(
-		localsql.InMemory(),
+		localsql.InMemoryTest(t),
 		svc,
 		logger.Named("nipostBuilder"),
 		poetCfg,

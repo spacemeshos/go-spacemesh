@@ -54,82 +54,82 @@ func getStateFunc(states map[types.Address]*testAcct) stateFunc {
 }
 
 func newMeshTX(
-	t *testing.T,
+	tb testing.TB,
 	nonce uint64,
 	signer *signing.EdSigner,
 	amt uint64,
 	received time.Time,
 ) *types.MeshTransaction {
-	t.Helper()
+	tb.Helper()
 	return &types.MeshTransaction{
-		Transaction: *newTx(t, nonce, amt, defaultFee, signer),
+		Transaction: *newTx(tb, nonce, amt, defaultFee, signer),
 		Received:    received,
 	}
 }
 
 func genAndSaveTXs(
-	t *testing.T,
+	tb testing.TB,
 	db sql.StateDatabase,
 	signer *signing.EdSigner,
 	from, to uint64,
 	startTime time.Time,
 ) []*types.MeshTransaction {
-	t.Helper()
-	mtxs := genTXs(t, signer, from, to, startTime)
-	saveTXs(t, db, mtxs)
+	tb.Helper()
+	mtxs := genTXs(tb, signer, from, to, startTime)
+	saveTXs(tb, db, mtxs)
 	return mtxs
 }
 
-func genTXs(t *testing.T, signer *signing.EdSigner, from, to uint64, startTime time.Time) []*types.MeshTransaction {
-	t.Helper()
+func genTXs(tb testing.TB, signer *signing.EdSigner, from, to uint64, startTime time.Time) []*types.MeshTransaction {
+	tb.Helper()
 	mtxs := make([]*types.MeshTransaction, 0, int(to-from+1))
 	for i := from; i <= to; i++ {
-		mtx := newMeshTX(t, i, signer, defaultAmount, startTime.Add(time.Second*time.Duration(i)))
+		mtx := newMeshTX(tb, i, signer, defaultAmount, startTime.Add(time.Second*time.Duration(i)))
 		mtxs = append(mtxs, mtx)
 	}
 	return mtxs
 }
 
-func saveTXs(t *testing.T, db sql.StateDatabase, mtxs []*types.MeshTransaction) {
-	t.Helper()
+func saveTXs(tb testing.TB, db sql.StateDatabase, mtxs []*types.MeshTransaction) {
+	tb.Helper()
 	for _, mtx := range mtxs {
-		require.NoError(t, transactions.Add(db, &mtx.Transaction, mtx.Received))
+		require.NoError(tb, transactions.Add(db, &mtx.Transaction, mtx.Received))
 	}
 }
 
-func checkTXStateFromDB(t *testing.T, db sql.StateDatabase, txs []*types.MeshTransaction, state types.TXState) {
-	t.Helper()
+func checkTXStateFromDB(tb testing.TB, db sql.StateDatabase, txs []*types.MeshTransaction, state types.TXState) {
+	tb.Helper()
 	for _, mtx := range txs {
 		got, err := transactions.Get(db, mtx.ID)
-		require.NoError(t, err)
-		require.Equal(t, state, got.State)
+		require.NoError(tb, err)
+		require.Equal(tb, state, got.State)
 	}
 }
 
-func checkTXNotInDB(t *testing.T, db sql.StateDatabase, tid types.TransactionID) {
-	t.Helper()
+func checkTXNotInDB(tb testing.TB, db sql.StateDatabase, tid types.TransactionID) {
+	tb.Helper()
 	_, err := transactions.Get(db, tid)
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	require.ErrorIs(tb, err, sql.ErrNotFound)
 }
 
-func checkTX(t *testing.T, c *Cache, tid types.TransactionID, lid types.LayerID, bid types.BlockID) {
-	t.Helper()
+func checkTX(tb testing.TB, c *Cache, tid types.TransactionID, lid types.LayerID, bid types.BlockID) {
+	tb.Helper()
 	got := c.Get(tid)
-	require.NotNil(t, got)
-	require.Equal(t, tid, got.ID)
-	require.Equal(t, lid, got.Layer)
-	require.Equal(t, bid, got.Block)
+	require.NotNil(tb, got)
+	require.Equal(tb, tid, got.ID)
+	require.Equal(tb, lid, got.Layer)
+	require.Equal(tb, bid, got.Block)
 }
 
-func checkNoTX(t *testing.T, c *Cache, tid types.TransactionID) {
-	t.Helper()
-	require.Nil(t, c.Get(tid))
+func checkNoTX(tb testing.TB, c *Cache, tid types.TransactionID) {
+	tb.Helper()
+	require.Nil(tb, c.Get(tid))
 }
 
-func checkMempool(t *testing.T, c *Cache, expected map[types.Address][]*types.MeshTransaction) {
-	t.Helper()
+func checkMempool(tb testing.TB, c *Cache, expected map[types.Address][]*types.MeshTransaction) {
+	tb.Helper()
 	mempool := c.GetMempool()
-	require.Len(t, mempool, len(expected))
+	require.Len(tb, mempool, len(expected))
 	for addr := range mempool {
 		var (
 			exp types.MeshTransaction
@@ -138,16 +138,16 @@ func checkMempool(t *testing.T, c *Cache, expected map[types.Address][]*types.Me
 		for i, ntx := range mempool[addr] {
 			got = *ntx
 			exp = *expected[addr][i]
-			require.Equal(t, exp.ID, got.ID)
+			require.Equal(tb, exp.ID, got.ID)
 		}
 	}
 }
 
-func checkProjection(t *testing.T, c *Cache, addr types.Address, nonce, balance uint64) {
-	t.Helper()
+func checkProjection(tb testing.TB, c *Cache, addr types.Address, nonce, balance uint64) {
+	tb.Helper()
 	pNonce, pBalance := c.GetProjection(addr)
-	require.Equal(t, nonce, pNonce)
-	require.Equal(t, balance, pBalance)
+	require.Equal(tb, nonce, pNonce)
+	require.Equal(tb, balance, pBalance)
 }
 
 func createState(tb testing.TB, numAccounts int) map[types.Address]*testAcct {
@@ -173,7 +173,7 @@ func createState(tb testing.TB, numAccounts int) map[types.Address]*testAcct {
 func createCache(tb testing.TB, numAccounts int) (*testCache, map[types.Address]*testAcct) {
 	tb.Helper()
 	accounts := createState(tb, numAccounts)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	return &testCache{
 		Cache: NewCache(getStateFunc(accounts), zaptest.NewLogger(tb)),
 		db:    db,
@@ -187,7 +187,7 @@ func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
 	principal := types.GenerateAddress(signer.PublicKey().Bytes())
 	ta := &testAcct{signer: signer, principal: principal, nonce: rand.Uint64()%1000 + 1, balance: defaultBalance}
 	states := map[types.Address]*testAcct{principal: ta}
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	return &testCache{
 		Cache: NewCache(getStateFunc(states), zap.NewNop()),
 		db:    db,
@@ -195,18 +195,18 @@ func createSingleAccountTestCache(tb testing.TB) (*testCache, *testAcct) {
 }
 
 func buildCache(
-	t *testing.T,
+	tb testing.TB,
 	tc *testCache,
 	accounts map[types.Address]*testAcct,
 	accountTXs map[types.Address][]*types.MeshTransaction,
 ) {
-	t.Helper()
+	tb.Helper()
 	for principal, ta := range accounts {
 		if _, ok := accountTXs[principal]; ok {
-			checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
+			checkProjection(tb, tc.Cache, ta.principal, ta.nonce, ta.balance)
 		}
 	}
-	require.NoError(t, tc.Cache.buildFromScratch(tc.db))
+	require.NoError(tb, tc.Cache.buildFromScratch(tc.db))
 
 	expectedMempool := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
@@ -218,24 +218,24 @@ func buildCache(
 			newNextNonce := ta.nonce + uint64(num)
 			newBalance := ta.balance
 			for _, mtx := range mtxs[:num] {
-				checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+				checkTX(tb, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
 				newBalance -= mtx.Spending()
 			}
-			checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
+			checkProjection(tb, tc.Cache, ta.principal, newNextNonce, newBalance)
 			expectedMempool[principal] = mtxs[:num]
 		}
 	}
-	checkMempool(t, tc.Cache, expectedMempool)
+	checkMempool(tb, tc.Cache, expectedMempool)
 }
 
 func buildSingleAccountCache(
-	t *testing.T,
+	tb testing.TB,
 	tc *testCache,
 	ta *testAcct,
 	mtxs []*types.MeshTransaction,
 ) (uint64, uint64) {
-	t.Helper()
-	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
+	tb.Helper()
+	checkProjection(tb, tc.Cache, ta.principal, ta.nonce, ta.balance)
 
 	newNextNonce := ta.nonce + uint64(len(mtxs))
 	newBalance := ta.balance
@@ -243,16 +243,16 @@ func buildSingleAccountCache(
 		newBalance -= mtx.Spending()
 	}
 
-	require.NoError(t, tc.Cache.buildFromScratch(tc.db))
+	require.NoError(tb, tc.Cache.buildFromScratch(tc.db))
 	for _, mtx := range mtxs {
-		checkTX(t, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
+		checkTX(tb, tc.Cache, mtx.ID, 0, types.EmptyBlockID)
 	}
-	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
+	checkProjection(tb, tc.Cache, ta.principal, newNextNonce, newBalance)
 	var expectedMempool map[types.Address][]*types.MeshTransaction
 	if len(mtxs) > 0 {
 		expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: mtxs}
 	}
-	checkMempool(t, tc.Cache, expectedMempool)
+	checkMempool(tb, tc.Cache, expectedMempool)
 	return newNextNonce, newBalance
 }
 
@@ -1067,12 +1067,12 @@ func TestCache_BuildFromScratch_AllHaveTooManyNonce_OK(t *testing.T) {
 }
 
 func buildSmallCache(
-	t *testing.T,
+	tb testing.TB,
 	tc *testCache,
 	accounts map[types.Address]*testAcct,
 	maxTX uint64,
 ) map[types.Address][]*types.MeshTransaction {
-	t.Helper()
+	tb.Helper()
 	mtxsByAccount := make(map[types.Address][]*types.MeshTransaction)
 	for principal, ta := range accounts {
 		numTXs := rand.Uint64() % maxTX
@@ -1083,23 +1083,23 @@ func buildSmallCache(
 		if ta.balance < minBalance {
 			ta.balance = minBalance
 		}
-		mtxsByAccount[principal] = genAndSaveTXs(t, tc.db, ta.signer, ta.nonce, ta.nonce+numTXs-1, time.Now())
+		mtxsByAccount[principal] = genAndSaveTXs(tb, tc.db, ta.signer, ta.nonce, ta.nonce+numTXs-1, time.Now())
 	}
-	buildCache(t, tc, accounts, mtxsByAccount)
+	buildCache(tb, tc, accounts, mtxsByAccount)
 	for _, mtxs := range mtxsByAccount {
-		checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
+		checkTXStateFromDB(tb, tc.db, mtxs, types.MEMPOOL)
 	}
 	return mtxsByAccount
 }
 
-func checkMempoolSize(t *testing.T, c *Cache, expected int) {
-	t.Helper()
+func checkMempoolSize(tb testing.TB, c *Cache, expected int) {
+	tb.Helper()
 	mempool := c.GetMempool()
 	numTXs := 0
 	for _, ntxs := range mempool {
 		numTXs += len(ntxs)
 	}
-	require.Equal(t, expected, numTXs)
+	require.Equal(tb, expected, numTXs)
 }
 
 func TestCache_LinkTXsWithProposal(t *testing.T) {
