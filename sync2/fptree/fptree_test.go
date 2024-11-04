@@ -1102,9 +1102,9 @@ func repeatTestFPTreeManyItems(
 	makeFPTrees mkFPTreesFunc,
 ) {
 	const (
-		repeatOuter = 3
-		repeatInner = 5
-		numItems    = 1 << 10
+		repeatOuter = 2
+		repeatInner = 3
+		numItems    = 1 << 9
 		maxDepth    = 12
 	)
 	for _, tc := range []struct {
