@@ -134,7 +134,7 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 		externalRef0.HareIter(round.Iter),
 		externalRef0.HareRound(round.Round))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get hare message: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -149,7 +149,7 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	resp, err := s.client.GetHareTotalWeightLayer(ctx, uint32(layer))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get total weight: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -164,7 +164,7 @@ func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uin
 func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
 	resp, err := s.client.GetHareWeightNodeIdLayer(ctx, node.String(), uint32(layer))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -180,7 +180,7 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 	v := types.Beacon{}
 	resp, err := s.client.GetHareBeaconEpoch(ctx, externalRef0.EpochID(epoch))
 	if err != nil {
-		return v, err
+		return v, fmt.Errorf("get hare beacon: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return v, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -198,7 +198,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 ) {
 	resp, err := s.client.GetProposalLayerNode(ctx, externalRef0.LayerID(layer), node.String())
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("get proposal layer: %w", err)
 	}
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -227,7 +227,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 
 	atxNonce := resp.Header.Get("X-Spacemesh-Atx-Nonce")
 	if atxNonce == "" {
-		return nil, 0, errors.New("atx nonce header not found")
+		return nil, 0, errors.New("missing atx nonce")
 	}
 	nonce, err := strconv.ParseUint(atxNonce, 10, 64)
 	if err != nil {
