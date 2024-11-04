@@ -25,7 +25,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
@@ -226,7 +228,7 @@ func TestParseTransactions(t *testing.T) {
 		conn     = dialGrpc(t, cfg)
 		client   = pb.NewTransactionServiceClient(conn)
 		keys     = make([]signing.PrivateKey, 4)
-		accounts = make([]types.Account, len(keys))
+		accounts = make([]types.Account, len(keys)+1)
 		rng      = rand.New(rand.NewSource(10101))
 	)
 	for i := range keys {
@@ -236,6 +238,12 @@ func TestParseTransactions(t *testing.T) {
 		addr, err := wallet.Address(*signing.NewPublicKey(pub))
 		require.NoError(t, err)
 		accounts[i] = types.Account{Address: addr, Balance: 1e12}
+	}
+	// add the wallet template account
+	accounts[len(accounts)-1] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
 	tx, err := wallet.Spawn(keys[0], 0)

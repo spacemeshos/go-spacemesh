@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
-const namespace = "vm"
+const namespace = "athenavm"
 
 var (
 	transactionDuration = metrics.NewHistogramWithBuckets(
