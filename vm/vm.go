@@ -405,6 +405,18 @@ func (v *VM) execute(
 		if err == nil {
 			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
 		}
+		if err == nil {
+			// If tx succeeded, refund remaining gas
+			// (We consume all remaining gas if the tx failed)
+			if err2 := ctx.Refund(); err2 != nil {
+				return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err2)
+			}
+			logger.Debug("refunded gas left to principal",
+				zap.String("principal", ctx.PrincipalAddress.String()),
+			)
+		} else {
+			logger.Debug("skipping gas refund for failed tx")
+		}
 		if err != nil {
 			logger.Debug("transaction failed",
 				zap.Object("header", header),
@@ -416,14 +428,6 @@ func (v *VM) execute(
 			}
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
-
-		// Refund remaining gas
-		if err2 := ctx.Refund(); err2 != nil {
-			return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err2)
-		}
-		logger.Debug("refunded gas left to principal",
-			zap.String("principal", ctx.PrincipalAddress.String()),
-		)
 
 		rst.RawTx = txs[i].GetRaw()
 		rst.TxHeader = &ctx.Header
