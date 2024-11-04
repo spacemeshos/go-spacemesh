@@ -1522,25 +1522,22 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		require.ErrorContains(t, err, "post failure")
 	})
-	t.Run("invalid PoST index - generates a malfeasance proof", func(t *testing.T) {
-		// TODO(mafa): add such a test for solo and merged ATXs
+	t.Run("invalid PoST index initial ATX - generates a malfeasance proof", func(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
 
 		atx := newInitialATXv2(t, golden)
 		atx.Sign(sig)
 
 		atxHandler.mValidator.EXPECT().PoetMembership(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
-		atxHandler.mValidator.EXPECT().
-			PostV2(
-				context.Background(),
-				atx.SmesherID,
-				atx.Initial.CommitmentATX,
-				wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
-				atx.NIPosts[0].Challenge.Bytes(),
-				atx.TotalNumUnits(),
-				gomock.Any(),
-			).
-			Return(verifying.ErrInvalidIndex{Index: 7})
+		atxHandler.mValidator.EXPECT().PostV2(
+			context.Background(),
+			atx.SmesherID,
+			atx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			gomock.Any(),
+		).Return(verifying.ErrInvalidIndex{Index: 7})
 
 		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
 		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -1573,6 +1570,145 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 			return nil
 		})
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		vErr := &verifying.ErrInvalidIndex{}
+		require.ErrorAs(t, err, vErr)
+		require.Equal(t, 7, vErr.Index)
+	})
+	t.Run("invalid PoST index solo ATX - generates a malfeasance proof", func(t *testing.T) {
+		atxHandler := newV2TestHandler(t, golden)
+
+		initialAtx := atxHandler.createAndProcessInitial(sig)
+
+		atx := newSoloATXv2(t, initialAtx.PublishEpoch+1, initialAtx.ID(), initialAtx.ID())
+		atx.Sign(sig)
+
+		atxHandler.mValidator.EXPECT().PoetMembership(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+		atxHandler.mValidator.EXPECT().PostV2(
+			context.Background(),
+			atx.SmesherID,
+			initialAtx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			gomock.Any(),
+		).Return(verifying.ErrInvalidIndex{Index: 7})
+
+		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			atx.SmesherID,
+			initialAtx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			7,
+		).Return(errors.New("invalid post index"))
+
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			sig.NodeID(),
+			gomock.Cond(func(data wire.Proof) bool {
+				_, ok := data.(*wire.ProofInvalidPost)
+				return ok
+			}),
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
+			malProof := proof.(*wire.ProofInvalidPost)
+			nId, err := malProof.Valid(ctx, verifier)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nId)
+			return nil
+		})
+		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
+		vErr := &verifying.ErrInvalidIndex{}
+		require.ErrorAs(t, err, vErr)
+		require.Equal(t, 7, vErr.Index)
+	})
+	t.Run("invalid PoST index merged ATX - generates a malfeasance proof", func(t *testing.T) {
+		atxHandler := newV2TestHandler(t, golden)
+
+		marrySig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		pubSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		// Marry IDs
+		mATX, otherATXs := marryIDs(t, atxHandler, []*signing.EdSigner{marrySig, sig, pubSig}, golden)
+		previousATXs := []types.ATXID{mATX.ID()}
+		for _, atx := range otherATXs {
+			previousATXs = append(previousATXs, atx.ID())
+		}
+
+		// Process a merged ATX
+		merged := newSoloATXv2(t, mATX.PublishEpoch+2, mATX.ID(), mATX.ID())
+		for i, atx := range otherATXs {
+			post := wire.SubPostV2{
+				MarriageIndex: uint32(i + 1),
+				NumUnits:      atx.TotalNumUnits(),
+				PrevATXIndex:  uint32(i + 1),
+			}
+			merged.NIPosts[0].Posts = append(merged.NIPosts[0].Posts, post)
+		}
+		mATXID := mATX.ID()
+		merged.MarriageATX = &mATXID
+
+		merged.PreviousATXs = previousATXs
+		merged.Sign(sig)
+
+		equivocationSet := []types.NodeID{marrySig.NodeID(), sig.NodeID(), pubSig.NodeID()}
+		atxHandler.mValidator.EXPECT().PoetMembership(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+		for _, post := range merged.NIPosts[0].Posts {
+			call := atxHandler.mValidator.EXPECT().PostV2(
+				context.Background(),
+				equivocationSet[post.MarriageIndex],
+				gomock.Any(),
+				wire.PostFromWireV1(&post.Post),
+				merged.NIPosts[0].Challenge.Bytes(),
+				post.NumUnits,
+				gomock.Any(),
+			)
+			if equivocationSet[post.MarriageIndex] == sig.NodeID() {
+				call.Return(verifying.ErrInvalidIndex{Index: 7})
+			} else {
+				call.AnyTimes()
+			}
+		}
+
+		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			gomock.Any(),
+			gomock.Any(),
+			merged.NIPosts[0].Challenge.Bytes(),
+			gomock.Any(),
+			7,
+		).Return(errors.New("invalid post index"))
+
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			sig.NodeID(),
+			gomock.Cond(func(data wire.Proof) bool {
+				_, ok := data.(*wire.ProofInvalidPost)
+				return ok
+			}),
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
+			malProof := proof.(*wire.ProofInvalidPost)
+			nId, err := malProof.Valid(ctx, verifier)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nId)
+			return nil
+		})
+		_, err = atxHandler.syntacticallyValidateDeps(context.Background(), merged)
 		vErr := &verifying.ErrInvalidIndex{}
 		require.ErrorAs(t, err, vErr)
 		require.Equal(t, 7, vErr.Index)
