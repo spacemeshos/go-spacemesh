@@ -17,13 +17,13 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/systest/validation"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const ENV_LONGEVITY_TESTS = "LONGEVITY_TESTS"
@@ -126,10 +126,11 @@ func TestStepTransactions(t *testing.T) {
 				tctx.Log.Debugw("spawning wallet", "address", client.account)
 				ctx, cancel := context.WithTimeout(tctx, 5*time.Minute)
 				defer cancel()
-				req, err := client.submit(
-					ctx,
-					wallet.SelfSpawn(client.account.PrivateKey, 0, sdk.WithGenesisID(cl.GenesisID())),
-				)
+				tx, err := wallet.Spawn(client.account.PrivateKey, 0, sdk.WithGenesisID(cl.GenesisID()))
+				if err != nil {
+					return err
+				}
+				req, err := client.submit(ctx, tx)
 				if err != nil {
 					return err
 				}
@@ -155,14 +156,17 @@ func TestStepTransactions(t *testing.T) {
 				rng.Read(randBytes[:])
 				receiver := types.GenerateAddress(randBytes[:])
 				rng.Read(receiver[:])
-				raw := wallet.Spend(
+				raw, err := wallet.Spend(
 					client.account.PrivateKey,
 					receiver,
 					rng.Uint64()%amountLimit,
 					nonce,
 					sdk.WithGenesisID(cl.GenesisID()),
 				)
-				_, err := client.submit(tctx, raw)
+				if err != nil {
+					return err
+				}
+				_, err = client.submit(tctx, raw)
 				if err != nil {
 					return fmt.Errorf("failed to submit 0x%x from %s with nonce %d: %w",
 						hash.Sum(raw), client.account, nonce, err,

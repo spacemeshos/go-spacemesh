@@ -16,17 +16,18 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/registry"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
+
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 const (
@@ -377,61 +378,73 @@ func convertTxState(tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionSta
 	}
 }
 
-func decodeTxArgs(decoder *scale.Decoder) (uint8, *core.Address, scale.Encodable, error) {
+func decodeTxArgs(decoder *scale.Decoder) (*athcon.MethodSelector, *core.Address, *signing.PublicKey, error) {
 	reg := registry.New()
 	wallet.Register(reg)
-	multisig.Register(reg)
-	vesting.Register(reg)
-	vault.Register(reg)
+	// multisig.Register(reg)
+	// vesting.Register(reg)
+	// vault.Register(reg)
 
 	_, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return 0, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
+		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
-		return 0, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
+		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
 
-	method, _, err := scale.DecodeCompact8(decoder)
-	if err != nil {
-		return 0, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
-	}
+	// method, _, err := scale.DecodeCompact8(decoder)
+	// if err != nil {
+	// 	return 0, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
+	// }
 
-	var templateAddress *core.Address
+	// templateAddress *core.Address
 	var handler core.Handler
-	switch method {
-	case core.MethodSpawn:
-		templateAddress = &core.Address{}
-		if _, err := templateAddress.DecodeScale(decoder); err != nil {
-			return 0, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
-		}
-	case vesting.MethodDrainVault:
-		templateAddress = &vesting.TemplateAddress
-	default:
-		templateAddress = &wallet.TemplateAddress
-	}
+	// switch method {
+	// case core.MethodSpawn:
+	// 	templateAddress = &core.Address{}
+	// 	if _, err := templateAddress.DecodeScale(decoder); err != nil {
+	// 		return 0, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
+	// 	}
+	// case vesting.MethodDrainVault:
+	// 	templateAddress = &vesting.TemplateAddress
+	// default:
+	// 	templateAddress = &wallet.TemplateAddress
+	// }
 
-	handler = reg.Get(*templateAddress)
+	handler = reg.Get(wallet.TemplateAddress)
 	if handler == nil {
-		return 0, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
+		return nil, nil, nil, fmt.Errorf("%w: wallet template not found", core.ErrMalformed)
+	}
+	output, err := handler.Parse(decoder)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: failed to parse transaction %w", core.ErrMalformed, err)
 	}
 
-	var p core.Payload
-	if _, err = p.DecodeScale(decoder); err != nil {
-		return 0, nil, nil, fmt.Errorf("%w: %w", core.ErrMalformed, err)
+	var unmarshaled struct {
+		*athcon.MethodSelector
+		signing.PublicKey
 	}
+	err = gossamerScale.Unmarshal(output.Payload, &unmarshaled)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
+	}
+	// var p core.Payload
+	// if _, err = p.DecodeScale(decoder); err != nil {
+	// 	return 0, nil, nil, fmt.Errorf("%w: %w", core.ErrMalformed, err)
+	// }
 
-	args := handler.Args(method)
-	if args == nil {
-		return 0, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
-	}
-	if _, err := args.DecodeScale(decoder); err != nil {
-		return 0, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
-	}
+	// args := handler.Args(method)
+	// if args == nil {
+	// 	return 0, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
+	// }
+	// if _, err := args.DecodeScale(decoder); err != nil {
+	// 	return 0, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
+	// }
 
-	return method, templateAddress, args, nil
+	return unmarshaled.MethodSelector, &wallet.TemplateAddress, &unmarshaled.PublicKey, nil
 }
 
 func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
@@ -441,83 +454,31 @@ func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
 	txType := spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_UNSPECIFIED
 
 	r := bytes.NewReader(rawTx)
-	method, template, txArgs, err := decodeTxArgs(scale.NewDecoder(r))
+	method, _, pubkey, err := decodeTxArgs(scale.NewDecoder(r))
 	if err != nil {
 		return res, txType, err
 	}
 
-	switch method {
-	case core.MethodSpawn:
-		switch *template {
-		case wallet.TemplateAddress:
-			args := txArgs.(*wallet.SpawnArguments)
-			res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
-				SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
-					Pubkey: args.PublicKey.String(),
-				},
-			}
-			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SPAWN
-		case multisig.TemplateAddress:
-			args := txArgs.(*multisig.SpawnArguments)
-			contents := &spacemeshv2alpha1.TransactionContents_MultiSigSpawn{
-				MultiSigSpawn: &spacemeshv2alpha1.ContentsMultiSigSpawn{
-					Required: uint32(args.Required),
-				},
-			}
-			contents.MultiSigSpawn.Pubkey = make([]string, len(args.PublicKeys))
-			for i := range args.PublicKeys {
-				contents.MultiSigSpawn.Pubkey[i] = args.PublicKeys[i].String()
-			}
-			res.Contents = contents
-			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SPAWN
-		case vesting.TemplateAddress:
-			args := txArgs.(*multisig.SpawnArguments)
-			contents := &spacemeshv2alpha1.TransactionContents_VestingSpawn{
-				VestingSpawn: &spacemeshv2alpha1.ContentsMultiSigSpawn{
-					Required: uint32(args.Required),
-				},
-			}
-			contents.VestingSpawn.Pubkey = make([]string, len(args.PublicKeys))
-			for i := range args.PublicKeys {
-				contents.VestingSpawn.Pubkey[i] = args.PublicKeys[i].String()
-			}
-			res.Contents = contents
-			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VESTING_SPAWN
-		case vault.TemplateAddress:
-			args := txArgs.(*vault.SpawnArguments)
-			res.Contents = &spacemeshv2alpha1.TransactionContents_VaultSpawn{
-				VaultSpawn: &spacemeshv2alpha1.ContentsVaultSpawn{
-					Owner:               args.Owner.String(),
-					TotalAmount:         args.TotalAmount,
-					InitialUnlockAmount: args.InitialUnlockAmount,
-					VestingStart:        args.VestingStart.Uint32(),
-					VestingEnd:          args.VestingEnd.Uint32(),
-				},
-			}
-			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VAULT_SPAWN
+	if spawnSelector, err := athcon.FromString("athexp_spawn"); err != nil {
+		return res, txType, fmt.Errorf("%w: failed to create spawn selector: %w", core.ErrInternal, err)
+	} else if spendSelector, err := athcon.FromString("athexp_spend"); err != nil {
+		return res, txType, fmt.Errorf("%w: failed to create spend selector: %w", core.ErrInternal, err)
+	} else if *method == spawnSelector {
+		res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
+			SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
+				Pubkey: pubkey.String(),
+			},
 		}
-	case core.MethodSpend:
-		args := txArgs.(*wallet.SpendArguments)
+		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SPAWN
+	} else if *method == spendSelector {
 		res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
+			// TODO(lane): we don't currently attempt to parse these from the payload
 			Send: &spacemeshv2alpha1.ContentsSend{
-				Destination: args.Destination.String(),
-				Amount:      args.Amount,
+				// Destination: args.Destination.String(),
+				// Amount:      args.Amount,
 			},
 		}
 		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SEND
-		if r.Len() > types.EdSignatureSize {
-			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SEND
-		}
-	case vesting.MethodDrainVault:
-		args := txArgs.(*vesting.DrainVaultArguments)
-		res.Contents = &spacemeshv2alpha1.TransactionContents_DrainVault{
-			DrainVault: &spacemeshv2alpha1.ContentsDrainVault{
-				Vault:       args.Vault.String(),
-				Destination: args.Destination.String(),
-				Amount:      args.Amount,
-			},
-		}
-		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DRAIN_VAULT
 	}
 
 	return res, txType, nil

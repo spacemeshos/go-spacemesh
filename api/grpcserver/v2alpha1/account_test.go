@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	// "github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
@@ -45,9 +45,9 @@ func TestAccountService_List(t *testing.T) {
 		if (i % 2) == 0 {
 			template = &wallet.TemplateAddress
 		}
-		if (i % 3) == 0 {
-			template = &multisig.TemplateAddress
-		}
+		// if (i % 3) == 0 {
+		// 	template = &multisig.TemplateAddress
+		// }
 
 		accs[i] = testAccount{
 			Address:          addr,

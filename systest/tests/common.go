@@ -17,8 +17,8 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -477,9 +477,12 @@ func currentBalance(ctx context.Context, client *cluster.NodeClient, address typ
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransaction(ctx,
-		wallet.SelfSpawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID())),
-		client)
+	tx, err := wallet.Spawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID()))
+	if err != nil {
+		return err
+	}
+
+	_, err = submitTransaction(ctx, tx, client)
 	return err
 }
 
@@ -493,13 +496,11 @@ func submitSpend(
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransaction(ctx,
-		wallet.Spend(
-			cluster.Private(account), receiver, amount,
-			nonce,
-			sdk.WithGenesisID(cluster.GenesisID()),
-		),
-		client)
+	tx, err := wallet.Spend(cluster.Private(account), receiver, amount, nonce, sdk.WithGenesisID(cluster.GenesisID()))
+	if err != nil {
+		return err
+	}
+	_, err = submitTransaction(ctx, tx, client)
 	return err
 }
 

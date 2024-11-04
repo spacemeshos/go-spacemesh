@@ -2,10 +2,13 @@ package fixture
 
 import (
 	"math/rand"
+	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	"github.com/stretchr/testify/require"
 )
 
 // NewAtxsGenerator with some random parameters.
@@ -40,14 +43,16 @@ func (g *AtxsGenerator) WithEpochs(start, n int) *AtxsGenerator {
 }
 
 // Next generates ActivationTx.
-func (g *AtxsGenerator) Next() *types.ActivationTx {
+func (g *AtxsGenerator) Next(t *testing.T) *types.ActivationTx {
 	var nodeID types.NodeID
 	g.rng.Read(nodeID[:])
+	addr, err := wallet.Address(*signing.NewPublicKey(nodeID.Bytes()))
+	require.NoError(t, err)
 
 	atx := &types.ActivationTx{
 		Sequence:     g.rng.Uint64(),
 		PublishEpoch: g.Epochs[g.rng.Intn(len(g.Epochs))],
-		Coinbase:     wallet.Address(nodeID.Bytes()),
+		Coinbase:     addr,
 		NumUnits:     g.rng.Uint32(),
 		TickCount:    1,
 		SmesherID:    nodeID,

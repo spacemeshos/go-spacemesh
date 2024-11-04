@@ -41,7 +41,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	txs := make([]types.TransactionWithResult, 100)
 	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
 		for i := range txs {
-			tx := gen.Next()
+			tx := gen.Next(t)
 
 			require.NoError(t, transactions.Add(dtx, &tx.Transaction, time.Time{}))
 			require.NoError(t, transactions.AddResult(dtx, tx.ID, &tx.TransactionResult))
@@ -82,7 +82,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 			WithAddresses(2).WithLayers(start, 10)
 		var streamed []*types.TransactionWithResult
 		for range n {
-			streamed = append(streamed, gen.Next())
+			streamed = append(streamed, gen.Next(t))
 		}
 
 		for _, tc := range []struct {
@@ -152,7 +152,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	tx, err := db.Tx(ctx)
 	require.NoError(b, err)
 	for range 1_000 {
-		rst := gen.Next()
+		rst := gen.Next(b)
 		for _, addr := range rst.Addresses {
 			count[addr]++
 			if count[addr] > maxcount {

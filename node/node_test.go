@@ -44,13 +44,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const layersPerEpoch = 3
@@ -478,7 +478,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	app.signers = []*signing.EdSigner{signer}
-	address := wallet.Address(signer.PublicKey().Bytes())
+	address, err := wallet.Address(*signing.NewPublicKey(signer.PublicKey().Bytes()))
 
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
@@ -550,9 +550,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	tx1 := types.NewRawTx(
-		wallet.SelfSpawn(signer.PrivateKey(), 0, sdk.WithGenesisID(cfg.Genesis.GenesisID())),
-	)
+	tx, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGenesisID(cfg.Genesis.GenesisID()))
+	require.NoError(t, err)
+	tx1 := types.NewRawTx(tx)
 
 	stream, err := c.TransactionsStateStream(ctx, &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},

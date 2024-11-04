@@ -6,11 +6,11 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	wallet2 "github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
+	wallet2 "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 // NewTransactionResultGenerator with some random parameters.
@@ -68,7 +68,7 @@ func (g *TransactionResultGenerator) WithLayers(start, n int) *TransactionResult
 }
 
 // Next generates TransactionWithResult.
-func (g *TransactionResultGenerator) Next() *types.TransactionWithResult {
+func (g *TransactionResultGenerator) Next(t require.TestingT) *types.TransactionWithResult {
 	var tx types.TransactionWithResult
 	g.rng.Read(tx.ID[:])
 
@@ -80,24 +80,27 @@ func (g *TransactionResultGenerator) Next() *types.TransactionWithResult {
 
 	_, priv, _ := ed25519.GenerateKey(g.rng)
 	var rawTx []byte
-	method := core.MethodSpawn
+	// method := core.MethodSpawn
 
+	var err error
 	if g.rng.Intn(2) == 1 {
 		dest := g.Addrs[rnd[1]]
 		tx.Addresses = append(tx.Addresses, dest)
-		rawTx = wallet2.Spend(priv, dest, 100, types.Nonce(1))
-		method = core.MethodSpend
+		rawTx, err = wallet2.Spend(priv, dest, 100, types.Nonce(1))
+		require.NoError(t, err)
+		// method = core.MethodSpend
 	} else {
-		rawTx = wallet2.SelfSpawn(priv, types.Nonce(1))
+		rawTx, err = wallet2.Spawn(priv, types.Nonce(1))
+		require.NoError(t, err)
 	}
 	tx.RawTx = types.NewRawTx(rawTx)
 	tx.Block = g.Blocks[g.rng.Intn(len(g.Blocks))]
 	tx.Layer = g.Layers[g.rng.Intn(len(g.Layers))]
 	tx.TxHeader = &types.TxHeader{
 		TemplateAddress: wallet.TemplateAddress,
-		Method:          uint8(method),
-		Principal:       principal,
-		Nonce:           types.Nonce(1),
+		// Method:          uint8(method),
+		Principal: principal,
+		Nonce:     types.Nonce(1),
 	}
 	return &tx
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -28,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const (
@@ -514,9 +514,10 @@ func genTx(
 	amount, nonce, price uint64,
 ) types.Transaction {
 	tb.Helper()
-	raw := wallet.Spend(signer.PrivateKey(), dest, amount,
+	raw, err := wallet.Spend(signer.PrivateKey(), dest, amount,
 		nonce,
 	)
+	require.NoError(tb, err)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
 		TxHeader: &types.TxHeader{},
