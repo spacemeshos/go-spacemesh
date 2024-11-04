@@ -248,19 +248,6 @@ func (v *Validator) PostV2(
 	}, numUnits, opts...)
 }
 
-func (v *Validator) PostV2Idx(
-	ctx context.Context,
-	nodeId types.NodeID,
-	commitmentAtxId types.ATXID,
-	post *types.Post,
-	challenge []byte,
-	numUnits uint32,
-	idx int,
-) error {
-	// TODO(mafa): this should be in the malfeasance handler with a dependency on the validator
-	return v.PostV2(ctx, nodeId, commitmentAtxId, post, challenge, numUnits, PostIndex(idx))
-}
-
 func (*Validator) NumUnits(cfg *PostConfig, numUnits uint32) error {
 	if numUnits < cfg.MinNumUnits {
 		return fmt.Errorf("invalid `numUnits`; expected: >=%d, given: %d", cfg.MinNumUnits, numUnits)
