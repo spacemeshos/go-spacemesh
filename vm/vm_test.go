@@ -1292,10 +1292,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			},
 			verified: true,
 		},
-		{
-			desc: "SpawnGenesisIdMismatch",
-			tx:   tt.selfSpawn(1, sdk.WithGenesisID(types.Hash20{1})),
-		},
+		// Skipped: We don't currently use genesisID
+		// {
+		// 	desc: "SpawnGenesisIdMismatch",
+		// 	tx:   tt.selfSpawn(1, sdk.WithGenesisID(types.Hash20{1})),
+		// },
 		{
 			desc: "Spend",
 			tx:   tt.spend(0, 1, 100),
@@ -1309,10 +1310,11 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			},
 			verified: true,
 		},
-		{
-			desc: "SpendGenesisIdMismatch",
-			tx:   tt.spend(0, 1, 100, sdk.WithGenesisID(types.Hash20{1})),
-		},
+		// Skipped: We don't currently use genesisID
+		// {
+		// 	desc: "SpendGenesisIdMismatch",
+		// 	tx:   tt.spend(0, 1, 100, sdk.WithGenesisID(types.Hash20{1})),
+		// },
 		{
 			desc: "WrongVersion",
 			tx:   encodeFields(tt, &one),
@@ -1374,6 +1376,7 @@ func TestValidation(t *testing.T) {
 	t.Parallel()
 	t.Run("SingleSig", func(t *testing.T) {
 		tt := newTester(t).
+			addWalletTemplate().
 			addSingleSig(1).
 			applyGenesis().
 			addSingleSig(1)

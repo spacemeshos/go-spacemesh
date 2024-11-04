@@ -606,12 +606,17 @@ func parse(
 		return nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
 	}
 
-	// one more sanity check: if this is a spawn for an account that was already spawned, we may
+	// now that the tx has been parsed, we can perform some more sanity checks.
+	// if this is a spawn for an account that was already spawned, we may
 	// have assumed above that it was not a spawn. now we can make sure.
+	// that this will also catch a non-spawn tx with an unspawned principal, which we
+	// provisionally assumed was a spawn tx.
 	if spawnSelector, err := athcon.FromString("athexp_spawn"); err != nil {
 		return nil, nil, fmt.Errorf("%w: failed to create spawn selector: %w", core.ErrInternal, err)
 	} else if principalAccount.TemplateAddress != nil && *unmarshaled.MethodSelector == spawnSelector {
 		return nil, nil, fmt.Errorf("%w: principal account already spawned", core.ErrMalformed)
+	} else if ctx.IsSpawn() && *unmarshaled.MethodSelector != spawnSelector {
+		return nil, nil, fmt.Errorf("%w: non-spawn tx with unspawned principal", core.ErrNotSpawned)
 	}
 
 	computedPrincipal, err := core.ComputePrincipalFromPubkey(
