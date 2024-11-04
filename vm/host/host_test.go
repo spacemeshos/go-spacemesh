@@ -7,6 +7,7 @@ import (
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -18,7 +19,9 @@ import (
 func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	os.Setenv("ATHENA_LIB_PATH", "../../build")
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
-	ctx := &core.Context{Loader: cache}
+	logger, err := zap.NewDevelopment()
+	require.NoError(t, err)
+	ctx := &core.Context{Loader: cache, Logger: logger}
 	host, err := NewHost(ctx)
 	require.NoError(t, err)
 	return host, cache
@@ -94,7 +97,7 @@ func TestEmptyCode(t *testing.T) {
 	require.ErrorContains(t, err, "athcon execute: no input code")
 }
 
-func TestSetGetStorge(t *testing.T) {
+func TestSetGetStorage(t *testing.T) {
 	host, cache := getHost(t)
 	defer host.Destroy()
 
