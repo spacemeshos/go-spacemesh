@@ -464,9 +464,15 @@ func (sp *SubPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 	binary.LittleEndian.PutUint32(marriageIndex[:], sp.MarriageIndex)
 	tree.AddLeaf(marriageIndex.Bytes())
 
-	if int(sp.PrevATXIndex) < len(prevATXs) {
-		// if prevATXIndex is out of range, it will be detected by syntactical validation
+	switch {
+	case len(prevATXs) == 0: // special case for initial ATX: prevATXs is empty
+		tree.AddLeaf(types.EmptyATXID.Bytes())
+	case int(sp.PrevATXIndex) < len(prevATXs):
 		tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
+	default:
+		// prevATXIndex is out of range, don't fail ATXID generation
+		// will be detected by syntactical validation
+		tree.AddLeaf(types.EmptyATXID.Bytes())
 	}
 
 	var leafIndex types.Hash32

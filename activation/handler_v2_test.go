@@ -1523,6 +1523,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		require.ErrorContains(t, err, "post failure")
 	})
 	t.Run("invalid PoST index - generates a malfeasance proof", func(t *testing.T) {
+		// TODO(mafa): add such a test for solo and merged ATXs
 		atxHandler := newV2TestHandler(t, golden)
 
 		atx := newInitialATXv2(t, golden)
@@ -1531,9 +1532,9 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mValidator.EXPECT().PoetMembership(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
 		atxHandler.mValidator.EXPECT().
 			PostV2(
-				gomock.Any(),
-				sig.NodeID(),
-				golden,
+				context.Background(),
+				atx.SmesherID,
+				atx.Initial.CommitmentATX,
 				wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
 				atx.NIPosts[0].Challenge.Bytes(),
 				atx.TotalNumUnits(),
@@ -1541,8 +1542,36 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 			).
 			Return(verifying.ErrInvalidIndex{Index: 7})
 
-		// TODO(mafa): update assertion to expect a malfeasance proof that can be verified
-		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), sig.NodeID(), gomock.Any())
+		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			atx.SmesherID,
+			atx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			7,
+		).Return(errors.New("invalid post index"))
+
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			sig.NodeID(),
+			gomock.Cond(func(data wire.Proof) bool {
+				_, ok := data.(*wire.ProofInvalidPost)
+				return ok
+			}),
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
+			malProof := proof.(*wire.ProofInvalidPost)
+			nId, err := malProof.Valid(ctx, verifier)
+			require.NoError(t, err)
+			require.Equal(t, sig.NodeID(), nId)
+			return nil
+		})
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		vErr := &verifying.ErrInvalidIndex{}
 		require.ErrorAs(t, err, vErr)
@@ -1961,6 +1990,9 @@ func newInitialATXv2(tb testing.TB, golden types.ATXID) *wire.ActivationTxV2 {
 		Initial:        &wire.InitialAtxPartsV2{CommitmentATX: golden},
 		NIPosts: []wire.NIPostV2{
 			{
+				Membership: wire.MerkleProofV2{
+					Nodes: make([]types.Hash32, 32),
+				},
 				Challenge: types.RandomHash(),
 				Posts: []wire.SubPostV2{
 					{
