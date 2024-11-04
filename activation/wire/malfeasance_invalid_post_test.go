@@ -102,7 +102,7 @@ func Test_InvalidPostProof(t *testing.T) {
 
 		marriageAtx := &types.ActivationTx{}
 		marriageAtx.SetID(wMarriageAtx.ID())
-		marriageAtx.SmesherID = pubSig.NodeID()
+		marriageAtx.SmesherID = marrySig.NodeID()
 		require.NoError(t, atxs.Add(db, marriageAtx, wMarriageAtx.Blob()))
 
 		atx := newActivationTxV2(
