@@ -688,6 +688,7 @@ func (h *HandlerV2) publishInvalidPostProof(
 			return fmt.Errorf("fetch initial ATX for ID %s: %w", nodeID.ShortString(), err)
 		}
 
+		// TODO(mafa): what if initial ATX is not v2?
 		initialAtx, err = h.fetchWireAtx(ctx, h.cdb, initialID)
 		if err != nil {
 			return fmt.Errorf("fetch initial ATX: %w", err)
