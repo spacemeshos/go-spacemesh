@@ -52,8 +52,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 const (
@@ -134,6 +136,7 @@ func dialGrpc(tb testing.TB, cfg Config) *grpc.ClientConn {
 }
 
 func TestMain(m *testing.M) {
+	os.Setenv("ATHENA_LIB_PATH", "../../build")
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	var err error
@@ -2392,7 +2395,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	keys := make([]*signing.EdSigner, 10)
-	accounts := make([]types.Account, len(keys))
+	accounts := make([]types.Account, len(keys)+1)
 	const initial = 100_000_000
 	for i := range keys {
 		signer, err := signing.NewEdSigner()
@@ -2404,6 +2407,12 @@ func TestVMAccountUpdates(t *testing.T) {
 			Address: addr,
 			Balance: initial,
 		}
+	}
+	// add the wallet template account
+	accounts[len(accounts)-1] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, svm.ApplyGenesis(accounts))
 	spawns := []types.Transaction{}
@@ -2423,7 +2432,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 	eg, ctx := errgroup.WithContext(ctx)
 	states := make(chan *pb.AccountState, len(accounts))
-	for _, account := range accounts {
+	for _, account := range accounts[:len(accounts)-1] {
 		stream, err := client.AccountDataStream(ctx, &pb.AccountDataStreamRequest{
 			Filter: &pb.AccountDataFilter{
 				AccountId:        &pb.AccountId{Address: account.Address.String()},
@@ -2462,7 +2471,7 @@ func TestVMAccountUpdates(t *testing.T) {
 		require.Equal(t, 2, int(state.Counter))
 		require.Less(t, int(state.Balance.Value), initial-amount)
 	}
-	require.Equal(t, len(accounts), i)
+	require.Equal(t, len(accounts)-1, i)
 }
 
 func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.ActivationTx {

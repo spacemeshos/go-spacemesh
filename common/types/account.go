@@ -24,5 +24,8 @@ func (a *Account) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	if a.TemplateAddress != nil {
 		encoder.AddString("template", a.TemplateAddress.String())
 	}
+	if len(a.State) > 0 {
+		encoder.AddInt("state size", len(a.State))
+	}
 	return nil
 }
