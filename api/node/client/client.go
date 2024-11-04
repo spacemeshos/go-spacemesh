@@ -216,7 +216,15 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	}
 
 	prop := types.Proposal{}
-	codec.MustDecode(bytes, &prop)
+	err = codec.Decode(bytes, &prop)
+	if err != nil {
+		return nil, 0, fmt.Errorf("decode proposal: %w", err)
+	}
+	err = prop.Initialize()
+	if err != nil {
+		return nil, 0, fmt.Errorf("proposal initialize: %w", err)
+	}
+
 	atxNonce := resp.Header.Get("X-Spacemesh-Atx-Nonce")
 	if atxNonce == "" {
 		return nil, 0, errors.New("atx nonce header not found")

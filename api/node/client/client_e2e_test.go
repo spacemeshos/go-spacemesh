@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 const retries = 3
@@ -190,4 +191,39 @@ func Test_Hare(t *testing.T) {
 		require.Equal(t, exp, v)
 		require.NoError(t, err)
 	})
+}
+
+func TestProposals(t *testing.T) {
+	svc, mock := setupE2E(t)
+	t.Run("build for", func(t *testing.T) {
+		p := createProposal(t)
+		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
+		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
+		require.NoError(t, err)
+		require.Equal(t, p, prop)
+	})
+}
+
+func createProposal(tb testing.TB) *types.Proposal {
+	tb.Helper()
+	b := types.RandomBallot()
+	b.Layer = 10000
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: *b,
+			TxIDs:  []types.TransactionID{types.RandomTransactionID(), types.RandomTransactionID()},
+		},
+	}
+	p.Ballot.EpochData = &types.EpochData{
+		EligibilityCount: 1,
+	}
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(tb, err)
+	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
+	p.Ballot.SmesherID = signer.NodeID()
+	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
+	p.SmesherID = signer.NodeID()
+	require.NoError(tb, p.Initialize())
+	return p
 }
