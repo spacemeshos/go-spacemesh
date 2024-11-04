@@ -608,7 +608,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 
 	// validate all niposts
 	var smesherCommitment *types.ATXID
-	for _, niposts := range atx.NIPosts {
+	for idx, niposts := range atx.NIPosts {
 		for _, post := range niposts.Posts {
 			id := equivocationSet[post.MarriageIndex]
 			var commitment types.ATXID
@@ -632,21 +632,14 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				id,
 				commitment,
 				wire.PostFromWireV1(&post.Post),
-				niposts.Challenge[:],
+				niposts.Challenge.Bytes(),
 				post.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
 			invalidIdx := &verifying.ErrInvalidIndex{}
 			if errors.As(err, invalidIdx) {
-				h.logger.Debug(
-					"ATX with invalid post index",
-					zap.Stringer("id", atx.ID()),
-					zap.Int("index", invalidIdx.Index),
-				)
-				// TODO(mafa): publish solo or merged invalid post malfeasance proof
-				var proof wire.Proof
-				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
-					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
+				if err := h.publishInvalidPostProof(ctx, atx, id, idx, uint32(invalidIdx.Index)); err != nil {
+					return nil, fmt.Errorf("publishing invalid post proof: %w", err)
 				}
 			}
 			if err != nil {
@@ -672,6 +665,49 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 
 	result.ticks = nipostSizes.minTicks()
 	return &result, nil
+}
+
+func (h *HandlerV2) publishInvalidPostProof(
+	ctx context.Context,
+	atx *wire.ActivationTxV2,
+	nodeID types.NodeID,
+	nipostIndex int,
+	invalidPostIndex uint32,
+) error {
+	h.logger.Debug(
+		"ATX with invalid post index",
+		zap.Stringer("id", atx.ID()),
+		zap.Uint32("index", invalidPostIndex),
+	)
+	initialAtx := &wire.ActivationTxV2{}
+	if atx.Initial != nil {
+		initialAtx = atx
+	} else {
+		initialID, err := atxs.GetFirstIDByNodeID(h.cdb, nodeID)
+		if err != nil {
+			return fmt.Errorf("fetch initial ATX for ID %s: %w", nodeID.ShortString(), err)
+		}
+
+		var initialAtxBytes sql.Blob
+		v, err := atxs.LoadBlob(ctx, h.cdb, initialID.Bytes(), &initialAtxBytes)
+		if err != nil {
+			return fmt.Errorf("fetch initial ATX blob for ID %s: %w", nodeID.ShortString(), err)
+		}
+		if v != types.AtxV2 {
+			// TODO(mafa): this needs to be fixed
+			return fmt.Errorf("initial ATX is not V2 for ID %s", nodeID.ShortString())
+		}
+		codec.MustDecode(initialAtxBytes.Bytes, initialAtx)
+	}
+
+	proof, err := wire.NewInvalidPostProof(h.cdb, atx, initialAtx, nodeID, nipostIndex, invalidPostIndex)
+	if err != nil {
+		return fmt.Errorf("creating invalid post proof: %w", err)
+	}
+	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
+		return fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
+	}
+	return nil
 }
 
 func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
@@ -808,6 +844,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
+	// TODO(mafa): finish proof
 	var proof wire.Proof
 	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
 }
