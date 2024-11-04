@@ -4,7 +4,7 @@ run-name: Release ${{ github.ref_name }}
 on:
   push:
     tags:
-      - '*'
+      - "*"
 
 jobs:
   build-and-upload:
@@ -16,15 +16,15 @@ jobs:
             outname_sufix: "linux-amd64"
           - os: ubuntu-latest-arm-8-cores
             outname_sufix: "linux-arm64"
-          - os: macos-13
-            outname_sufix: "mac-amd64"
+          # - os: macos-13
+          #   outname_sufix: "mac-amd64"
           - os: [self-hosted, macOS, ARM64, go-spacemesh]
             outname_sufix: "mac-arm64"
           - os: windows-2022
             outname_sufix: "win-amd64"
     permissions:
-      contents: 'read'
-      id-token: 'write'
+      contents: "read"
+      id-token: "write"
     steps:
       - shell: bash
         run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
@@ -84,7 +84,7 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
-          service_account: ${{ secrets.GCP_WI_SA }} 
+          service_account: ${{ secrets.GCP_WI_SA }}
           token_format: access_token
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -107,9 +107,9 @@ jobs:
           --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
           --acl public-read --follow-symlinks
         env:
-            AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
-            AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
       - name: Install coreutils
         if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         run: brew install coreutils
@@ -133,8 +133,8 @@ jobs:
     runs-on: ubuntu-22.04
     needs: build-and-upload
     permissions:
-      contents: 'write'
-      id-token: 'write'
+      contents: "write"
+      id-token: "write"
     steps:
       - name: Download the artifacts
         uses: actions/download-artifact@v4
@@ -164,7 +164,7 @@ jobs:
         with:
           project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
-          service_account: ${{ secrets.GCP_WI_SA }} 
+          service_account: ${{ secrets.GCP_WI_SA }}
           token_format: access_token
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
@@ -187,16 +187,16 @@ jobs:
           --endpoint-url https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
           --acl public-read --follow-symlinks
         env:
-            AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
-            AWS_REGION: us-east-1
+          AWS_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
       - name: Create Release
         uses: softprops/action-gh-release@v2
         id: create_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name:  ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           body: |
             ## Zip Files
             - Windows amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
