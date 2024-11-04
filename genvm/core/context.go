@@ -36,7 +36,7 @@ type Context struct {
 	consumed uint64
 	// fee is in coins units
 	fee uint64
-	// an amount transfrered to other accounts
+	// an amount transferred to other accounts
 	transferred uint64
 
 	touched []Address
