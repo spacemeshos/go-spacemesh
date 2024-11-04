@@ -2,7 +2,6 @@ package wallet
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"os"
 	"testing"
@@ -20,6 +19,15 @@ import (
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 )
 
+const (
+	PUBKEY  = "ba216991978cab901254e8eaa062830bbe42c6fc7f56032cbed0e8926ad43e97"
+	PRIVKEY = "2375b169ab93821366eb5e6898145ec12b6419536b8ee0615cae783b4bc015e7" +
+		"ba216991978cab901254e8eaa062830bbe42c6fc7f56032cbed0e8926ad43e97"
+	PRINCIPAL    = "00000000DF39133A6A5B6DDBFEBC865F05640671F00A3930"
+	WALLET_STATE = "00000000000000000000000000000000" +
+		"BA216991978CAB901254E8EAA062830BBE42C6FC7F56032CBED0E8926AD43E97"
+)
+
 func FuzzVerify(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		wallet := Wallet{}
@@ -29,44 +37,46 @@ func FuzzVerify(f *testing.F) {
 }
 
 func TestMaxSpend(t *testing.T) {
+	const amount = 100
+
 	ctrl := gomock.NewController(t)
 	testWallet := Wallet{}
 	mockHost := mocks.NewMockHost(ctrl)
 	testWallet.host = mockHost
+	testWallet.templateCode = walletTemplate.PROGRAM
+	walletState, err := hex.DecodeString(WALLET_STATE)
+	require.NoError(t, err)
+	testWallet.walletState = walletState
+
+	os.Setenv("ATHENA_LIB_PATH", "../../../build")
+	vmlib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	require.NoError(t, err)
 
 	// construct spawn and spend payloads
-	// nothing in the payload after the selector matters
-	spawnPayload, _ := athcon.FromString("athexp_spawn")
-	spendPayload, _ := athcon.FromString("athexp_spend")
+	spawnPayload := vmlib.EncodeTxSpawn(athcon.Bytes32{})
+	spendPayload := vmlib.EncodeTxSpend(athcon.Address{}, amount)
 
-	output := make([]byte, 8)
-	const amount = 100
-	binary.LittleEndian.PutUint64(output, amount)
+	mockHost.EXPECT().Principal().Return(types.Address{}).Times(5)
+	mockHost.EXPECT().MaxGas().Return(100000).Times(2)
+	mockHost.EXPECT().Clone().Return(mockHost).Times(1)
+	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(1)
+	mockHost.EXPECT().TemplateAddress().Return(types.Address{}).Times(1)
 	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
-	mockHost.EXPECT().Principal().Return(types.Address{}).Times(2)
-	mockHost.EXPECT().MaxGas().Return(1000).Times(2)
 	t.Run("Spawn", func(t *testing.T) {
-		max, err := testWallet.MaxSpend(spawnPayload[:])
+		max, err := testWallet.MaxSpend(spawnPayload)
 		require.NoError(t, err)
 		require.EqualValues(t, 0, max)
 	})
 	t.Run("Spend", func(t *testing.T) {
-		max, err := testWallet.MaxSpend(spendPayload[:])
+		max, err := testWallet.MaxSpend(spendPayload)
 		require.NoError(t, err)
 		require.EqualValues(t, amount, max)
 	})
 }
 
 func TestSpawn(t *testing.T) {
-	const PUBKEY = "ba216991978cab901254e8eaa062830bbe42c6fc7f56032cbed0e8926ad43e97"
-	const PRINCIPAL = "00000000DF39133A6A5B6DDBFEBC865F05640671F00A3930"
-	const WALLET_STATE = "00000000000000000000000000000000" +
-		"BA216991978CAB901254E8EAA062830BBE42C6FC7F56032CBED0E8926AD43E97"
-
 	ctrl := gomock.NewController(t)
 	mockHost := mocks.NewMockHost(ctrl)
-	mockLoader := mocks.NewMockAccountLoader(ctrl)
-	mockUpdater := mocks.NewMockAccountUpdater(ctrl)
 
 	principalAddress := types.Address{1}
 	templateAddress := types.Address{2}
@@ -76,28 +86,21 @@ func TestSpawn(t *testing.T) {
 	pubkeyBytes, err := hex.DecodeString(PUBKEY)
 	require.NoError(t, err)
 	pubkey := athcon.Bytes32(pubkeyBytes)
-	expectedWalletState, err := hex.DecodeString(WALLET_STATE)
-	require.NoError(t, err)
-
-	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
-	mockHost.EXPECT().Principal().Return(principalAddress).Times(5)
-	mockHost.EXPECT().MaxGas().Return(10000).Times(1)
-	mockHost.EXPECT().TemplateAddress().Return(templateAddress).Times(2)
-	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(1)
 
 	mockTemplate := types.Account{
 		State: walletTemplate.PROGRAM,
 	}
-	mockLoader.EXPECT().Get(templateAddress).Return(mockTemplate, nil).Times(1)
-	mockLoader.EXPECT().Get(expectedPrincipalAddress).Return(types.Account{}, nil).Times(1)
-
-	// spawn should call Update to store the newly-spawned account state
-	mockUpdater.EXPECT().Update(gomock.Any()).DoAndReturn(func(account types.Account) error {
-		require.Equal(t, expectedPrincipalAddress, account.Address)
-		require.Equal(t, expectedWalletState, account.State)
-		require.Equal(t, templateAddress, *account.TemplateAddress)
-		return nil
-	}).Times(1)
+	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
+	mockHost.EXPECT().Principal().Return(principalAddress).Times(6)
+	mockHost.EXPECT().MaxGas().Return(100000).Times(1)
+	mockHost.EXPECT().SpendGas(uint64(5036)).Times(1)
+	mockHost.EXPECT().TemplateAddress().Return(templateAddress).Times(2)
+	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(1)
+	mockHost.EXPECT().IsSpawn().Return(true).Times(1)
+	mockHost.EXPECT().GasSpent().Return(uint64(0)).Times(1)
+	mockHost.EXPECT().Get(templateAddress).Return(mockTemplate, nil).Times(1)
+	mockHost.EXPECT().Get(principalAddress).Return(types.Account{}, nil).Times(1)
+	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(expectedPrincipalAddress, nil).Times(1)
 
 	// point to the library path
 	os.Setenv("ATHENA_LIB_PATH", "../../../build")
@@ -105,24 +108,16 @@ func TestSpawn(t *testing.T) {
 	require.NoError(t, err)
 
 	athenaPayload := vmLib.EncodeTxSpawn(athcon.Bytes32(pubkey))
-	executionPayload := athcon.EncodedExecutionPayload([]byte{}, athenaPayload)
 
 	// Execute the spawn and catch the result
-	output, gasLeft, err := (&handler{}).Exec(mockHost, executionPayload)
-	require.Less(t, gasLeft, int64(5000))
+	output, gasLeft, err := (&handler{}).Exec(mockHost, athenaPayload)
+	require.Equal(t, gasLeft, int64(94964))
+	require.Len(t, output, 24)
 	require.Equal(t, expectedPrincipalAddress, types.Address(output))
 	require.NoError(t, err)
 }
 
 func TestVerify(t *testing.T) {
-	const PRIVKEY = "2375b169ab93821366eb5e6898145ec12b6419536b8ee0615cae783b4bc015e7" +
-		"ba216991978cab901254e8eaa062830bbe42c6fc7f56032cbed0e8926ad43e97"
-	const PUBKEY = "ba216991978cab901254e8eaa062830bbe42c6fc7f56032cbed0e8926ad43e97"
-
-	// as in Spawn test, above
-	const WALLET_STATE = "00000000000000000000000000000000" +
-		"BA216991978CAB901254E8EAA062830BBE42C6FC7F56032CBED0E8926AD43E97"
-
 	walletState, err := hex.DecodeString(WALLET_STATE)
 	require.NoError(t, err)
 	privkeyBytes, err := hex.DecodeString(PRIVKEY)
@@ -134,19 +129,6 @@ func TestVerify(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockHost := mocks.NewMockHost(ctrl)
-	mockLoader := mocks.NewMockAccountLoader(ctrl)
-
-	// Times counts the total number of times these methods are called.
-	// Note that wallet.Verify() short-circuits when called on empty input, so it only actually
-	// runs twice.
-	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(2)
-	mockHost.EXPECT().Principal().Return(types.Address{2}).Times(5)
-	mockHost.EXPECT().MaxGas().Return(100000000).Times(2)
-	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).Times(1)
-
-	// for now, don't include GenesisID
-	// empty := types.Hash20{}
-	// mockHost.EXPECT().GetGenesisID().Return(empty).Times(3)
 
 	mockTemplate := types.Account{
 		State: walletTemplate.PROGRAM,
@@ -154,8 +136,25 @@ func TestVerify(t *testing.T) {
 	mockWallet := types.Account{
 		State: walletState,
 	}
-	mockLoader.EXPECT().Get(types.Address{1}).Return(mockTemplate, nil).Times(1)
-	mockLoader.EXPECT().Get(types.Address{2}).Return(mockWallet, nil).Times(1)
+
+	// Times counts the total number of times these methods are called.
+	// Note that wallet.Verify() short-circuits when called on empty input, so it only actually
+	// runs twice.
+	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(2)
+	mockHost.EXPECT().Principal().Return(types.Address{2}).Times(11)
+	mockHost.EXPECT().MaxGas().Return(100000000).Times(2)
+	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).Times(3)
+	mockHost.EXPECT().Get(types.Address{1}).Return(mockTemplate, nil).Times(1)
+	mockHost.EXPECT().Get(types.Address{2}).Return(mockWallet, nil).Times(1)
+	mockHost.EXPECT().IsSpawn().Return(false).Times(3)
+	mockHost.EXPECT().Clone().Return(mockHost).Times(2)
+	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(2)
+	mockHost.EXPECT().SpendGas(uint64(10024)).Times(1)
+	mockHost.EXPECT().SpendGas(uint64(10428)).Times(1)
+
+	// for now, don't include GenesisID
+	// empty := types.Hash20{}
+	// mockHost.EXPECT().GetGenesisID().Return(empty).Times(3)
 
 	// point to the library path
 	os.Setenv("ATHENA_LIB_PATH", "../../../build")
@@ -172,7 +171,6 @@ func TestVerify(t *testing.T) {
 	})
 	t.Run("Valid", func(t *testing.T) {
 		msg := []byte{1, 2, 3}
-		// body := core.SigningBody(empty[:], msg)
 		sig := ed25519.Sign(privkeyBytes, msg)
 		require.True(
 			t,
