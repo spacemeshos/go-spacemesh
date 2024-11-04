@@ -679,7 +679,7 @@ func (h *HandlerV2) publishInvalidPostProof(
 		zap.Stringer("id", atx.ID()),
 		zap.Uint32("index", invalidPostIndex),
 	)
-	initialAtx := &wire.ActivationTxV2{}
+	var initialAtx *wire.ActivationTxV2
 	if atx.Initial != nil {
 		initialAtx = atx
 	} else {
@@ -688,16 +688,11 @@ func (h *HandlerV2) publishInvalidPostProof(
 			return fmt.Errorf("fetch initial ATX for ID %s: %w", nodeID.ShortString(), err)
 		}
 
-		var initialAtxBytes sql.Blob
-		v, err := atxs.LoadBlob(ctx, h.cdb, initialID.Bytes(), &initialAtxBytes)
+		// TODO(mafa): what if initial ATX is not v2?
+		initialAtx, err = h.fetchWireAtx(ctx, h.cdb, initialID)
 		if err != nil {
 			return fmt.Errorf("fetch initial ATX blob for ID %s: %w", nodeID.ShortString(), err)
 		}
-		if v != types.AtxV2 {
-			// TODO(mafa): this needs to be fixed
-			return fmt.Errorf("initial ATX is not V2 for ID %s", nodeID.ShortString())
-		}
-		codec.MustDecode(initialAtxBytes.Bytes, initialAtx)
 	}
 
 	proof, err := wire.NewInvalidPostProof(h.cdb, atx, initialAtx, nodeID, nipostIndex, invalidPostIndex)
@@ -753,7 +748,7 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx 
 
 func (h *HandlerV2) fetchWireAtx(
 	ctx context.Context,
-	tx sql.Transaction,
+	tx sql.Executor,
 	id types.ATXID,
 ) (*wire.ActivationTxV2, error) {
 	var blob sql.Blob
