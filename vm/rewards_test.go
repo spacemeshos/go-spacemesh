@@ -11,11 +11,12 @@ func TestRewards(t *testing.T) {
 	t.Parallel()
 	genTester := func(t *testing.T) *tester {
 		return newTester(t).
+			addWalletTemplate().
 			addSingleSig(10).
 			applyGenesis()
 	}
 	ref := genTester(t)
-	const spawnFee = 100432
+	const spawnFee = 17040
 	require.Equal(t, int(spawnFee), ref.estimateSpawnGas(0, 0))
 	// this is hardcoded so that you can see which number is divided without reminder
 	// and pick correct fractions for tests
