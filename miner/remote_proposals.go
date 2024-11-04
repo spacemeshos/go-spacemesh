@@ -129,10 +129,11 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 		proposal, nonce, err := pb.nodeSvc.Proposal(ctx, layer, signer.signer.NodeID())
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
+			continue
 		}
 		if proposal == nil {
 			// this node signer isn't eligible this epoch, continue
-			pb.logger.Info("node not eligible on this layer. will try next")
+			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
 		}
 
@@ -160,7 +161,11 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 		proposal.EligibilityProofs = eligibilities
 		proposal.Ballot.Signature = signer.signer.Sign(signing.BALLOT, proposal.Ballot.SignedBytes())
 		proposal.Signature = signer.signer.Sign(signing.PROPOSAL, proposal.SignedBytes())
-		proposal.MustInitialize()
+		err = proposal.Initialize()
+		if err != nil {
+			pb.logger.Error("failed to initialize proposal", zap.Error(err))
+			continue
+		}
 		pb.logger.Info("publishing proposal", zap.Inline(proposal))
 		if err := pb.publisher.Publish(ctx, pubsub.ProposalProtocol, codec.MustEncode(proposal)); err != nil {
 			pb.logger.Error("failed to publish proposal",
