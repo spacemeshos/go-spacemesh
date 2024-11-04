@@ -99,7 +99,7 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 	var maxspend uint64
 	if err == nil {
 		if len(output) != 8 {
-			return 0, fmt.Errorf("max spend output is not 8 bytes")
+			return 0, errors.New("max spend output is not 8 bytes")
 		}
 		maxspend = binary.LittleEndian.Uint64(output)
 	}

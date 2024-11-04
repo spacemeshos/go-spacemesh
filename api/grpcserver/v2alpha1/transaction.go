@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-scale"
@@ -16,17 +18,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/registry"
-
-	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
-	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -395,26 +394,7 @@ func decodeTxArgs(decoder *scale.Decoder) (*athcon.MethodSelector, *core.Address
 		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
 
-	// method, _, err := scale.DecodeCompact8(decoder)
-	// if err != nil {
-	// 	return 0, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
-	// }
-
-	// templateAddress *core.Address
-	var handler core.Handler
-	// switch method {
-	// case core.MethodSpawn:
-	// 	templateAddress = &core.Address{}
-	// 	if _, err := templateAddress.DecodeScale(decoder); err != nil {
-	// 		return 0, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
-	// 	}
-	// case vesting.MethodDrainVault:
-	// 	templateAddress = &vesting.TemplateAddress
-	// default:
-	// 	templateAddress = &wallet.TemplateAddress
-	// }
-
-	handler = reg.Get(wallet.TemplateAddress)
+	handler := reg.Get(wallet.TemplateAddress)
 	if handler == nil {
 		return nil, nil, nil, fmt.Errorf("%w: wallet template not found", core.ErrMalformed)
 	}

@@ -17,11 +17,11 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/vm/sdk"
-	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const (
@@ -296,68 +296,6 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	}
 }
 
-func waitTransaction(ctx context.Context,
-	eg *errgroup.Group,
-	client *cluster.NodeClient,
-	id []byte,
-) {
-	eg.Go(func() error {
-		api := pb.NewTransactionServiceClient(client.PubConn())
-		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
-		if err != nil {
-			return err
-		}
-		_, err = rsts.Recv()
-		if err != nil {
-			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
-		}
-		return nil
-	})
-}
-
-func watchTransactionResults(ctx context.Context,
-	eg *errgroup.Group,
-	client *cluster.NodeClient,
-	log *zap.Logger,
-	collector func(*pb.TransactionResult) (bool, error),
-) {
-	eg.Go(func() error {
-		retries := 0
-	BACKOFF:
-
-		api := pb.NewTransactionServiceClient(client.PubConn())
-		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
-		if err != nil {
-			return err
-		}
-		for {
-			rst, err := rsts.Recv()
-			s, ok := status.FromError(err)
-			if ok && s.Code() != codes.OK {
-				log.Warn("transactions stream error",
-					zap.String("client", client.Name),
-					zap.Error(err),
-					zap.Any("status", s),
-				)
-				if s.Code() == codes.Unavailable {
-					if retries == attempts {
-						return errors.New("transaction results unavailable")
-					}
-					retries++
-					time.Sleep(retryBackoff)
-					goto BACKOFF
-				}
-			}
-			if err != nil {
-				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
-			}
-			if cont, err := collector(rst); !cont {
-				return err
-			}
-		}
-	})
-}
-
 func watchProposals(
 	ctx context.Context,
 	eg *errgroup.Group,
@@ -463,15 +401,6 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Add
 		return 0, err
 	}
 	return resp.AccountWrapper.StateProjected.Counter, nil
-}
-
-func currentBalance(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
-	gstate := pb.NewGlobalStateServiceClient(client.PubConn())
-	resp, err := gstate.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: address.String()}})
-	if err != nil {
-		return 0, err
-	}
-	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
 }
 
 func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {

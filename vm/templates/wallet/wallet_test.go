@@ -111,7 +111,7 @@ func TestSpawn(t *testing.T) {
 
 	// Execute the spawn and catch the result
 	output, gasLeft, err := (&handler{}).Exec(mockHost, athenaPayload)
-	require.Equal(t, gasLeft, int64(94964))
+	require.Equal(t, int64(94964), gasLeft)
 	require.Len(t, output, 24)
 	require.Equal(t, expectedPrincipalAddress, types.Address(output))
 	require.NoError(t, err)
