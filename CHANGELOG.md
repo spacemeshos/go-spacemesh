@@ -2,6 +2,20 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## Unreleased
+
+### Improvements
+
+* [#6431](https://github.com/spacemeshos/go-spacemesh/pull/6431) Fix db-allow-schema-drift handling
+* [#6408](https://github.com/spacemeshos/go-spacemesh/pull/6408) Prevent empty DB connection pool by freeing connections
+  upon errors during DB operations. This mostly fixes issues when a node is under heavy load from the API.
+
+* [#6417](https://github.com/spacemeshos/go-spacemesh/pull/6417) Fix initial post being deleted when the node is
+  restarted or times out before the first ATX is published.
+
+* [#6422](https://github.com/spacemeshos/go-spacemesh/pull/6422) Further improved performance of the proposal building
+  process to avoid late proposals.
+
 ## v1.7.6
 
 ### Upgrade information

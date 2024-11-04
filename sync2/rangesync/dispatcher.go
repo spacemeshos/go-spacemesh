@@ -9,11 +9,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 // Handler is a function that handles a request for a Dispatcher.
-type Handler func(ctx context.Context, s io.ReadWriter) error
+type Handler func(context.Context, p2p.Peer, io.ReadWriter) error
 
 // Dispatcher multiplexes a P2P Server to multiple set reconcilers.
 type Dispatcher struct {
@@ -51,6 +52,7 @@ func (d *Dispatcher) Register(name string, h Handler) {
 // Dispatch dispatches a request to a handler.
 func (d *Dispatcher) Dispatch(
 	ctx context.Context,
+	peer p2p.Peer,
 	req []byte,
 	stream io.ReadWriter,
 ) (err error) {
@@ -62,7 +64,7 @@ func (d *Dispatcher) Dispatch(
 		return fmt.Errorf("no handler named %q", name)
 	}
 	d.logger.Debug("dispatch", zap.String("handler", name))
-	if err := h(ctx, stream); err != nil {
+	if err := h(ctx, peer, stream); err != nil {
 		return fmt.Errorf("handler %q: %w", name, err)
 	}
 	return nil

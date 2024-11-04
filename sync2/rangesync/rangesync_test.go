@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
 
@@ -53,12 +54,14 @@ func (fc *fakeConduit) Send(msg rangesync.SyncMessage) error {
 	return nil
 }
 
-func makeSet(tb testing.TB, items string) *rangesync.DumbSet {
-	var s rangesync.DumbSet
-	for _, c := range []byte(items) {
-		require.NoError(tb, s.Receive(rangesync.KeyBytes{c}))
+func makeSet(items string) *rangesync.DumbSet {
+	s := &rangesync.DumbSet{
+		FPFunc: rangesync.NaiveFPFunc,
 	}
-	return &s
+	for _, c := range []byte(items) {
+		s.AddUnchecked(rangesync.KeyBytes{c})
+	}
+	return s
 }
 
 func setStr(os rangesync.OrderedSet) string {
@@ -85,7 +88,7 @@ func dumpRangeMessages(tb testing.TB, msgs []rangesync.SyncMessage, fmt string, 
 	}
 	tb.Logf(fmt, args...)
 	for _, m := range msgs {
-		tb.Logf("  %s", m)
+		tb.Logf("  %s", rangesync.SyncMessageToString(m))
 	}
 }
 
@@ -293,18 +296,13 @@ func TestRangeSync(t *testing.T) {
 			logger := zaptest.NewLogger(t)
 			for n, maxSendRange := range []int{1, 2, 3, 4} {
 				t.Logf("maxSendRange: %d", maxSendRange)
-				setA := makeSet(t, tc.a)
-				setA.DisableReAdd = true
-				syncA := rangesync.NewRangeSetReconciler(setA,
-					rangesync.WithLogger(logger.Named("A")),
-					rangesync.WithMaxSendRange(maxSendRange),
-					rangesync.WithItemChunkSize(3))
-				setB := makeSet(t, tc.b)
-				setB.DisableReAdd = true
-				syncB := rangesync.NewRangeSetReconciler(setB,
-					rangesync.WithLogger(logger.Named("B")),
-					rangesync.WithMaxSendRange(maxSendRange),
-					rangesync.WithItemChunkSize(3))
+				cfg := rangesync.DefaultConfig()
+				cfg.MaxSendRange = maxSendRange
+				cfg.ItemChunkSize = 3
+				setA := makeSet(tc.a)
+				syncA := rangesync.NewRangeSetReconciler(logger.Named("A"), cfg, setA)
+				setB := makeSet(tc.b)
+				syncB := rangesync.NewRangeSetReconciler(logger.Named("B"), cfg, setB)
 
 				var (
 					nRounds    int
@@ -320,6 +318,8 @@ func TestRangeSync(t *testing.T) {
 				nRounds, _, _ = runSync(t, syncA, syncB, x, y, tc.maxRounds[n])
 				t.Logf("%s: maxSendRange %d: %d rounds",
 					tc.name, maxSendRange, nRounds)
+				setA.AddReceived()
+				setB.AddReceived()
 
 				require.Equal(t, tc.countA, prBA.Count, "countA")
 				require.Equal(t, tc.countB, prAB.Count, "countB")
@@ -352,14 +352,14 @@ func TestRandomSync(t *testing.T) {
 			bytesA[i], bytesA[j] = bytesA[j], bytesA[i]
 		})
 		bytesA = bytesA[:rand.Intn(len(bytesA))]
-		setA := makeSet(t, string(bytesA))
+		setA := makeSet(string(bytesA))
 
 		bytesB = append([]byte(nil), chars...)
 		rand.Shuffle(len(bytesB), func(i, j int) {
 			bytesB[i], bytesB[j] = bytesB[j], bytesB[i]
 		})
 		bytesB = bytesB[:rand.Intn(len(bytesB))]
-		setB := makeSet(t, string(bytesB))
+		setB := makeSet(string(bytesB))
 
 		keySet := make(map[byte]struct{})
 		for _, c := range append(bytesA, bytesB...) {
@@ -370,14 +370,16 @@ func TestRandomSync(t *testing.T) {
 		slices.Sort(expectedSet)
 
 		maxSendRange := rand.Intn(16) + 1
-		syncA := rangesync.NewRangeSetReconciler(setA,
-			rangesync.WithMaxSendRange(maxSendRange),
-			rangesync.WithItemChunkSize(3))
-		syncB := rangesync.NewRangeSetReconciler(setB,
-			rangesync.WithMaxSendRange(maxSendRange),
-			rangesync.WithItemChunkSize(3))
+		cfg := rangesync.DefaultConfig()
+		cfg.MaxSendRange = maxSendRange
+		cfg.ItemChunkSize = 3
+		logger := zap.NewNop()
+		syncA := rangesync.NewRangeSetReconciler(logger, cfg, setA)
+		syncB := rangesync.NewRangeSetReconciler(logger, cfg, setB)
 
 		runSync(t, syncA, syncB, nil, nil, max(len(expectedSet), 2))
+		setA.AddReceived()
+		setB.AddReceived()
 		require.Equal(t, setStr(setA), setStr(setB))
 		require.Equal(t, string(expectedSet), setStr(setA),
 			"expected set for %q<->%q", bytesA, bytesB)
@@ -391,27 +393,26 @@ type hashSyncTestConfig struct {
 	maxNumSpecificA int
 	minNumSpecificB int
 	maxNumSpecificB int
-	allowReAdd      bool
 }
 
 type hashSyncTester struct {
 	tb           testing.TB
 	src          []rangesync.KeyBytes
-	setA, setB   rangesync.OrderedSet
-	opts         []rangesync.RangeSetReconcilerOption
+	setA, setB   *rangesync.DumbSet
+	cfg          rangesync.RangeSetReconcilerConfig
 	numSpecificA int
 	numSpecificB int
 }
 
 func newHashSyncTester(tb testing.TB, cfg hashSyncTestConfig) *hashSyncTester {
 	tb.Helper()
+	rCfg := rangesync.DefaultConfig()
+	rCfg.MaxSendRange = cfg.maxSendRange
+	rCfg.MaxReconcDiff = 0.1
 	st := &hashSyncTester{
-		tb:  tb,
-		src: make([]rangesync.KeyBytes, cfg.numTestHashes),
-		opts: []rangesync.RangeSetReconcilerOption{
-			rangesync.WithMaxSendRange(cfg.maxSendRange),
-			rangesync.WithMaxDiff(0.1),
-		},
+		tb:           tb,
+		src:          make([]rangesync.KeyBytes, cfg.numTestHashes),
+		cfg:          rCfg,
 		numSpecificA: rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA,
 		numSpecificB: rand.Intn(cfg.maxNumSpecificB+1-cfg.minNumSpecificB) + cfg.minNumSpecificB,
 	}
@@ -421,16 +422,16 @@ func newHashSyncTester(tb testing.TB, cfg hashSyncTestConfig) *hashSyncTester {
 	}
 
 	sliceA := st.src[:cfg.numTestHashes-st.numSpecificB]
-	st.setA = rangesync.NewDumbSet(!cfg.allowReAdd)
+	st.setA = &rangesync.DumbSet{}
 	for _, h := range sliceA {
-		require.NoError(tb, st.setA.Receive(h))
+		st.setA.AddUnchecked(h)
 	}
 
 	sliceB := slices.Clone(st.src[:cfg.numTestHashes-st.numSpecificB-st.numSpecificA])
 	sliceB = append(sliceB, st.src[cfg.numTestHashes-st.numSpecificB:]...)
-	st.setB = rangesync.NewDumbSet(!cfg.allowReAdd)
+	st.setB = &rangesync.DumbSet{}
 	for _, h := range sliceB {
-		require.NoError(tb, st.setB.Receive(h))
+		st.setB.AddUnchecked(h)
 	}
 
 	slices.SortFunc(st.src, func(a, b rangesync.KeyBytes) int {
@@ -458,79 +459,15 @@ func TestSyncHash(t *testing.T) {
 		minNumSpecificB: 4,
 		maxNumSpecificB: 90,
 	})
-	syncA := rangesync.NewRangeSetReconciler(st.setA, st.opts...)
-	syncB := rangesync.NewRangeSetReconciler(st.setB, st.opts...)
+	logger := zap.NewNop()
+	syncA := rangesync.NewRangeSetReconciler(logger, st.cfg, st.setA)
+	syncB := rangesync.NewRangeSetReconciler(logger, st.cfg, st.setB)
 	nRounds, nMsg, nItems := runSync(t, syncA, syncB, nil, nil, 100)
 	numSpecific := st.numSpecificA + st.numSpecificB
 	itemCoef := float64(nItems) / float64(numSpecific)
 	t.Logf("numSpecific: %d, nRounds: %d, nMsg: %d, nItems: %d, itemCoef: %.2f",
 		numSpecific, nRounds, nMsg, nItems, itemCoef)
+	st.setA.AddReceived()
+	st.setB.AddReceived()
 	st.verify(st.setA, st.setB)
-}
-
-// deferredAddSet wraps an OrderedSet and defers actually adding items until addAll() is
-// called. This is used to check that the set reconciliation algorithm, except for the
-// Recent sync part, doesn't depend on items being added to the set immediately.
-type deferredAddSet struct {
-	rangesync.OrderedSet
-	added map[string]struct{}
-}
-
-// Receive implements the OrderedSet.
-func (das *deferredAddSet) Receive(id rangesync.KeyBytes) error {
-	if das.added == nil {
-		das.added = make(map[string]struct{})
-	}
-	das.added[string(id)] = struct{}{}
-	return nil
-}
-
-// addAll adds all deferred items to the underlying OrderedSet.
-func (das *deferredAddSet) addAll() error {
-	for k := range das.added {
-		if err := das.OrderedSet.Receive(rangesync.KeyBytes(k)); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func TestDeferredAdd(t *testing.T) {
-	st := newHashSyncTester(t, hashSyncTestConfig{
-		maxSendRange:    1,
-		numTestHashes:   10000,
-		minNumSpecificA: 4,
-		maxNumSpecificA: 90,
-		minNumSpecificB: 4,
-		maxNumSpecificB: 90,
-	})
-	opts := append(st.opts, rangesync.WithMaxDiff(0.9))
-	var msgLists [][]rangesync.SyncMessage
-
-	sync := func(setA, setB rangesync.OrderedSet) {
-		syncA := rangesync.NewRangeSetReconciler(setA, opts...)
-		syncB := rangesync.NewRangeSetReconciler(setB, opts...)
-		fc := &fakeConduit{tb: t}
-		require.NoError(t, syncA.Initiate(fc, nil, nil))
-		nRounds, nMsg, nItems := doRunSync(fc, syncA, syncB, 100)
-		numSpecific := st.numSpecificA + st.numSpecificB
-		itemCoef := float64(nItems) / float64(numSpecific)
-		t.Logf("numSpecific: %d, nRounds: %d, nMsg: %d, nItems: %d, itemCoef: %.2f",
-			numSpecific, nRounds, nMsg, nItems, itemCoef)
-		msgLists = append(msgLists, fc.rec)
-	}
-
-	setA := st.setA.Copy(true)
-	setB := st.setB.Copy(true)
-	sync(setA, setB)
-	st.verify(setA, setB)
-
-	dSetA := &deferredAddSet{OrderedSet: st.setA.Copy(true)}
-	dSetB := &deferredAddSet{OrderedSet: st.setB.Copy(true)}
-	sync(dSetA, dSetB)
-	dSetA.addAll()
-	dSetB.addAll()
-	st.verify(dSetA, dSetB)
-
-	require.Equal(t, msgLists[0], msgLists[1])
 }

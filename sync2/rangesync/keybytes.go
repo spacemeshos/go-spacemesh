@@ -33,6 +33,15 @@ func (k KeyBytes) Compare(other KeyBytes) int {
 	return bytes.Compare(k, other)
 }
 
+// BitFromLeft returns the n-th bit from the left in the key.
+func (k KeyBytes) BitFromLeft(i int) bool {
+	bi := i / 8
+	if bi > FingerprintSize {
+		panic("BUG: bad fingerprint bit index")
+	}
+	return k[bi]&(0x1<<uint(7-i%8)) != 0
+}
+
 // Inc returns the key with the same number of bytes as this one, obtained by incrementing
 // the key by one. It returns true if the increment has caused an overflow.
 func (k KeyBytes) Inc() (overflow bool) {
@@ -61,6 +70,16 @@ func (k KeyBytes) IsZero() bool {
 		}
 	}
 	return true
+}
+
+// Trim zeroes all the bits in the key starting with the given bit index.
+func (k KeyBytes) Trim(bit int) {
+	bi := bit / 8
+	if bi >= len(k) {
+		return
+	}
+	clear(k[bi+1:])
+	k[bi] &^= 0xff >> uint(bit%8)
 }
 
 // RandomKeyBytes generates random data in bytes for testing.
