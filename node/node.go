@@ -1998,6 +1998,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithReadOnly(),
 		sql.WithLogger(apiDBLog),
 		sql.WithConnections(app.Config.API.DatabaseConnections),
+		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
 		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {
