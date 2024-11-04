@@ -197,10 +197,10 @@ func (t *tester) selfSpawn(i int, opts ...sdk.Opt) types.RawTx {
 	return types.NewRawTx(t.accounts[i].selfSpawn(t, nonce, opts...))
 }
 
-func (t *tester) spawn(i, j int, opts ...sdk.Opt) types.RawTx {
-	nonce := t.nextNonce(i)
-	return types.NewRawTx(t.accounts[i].spawn(t, nonce, opts...))
-}
+// func (t *tester) spawn(i, j int, opts ...sdk.Opt) types.RawTx {
+// 	nonce := t.nextNonce(i)
+// 	return types.NewRawTx(t.accounts[i].spawn(t, nonce, opts...))
+// }
 
 func (t *tester) randSpendN(n int, amount uint64) []types.RawTx {
 	rst := make([]types.RawTx, n)
@@ -304,22 +304,22 @@ func (tx *selfSpawnTxWithOpts) gen(t *tester) types.RawTx {
 	return t.selfSpawn(tx.principal, tx.opts...)
 }
 
-type spawnTx struct {
-	principal, target int
-}
+// type spawnTx struct {
+// 	principal, target int
+// }
 
-func (tx *spawnTx) gen(t *tester) types.RawTx {
-	return t.spawn(tx.principal, tx.target)
-}
+// func (tx *spawnTx) gen(t *tester) types.RawTx {
+// 	return t.spawn(tx.principal, tx.target)
+// }
 
-type spawnTxWithOpts struct {
-	principal, target int
-	opts              []sdk.Opt
-}
+// type spawnTxWithOpts struct {
+// 	principal, target int
+// 	opts              []sdk.Opt
+// }
 
-func (tx *spawnTxWithOpts) gen(t *tester) types.RawTx {
-	return t.spawn(tx.principal, tx.target, tx.opts...)
-}
+// func (tx *spawnTxWithOpts) gen(t *tester) types.RawTx {
+// 	return t.spawn(tx.principal, tx.target, tx.opts...)
+// }
 
 type spendTx struct {
 	from, to int
@@ -1034,6 +1034,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 			},
 		},
+		// Skipped: Athena doesn't currently support non self spawn
 		// {
 		// 	desc: "Spawn",
 		// 	layers: []layertc{
@@ -1046,8 +1047,11 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 		// 				0: spawned{
 		// 					template: template,
 		// 					change: spent{
-		// 						amount: ref.estimateSpawnGas(0, 0) + ref.estimateSpawnGas(0, 11),
-		// 						change: nonce{increased: 2},
+		// 						// duplicate spawn tx in athena is NOOP (ineffective tx)
+		// 						amount: ref.estimateSpawnGas(0, 0),
+		// 						change: nonce{increased: 1},
+		// 						// amount: ref.estimateSpawnGas(0, 0) + ref.estimateSpawnGas(0, 11),
+		// 						// change: nonce{increased: 2},
 		// 					},
 		// 				},
 		// 				11: spawned{template: template},
@@ -1055,6 +1059,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 		// 		},
 		// 	},
 		// },
+		// Skipped: We don't currently use genesisID
 		// {
 		// 	desc: "WrongIdInSpawn",
 		// 	layers: []layertc{
@@ -1077,6 +1082,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 		// 		},
 		// 	},
 		// },
+		// Skipped: Currently no non-self spawn
 		// {
 		// 	desc: "SpendFromSpawned",
 		// 	layers: []layertc{
@@ -1131,35 +1137,35 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 		// 		},
 		// 	},
 		// },
-		// {
-		// 	desc: "NotSpawned",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&spawnTx{0, 11},
-		// 			},
-		// 			expected: map[int]change{
-		// 				0:  same{},
-		// 				11: same{},
-		// 			},
-		// 			ineffective: []int{0},
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	desc: "IneffectiveZeroGasPrice",
-		// 	layers: []layertc{
-		// 		{
-		// 			txs: []testTx{
-		// 				&selfSpawnTxWithOpts{0, []sdk.Opt{sdk.WithGasPrice(0)}},
-		// 			},
-		// 			ineffective: []int{0},
-		// 			expected: map[int]change{
-		// 				0: same{},
-		// 			},
-		// 		},
-		// 	},
-		// },
+		{
+			desc: "NotSpawned",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						// &spawnTx{0, 11},
+					},
+					expected: map[int]change{
+						0: same{},
+						// 11: same{},
+					},
+					// ineffective: []int{0},
+				},
+			},
+		},
+		{
+			desc: "IneffectiveZeroGasPrice",
+			layers: []layertc{
+				{
+					txs: []testTx{
+						&selfSpawnTxWithOpts{0, []sdk.Opt{sdk.WithGasPrice(0)}},
+					},
+					ineffective: []int{0},
+					expected: map[int]change{
+						0: same{},
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -1337,11 +1343,12 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			tx:   tt.spend(1, 1, 100),
 			err:  core.ErrNotSpawned,
 		},
-		{
-			desc: "SpawnNotSpawned",
-			tx:   tt.spawn(1, 0),
-			err:  core.ErrNotSpawned,
-		},
+		// Skipped: Athena doesn't support non self spawn
+		// {
+		// 	desc: "SpawnNotSpawned",
+		// 	tx:   tt.spawn(1, 0),
+		// 	err:  core.ErrNotSpawned,
+		// },
 		{
 			desc: "OverflowsLimit",
 			tx:   types.NewRawTx(make([]byte, core.TxSizeLimit+1)),
@@ -1402,24 +1409,25 @@ func BenchmarkTransactions(b *testing.B) {
 		}
 		bench(b, tt, txs)
 	})
-	b.Run("singlesig/spawn", func(b *testing.B) {
-		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
-		ineffective, _, err := tt.Apply(
-			types.GetEffectiveGenesis().Add(1),
-			notVerified(tt.spawnAll()...),
-			nil,
-		)
-		tt = tt.addSingleSig(n)
+	// Skipped: Currently no non-self spawn
+	// b.Run("singlesig/spawn", func(b *testing.B) {
+	// 	tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
+	// 	ineffective, _, err := tt.Apply(
+	// 		types.GetEffectiveGenesis().Add(1),
+	// 		notVerified(tt.spawnAll()...),
+	// 		nil,
+	// 	)
+	// 	tt = tt.addSingleSig(n)
 
-		require.NoError(b, err)
-		require.Empty(b, ineffective)
-		txs := make([]types.Transaction, n)
-		for i := range txs {
-			tx := &spawnTx{principal: i, target: i + n}
-			txs[i] = types.Transaction{RawTx: tx.gen(tt)}
-		}
-		bench(b, tt, txs)
-	})
+	// 	require.NoError(b, err)
+	// 	require.Empty(b, ineffective)
+	// 	txs := make([]types.Transaction, n)
+	// 	for i := range txs {
+	// 		tx := &spawnTx{principal: i, target: i + n}
+	// 		txs[i] = types.Transaction{RawTx: tx.gen(tt)}
+	// 	}
+	// 	bench(b, tt, txs)
+	// })
 	b.Run("singlesig/spend", func(b *testing.B) {
 		tt := newTester(b).persistent().addSingleSig(n).applyGenesis()
 		ineffective, _, err := tt.Apply(
