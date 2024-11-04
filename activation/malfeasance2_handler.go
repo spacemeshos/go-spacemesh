@@ -19,6 +19,7 @@ type MalfeasanceHandlerV2 struct {
 	cdb        *datastore.CachedDB
 	tortoise   system.Tortoise
 	edVerifier *signing.EdVerifier
+	validator  nipostValidatorV2
 }
 
 func NewMalfeasanceHandlerV2(
@@ -28,6 +29,7 @@ func NewMalfeasanceHandlerV2(
 	cdb *datastore.CachedDB,
 	tortoise system.Tortoise,
 	edVerifier *signing.EdVerifier,
+	validator nipostValidatorV2,
 ) *MalfeasanceHandlerV2 {
 	return &MalfeasanceHandlerV2{
 		syncer:     syncer,
@@ -36,7 +38,20 @@ func NewMalfeasanceHandlerV2(
 		cdb:        cdb,
 		tortoise:   tortoise,
 		edVerifier: edVerifier,
+		validator:  validator,
 	}
+}
+
+func (mh *MalfeasanceHandlerV2) PostV2Idx(
+	ctx context.Context,
+	nodeId types.NodeID,
+	commitmentAtxId types.ATXID,
+	post *types.Post,
+	challenge []byte,
+	numUnits uint32,
+	idx int,
+) error {
+	return mh.validator.PostV2(ctx, nodeId, commitmentAtxId, post, challenge, numUnits, PostIndex(idx))
 }
 
 // TODO(mafa): call this validate in the handler for publish/gossip.
