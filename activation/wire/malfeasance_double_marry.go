@@ -27,20 +27,20 @@ type ProofDoubleMarry struct {
 
 	// ATX1 is the ID of the ATX being proven to have the marriage certificate of interest.
 	ATX1 types.ATXID
-	// SmesherID1 is the ID of the smesher that published the ATX1.
+	// SmesherID1 is the ID of the smesher that published ATX1.
 	SmesherID1 types.NodeID
-	// Signature1 is the signature of MarriageATX1 by SmesherID1.
+	// Signature1 is the signature of the ATXID by the smesher.
 	Signature1 types.EdSignature
 	// Proof1 is the proof that the marriage certificate is contained in the ATX1.
 	Proof1 MarryProof
 
 	// ATX2 is the ID of the ATX being proven to have the marriage certificate of interest.
 	ATX2 types.ATXID
-	// SmesherID2 is the ID of the smesher that published the ATX1.
+	// SmesherID2 is the ID of the smesher that published ATX2.
 	SmesherID2 types.NodeID
-	// Signature2 is the signature of MarriageATX1 by SmesherID1.
+	// Signature2 is the signature of the ATXID by the smesher.
 	Signature2 types.EdSignature
-	// Proof2 is the proof that the marriage certificate is contained in the ATX1.
+	// Proof2 is the proof that the marriage certificate is contained in the ATX2.
 	Proof2 MarryProof
 }
 
