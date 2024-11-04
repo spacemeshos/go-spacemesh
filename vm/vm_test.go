@@ -334,16 +334,6 @@ func (tx spendTx) withNonce(nonce core.Nonce) *spendNonce {
 	return &spendNonce{spendTx: tx, nonce: nonce}
 }
 
-type spendTxWithOpts struct {
-	from, to int
-	amount   uint64
-	opts     []sdk.Opt
-}
-
-func (tx *spendTxWithOpts) gen(t *tester) types.RawTx {
-	return t.spend(tx.from, tx.to, tx.amount, tx.opts...)
-}
-
 type corruptSig struct {
 	testTx
 }
@@ -774,7 +764,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 10, uint64(ref.estimateSpawnGas(10, 10)) - 1}, // send enough to cover intrinsic cost but not whole transaction
+						// send enough to cover intrinsic cost but not whole transaction
+						&spendTx{0, 10, uint64(ref.estimateSpawnGas(10, 10)) - 1},
 						&selfSpawnTx{10},
 						&spendTx{0, 11, 100},
 					},
@@ -1227,8 +1218,10 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 					current, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid)
 					require.NoError(tt, err)
 					tt.Logf("verifying account index=%d in layer index=%d", account, i)
-					tt.Logf("account index=%d addr=%s balance=%d previous in layer=%d: %v", account, prev.Address.String(), prev.Balance, lid.Sub(1), prev)
-					tt.Logf("account index=%d addr=%s balance=%d current in layer=%d: %v", account, current.Address.String(), current.Balance, lid, current)
+					tt.Logf("account index=%d addr=%s balance=%d previous in layer=%d: %v",
+						account, prev.Address.String(), prev.Balance, lid.Sub(1), prev)
+					tt.Logf("account index=%d addr=%s balance=%d current in layer=%d: %v",
+						account, current.Address.String(), current.Balance, lid, current)
 					changes.verify(tt, &prev, &current)
 				}
 			}

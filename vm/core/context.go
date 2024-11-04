@@ -5,10 +5,9 @@ import (
 	"math"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-
-	"go.uber.org/zap"
 )
 
 type StorageStatus int
@@ -291,7 +290,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 	return err
 }
 
-// Refund refunds gas remaining after execution
+// Refund refunds gas remaining after execution.
 func (c *Context) Refund() (err error) {
 	// TODO(lane): safe math
 	unspent := c.consumed - c.gasSpent

@@ -26,7 +26,7 @@ const (
 	EDVERIFY uint64 = 3000
 
 	// Hardcoded Athena gas costs
-	// TODO(lane): remove hardcoded gas costs
+	// TODO(lane): remove hardcoded gas costs.
 	ATHENA_GAS_SPAWN  = 5036
 	ATHENA_GAS_SPEND  = 8196
 	ATHENA_GAS_VERIFY = 12004

@@ -8,12 +8,11 @@ import (
 	"path/filepath"
 	"runtime"
 
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-
-	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 func AthenaLibPath() string {
@@ -89,7 +88,6 @@ func (h *Host) Execute(
 	code []byte,
 ) (output []byte, gasLeft int64, err error) {
 	hostCtx := &hostContext{
-		layer,
 		h.host,
 		h.staticContext,
 		h.dynamicContext,
@@ -115,7 +113,6 @@ func (h *Host) Execute(
 }
 
 type hostContext struct {
-	layer          types.LayerID
 	host           core.Host
 	staticContext  core.StaticContext
 	dynamicContext core.DynamicContext

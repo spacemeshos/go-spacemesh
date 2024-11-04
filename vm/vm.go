@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
-
-	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -26,8 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
-
-	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 // Opt is for changing VM during initialization.

@@ -94,7 +94,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 	for i, pubkey := range pubkeys {
 		addr, err := walletSdk.Address(*signing.NewPublicKey(pubkey))
 		if err != nil {
-			log.Fatalf("failed to generate address: %w", err)
+			log.Fatalf("failed to generate address: %s", err)
 		}
 		addrs = append(addrs, addr)
 		t1.AppendRow(table.Row{
@@ -119,7 +119,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 	for i, principal := range addrs {
 		tx, err := walletSdk.Spawn(signing.PrivateKey(privkeys[i]), 0)
 		if err != nil {
-			log.Fatalf("failed to generate spawn transaction: %w", err)
+			log.Fatalf("failed to generate spawn transaction: %s", err)
 		}
 		// first generate a spawn transaction
 		t2.AppendRow(table.Row{
@@ -142,7 +142,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 			nonce := rand.Uint64()
 			tx, err := walletSdk.Spend(signing.PrivateKey(privkeys[i]), recipient, amount, nonce)
 			if err != nil {
-				log.Fatalf("failed to generate spend transaction: %w", err)
+				log.Fatalf("failed to generate spend transaction: %s", err)
 			}
 			t2.AppendRow(table.Row{
 				fmt.Sprintf("spend [%s]", hex.EncodeToString(spendSelector[:])),

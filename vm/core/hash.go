@@ -1,11 +1,11 @@
 package core
 
 import (
+	"github.com/ChainSafe/gossamer/pkg/scale"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/signing"
-
-	"github.com/ChainSafe/gossamer/pkg/scale"
 )
 
 func SigningBody(genesis, tx []byte) []byte {

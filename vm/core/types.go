@@ -4,10 +4,9 @@ import (
 	"encoding/hex"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-
-	"go.uber.org/zap/zapcore"
 )
 
 const TxSizeLimit = 1024
