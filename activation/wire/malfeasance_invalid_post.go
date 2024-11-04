@@ -53,6 +53,10 @@ func NewInvalidPostProof(
 		return nil, errors.New("ATX is not a merged ATX, but NodeID is different from SmesherID")
 	}
 
+	if nipostIndex < 0 || nipostIndex >= len(atx.NIPosts) {
+		return nil, errors.New("invalid NIPoST index")
+	}
+
 	postIndex := 0
 	var marriageProof *MarriageProof
 	if atx.SmesherID != nodeID {
@@ -65,7 +69,7 @@ func NewInvalidPostProof(
 			return post.MarriageIndex == proof.NodeIDMarryProof.CertificateIndex
 		})
 		if postIndex == -1 {
-			return nil, errors.New("marriage index not found in PoSTs of ATX")
+			return nil, fmt.Errorf("no PoST from %s in ATX", nodeID.ShortString())
 		}
 	}
 
@@ -233,6 +237,9 @@ func createInvalidPostProof(
 ) (InvalidPostProof, error) {
 	if nipostIndex < 0 || nipostIndex >= len(atx.NIPosts) {
 		return InvalidPostProof{}, errors.New("invalid NIPoST index")
+	}
+	if postIndex < 0 || postIndex >= len(atx.NIPosts[nipostIndex].Posts) {
+		return InvalidPostProof{}, errors.New("invalid PoST index")
 	}
 
 	return InvalidPostProof{
