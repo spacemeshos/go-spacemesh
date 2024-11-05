@@ -3,6 +3,7 @@ package transactions
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -60,6 +61,7 @@ func filterTxs(txs []types.TransactionWithResult, filter ResultsFilter) []types.
 }
 
 func TestIterateResults(t *testing.T) {
+	os.Setenv("ATHENA_LIB_PATH", "../../build")
 	db := statesql.InMemory()
 
 	gen := fixture.NewTransactionResultGenerator()

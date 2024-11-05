@@ -311,7 +311,7 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 	if tx.TxHeader != nil {
 		t.Principal = tx.Principal.String()
 		t.Template = tx.TemplateAddress.String()
-		t.Method = uint32(tx.Method)
+		// t.Method = uint32(tx.Method)
 		t.Nonce = &spacemeshv2alpha1.Nonce{Counter: tx.Nonce}
 		t.MaxGas = tx.MaxGas
 		t.GasPrice = tx.GasPrice
