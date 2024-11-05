@@ -256,6 +256,8 @@ func (h *RemoteHare) signPub(ctx context.Context, session *session, message *Mes
 		msg.Eligibility = *vrf
 		msg.Sender = session.signers[i].NodeID()
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
+		h.log.Info("publishing hare message", zap.Uint32("layer", session.lid.Uint32()),
+			zap.Stringer("beacon", session.beacon))
 		if err := h.svc.Publish(ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
 			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}
