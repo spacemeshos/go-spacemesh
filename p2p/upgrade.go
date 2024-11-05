@@ -75,7 +75,7 @@ func WithPeerInfo(pi peerinfo.PeerInfo) Opt {
 	}
 }
 
-// Host is a conveniency wrapper for all p2p related functionality required to run
+// Host is a convenience wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
 	eg     errgroup.Group
