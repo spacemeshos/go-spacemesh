@@ -20,6 +20,7 @@ import (
 
 type nodeService interface {
 	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error)
+	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
 type RemoteProposalBuilder struct {
 	logger *zap.Logger
@@ -32,6 +33,7 @@ type RemoteProposalBuilder struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
+	epochEligibilities map[types.EpochID]uint32
 }
 
 // New creates a struct of block builder type.
@@ -50,10 +52,11 @@ func NewRemoteBuilder(
 			layerSize:      layerSize,
 			layersPerEpoch: layersPerEpoch,
 		},
-		logger:    logger,
-		clock:     clock,
-		publisher: publisher,
-		nodeSvc:   svc,
+		logger:             logger,
+		clock:              clock,
+		publisher:          publisher,
+		nodeSvc:            svc,
+		epochEligibilities: make(map[types.EpochID]uint32),
 		signers: struct {
 			mu      sync.Mutex
 			signers map[types.NodeID]*signerSession
@@ -136,13 +139,34 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
 		}
+		bcn, err := pb.nodeSvc.Beacon(ctx, layer.GetEpoch())
+		if err != nil {
+			pb.logger.Error("get beacon", zap.Error(err))
+			continue
+		}
+		var (
+			elig uint32
+			ok   bool
+		)
+		if proposal.Ballot.EpochData != nil {
+			elig, ok = pb.epochEligibilities[layer.GetEpoch()]
+			if !ok {
+				pb.epochEligibilities[layer.GetEpoch()] = proposal.Ballot.EpochData.EligibilityCount
+				elig = proposal.Ballot.EpochData.EligibilityCount
+			}
+		} else {
+			elig, ok = pb.epochEligibilities[layer.GetEpoch()]
+			if !ok {
+				panic("missing epoch eligibilities")
+			}
+		}
 
 		proofs := calcEligibilityProofs(
 			signer.signer.VRFSigner(),
 			layer.GetEpoch(),
-			proposal.Ballot.EpochData.Beacon,
+			bcn,
 			types.VRFPostIndex(nonce),
-			proposal.Ballot.EpochData.EligibilityCount,
+			elig,
 			pb.cfg.layersPerEpoch,
 		)
 
