@@ -54,6 +54,13 @@ type Peers struct {
 	globalLatency float64
 }
 
+func (p *Peers) Contains(id peer.ID) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, exist := p.peers[id]
+	return exist
+}
+
 func (p *Peers) Add(id peer.ID) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()

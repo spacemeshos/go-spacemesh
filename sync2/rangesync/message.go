@@ -167,9 +167,11 @@ func (s sender) SendSample(
 }
 
 func (s sender) SendRecent(since time.Time) error {
-	return s.Send(&RecentMessage{
-		SinceTime: uint64(since.UnixNano()),
-	})
+	var m RecentMessage
+	if !since.IsZero() {
+		m.SinceTime = uint64(since.UnixNano())
+	}
+	return s.Send(&m)
 }
 
 // "Empty" message types follow. These do not need scalegen and thus are not in wire_types.go.

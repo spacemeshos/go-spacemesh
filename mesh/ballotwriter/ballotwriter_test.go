@@ -123,7 +123,7 @@ func BenchmarkWriteCoalescing(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if err := db.WithTx(context.Background(), func(tx sql.Transaction) error {
+			if err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
 				if err := writeFn(a[i], tx); err != nil {
 					b.Fatal(err)
 				}
@@ -138,7 +138,7 @@ func BenchmarkWriteCoalescing(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
 		for j := 0; j < b.N/1000; j++ {
-			if err := db.WithTx(context.Background(), func(tx sql.Transaction) error {
+			if err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
 				var err error
 				for i := (j * 1000); i < (j*1000)+1000; i++ {
 					if err = writeFn(a[i], tx); err != nil {
@@ -156,7 +156,7 @@ func BenchmarkWriteCoalescing(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
 		for j := 0; j < b.N/5000; j++ {
-			if err := db.WithTx(context.Background(), func(tx sql.Transaction) error {
+			if err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
 				var err error
 				for i := (j * 5000); i < (j*5000)+5000; i++ {
 					if err = writeFn(a[i], tx); err != nil {

@@ -232,17 +232,17 @@ func TestApply_AlreadyApplied(t *testing.T) {
 	require.NoError(t, transactions.Add(db, tx, time.Now()))
 
 	bid := types.RandomBlockID()
-	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
 	}))
 
 	// same block applied again
-	require.Error(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+	require.Error(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
 	}))
 
 	// different block applied again
-	require.Error(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+	require.Error(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.AddResult(
 			dtx,
 			tx.ID,
@@ -254,7 +254,7 @@ func TestApply_AlreadyApplied(t *testing.T) {
 func TestUndoLayers_Empty(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
-	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.UndoLayers(dtx, types.LayerID(199))
 	}))
 }
@@ -273,7 +273,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		require.NoError(t, transactions.Add(db, tx, time.Now()))
 		bid := types.RandomBlockID()
 
-		require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+		require.NoError(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 			return transactions.AddResult(dtx, tx.ID, &types.TransactionResult{Layer: lid, Block: bid})
 		}))
 		applied = append(applied, tx.ID)
@@ -285,7 +285,7 @@ func TestApplyAndUndoLayers(t *testing.T) {
 		require.Equal(t, types.APPLIED, mtx.State)
 	}
 	// revert to firstLayer
-	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.UndoLayers(dtx, firstLayer.Add(1))
 	}))
 
@@ -349,7 +349,7 @@ func TestGetByAddress(t *testing.T) {
 		createTX(t, signer1, signer2Address, 1, 191, 1),
 	}
 	received := time.Now()
-	require.NoError(t, db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, tx := range txs {
 			require.NoError(t, transactions.Add(dbtx, tx, received))
 			require.NoError(t, transactions.AddResult(dbtx, tx.ID, &types.TransactionResult{Layer: lid}))
@@ -418,7 +418,7 @@ func TestAppliedLayer(t *testing.T) {
 	for _, tx := range txs {
 		require.NoError(t, transactions.Add(db, tx, time.Now()))
 	}
-	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.AddResult(dtx, txs[0].ID, &types.TransactionResult{Layer: lid, Block: types.BlockID{1, 1}})
 	}))
 
@@ -429,7 +429,7 @@ func TestAppliedLayer(t *testing.T) {
 	_, err = transactions.GetAppliedLayer(db, txs[1].ID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
 		return transactions.UndoLayers(dtx, lid)
 	}))
 	_, err = transactions.GetAppliedLayer(db, txs[0].ID)
@@ -466,7 +466,7 @@ func TestAddressesWithPendingTransactions(t *testing.T) {
 		{Address: principals[0], Nonce: txs[0].Nonce},
 		{Address: principals[1], Nonce: txs[2].Nonce},
 	}, rst)
-	require.NoError(t, db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		return transactions.AddResult(dbtx, txs[0].ID, &types.TransactionResult{Message: "hey"})
 	}))
 	rst, err = transactions.AddressesWithPendingTransactions(db)
@@ -475,7 +475,7 @@ func TestAddressesWithPendingTransactions(t *testing.T) {
 		{Address: principals[0], Nonce: txs[1].Nonce},
 		{Address: principals[1], Nonce: txs[2].Nonce},
 	}, rst)
-	require.NoError(t, db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		return transactions.AddResult(dbtx, txs[2].ID, &types.TransactionResult{Message: "hey"})
 	}))
 	rst, err = transactions.AddressesWithPendingTransactions(db)

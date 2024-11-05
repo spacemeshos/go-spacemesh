@@ -2015,6 +2015,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithReadOnly(),
 		sql.WithLogger(apiDBLog),
 		sql.WithConnections(app.Config.API.DatabaseConnections),
+		sql.WithNoCheckSchemaDrift(), // already checked above
 		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {

@@ -126,11 +126,16 @@ type RecentMessage struct {
 
 var _ SyncMessage = &RecentMessage{}
 
-func (m *RecentMessage) Type() MessageType           { return MessageTypeRecent }
-func (m *RecentMessage) X() KeyBytes                 { return nil }
-func (m *RecentMessage) Y() KeyBytes                 { return nil }
-func (m *RecentMessage) Fingerprint() Fingerprint    { return EmptyFingerprint() }
-func (m *RecentMessage) Count() int                  { return 0 }
-func (m *RecentMessage) Keys() []KeyBytes            { return nil }
-func (m *RecentMessage) Since() time.Time            { return time.Unix(0, int64(m.SinceTime)) }
+func (m *RecentMessage) Type() MessageType        { return MessageTypeRecent }
+func (m *RecentMessage) X() KeyBytes              { return nil }
+func (m *RecentMessage) Y() KeyBytes              { return nil }
+func (m *RecentMessage) Fingerprint() Fingerprint { return EmptyFingerprint() }
+func (m *RecentMessage) Count() int               { return 0 }
+func (m *RecentMessage) Keys() []KeyBytes         { return nil }
+func (m *RecentMessage) Since() time.Time {
+	if m.SinceTime == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, int64(m.SinceTime))
+}
 func (m *RecentMessage) Sample() []MinhashSampleItem { return nil }

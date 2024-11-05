@@ -282,7 +282,7 @@ jobs:
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v5
         # always run even if the previous step fails
         if: always()
         with:

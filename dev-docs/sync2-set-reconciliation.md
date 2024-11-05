@@ -1,7 +1,7 @@
 <!-- markdown-toc start - Don't edit this section. Run M-x markdown-toc-refresh-toc -->
 **Table of Contents**
 
-- [Set Reconciliation Protocol (sync2)](#set-reconciliation-protocol-sync2)
+- [Pairwise Set Reconciliation Protocol](#pairwise-set-reconciliation-protocol)
     - [Basic concepts](#basic-concepts)
     - [Simplified set reconciliation example](#simplified-set-reconciliation-example)
     - [Attack mitigation](#attack-mitigation)
@@ -27,17 +27,17 @@
         - [Redundant ItemChunk messages](#redundant-itemchunk-messages)
         - [Range checksums](#range-checksums)
         - [Bloom filters for recent sync](#bloom-filters-for-recent-sync)
+- [Multi-peer Reconciliation](#multi-peer-reconciliation)
+    - [Deciding on the sync strategy](#deciding-on-the-sync-strategy)
+    - [Split sync](#split-sync)
+    - [Full sync](#full-sync)
 
 <!-- markdown-toc end -->
 
-# Set Reconciliation Protocol (sync2)
+# Pairwise Set Reconciliation Protocol
 
-The recursive set reconciliation protocol described in this document is based on
+The recursive set reconciliation protocol described in this section is based on
 [Range-Based Set Reconciliation](https://arxiv.org/pdf/2212.13567.pdf) paper by Aljoscha Meyer.
-
-The multi-peer reconciliation approach is loosely based on
-[SREP: Out-Of-Band Sync of Transaction Pools for Large-Scale Blockchains](https://people.bu.edu/staro/2023-ICBC-Novak.pdf)
-paper by Novak Boškov, Sevval Simsek, Ari Trachtenberg, and David Starobinski.
 
 ## Basic concepts
 
@@ -533,18 +533,24 @@ This message is used for [Recent sync](#recent-sync). It is sent as
 the initial message when recent sync is enabled.
 
 `Recent` message is preceded by a number of `ItemChunk` messages
-carrying the actual items (keys).
+carrying the actual items (keys). The items in immediately preceding
+`ItemChunk` message must be added to the set immediately before
+proceeding with further reconciliation.
 
 Parameters:
 * `SinceTime`: nanoseconds since Unix epoch marking the beginning of
   recent items that were sent, according to the local timestamp.
+  If `SinceTime` is zero, this indicates a response to another Recent
+  message.
 
 As a response to `Recent` message, the local items starting from
 `SinceTime` according to their local timestamp are sent to the peer
-via a number of `ItemChunk` messages. After that the sync sequence
-without further `Recent` message but with or without MinHash probing
-is initiated, depending on whether a positive `maxDiff` value is set
-via the `WithMaxDiff` option.
+via a number of `ItemChunk` messages, followed by `Recent` message
+with zero timestamp, indicating that the items need to be added to the
+set immediately before proceeding with further reconciliation. After
+that the sync sequence without further `Recent` message but with or
+without MinHash probing is initiated, depending on whether a positive
+`maxDiff` value is set via the `WithMaxDiff` option.
 
 ```mermaid
 sequenceDiagram
@@ -557,6 +563,7 @@ sequenceDiagram
   loop
     B->>A: ItemChunk <br/> (Items)
   end
+  B->>A: Recent <br/> (Since=0)
   Note over B: The sample is taken <br/> after consuming <br/> the recent items from A
   B->>A: Sample <br/> (X, Y, Count, Fingerprint, Items)
 ```
@@ -767,3 +774,174 @@ as we don't need the sets to be exactly same after the recent sync; we
 just want to bring them closer to each other. That being said, a
 sufficient size of the Bloom filter needs to be chosen to minimize the
 number of missed elements.
+
+# Multi-peer Reconciliation
+
+The multi-peer reconciliation approach is loosely based on
+[SREP: Out-Of-Band Sync of Transaction Pools for Large-Scale Blockchains](https://people.bu.edu/staro/2023-ICBC-Novak.pdf)
+paper by Novak Boškov, Sevval Simsek, Ari Trachtenberg, and David Starobinski.
+
+![Multi-peer set reconciliation](multipeer.png)
+
+Due to the FPTree data structure being used, the copy operation on a
+set is `O(1)`. When synchronizing the local set against the remote
+peer's set, we need to make sure the set doesn't change while being
+synchronized, except for the recent items being added at the beginning
+of the sync. Thus, for the purpose of synchronization against each
+remote peer, a separate copy of the original set is made. When new
+items are being received during sync with a remote peer, these items
+are passed to the fetcher which retrieves the actual data blobs from
+the peers, after which the received objects are validated and stored
+in the state database. The main set is refreshed from time to time to
+include the items that were recently added; this doesn't affect the
+derived copies currently in use for sync.
+
+## Deciding on the sync strategy
+
+When picking the peers for the purpose of multi-peer sync, each peer
+is [probed](#minhash-based-set-difference-estimation) to determine how
+many items it has in its set. The peers with substantially lower
+number of items than in the local set (configurable threshold) are not
+considered for sync, so as not to place additional load on the peer
+which are not fully synced yet, and let them decide on their syncing
+strategy on their own. Note that the sync is always bi-directional.
+
+Synchronization against multiple peers can be done in two modes:
+1. Split sync involves splitting the whole range into smaller ones,
+   one smaller range per peer, and limiting the sync to the
+   corresponding range of IDs when syncing with each peer.
+2. Full sync involves syncing the full set against each peer's full
+   set.
+
+The sync strategy is selected based on the set similarity between the
+local peers and the peers that have been chosen for sync, as well as
+on the number of items in the remote peer sets. Roughly it can be described using
+the following diagram:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Wait
+    Wait --> ProbePeers : Timeout
+    ProbePeers --> Wait : No peers / <br/> all probes failed
+    ProbePeers --> SplitSync : Enough peers for split + <br/> this one is too different + <br> last sync was not split
+    ProbePeers --> FullSync : Too few peers for split / <br/> this one is similar <br/> enough to peers
+    SplitSync --> Wait : Sync failed
+    SplitSync --> FullSync : Sync succeeded
+    FullSync --> Wait : Sync terminated
+```
+
+## Split sync
+
+The split sync approach helps bringing nodes that went substantially
+out of sync relatively quickly while also making sure too much load is
+not placed on each of the syncing peers. It somewhat resembles
+BitTorrent approach where a file is downloaded from multiple peers,
+with different pieces being obtained from different peers, even if
+this similarity is rather superficial, as the protocol involved is
+very different. The split sync is followed by full sync against the
+peers, as in some cases, as with ATXs during cycle gaps, the set might
+became somewhat "outdated" while the sync was being done. Below is
+a diagram describing split sync sequence:
+
+```mermaid
+sequenceDiagram
+  Note over A: Check how different is A <br/> from its peers
+  par
+    A ->> B: Probe
+    B ->> A: Sample <br/> sim=0.95 count=10001
+  and
+    A ->> C: Probe
+    C ->> A: Sample <br/> sim=0.94 count=10002
+  and
+    A ->> D: Probe
+    D ->> A: Sample <br/> sim=0.94 count=10003
+  and
+    A ->> E: Probe
+    E ->> A: Sample <br/> sim=0.96 count=10001
+  and
+    A ->> F: Probe
+    F ->> A: Sample <br/> sim=0.89 count=9000
+  end
+  Note over A: Not enough peers close to this one <br/> Enough peers eligible for split sync <br/> Peer F's count is too low <br/> Proceeding with split sync
+  par
+    A <<->> B: Sync [0x00..., 0x40...)
+  and
+    A <<->> C: Sync [0x40..., 0x80...)
+  and
+    A <<->> D: Sync [0x80..., 0xC0...)
+  and
+    A <<->> E: Sync [0xC0..., 0x00...)
+  end
+  Note over A: Full sync follows split sync <br/> Syncing against peers that are in sync <br/> is very cheap
+  par
+    A <<->> B: Sync [0x00..., 0x00...)
+  and
+    A <<->> C: Sync [0x00..., 0x00...)
+  and
+    A <<->> D: Sync [0x00..., 0x00...)
+  and
+    A <<->> E: Sync [0x00..., 0x00...)
+  end
+  Note over A: Node A is in sync with the network
+```
+
+When some of the peers are too slow, their ranges are additionally
+assigned to faster peers that managed to complete their ranges
+already. Synchronization against slower peers is not interrupted
+though until each range is synced at least once:
+
+```mermaid
+sequenceDiagram
+  par
+    A <<->> B: Sync [0x00..., 0x40...)
+  and
+    A <<->> C: Sync [0x40..., 0x80...)
+  and
+    A <<->> D: Sync [0x80..., 0xC0...)
+  and
+    A <<->> E: Sync [0xC0..., 0x00...)
+  and
+    Note over A: Peer E being too slow
+    A <<->> E: Sync [0xC0..., 0x00...)
+  end
+```
+
+## Full sync
+
+Full sync is used when this node's set is similar enough to its peers'
+sets, or when there's not enough peers for split sync. The full sync
+against each peer is more reliable than split sync against the same
+peers, so after split sync completes, full sync is always done. The
+diagram below illustrates the full sync sequence.
+
+```mermaid
+sequenceDiagram
+  Note over A: Check how different is A <br/> from its peers
+  par
+    A ->> B: Probe
+    B ->> A: Sample <br/> sim=0.999 count=10001
+  and
+    A ->> C: Probe
+    C ->> A: Sample <br/> sim=0.999 count=10002
+  and
+    A ->> D: Probe
+    D ->> A: Sample <br/> sim=0.999 count=10003
+  and
+    A ->> E: Probe
+    E ->> A: Sample <br/> sim=0.999 count=10001
+  and
+    A ->> F: Probe
+    F ->> A: Sample <br/> sim=0.090 count=9000
+  end
+  Note over A: Enough peers close to this one <br/> Peer F's count is too low <br/> Proceeding with full sync
+  par
+    A <<->> B: Sync [0x00..., 0x00...)
+  and
+    A <<->> C: Sync [0x00..., 0x00...)
+  and
+    A <<->> D: Sync [0x00..., 0x00...)
+  and
+    A <<->> E: Sync [0x00..., 0x00...)
+  end
+  Note over A: Node A is in sync with the network
+```

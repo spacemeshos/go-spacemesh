@@ -11,14 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
 func makeFakeDispHandler(n int) rangesync.Handler {
-	return func(ctx context.Context, stream io.ReadWriter) error {
+	return func(ctx context.Context, _ p2p.Peer, stream io.ReadWriter) error {
 		x := rangesync.KeyBytes(bytes.Repeat([]byte{byte(n)}, 32))
-		c := rangesync.StartWireConduit(ctx, stream)
+		c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 		defer c.End()
 		s := rangesync.Sender{c}
 		s.SendRangeContents(x, x, n)
@@ -59,7 +60,7 @@ func TestDispatcher(t *testing.T) {
 			require.NoError(t, c.StreamRequest(
 				context.Background(), srvPeerID, []byte(tt.name),
 				func(ctx context.Context, stream io.ReadWriter) error {
-					c := rangesync.StartWireConduit(ctx, stream)
+					c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 					defer c.End()
 					m, err := c.NextMessage()
 					require.NoError(t, err)

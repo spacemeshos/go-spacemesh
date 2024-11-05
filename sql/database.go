@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -233,6 +234,15 @@ func InMemory(opts ...Opt) *sqliteDatabase {
 	if err != nil {
 		panic(err)
 	}
+	return db
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...Opt) *sqliteDatabase {
+	// When using empty DB schema, we don't want to check for schema drift due to
+	// "PRAGMA user_version = 0;" in the initial schema retrieved from the DB.
+	db := InMemory(append(opts, WithNoCheckSchemaDrift())...)
+	tb.Cleanup(func() { db.Close() })
 	return db
 }
 
@@ -617,6 +627,8 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	}
 	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn, freeConn: cancel}
 	if err := tx.begin(initstmt); err != nil {
+		cancel()
+		db.pool.Put(conn)
 		return nil, err
 	}
 	return tx, nil
@@ -686,7 +698,7 @@ func (db *sqliteDatabase) Tx(ctx context.Context) (Transaction, error) {
 // WithTx will pass initialized deferred transaction to exec callback.
 // Will commit only if error is nil.
 func (db *sqliteDatabase) WithTx(ctx context.Context, exec func(Transaction) error) error {
-	return db.withTx(ctx, beginImmediate, exec)
+	return db.withTx(ctx, beginDefault, exec)
 }
 
 // TxImmediate creates immediate transaction.
@@ -700,10 +712,7 @@ func (db *sqliteDatabase) TxImmediate(ctx context.Context) (Transaction, error) 
 
 // WithTxImmediate will pass initialized immediate transaction to exec callback.
 // Will commit only if error is nil.
-func (db *sqliteDatabase) WithTxImmediate(
-	ctx context.Context,
-	exec func(Transaction) error,
-) error {
+func (db *sqliteDatabase) WithTxImmediate(ctx context.Context, exec func(Transaction) error) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
