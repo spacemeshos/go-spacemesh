@@ -12,7 +12,8 @@
         "beacon": "ERROR",
         "proposalBuilder": "DEBUG",
         "atxBuilder": "ERROR",
-        "hare": "ERROR"
+        "hare": "ERROR",
+        "nodeServiceClient": "ERROR"
     },
     "main": {
         "node-service-address": "http://0.0.0.0:9099",

@@ -221,6 +221,12 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 				)
 
 				msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
+				if msgBytes == nil && err == nil {
+					// special case - no message to process, we're either too early or hare terminated.
+					// do the onRound and then continue
+					onRound(session.proto) // advance the protocol state before continuing
+					continue
+				}
 				if err != nil {
 					h.log.Error("get hare message", zap.Error(err))
 					onRound(session.proto) // advance the protocol state before continuing

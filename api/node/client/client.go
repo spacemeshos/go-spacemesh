@@ -136,14 +136,22 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 	if err != nil {
 		return nil, fmt.Errorf("get hare message: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		bytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("read all: %w", err)
+		}
+		return bytes, nil
+
+	case http.StatusNoContent:
+		// no message to return, special case, return nil,nil
+		// and the caller should assume there's no message to process,
+		// therefore hare probably terminated.
+		return nil, nil
+	default:
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read all: %w", err)
-	}
-	return bytes, nil
 }
 
 func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
