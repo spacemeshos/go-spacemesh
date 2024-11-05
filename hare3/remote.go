@@ -33,7 +33,6 @@ type RemoteHare struct {
 	oracle    *legacyOracle
 	sessions  map[types.LayerID]*protocol
 	eg        errgroup.Group
-	ctx       context.Context
 	svc       NodeService
 
 	log *zap.Logger
@@ -175,8 +174,8 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 		h.log.Debug("active in preround. waiting for preround delay", zap.Uint32("lid", session.lid.Uint32()))
 		select {
 		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
-		case <-h.ctx.Done():
-			return h.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 	msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
@@ -235,7 +234,7 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 			}
 
 			onRound(session.proto) // advance the protocol state before continuing
-		case <-h.ctx.Done():
+		case <-ctx.Done():
 			return nil
 		}
 	}
