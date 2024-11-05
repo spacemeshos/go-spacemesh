@@ -994,10 +994,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			merged.SmesherID,
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofDoubleMerge)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofDoubleMerge{}),
 		).DoAndReturn(func(ctx context.Context, id types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMerge)
 			nId, err := malProof.Valid(context.Background(), verifier)
@@ -1578,10 +1575,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofInvalidPost)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
@@ -1632,10 +1626,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofInvalidPost)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
@@ -1717,10 +1708,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofInvalidPost)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
@@ -1852,10 +1840,7 @@ func Test_Marriages(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofDoubleMarry)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMarry)
 			nId, err := malProof.Valid(ctx, verifier)
