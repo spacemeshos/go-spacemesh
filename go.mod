@@ -14,7 +14,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/grafana/pyroscope-go v1.2.0
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.23.0
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-ds-leveldb v0.5.0
@@ -39,7 +39,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
-	github.com/spacemeshos/api/release/go v1.55.1-0.20241018085104-8cdf8cf26e61
+	github.com/spacemeshos/api/release/go v1.55.1-0.20241105095330-546880913ed5
 	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.1
@@ -58,7 +58,7 @@ require (
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0
 	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.7.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20240930140551-af27646dc61f
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241021214115-324edc3d5d38
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.1
 	k8s.io/api v0.31.2
@@ -240,13 +240,13 @@ require (
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/sys v0.25.0 // indirect
 	golang.org/x/term v0.24.0 // indirect
-	golang.org/x/text v0.18.0 // indirect
+	golang.org/x/text v0.19.0 // indirect
 	golang.org/x/tools v0.25.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	gonum.org/v1/gonum v0.15.0 // indirect
 	google.golang.org/api v0.197.0 // indirect
 	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20240930140551-af27646dc61f // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241021214115-324edc3d5d38 // indirect
 	google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
