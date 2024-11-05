@@ -265,6 +265,7 @@ func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
 ) (GetHareTotalWeightLayerResponseObject, error) {
 	weight, err := s.hare.TotalWeight(ctx, types.LayerID(req.Layer))
 	if err != nil {
+		fmt.Println("total weight error", err)
 		return nil, err
 	}
 	return &totalWeightResp{weight}, nil
@@ -291,6 +292,7 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
 	id := types.BytesToNodeID(hexBuf)
 	weight, err := s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))
 	if err != nil {
+		fmt.Println("miner weight error", err)
 		return nil, fmt.Errorf("miner weight: %w", err)
 	}
 	return &nodeWeightResp{val: weight}, nil
@@ -310,6 +312,7 @@ func (s *Server) GetHareBeaconEpoch(ctx context.Context,
 ) (GetHareBeaconEpochResponseObject, error) {
 	beacon, err := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
 	if err != nil {
+		fmt.Println("get hare beacon epoch error", err)
 		return nil, err
 	}
 	return &beaconResp{b: beacon}, nil
@@ -337,15 +340,18 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 ) {
 	hexBuf, err := hex.DecodeString(request.Node)
 	if err != nil {
+		fmt.Println("hex decode error", err)
 		return &proposalResp{}, err
 	}
 	id := types.BytesToNodeID(hexBuf)
 
 	proposal, nonce, err := s.proposals.BuildFor(ctx, types.LayerID(request.Layer), id)
 	if err != nil {
+		fmt.Println("build for error", err)
 		return &proposalResp{}, err
 	}
 	if proposal.Ballot.EpochData.EligibilityCount == 0 {
+		fmt.Println("no eligibility")
 		return &proposalResp{}, nil
 	}
 	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, err
