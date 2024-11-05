@@ -49,8 +49,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 const layersPerEpoch = 3
@@ -508,7 +510,11 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.Genesis = config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
 			Accounts: map[string]uint64{
-				address.String(): 100_000_000,
+				address.String():                        100_000_000,
+				walletTemplate.TemplateAddress.String(): 0,
+			},
+			Templates: map[string][]byte{
+				walletTemplate.TemplateAddress.String(): walletProgram.PROGRAM,
 			},
 		}
 

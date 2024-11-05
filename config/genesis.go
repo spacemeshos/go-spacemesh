@@ -97,6 +97,7 @@ func (g *GenesisConfig) ToAccounts() []types.Account {
 		}
 		if g.Templates[addr] != nil {
 			acct.State = g.Templates[addr]
+			acct.TemplateAddress = &genesisAddr
 		}
 		rst = append(rst, acct)
 	}
