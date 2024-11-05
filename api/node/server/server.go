@@ -345,6 +345,9 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	if err != nil {
 		return &proposalResp{}, err
 	}
+	if proposal == nil && err == nil {
+		return &proposalResp{}, nil
+	}
 	if proposal.Ballot.EpochData.EligibilityCount == 0 {
 		return &proposalResp{}, nil
 	}
