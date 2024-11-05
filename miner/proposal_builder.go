@@ -653,90 +653,69 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 		return nil
 	})
 
-	eligible := make(chan *signerSession, 2)
-	var eg errgroup.Group
-	eg.Go(func() error {
-		if err := pb.initSignerDataFor(ctx, signer, lid, nodeID); err != nil {
-			if errors.Is(err, errAtxNotAvailable) {
-				pb.logger.Debug("smesher doesn't have atx that targets this epoch",
-					log.ZContext(ctx),
-					zap.Uint32("epoch_id", signer.session.epoch.Uint32()),
-				)
-			} else {
-				return err
-			}
-		}
-		if lid <= signer.session.prev {
-			return fmt.Errorf("layer %d was already built by signer %s", lid, nodeID.ShortString())
-		}
-		signer.session.prev = lid
-		proofs := signer.session.eligibilities.slots
-		if proofs == 0 {
-			pb.logger.Debug("not eligible for proposal in layer",
+	if err := pb.initSignerDataFor(ctx, signer, lid, nodeID); err != nil {
+		if errors.Is(err, errAtxNotAvailable) {
+			pb.logger.Debug("smesher doesn't have atx that targets this epoch",
 				log.ZContext(ctx),
-				zap.Uint32("layer_id", lid.Uint32()),
-				zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+				zap.Uint32("epoch_id", signer.session.epoch.Uint32()),
 			)
-			return nil
+			return nil, 0, errors.New("no atx in epoch")
+		} else {
+			return nil, 0, err
 		}
-		pb.logger.Debug("eligible for proposals in layer",
+	}
+	if lid <= signer.session.prev {
+		return nil, 0, fmt.Errorf("layer %d was already built by signer %s", lid, nodeID.ShortString())
+	}
+	signer.session.prev = lid
+	proofs := signer.session.eligibilities.slots
+	if proofs == 0 {
+		pb.logger.Debug("not eligible for proposal in layer",
 			log.ZContext(ctx),
 			zap.Uint32("layer_id", lid.Uint32()),
 			zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
-			zap.Int("num proposals", int(proofs)),
 		)
-		eligible <- signer // won't block
-		return nil
-	})
+		return nil, 0, nil
+	}
+	pb.logger.Debug("eligible for proposals in layer",
+		log.ZContext(ctx),
+		zap.Uint32("layer_id", lid.Uint32()),
+		zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+		zap.Int("num proposals", int(proofs)),
+	)
 
-	var stage1Err error
-	go func() {
-		stage1Err = eg.Wait()
-		close(eligible)
-	}()
+	opinion, err := encodeVotesOnce()
+	if err != nil {
+		return nil, 0, err
+	}
 
-	var prop *types.Proposal
-	// Stage 2
-	eg2 := errgroup.Group{}
-	for ss := range eligible {
-		opinion, err := encodeVotesOnce()
-		if err != nil {
+	meshHash := calcMeshHashOnce()
+
+	if signer.session.ref == types.EmptyBallotID {
+		if err := persistActiveSetOnce(); err != nil {
 			return nil, 0, err
 		}
-
-		meshHash := calcMeshHashOnce()
-
-		eg2.Go(func() error {
-			// needs to be saved before publishing, as we will query it in handler
-			if ss.session.ref == types.EmptyBallotID {
-				if err := persistActiveSetOnce(); err != nil {
-					return err
-				}
-			}
-			slots := ss.session.eligibilities.slots
-
-			txs := pb.conState.PredictBlock(lid, int(slots))
-
-			prop = createPartialProposal(
-				&ss.session,
-				pb.shared.beacon,
-				pb.shared.active.set,
-				nodeID,
-				lid,
-				txs,
-				opinion,
-				meshHash,
-			)
-			pb.logger.Info("proposal created",
-				log.ZContext(ctx),
-				zap.Inline(prop),
-				zap.Object("latency", &ss.latency),
-			)
-			return nil
-		})
 	}
-	err := errors.Join(stage1Err, eg2.Wait())
-	return prop, 0, err
+	slots := signer.session.eligibilities.slots
+
+	txs := pb.conState.PredictBlock(lid, int(slots))
+
+	prop := createPartialProposal(
+		&signer.session,
+		pb.shared.beacon,
+		pb.shared.active.set,
+		nodeID,
+		lid,
+		txs,
+		opinion,
+		meshHash,
+	)
+	pb.logger.Info("proposal created",
+		log.ZContext(ctx),
+		zap.Inline(prop),
+		zap.Object("latency", &signer.latency),
+	)
+	return prop, signer.session.nonce, nil
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
