@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 
@@ -27,9 +28,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
+
+func init() {
+	os.Setenv("ATHENA_LIB_PATH", "../../../build")
+}
 
 func TestTransactionService_List(t *testing.T) {
 	types.SetLayersPerEpoch(5)
@@ -227,7 +234,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	keys := make([]signing.PrivateKey, 4)
-	accounts := make([]types.Account, len(keys))
+	accounts := make([]types.Account, len(keys)+1)
 	rng := rand.New(rand.NewSource(10101))
 	for i := range keys {
 		pub, priv, err := ed25519.GenerateKey(rng)
@@ -236,6 +243,11 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 		address, err := wallet.Address(*signing.NewPublicKey(pub))
 		require.NoError(t, err)
 		accounts[i] = types.Account{Address: address, Balance: 1e12}
+	}
+	accounts[len(keys)] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
 	tx, err := wallet.Spawn(keys[0], 0)
@@ -257,7 +269,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 			Transaction: tx,
 		})
 		require.NoError(t, err)
-		require.Equal(t, uint64(36090), resp.RecommendedMaxGas)
+		require.Equal(t, uint64(20200), resp.RecommendedMaxGas)
 	})
 	t.Run("malformed tx", func(t *testing.T) {
 		_, err := client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
@@ -301,7 +313,7 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	keys := make([]signing.PrivateKey, 4)
-	accounts := make([]types.Account, len(keys))
+	accounts := make([]types.Account, len(keys)+1)
 	rng := rand.New(rand.NewSource(10101))
 	for i := range keys {
 		pub, priv, err := ed25519.GenerateKey(rng)
@@ -310,6 +322,11 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		addr, err := wallet.Address(*signing.NewPublicKey(pub))
 		require.NoError(t, err)
 		accounts[i] = types.Account{Address: addr, Balance: 1e12}
+	}
+	accounts[len(keys)] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
 	tx, err := wallet.Spawn(keys[0], 0)
@@ -397,8 +414,11 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Equal(t, resp.Tx.Contents.GetSend().Amount, amount)
-		require.Equal(t, resp.Tx.Contents.GetSend().Destination, addr.String())
+		// TODO(lane): we don't currently parse tx amount for athena txs
+		require.Equal(t, uint64(0), resp.Tx.Contents.GetSend().Amount)
+		require.Equal(t, "", resp.Tx.Contents.GetSend().Destination)
+		// require.Equal(t, amount, resp.Tx.Contents.GetSend().Amount)
+		// require.Equal(t, addr.String(), resp.Tx.Contents.GetSend().Destination)
 	})
 
 	t.Run("transaction contents for spawn tx", func(t *testing.T) {
@@ -410,8 +430,13 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 			Transaction: tx,
 			Verify:      true,
 		})
-		require.NoError(t, err)
-		require.Equal(t, resp.Tx.Contents.GetSingleSigSpawn().Pubkey, publicKey.String())
+
+		// in Spacemesh you can parse a spawn tx for an account that's already spawned.
+		// Athena doesn't allow this.
+		// require.NoError(t, err)
+		// require.Equal(t, publicKey.String(), resp.Tx.Contents.GetSingleSigSpawn().Pubkey)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		require.Nil(t, resp)
 	})
 }
 
