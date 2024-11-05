@@ -348,6 +348,10 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	if proposal == nil && err == nil {
 		return &proposalResp{}, nil
 	}
+	// we have to explicitly check this case otherwise the next line may panic
+	if proposal.Ballot.RefBallot != types.EmptyBallotID {
+		return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, nil
+	}
 	if proposal.Ballot.EpochData.EligibilityCount == 0 {
 		return &proposalResp{}, nil
 	}
