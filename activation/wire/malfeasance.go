@@ -96,7 +96,11 @@ func (p *ATXProof) Decode() (Proof, error) {
 		}
 		return rst, nil
 	case DoubleMerge:
-		return nil, errors.New("double merge proof is not supported")
+		rst := &ProofDoubleMerge{}
+		if err := codec.Decode(p.Proof, rst); err != nil {
+			return nil, fmt.Errorf("decoding ATX double merge proof: %w", err)
+		}
+		return rst, nil
 	case InvalidPost:
 		rst := &ProofInvalidPost{}
 		if err := codec.Decode(p.Proof, rst); err != nil {
