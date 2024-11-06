@@ -199,6 +199,7 @@ func TestProposals(t *testing.T) {
 		p := createProposal(t)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
 		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
+		prop.MustInitialize()
 		require.NoError(t, err)
 		require.Equal(t, p, prop)
 	})
