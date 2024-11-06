@@ -837,23 +837,21 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
-	// TODO: Support a double merged ATX published in a checkpointed epoch.
-	// In this case, the other ATX is golden and the whole network is guaranteed to see it.
-	// Such double merged ATX should be considered syntactically invalid.
-	// However, to properly detect this, we should move this check before storing the ATX
-	// and return an error w/o storing the ATX.
+	// TODO(mafa): during syntactical validation we should check if a merged ATX is targeting a checkpointed epoch
+	// merged ATXs need to be checkpointed with their marriage ATXs
+	// if there is a collision (i.e. the new ATX references the same marriage ATX as a golden ATX) it should be
+	// considered syntactically invalid
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6434
 	otherAtx, err := h.fetchWireAtx(ctx, tx, other)
 	if err != nil {
 		return false, fmt.Errorf("fetching other ATX: %w", err)
 	}
 
-	// Get the marriage ATX to prove that both IDs are married.
-	// TODO: what if IDs married before checkpoint?
-	// In this case, the blob for the marriage ATX is not available and it's not possible
-	// to construct proof that Smeshers who published both ATXs are married.
-	// However, everybody on the network know they are married because this information
-	// is persisted in the checkpoint. This should probably supported in a slightly different implementation
-	// of a malfeasance proof (without a marriage proof).
+	// TODO(mafa): checkpoints need to include all marriage ATXs in full to be able to create malfeasance proofs
+	// like this one (but also others)
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6435
 	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, otherAtx)
 	if err != nil {
 		return true, fmt.Errorf("creating double merge proof: %w", err)
