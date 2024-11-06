@@ -1,27 +1,60 @@
 package wire
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate scalegen
 
 // MerkleTreeIndex is the index of the leaf containing the given field in the merkle tree.
-type MerkleTreeIndex uint16
+type MerkleTreeIndex uint64
 
 const (
 	PublishEpochIndex MerkleTreeIndex = iota
 	PositioningATXIndex
 	CoinbaseIndex
-	InitialPostIndex
+	InitialPostRootIndex
 	PreviousATXsRootIndex
 	NIPostsRootIndex
 	VRFNonceIndex
 	MarriagesRootIndex
 	MarriageATXIndex
+)
+
+type InitialPostTreeIndex uint64
+
+const (
+	CommitmentATXIndex InitialPostTreeIndex = iota
+	InitialPostIndex
+)
+
+type NIPostTreeIndex uint64
+
+const (
+	MembershipIndex NIPostTreeIndex = iota
+	ChallengeIndex
+	PostsRootIndex
+)
+
+type MarriageCertificateIndex uint64
+
+const (
+	ReferenceATXIndex MarriageCertificateIndex = iota
+	SignatureIndex
+)
+
+type SubPostTreeIndex uint64
+
+const (
+	MarriageIndex SubPostTreeIndex = iota
+	PrevATXIndex
+	MembershipLeafIndex
+	PostIndex
+	NumUnitsIndex
 )
 
 // ProofType is an identifier for the type of proof that is encoded in the ATXProof.
@@ -56,5 +89,5 @@ type ATXProof struct {
 type Proof interface {
 	scale.Encodable
 
-	Valid(edVerifier *signing.EdVerifier) (types.NodeID, error)
+	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
 }

@@ -331,7 +331,7 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 			Message:     result.Message,
 			GasConsumed: result.Gas,
 			Fee:         result.Fee,
-			Block:       result.Block[:],
+			Block:       result.Block.Bytes(),
 			Layer:       result.Layer.Uint32(),
 		}
 		if len(result.Addresses) > 0 {

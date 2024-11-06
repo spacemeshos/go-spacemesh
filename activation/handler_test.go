@@ -119,6 +119,7 @@ func toAtx(tb testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 }
 
 type handlerMocks struct {
+	ctrl        *gomock.Controller
 	goldenATXID types.ATXID
 
 	mclock      *MocklayerClock
@@ -184,6 +185,8 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	ctrl := gomock.NewController(tb)
 	return handlerMocks{
+		ctrl: ctrl,
+
 		goldenATXID: golden,
 		mclock:      NewMocklayerClock(ctrl),
 		mpub:        pubsubmocks.NewMockPublisher(ctrl),

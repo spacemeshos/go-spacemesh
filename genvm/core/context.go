@@ -10,7 +10,7 @@ import (
 )
 
 // Context serves 2 purposes:
-// - maintains changes to the system state, that will be applied only after succeful execution
+// - maintains changes to the system state, that will be applied only after successful execution
 // - accumulates set of reusable objects and data.
 type Context struct {
 	Registry HandlerRegistry
@@ -36,7 +36,7 @@ type Context struct {
 	consumed uint64
 	// fee is in coins units
 	fee uint64
-	// an amount transfrered to other accounts
+	// an amount transferred to other accounts
 	transferred uint64
 
 	touched []Address

@@ -874,7 +874,7 @@ func (b *Builder) createAtx(
 			PositioningATX: challenge.PositioningATX,
 			Coinbase:       b.Coinbase(),
 			VRFNonce:       (uint64)(nipostState.VRFNonce),
-			NiPosts: []wire.NiPostsV2{
+			NIPosts: []wire.NIPostV2{
 				{
 					Membership: wire.MerkleProofV2{
 						Nodes: nipostState.Membership.Nodes,
