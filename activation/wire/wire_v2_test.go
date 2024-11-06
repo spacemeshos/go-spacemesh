@@ -31,6 +31,12 @@ func withMarriageATX(id types.ATXID) testAtxV2Opt {
 	}
 }
 
+func withPublishEpoch(epoch types.EpochID) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.PublishEpoch = epoch
+	}
+}
+
 func withInitial(commitAtx types.ATXID, post PostV1) testAtxV2Opt {
 	return func(atx *ActivationTxV2) {
 		atx.Initial = &InitialAtxPartsV2{

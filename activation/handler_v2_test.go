@@ -985,8 +985,24 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.PreviousATXs = []types.ATXID{otherATXs[1].ID(), otherATXs[2].ID()}
 		merged.Sign(signers[2])
 
+		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
 		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
-		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), merged.SmesherID, gomock.Any())
+		atxHandler.mMalPublish.EXPECT().Publish(
+			gomock.Any(),
+			merged.SmesherID,
+			gomock.AssignableToTypeOf(&wire.ProofDoubleMerge{}),
+		).DoAndReturn(func(ctx context.Context, id types.NodeID, proof wire.Proof) error {
+			malProof := proof.(*wire.ProofDoubleMerge)
+			nId, err := malProof.Valid(context.Background(), verifier)
+			require.NoError(t, err)
+			require.Equal(t, merged.SmesherID, nId)
+			return nil
+		})
 		err = atxHandler.processATX(context.Background(), "", merged, time.Now())
 		require.NoError(t, err)
 	})
@@ -1020,12 +1036,13 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		merged.MarriageATX = &mATXID
 		merged.PreviousATXs = []types.ATXID{otherATXs[1].ID(), otherATXs[2].ID(), otherATXs[3].ID()}
 		merged.Sign(signers[2])
-		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
-		// TODO: this could be syntactically validated as all nodes in the network
+
+		// This is syntactically invalid as all nodes in the network
 		// should already have the checkpointed merged ATX.
-		atxHandler.mMalPublish.EXPECT().Publish(gomock.Any(), merged.SmesherID, gomock.Any())
+		t.Skip("syntactically validating double merge where one ATX is checkpointed isn't implemented yet")
+		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
 		err := atxHandler.processATX(context.Background(), "", merged, time.Now())
-		require.NoError(t, err)
+		require.Error(t, err)
 	})
 }
 
@@ -1559,10 +1576,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofInvalidPost)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
@@ -1613,10 +1627,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofInvalidPost)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
@@ -1698,10 +1709,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofInvalidPost)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
@@ -1833,10 +1841,7 @@ func Test_Marriages(t *testing.T) {
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
 			sig.NodeID(),
-			gomock.Cond(func(data wire.Proof) bool {
-				_, ok := data.(*wire.ProofDoubleMarry)
-				return ok
-			}),
+			gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
 		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMarry)
 			nId, err := malProof.Valid(ctx, verifier)

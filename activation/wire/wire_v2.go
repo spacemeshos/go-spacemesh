@@ -158,8 +158,16 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 	return atx.id
 }
 
-func (atx *ActivationTxV2) PublishEpochProof() []types.Hash32 {
+func (atx *ActivationTxV2) PublishEpochProof() PublishEpochProof {
 	return atx.merkleProof(PublishEpochIndex)
+}
+
+type PublishEpochProof []types.Hash32
+
+func (p PublishEpochProof) Valid(atxID types.ATXID, publishEpoch types.EpochID) bool {
+	var publishEpochBytes types.Hash32
+	binary.LittleEndian.PutUint32(publishEpochBytes[:], publishEpoch.Uint32())
+	return validateProof(types.Hash32(atxID), publishEpochBytes, p, uint64(PublishEpochIndex))
 }
 
 func (atx *ActivationTxV2) PositioningATXProof() []types.Hash32 {

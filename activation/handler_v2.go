@@ -841,8 +841,25 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
-	// TODO(mafa): finish proof
-	var proof wire.Proof
+	// TODO(mafa): during syntactical validation we should check if a merged ATX is targeting a checkpointed epoch
+	// merged ATXs need to be checkpointed with their marriage ATXs
+	// if there is a collision (i.e. the new ATX references the same marriage ATX as a golden ATX) it should be
+	// considered syntactically invalid
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6434
+	otherAtx, err := h.fetchWireAtx(ctx, tx, other)
+	if err != nil {
+		return false, fmt.Errorf("fetching other ATX: %w", err)
+	}
+
+	// TODO(mafa): checkpoints need to include all marriage ATXs in full to be able to create malfeasance proofs
+	// like this one (but also others)
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6435
+	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, otherAtx)
+	if err != nil {
+		return true, fmt.Errorf("creating double merge proof: %w", err)
+	}
 	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
 }
 
