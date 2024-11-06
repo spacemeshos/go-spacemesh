@@ -637,12 +637,12 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				PostSubset([]byte(h.local)),
 			)
 			invalidIdx := &verifying.ErrInvalidIndex{}
-			if errors.As(err, invalidIdx) {
+			switch {
+			case errors.As(err, invalidIdx):
 				if err := h.publishInvalidPostProof(ctx, atx, id, idx, uint32(invalidIdx.Index)); err != nil {
 					return nil, fmt.Errorf("publishing invalid post proof: %w", err)
 				}
-			}
-			if err != nil {
+			case err != nil:
 				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
 			}
 			result.ids[id] = idData{
@@ -674,11 +674,6 @@ func (h *HandlerV2) publishInvalidPostProof(
 	nipostIndex int,
 	invalidPostIndex uint32,
 ) error {
-	h.logger.Debug(
-		"ATX with invalid post index",
-		zap.Stringer("id", atx.ID()),
-		zap.Uint32("index", invalidPostIndex),
-	)
 	initialAtx := atx
 	if initialAtx.Initial == nil {
 		initialID, err := atxs.GetFirstIDByNodeID(h.cdb, nodeID)
@@ -686,7 +681,7 @@ func (h *HandlerV2) publishInvalidPostProof(
 			return fmt.Errorf("fetch initial ATX for ID %s: %w", nodeID.ShortString(), err)
 		}
 
-		// TODO(mafa): what if initial ATX is not v2?
+		// TODO(mafa): implement for v1 initial ATXs: https://github.com/spacemeshos/go-spacemesh/issues/6433
 		initialAtx, err = h.fetchWireAtx(ctx, h.cdb, initialID)
 		if err != nil {
 			return fmt.Errorf("fetch initial ATX blob for ID %s: %w", nodeID.ShortString(), err)
