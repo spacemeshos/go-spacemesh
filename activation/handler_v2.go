@@ -679,10 +679,8 @@ func (h *HandlerV2) publishInvalidPostProof(
 		zap.Stringer("id", atx.ID()),
 		zap.Uint32("index", invalidPostIndex),
 	)
-	var initialAtx *wire.ActivationTxV2
-	if atx.Initial != nil {
-		initialAtx = atx
-	} else {
+	initialAtx := atx
+	if initialAtx.Initial == nil {
 		initialID, err := atxs.GetFirstIDByNodeID(h.cdb, nodeID)
 		if err != nil {
 			return fmt.Errorf("fetch initial ATX for ID %s: %w", nodeID.ShortString(), err)
@@ -691,7 +689,7 @@ func (h *HandlerV2) publishInvalidPostProof(
 		// TODO(mafa): what if initial ATX is not v2?
 		initialAtx, err = h.fetchWireAtx(ctx, h.cdb, initialID)
 		if err != nil {
-			return fmt.Errorf("fetch initial ATX: %w", err)
+			return fmt.Errorf("fetch initial ATX blob for ID %s: %w", nodeID.ShortString(), err)
 		}
 	}
 
