@@ -688,6 +688,14 @@ func (h *HandlerV2) publishInvalidPostProof(
 		}
 	}
 
+	// TODO(mafa): checkpoints need to include all initial ATXs in full to be able to create this malfeasance proof:
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6436
+	//
+	// TODO(mafa): checkpoints need to include all marriage ATXs in full to be able to create malfeasance proofs
+	// like this one (but also others)
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6435
 	proof, err := wire.NewInvalidPostProof(h.cdb, atx, initialAtx, nodeID, nipostIndex, invalidPostIndex)
 	if err != nil {
 		return fmt.Errorf("creating invalid post proof: %w", err)
