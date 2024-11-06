@@ -642,6 +642,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				if err := h.publishInvalidPostProof(ctx, atx, id, idx, uint32(invalidIdx.Index)); err != nil {
 					return nil, fmt.Errorf("publishing invalid post proof: %w", err)
 				}
+				return nil, fmt.Errorf("invalid post for ID %s: %w", id.ShortString(), err)
 			case err != nil:
 				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
 			}
