@@ -42,41 +42,36 @@ func NewMalfeasanceHandlerV2(
 	}
 }
 
-func (mh *MalfeasanceHandlerV2) PostV2Idx(
+func (mh *MalfeasanceHandlerV2) PostIndex(
 	ctx context.Context,
-	nodeId types.NodeID,
-	commitmentAtxId types.ATXID,
+	smesherID types.NodeID,
+	commitment types.ATXID,
 	post *types.Post,
 	challenge []byte,
 	numUnits uint32,
 	idx int,
 ) error {
-	return mh.validator.PostV2(ctx, nodeId, commitmentAtxId, post, challenge, numUnits, PostIndex(idx))
+	return mh.validator.PostV2(ctx, smesherID, commitment, post, challenge, numUnits, PostIndex(idx))
+}
+
+func (mh *MalfeasanceHandlerV2) Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+	return mh.edVerifier.Verify(d, nodeID, m, sig)
 }
 
 // TODO(mafa): call this validate in the handler for publish/gossip.
 // TODO(mafa): extend this validate to return nil if `peer` == self.
 func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]types.NodeID, error) {
-	var decoded wire.ATXProof
-	if err := codec.Decode(data, &decoded); err != nil {
+	var atxProof wire.ATXProof
+	if err := codec.Decode(data, &atxProof); err != nil {
 		return nil, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
 	}
 
-	var proof wire.Proof
-	switch decoded.ProofType {
-	case wire.DoubleMarry:
-		p := &wire.ProofDoubleMarry{}
-		if err := codec.Decode(decoded.Proof, p); err != nil {
-			return nil, fmt.Errorf("decoding ATX double marry proof: %w", err)
-		}
-		proof = p
-	case wire.InvalidPost:
-		// TODO(mafa): implement this
-	default:
-		return nil, fmt.Errorf("unknown ATX malfeasance proof type: %d", decoded.ProofType)
+	proof, err := atxProof.Decode()
+	if err != nil {
+		return nil, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
 	}
 
-	id, err := proof.Valid(mh.edVerifier)
+	id, err := proof.Valid(ctx, mh)
 	if err != nil {
 		return nil, fmt.Errorf("validating ATX malfeasance proof: %w", err)
 	}

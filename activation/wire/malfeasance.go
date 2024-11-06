@@ -2,9 +2,12 @@ package wire
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -82,6 +85,29 @@ type ATXProof struct {
 	ProofType ProofType
 	// Proof is the actual proof. Its type depends on the ProofType.
 	Proof []byte `scale:"max=1048576"` // max size of proof is 1MiB
+}
+
+func (p *ATXProof) Decode() (Proof, error) {
+	switch p.ProofType {
+	case DoubleMarry:
+		rst := &ProofDoubleMarry{}
+		if err := codec.Decode(p.Proof, rst); err != nil {
+			return nil, fmt.Errorf("decoding ATX double marry proof: %w", err)
+		}
+		return rst, nil
+	case DoubleMerge:
+		return nil, errors.New("double merge proof is not supported")
+	case InvalidPost:
+		rst := &ProofInvalidPost{}
+		if err := codec.Decode(p.Proof, rst); err != nil {
+			return nil, fmt.Errorf("decoding ATX invalid post proof: %w", err)
+		}
+		return rst, nil
+	case InvalidPrevious:
+		return nil, errors.New("invalid previous proof is not supported")
+	default:
+		return nil, fmt.Errorf("unknown ATX malfeasance proof type: %d", p.ProofType)
+	}
 }
 
 // Proof is an interface for all types of proofs that can be provided in an ATXProof.
