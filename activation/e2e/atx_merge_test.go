@@ -97,7 +97,7 @@ func createInitialAtx(
 			Post:          *wire.PostToWireV1(initial),
 		},
 		VRFNonce: uint64(nipost.VRFNonce),
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: wire.MerkleProofV2{
 					Nodes: nipost.Membership.Nodes,
@@ -121,7 +121,7 @@ func createSoloAtx(publish types.EpochID, prev, pos types.ATXID, nipost *nipost.
 		PreviousATXs:   []types.ATXID{prev},
 		PositioningATX: pos,
 		VRFNonce:       uint64(nipost.VRFNonce),
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: wire.MerkleProofV2{
 					Nodes: nipost.Membership.Nodes,
@@ -152,7 +152,7 @@ func createMerged(
 		PreviousATXs:   previous,
 		MarriageATX:    &marriage,
 		PositioningATX: positioning,
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: membership,
 				Challenge:  types.Hash32(niposts[0].PostMetadata.Challenge),
@@ -163,7 +163,7 @@ func createMerged(
 	for i, nipost := range niposts {
 		idx := slices.IndexFunc(previous, func(a types.ATXID) bool { return a == nipost.previous })
 		require.NotEqual(tb, -1, idx)
-		atx.NiPosts[0].Posts = append(atx.NiPosts[0].Posts, wire.SubPostV2{
+		atx.NIPosts[0].Posts = append(atx.NIPosts[0].Posts, wire.SubPostV2{
 			MarriageIndex:       uint32(i),
 			PrevATXIndex:        uint32(idx),
 			MembershipLeafIndex: nipost.Membership.LeafIndex,

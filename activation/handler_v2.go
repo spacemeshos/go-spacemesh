@@ -182,13 +182,13 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 	}
 
 	if atx.MarriageATX == nil {
-		if len(atx.NiPosts) != 1 {
+		if len(atx.NIPosts) != 1 {
 			return errors.New("solo atx must have one nipost")
 		}
-		if len(atx.NiPosts[0].Posts) != 1 {
+		if len(atx.NIPosts[0].Posts) != 1 {
 			return errors.New("solo atx must have one post")
 		}
-		if atx.NiPosts[0].Posts[0].PrevATXIndex != 0 {
+		if atx.NIPosts[0].Posts[0].PrevATXIndex != 0 {
 			return errors.New("solo atx post must have prevATXIndex 0")
 		}
 	}
@@ -204,7 +204,7 @@ func (h *HandlerV2) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 			return errors.New("initial atx must not have previous atxs")
 		}
 
-		numUnits := atx.NiPosts[0].Posts[0].NumUnits
+		numUnits := atx.NIPosts[0].Posts[0].NumUnits
 		if err := h.nipostValidator.VRFNonceV2(
 			atx.SmesherID, atx.Initial.CommitmentATX, atx.VRFNonce, numUnits,
 		); err != nil {
@@ -309,7 +309,7 @@ func (h *HandlerV2) collectAtxDeps(atx *wire.ActivationTxV2) ([]types.Hash32, []
 	}
 
 	poetRefs := make(map[types.Hash32]struct{})
-	for _, nipost := range atx.NiPosts {
+	for _, nipost := range atx.NIPosts {
 		poetRefs[nipost.Challenge] = struct{}{}
 	}
 
@@ -495,7 +495,7 @@ func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
 
 func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error {
 	seen := make(map[uint32]struct{})
-	for _, niposts := range atx.NiPosts {
+	for _, niposts := range atx.NIPosts {
 		for _, post := range niposts.Posts {
 			if _, ok := seen[post.MarriageIndex]; ok {
 				return fmt.Errorf("ID present twice (duplicated marriage index): %d", post.MarriageIndex)
@@ -540,8 +540,8 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate previous ATXs
-	nipostSizes := make(nipostSizes, len(atx.NiPosts))
-	for i, niposts := range atx.NiPosts {
+	nipostSizes := make(nipostSizes, len(atx.NIPosts))
+	for i, niposts := range atx.NIPosts {
 		nipostSizes[i] = new(nipostSize)
 		for _, post := range niposts.Posts {
 			if post.MarriageIndex >= uint32(len(equivocationSet)) {
@@ -563,7 +563,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate poet membership proofs
-	for i, niposts := range atx.NiPosts {
+	for i, niposts := range atx.NIPosts {
 		// verify PoET memberships in a single go
 		indexedChallenges := make(map[uint64][]byte)
 
@@ -608,7 +608,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 
 	// validate all niposts
 	var smesherCommitment *types.ATXID
-	for _, niposts := range atx.NiPosts {
+	for idx, niposts := range atx.NIPosts {
 		for _, post := range niposts.Posts {
 			id := equivocationSet[post.MarriageIndex]
 			var commitment types.ATXID
@@ -632,24 +632,18 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				id,
 				commitment,
 				wire.PostFromWireV1(&post.Post),
-				niposts.Challenge[:],
+				niposts.Challenge.Bytes(),
 				post.NumUnits,
 				PostSubset([]byte(h.local)),
 			)
 			invalidIdx := &verifying.ErrInvalidIndex{}
-			if errors.As(err, invalidIdx) {
-				h.logger.Debug(
-					"ATX with invalid post index",
-					zap.Stringer("id", atx.ID()),
-					zap.Int("index", invalidIdx.Index),
-				)
-				// TODO(mafa): finish proof
-				var proof wire.Proof
-				if err := h.malPublisher.Publish(ctx, id, proof); err != nil {
-					return nil, fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
+			switch {
+			case errors.As(err, invalidIdx):
+				if err := h.publishInvalidPostProof(ctx, atx, id, idx, uint32(invalidIdx.Index)); err != nil {
+					return nil, fmt.Errorf("publishing invalid post proof: %w", err)
 				}
-			}
-			if err != nil {
+				return nil, fmt.Errorf("invalid post for ID %s: %w", id.ShortString(), err)
+			case err != nil:
 				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
 			}
 			result.ids[id] = idData{
@@ -672,6 +666,45 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 
 	result.ticks = nipostSizes.minTicks()
 	return &result, nil
+}
+
+func (h *HandlerV2) publishInvalidPostProof(
+	ctx context.Context,
+	atx *wire.ActivationTxV2,
+	nodeID types.NodeID,
+	nipostIndex int,
+	invalidPostIndex uint32,
+) error {
+	initialAtx := atx
+	if initialAtx.Initial == nil {
+		initialID, err := atxs.GetFirstIDByNodeID(h.cdb, nodeID)
+		if err != nil {
+			return fmt.Errorf("fetch initial ATX for ID %s: %w", nodeID.ShortString(), err)
+		}
+
+		// TODO(mafa): implement for v1 initial ATXs: https://github.com/spacemeshos/go-spacemesh/issues/6433
+		initialAtx, err = h.fetchWireAtx(ctx, h.cdb, initialID)
+		if err != nil {
+			return fmt.Errorf("fetch initial ATX blob for ID %s: %w", nodeID.ShortString(), err)
+		}
+	}
+
+	// TODO(mafa): checkpoints need to include all initial ATXs in full to be able to create this malfeasance proof:
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6436
+	//
+	// TODO(mafa): checkpoints need to include all marriage ATXs in full to be able to create malfeasance proofs
+	// like this one (but also others)
+	//
+	// see https://github.com/spacemeshos/go-spacemesh/issues/6435
+	proof, err := wire.NewInvalidPostProof(h.cdb, atx, initialAtx, nodeID, nipostIndex, invalidPostIndex)
+	if err != nil {
+		return fmt.Errorf("creating invalid post proof: %w", err)
+	}
+	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
+		return fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
+	}
+	return nil
 }
 
 func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
@@ -717,7 +750,7 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx 
 
 func (h *HandlerV2) fetchWireAtx(
 	ctx context.Context,
-	tx sql.Transaction,
+	tx sql.Executor,
 	id types.ATXID,
 ) (*wire.ActivationTxV2, error) {
 	var blob sql.Blob
@@ -808,6 +841,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 		zap.Stringer("smesher_id", atx.SmesherID),
 	)
 
+	// TODO(mafa): finish proof
 	var proof wire.Proof
 	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
 }
