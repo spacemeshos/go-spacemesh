@@ -809,12 +809,14 @@ func (app *App) initServices(ctx context.Context) error {
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	}
+	var bcnGetter system.BeaconGetter = beaconProtocol
 	if nodeServiceClient != nil {
+		bcnGetter = &beaconGetter{client: nodeServiceClient}
 		extraOpts = append(extraOpts, eligibility.WithTotalWeightFunc(nodeServiceClient.TotalWeight))
 		extraOpts = append(extraOpts, eligibility.WithMinerWeightFunc(nodeServiceClient.MinerWeight))
 	}
 	app.hOracle = eligibility.New(
-		beaconProtocol,
+		bcnGetter,
 		app.db,
 		app.atxsdata,
 		vrfVerifier,
@@ -2460,4 +2462,14 @@ func (p *proposalConsumerHare) OnProposal(proposal *types.Proposal) error {
 		return p.hare3.OnProposal(proposal)
 	}
 	return p.hare4.OnProposal(proposal)
+}
+
+type beaconGetter struct {
+	client *client.NodeService
+}
+
+func (b *beaconGetter) GetBeacon(e types.EpochID) (types.Beacon, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return b.client.Beacon(ctx, e)
 }
