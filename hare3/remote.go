@@ -181,10 +181,12 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 	msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
 	if err != nil && active {
 		h.log.Error("get hare message on preround", zap.Error(err))
+	} else if msgBytes == nil && err == nil {
+		// do nothing, there's no message to process
 	} else {
 		msg := &Message{}
 		if err := codec.Decode(msgBytes, msg); err != nil {
-			h.log.Error("decode remote hare message", zap.Error(err))
+			h.log.Error("preround decode remote hare message", zap.Error(err))
 		} else {
 			h.signPub(ctx, session, msg)
 		}
