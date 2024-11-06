@@ -25,12 +25,70 @@ func withMarriageCertificate(sig *signing.EdSigner, refAtx types.ATXID, atxPubli
 	}
 }
 
+func withMarriageATX(id types.ATXID) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.MarriageATX = &id
+	}
+}
+
+func withInitial(commitAtx types.ATXID, post PostV1) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.Initial = &InitialAtxPartsV2{
+			CommitmentATX: commitAtx,
+			Post:          post,
+		}
+	}
+}
+
+func withPreviousATXs(atxs ...types.ATXID) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		atx.PreviousATXs = atxs
+	}
+}
+
+func withNIPost(opts ...testNIPostV2Opt) testAtxV2Opt {
+	return func(atx *ActivationTxV2) {
+		nipost := &NIPostV2{}
+		for _, opt := range opts {
+			opt(nipost)
+		}
+		atx.NIPosts = append(atx.NIPosts, *nipost)
+	}
+}
+
+type testNIPostV2Opt func(*NIPostV2)
+
+func withNIPostChallenge(challenge types.Hash32) testNIPostV2Opt {
+	return func(nipost *NIPostV2) {
+		nipost.Challenge = challenge
+	}
+}
+
+func withNIPostMembershipProof(proof MerkleProofV2) testNIPostV2Opt {
+	return func(nipost *NIPostV2) {
+		nipost.Membership = proof
+	}
+}
+
+func withNIPostSubPost(subPost SubPostV2) testNIPostV2Opt {
+	return func(nipost *NIPostV2) {
+		nipost.Posts = append(nipost.Posts, subPost)
+	}
+}
+
 func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 	atx := &ActivationTxV2{
 		PublishEpoch:   rand.N(types.EpochID(255)),
 		PositioningATX: types.RandomATXID(),
-		PreviousATXs:   make([]types.ATXID, 1+rand.IntN(255)),
-		NiPosts: []NiPostsV2{
+	}
+	for _, opt := range opts {
+		opt(atx)
+	}
+	if atx.PreviousATXs == nil {
+		atx.PreviousATXs = make([]types.ATXID, 1+rand.IntN(255))
+	}
+	if atx.NIPosts == nil {
+		atx.NIPosts = []NIPostV2{
 			{
 				Membership: MerkleProofV2{
 					Nodes: make([]types.Hash32, 32),
@@ -48,10 +106,7 @@ func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 					},
 				},
 			},
-		},
-	}
-	for _, opt := range opts {
-		opt(atx)
+		}
 	}
 	return atx
 }
@@ -78,7 +133,7 @@ func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
 			PublishEpoch:   0,
 			PositioningATX: types.RandomATXID(),
 			PreviousATXs:   make([]types.ATXID, 256),
-			NiPosts: []NiPostsV2{
+			NIPosts: []NIPostV2{
 				{
 					Membership: MerkleProofV2{
 						Nodes: make([]types.Hash32, 32),
@@ -95,15 +150,15 @@ func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
 				},
 			},
 		}
-		for i := range atx.NiPosts[0].Posts {
-			atx.NiPosts[0].Posts[i].Post = PostV1{
+		for i := range atx.NIPosts[0].Posts {
+			atx.NIPosts[0].Posts[i].Post = PostV1{
 				Nonce:   0,
 				Indices: make([]byte, 800),
 				Pow:     0,
 			}
 		}
-		for i := range atx.NiPosts[1].Posts {
-			atx.NiPosts[1].Posts[i].Post = PostV1{
+		for i := range atx.NIPosts[1].Posts {
+			atx.NIPosts[1].Posts[i].Post = PostV1{
 				Nonce:   0,
 				Indices: make([]byte, 800),
 				Pow:     0,
@@ -134,13 +189,13 @@ func Test_ATXv2_SupportUpTo4Niposts(t *testing.T) {
 	f.Fuzz(atx)
 	for i := range 4 {
 		t.Run(fmt.Sprintf("supports %d poet", i), func(t *testing.T) {
-			atx.NiPosts = make([]NiPostsV2, i)
+			atx.NIPosts = make([]NIPostV2, i)
 			_, err := codec.Encode(atx)
 			require.NoError(t, err)
 		})
 	}
 	t.Run("doesn't support > 5 niposts", func(t *testing.T) {
-		atx.NiPosts = make([]NiPostsV2, 5)
+		atx.NIPosts = make([]NIPostV2, 5)
 		_, err := codec.Encode(atx)
 		require.Error(t, err)
 	})

@@ -1,11 +1,13 @@
 package wire
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -19,6 +21,8 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 	otherSig, err := signing.NewEdSigner()
 	require.NoError(t, err)
+
+	edVerifier := signing.NewEdVerifier()
 
 	t.Run("valid", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
@@ -43,8 +47,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, proof)
 
-		verifier := signing.NewEdVerifier()
-		id, err := proof.Valid(verifier)
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, otherSig.NodeID(), id)
 	})
@@ -86,18 +96,14 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		// manually construct an invalid proof
 		proof = &ProofDoubleMarry{
-			Proofs: [2]MarryProof{
-				{
-					ATXID: atx1.ID(),
-				},
-				{
-					ATXID: atx1.ID(),
-				},
-			},
+			ATX1: atx1.ID(),
+			ATX2: atx1.ID(),
 		}
 
-		verifier := signing.NewEdVerifier()
-		id, err := proof.Valid(verifier)
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "same ATX ID")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -129,22 +135,35 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		proof := &ProofDoubleMarry{
 			NodeID: otherSig.NodeID(),
-			Proofs: [2]MarryProof{
-				proof1, proof2,
-			},
+
+			ATX1:       atx1.ID(),
+			SmesherID1: atx1.SmesherID,
+			Signature1: atx1.Signature,
+			Proof1:     proof1,
+
+			ATX2:       atx2.ID(),
+			SmesherID2: atx2.SmesherID,
+			Signature2: atx2.Signature,
+			Proof2:     proof2,
 		}
 
-		verifier := signing.NewEdVerifier()
-		proof.Proofs[0].MarriageProof = slices.Clone(proof1.MarriageProof)
-		proof.Proofs[0].MarriageProof[0] = types.RandomHash()
-		id, err := proof.Valid(verifier)
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		proof.Proof1.MarriageCertificatesProof = slices.Clone(proof1.MarriageCertificatesProof)
+		proof.Proof1.MarriageCertificatesProof[0] = types.RandomHash()
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 
-		proof.Proofs[0].MarriageProof[0] = proof1.MarriageProof[0]
-		proof.Proofs[1].MarriageProof = slices.Clone(proof2.MarriageProof)
-		proof.Proofs[1].MarriageProof[0] = types.RandomHash()
-		id, err = proof.Valid(verifier)
+		proof.Proof1.MarriageCertificatesProof[0] = proof1.MarriageCertificatesProof[0]
+		proof.Proof2.MarriageCertificatesProof = slices.Clone(proof2.MarriageCertificatesProof)
+		proof.Proof2.MarriageCertificatesProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -176,22 +195,35 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		proof := &ProofDoubleMarry{
 			NodeID: otherSig.NodeID(),
-			Proofs: [2]MarryProof{
-				proof1, proof2,
-			},
+
+			ATX1:       atx1.ID(),
+			SmesherID1: atx1.SmesherID,
+			Signature1: atx1.Signature,
+			Proof1:     proof1,
+
+			ATX2:       atx2.ID(),
+			SmesherID2: atx2.SmesherID,
+			Signature2: atx2.Signature,
+			Proof2:     proof2,
 		}
 
-		verifier := signing.NewEdVerifier()
-		proof.Proofs[0].CertificateProof = slices.Clone(proof1.CertificateProof)
-		proof.Proofs[0].CertificateProof[0] = types.RandomHash()
-		id, err := proof.Valid(verifier)
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		proof.Proof1.CertificateProof = slices.Clone(proof1.CertificateProof)
+		proof.Proof1.CertificateProof[0] = types.RandomHash()
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate proof")
 		require.Equal(t, types.EmptyNodeID, id)
 
-		proof.Proofs[0].CertificateProof[0] = proof1.CertificateProof[0]
-		proof.Proofs[1].CertificateProof = slices.Clone(proof2.CertificateProof)
-		proof.Proofs[1].CertificateProof[0] = types.RandomHash()
-		id, err = proof.Valid(verifier)
+		proof.Proof1.CertificateProof[0] = proof1.CertificateProof[0]
+		proof.Proof2.CertificateProof = slices.Clone(proof2.CertificateProof)
+		proof.Proof2.CertificateProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate proof")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -218,17 +250,22 @@ func Test_DoubleMarryProof(t *testing.T) {
 		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
 		require.NoError(t, err)
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
 
-		proof.Proofs[0].Signature = types.RandomEdSignature()
-		id, err := proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
+		proof.Signature1 = types.RandomEdSignature()
+		id, err := proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX1")
 		require.Equal(t, types.EmptyNodeID, id)
 
-		proof.Proofs[0].Signature = atx1.Signature
-		proof.Proofs[1].Signature = types.RandomEdSignature()
-		id, err = proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
+		proof.Signature1 = atx1.Signature
+		proof.Signature2 = types.RandomEdSignature()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX2")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
 
@@ -254,16 +291,21 @@ func Test_DoubleMarryProof(t *testing.T) {
 		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
 		require.NoError(t, err)
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
 
-		proof.Proofs[0].CertificateSignature = types.RandomEdSignature()
-		id, err := proof.Valid(verifier)
+		proof.Proof1.Certificate.Signature = types.RandomEdSignature()
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate signature")
 		require.Equal(t, types.EmptyNodeID, id)
 
-		proof.Proofs[0].CertificateSignature = atx1.Marriages[1].Signature
-		proof.Proofs[1].CertificateSignature = types.RandomEdSignature()
-		id, err = proof.Valid(verifier)
+		proof.Proof1.Certificate.Signature = atx1.Marriages[1].Signature
+		proof.Proof2.Certificate.Signature = types.RandomEdSignature()
+		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate signature")
 		require.Equal(t, types.EmptyNodeID, id)
 	})

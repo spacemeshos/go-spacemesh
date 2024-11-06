@@ -500,7 +500,7 @@ func (h *HandlerV1) storeAtx(
 		proof     *mwire.MalfeasanceProof
 		malicious bool
 	)
-	if err := h.cdb.WithTx(ctx, func(tx sql.Transaction) error {
+	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		var err error
 		malicious, err = identities.IsMalicious(tx, atx.SmesherID)
 		if err != nil {

@@ -186,8 +186,8 @@ func poetProofRefs(ctx context.Context, db sql.Executor, id types.ATXID) ([]type
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
 			return nil, fmt.Errorf("decoding ATX blob: %w", err)
 		}
-		refs := make([]types.PoetProofRef, len(atx.NiPosts))
-		for i, post := range atx.NiPosts {
+		refs := make([]types.PoetProofRef, len(atx.NIPosts))
+		for i, post := range atx.NIPosts {
 			refs[i] = types.PoetProofRef(post.Challenge)
 		}
 		return refs, nil

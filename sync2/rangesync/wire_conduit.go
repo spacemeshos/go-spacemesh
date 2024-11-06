@@ -13,56 +13,53 @@ import (
 )
 
 const (
-	writeQueueSize = 10000
+	// TODO: currently, in RangeSetReconciler, the reconciliation process may block
+	// indefinitely if the send queue in wireConduit overflows, causing connection to
+	// time out, after which reconciliation is interrupted.
+	// A way to partly mitigate this issue would be the following:
+	// 1. Invoking Receive() immediately on any incoming set items.  It may help that
+	//    the set is only actually modified via Add() when handling items associated
+	//    with Recent messages.
+	// 2. Branch out into more goroutines when handling incoming messages upon sending
+	//    being blocked. This way, we'll allow the remote side to receive some
+	//    messages by handling the messages it sent us and unblocking its send queue.
+	// The OrderedSet is only added to by RangeSetReconciler when receiving recent
+	// items. Receive() semantics should be updated so that Receive() being called on
+	// OrderedSet's copies' does the same as Receive() being called on the original
+	// OrderedSet. After these changes, it should be easy enough to parallelize
+	// RangeSetReconciler's message handling as needed, passing copies of OrderedSet
+	// to the new goroutines.
+	sendQueueSize = 200000
 )
 
-var ErrLimitExceeded = errors.New("sync traffic/message limit exceeded")
-
-// ConduitOption specifies an option for a message conduit.
-type ConduitOption func(c *wireConduit)
-
-// WithTrafficLimit sets a limit on the total number of bytes sent and received.
-// Zero or negative values disable the limit.
-func WithTrafficLimit(limit int) ConduitOption {
-	return func(c *wireConduit) {
-		c.trafficLimit = limit
-	}
-}
-
-// WithMessageLimit sets a limit on the total number of messages sent and received.
-// Zero or negative values disable the limit.
-func WithMessageLimit(limit int) ConduitOption {
-	return func(c *wireConduit) {
-		c.messageLimit = limit
-	}
-}
+var (
+	ErrTrafficLimitExceeded = errors.New("sync traffic limit exceeded")
+	ErrMessageLimitExceeded = errors.New("sync message limit exceeded")
+)
 
 // wireConduit is an implementation of the Conduit interface that sends and receives
 // messages over a stream represented by an io.ReadWriter.
 type wireConduit struct {
-	stream       io.ReadWriter
-	eg           errgroup.Group
-	sendCh       chan SyncMessage
-	stopCh       chan struct{}
-	nBytesSent   atomic.Int64
-	nBytesRecv   atomic.Int64
-	nMsgsSent    atomic.Int64
-	nMsgsRecv    atomic.Int64
-	trafficLimit int
-	messageLimit int
+	stream     io.ReadWriter
+	cfg        RangeSetReconcilerConfig
+	eg         errgroup.Group
+	sendCh     chan SyncMessage
+	stopCh     chan struct{}
+	nBytesSent atomic.Int64
+	nBytesRecv atomic.Int64
+	nMsgsSent  atomic.Int64
+	nMsgsRecv  atomic.Int64
 }
 
 var _ Conduit = &wireConduit{}
 
 // startWireConduit sets up a new wireConduit using the given context, stream and options.
-func startWireConduit(ctx context.Context, s io.ReadWriter, opts ...ConduitOption) *wireConduit {
+func startWireConduit(ctx context.Context, s io.ReadWriter, cfg RangeSetReconcilerConfig) *wireConduit {
 	c := &wireConduit{
 		stream: s,
-		sendCh: make(chan SyncMessage, writeQueueSize),
+		cfg:    cfg,
+		sendCh: make(chan SyncMessage, sendQueueSize),
 		stopCh: make(chan struct{}),
-	}
-	for _, opt := range opts {
-		opt(c)
 	}
 	c.eg.Go(func() error {
 		defer close(c.stopCh)
@@ -122,11 +119,11 @@ func (c *wireConduit) End() {
 
 // checkLimits checks if the traffic or message limits have been exceeded.
 func (c *wireConduit) checkLimits() error {
-	if c.trafficLimit > 0 && c.bytesSent()+c.bytesReceived() > c.trafficLimit {
-		return ErrLimitExceeded
+	if c.cfg.TrafficLimit > 0 && c.bytesSent()+c.bytesReceived() > c.cfg.TrafficLimit {
+		return ErrTrafficLimitExceeded
 	}
-	if c.messageLimit > 0 && c.messagesSent()+c.messagesReceived() > c.trafficLimit {
-		return ErrLimitExceeded
+	if c.cfg.MessageLimit > 0 && c.messagesSent()+c.messagesReceived() > c.cfg.MessageLimit {
+		return ErrMessageLimitExceeded
 	}
 	return nil
 }
