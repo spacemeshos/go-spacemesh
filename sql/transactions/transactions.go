@@ -295,6 +295,33 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		}, "get acct pending from nonce")
 }
 
+func PrunePendingBeforeNonce(db sql.Executor, address types.Address, to uint64) error {
+	txs, err := queryPending(db, `select tx, header, layer, block, timestamp, id from transactions
+		where principal = ?1 and nonce < ?2 and result is null`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address.Bytes())
+			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(to))
+		}, "get acct pending to nonce")
+	if err != nil {
+		return fmt.Errorf("query pending: %w", err)
+	}
+	insert := func(txId []byte) error {
+		_, err := db.Exec(`insert into evicted_mempool (id) values (?1)
+		on conflict(id) do nothing;`,
+			func(stmt *sql.Statement) {
+				stmt.BindBytes(1, txId)
+			}, nil)
+		return err
+	}
+
+	for _, tx := range txs {
+		if err := insert(tx.ID.Bytes()); err != nil {
+			return fmt.Errorf("insert evicted: %w", err)
+		}
+	}
+	return nil
+}
+
 // query MUST ensure that this order of fields tx, header, layer, block, timestamp, id.
 func queryPending(
 	db sql.Executor,
