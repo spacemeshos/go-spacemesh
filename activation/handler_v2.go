@@ -709,7 +709,15 @@ func (h *HandlerV2) validatePost(
 	// like this one (but also others)
 	//
 	// see https://github.com/spacemeshos/go-spacemesh/issues/6435
-	proof, err := wire.NewInvalidPostProof(h.cdb, atx, commitment, nodeID, nipostIndex, uint32(errInvalid.Index), uint32(validIdx))
+	proof, err := wire.NewInvalidPostProof(
+		h.cdb,
+		atx,
+		commitment,
+		nodeID,
+		nipostIndex,
+		uint32(errInvalid.Index),
+		uint32(validIdx),
+	)
 	if err != nil {
 		return fmt.Errorf("creating invalid post proof: %w", err)
 	}
