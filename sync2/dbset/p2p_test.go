@@ -209,6 +209,7 @@ func runSync(
 		return srv.Run(ctx)
 	})
 
+	// Wait for the server to activate
 	require.Eventually(t, func() bool {
 		for _, h := range mesh.Hosts() {
 			if len(h.Mux().Protocols()) == 0 {
@@ -226,7 +227,9 @@ func runSync(
 	require.NoError(t, pssB.Sync(ctx, srvPeerID, syncSetB, x, x))
 	stopTimer(t)
 	t.Logf("synced in %v, sent %d, recv %d", time.Since(tStart), pssB.Sent(), pssB.Received())
+
 	if verify {
+		// Check that the sets are equal after we add the received items
 		addReceived(t, dbA, setA, syncSetA)
 		addReceived(t, dbB, setB, syncSetB)
 
@@ -289,6 +292,11 @@ func genRandomRows(nShared, nUniqueA, nUniqueB int) (rowsA, rowsB []fooRow, comb
 }
 
 func TestP2P(t *testing.T) {
+	// In this test, we synchronize two sets of items, A and B, and verify that they
+	// are equal.  The sets are represented by two SQLite databases, each containing a
+	// table `foo` with columns `id` and `received`. The `id` column is a 32-byte id,
+	// and the `received` column is a timestamp in nanoseconds which is used to test
+	// recent sync mechanism.
 	const maxDepth = 24
 	hexID := rangesync.MustParseHexKeyBytes
 	t.Run("predefined items", func(t *testing.T) {
