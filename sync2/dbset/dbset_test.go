@@ -36,6 +36,7 @@ func TestDBSet_Empty(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+	defer s.Release()
 	empty, err := s.Empty()
 	require.NoError(t, err)
 	require.True(t, empty)
@@ -79,6 +80,7 @@ func TestDBSet(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+	defer s.Release()
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		firstKey(t, s.Items()).String())
 	has, err := s.Has(
@@ -169,7 +171,7 @@ func TestDBSet(t *testing.T) {
 	}
 }
 
-func TestDBItemStore_Receive(t *testing.T) {
+func TestDBSet_Receive(t *testing.T) {
 	ids := []rangesync.KeyBytes{
 		rangesync.MustParseHexKeyBytes("0000000000000000000000000000000000000000000000000000000000000000"),
 		rangesync.MustParseHexKeyBytes("123456789abcdef0000000000000000000000000000000000000000000000000"),
@@ -182,6 +184,7 @@ func TestDBItemStore_Receive(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+	defer s.Release()
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		firstKey(t, s.Items()).String())
 
@@ -200,7 +203,7 @@ func TestDBItemStore_Receive(t *testing.T) {
 	require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.String())
 }
 
-func TestDBItemStore_Copy(t *testing.T) {
+func TestDBSet_Copy(t *testing.T) {
 	ids := []rangesync.KeyBytes{
 		rangesync.MustParseHexKeyBytes("0000000000000000000000000000000000000000000000000000000000000000"),
 		rangesync.MustParseHexKeyBytes("123456789abcdef0000000000000000000000000000000000000000000000000"),
@@ -213,6 +216,7 @@ func TestDBItemStore_Copy(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+	defer s.Release()
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		firstKey(t, s.Items()).String())
 
@@ -261,6 +265,7 @@ func TestDBItemStore_Advance(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+	defer s.Release()
 	require.NoError(t, s.EnsureLoaded())
 
 	copy := s.Copy(false)
@@ -328,6 +333,7 @@ func TestDBSet_Added(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+	defer s.Release()
 	requireEmpty(t, s.Received())
 
 	add := []rangesync.KeyBytes{

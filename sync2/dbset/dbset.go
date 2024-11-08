@@ -202,12 +202,11 @@ func (d *DBSet) Empty() (bool, error) {
 
 // Advance advances the DBSet to the latest state of the underlying database table.
 func (d *DBSet) Advance() error {
+	if err := d.EnsureLoaded(); err != nil {
+		return fmt.Errorf("loading DBSet: %w", err)
+	}
 	d.loadMtx.Lock()
 	defer d.loadMtx.Unlock()
-	if d.ft == nil {
-		// FIXME
-		panic("BUG: can't advance the DBItemStore before it's loaded")
-	}
 	oldSnapshot := d.snapshot
 	var err error
 	d.snapshot, err = d.st.Snapshot(d.db)

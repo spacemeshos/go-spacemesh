@@ -62,15 +62,4 @@ func TestRCPool(t *testing.T) {
 	// replace the item
 	pool.replace(idx5, foo{x: 12})
 	require.Equal(t, foo{x: 12}, pool.item(idx5))
-
-	// // don't replace an item with multiple refs
-	// pool.ref(idx5)
-	// idx6, replaced := pool.addOrReplace(idx5, foo{x: 13})
-	// require.False(t, replaced)
-	// require.Equal(t, fooIndex(7), idx6)
-	// require.Equal(t, foo{x: 12}, pool.item(idx5))
-	// require.Equal(t, foo{x: 13}, pool.item(idx6))
-
-	// // but failing to replace the item should have still decreased its ref count
-	// require.True(t, pool.release(idx5))
 }
