@@ -397,7 +397,7 @@ func (ac *accountCache) resetAfterApply(
 	ac.startNonce = nextNonce
 	ac.startBalance = newBalance
 
-	err := transactions.PrunePendingNonce(db, ac.addr, ac.startNonce)
+	err := transactions.EvictPendingNonce(db, ac.addr, ac.startNonce)
 	if err != nil {
 		return fmt.Errorf("prune pending: %w", err)
 	}
@@ -780,6 +780,11 @@ func (c *Cache) ApplyLayer(
 			return err
 		}
 		acctResetDuration.Observe(float64(time.Since(t2)))
+	}
+
+	err := transactions.PruneEvicted(db)
+	if err != nil {
+		logger.Warn("failed to prune evicted", zap.Error(err))
 	}
 	return nil
 }

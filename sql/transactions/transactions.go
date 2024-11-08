@@ -306,9 +306,9 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		}, "get acct pending from nonce")
 }
 
-// PrunePendingNonce will evict from the pending transactions
+// EvictPendingNonce will evict the pending transactions
 // from a given principal address into the evited_mempool table.
-func PrunePendingNonce(db sql.Executor, address types.Address, to uint64) error {
+func EvictPendingNonce(db sql.Executor, address types.Address, to uint64) error {
 	txs, err := queryPending(db, `select tx, header, layer, block, timestamp, id from transactions
 		where principal = ?1 and nonce < ?2 and result is null`,
 		func(stmt *sql.Statement) {
@@ -342,6 +342,14 @@ func PrunePendingNonce(db sql.Executor, address types.Address, to uint64) error 
 		}
 	}
 	return nil
+}
+
+const PRUNE_PERIOD = "-12 hours"
+
+func PruneEvicted(db sql.Executor) error {
+	sql := fmt.Sprintf("delete from evicted_mempool where time < DATETIME(CURRENT_TIMESTAMP,'%s');", PRUNE_PERIOD)
+	_, err := db.Exec(sql, nil, nil)
+	return err
 }
 
 // query MUST ensure that this order of fields tx, header, layer, block, timestamp, id.
