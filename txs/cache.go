@@ -396,6 +396,11 @@ func (ac *accountCache) resetAfterApply(
 	ac.txsByNonce = list.New()
 	ac.startNonce = nextNonce
 	ac.startBalance = newBalance
+
+	err := transactions.PrunePendingNonce(db, ac.addr, ac.startNonce)
+	if err != nil {
+		return fmt.Errorf("prune pending: %w", err)
+	}
 	return ac.addPendingFromNonce(logger, db, ac.startNonce, applied)
 }
 
