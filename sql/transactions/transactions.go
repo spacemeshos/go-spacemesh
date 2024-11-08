@@ -307,7 +307,7 @@ func PrunePendingBeforeNonce(db sql.Executor, address types.Address, to uint64) 
 	}
 	insert := func(txId []byte) error {
 		_, err := db.Exec(`insert into evicted_mempool (id) values (?1)
-		on conflict(id) do nothing;`,
+		on conflict(id) do nothing; delete from transactions where id = ?1`,
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, txId)
 			}, nil)
