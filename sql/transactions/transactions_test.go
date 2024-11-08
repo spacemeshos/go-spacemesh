@@ -562,3 +562,49 @@ func TestTransactionInBlock(t *testing.T) {
 	_, _, err = transactions.TransactionInBlock(db, tid, lids[2])
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
+
+func TestTransactionEvictMempool(t *testing.T) {
+	principals := []types.Address{
+		{1},
+		{2},
+		{3},
+	}
+	txs := []types.Transaction{
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{1}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: 0},
+		},
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{2}},
+			TxHeader: &types.TxHeader{Principal: principals[0], Nonce: 1},
+		},
+		{
+			RawTx:    types.RawTx{ID: types.TransactionID{3}},
+			TxHeader: &types.TxHeader{Principal: principals[1], Nonce: 0},
+		},
+	}
+	db := statesql.InMemoryTest(t)
+	for _, tx := range txs {
+		require.NoError(t, transactions.Add(db, &tx, time.Time{}))
+	}
+	err := transactions.PrunePendingNonce(db, principals[0], 1)
+	require.NoError(t, err)
+
+	pending, err := transactions.GetAcctPendingFromNonce(db, principals[0], 1)
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	require.Equal(t, pending[0].ID, txs[1].ID)
+
+	pending, err = transactions.GetAcctPendingFromNonce(db, principals[1], 0)
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	require.Equal(t, pending[0].ID, txs[2].ID)
+
+	has, err := transactions.Has(db, txs[0].ID)
+	require.False(t, has)
+	require.NoError(t, err)
+
+	has, err = transactions.HasEvicted(db, txs[0].ID)
+	require.True(t, has)
+	require.NoError(t, err)
+}

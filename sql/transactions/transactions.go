@@ -233,6 +233,17 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 	return rows > 0, nil
 }
 
+func HasEvicted(db sql.Executor, id types.TransactionID) (bool, error) {
+	rows, err := db.Exec("select 1 from evicted_mempool where id = ?1",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil)
+	if err != nil {
+		return false, fmt.Errorf("has evicted %s: %w", id, err)
+	}
+	return rows > 0, nil
+}
+
 // GetByAddress finds all transactions for an address.
 func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	var txs []*types.MeshTransaction
@@ -295,6 +306,8 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		}, "get acct pending from nonce")
 }
 
+// PrunePendingNonce will evict from the pending transactions
+// from a given principal address into the evited_mempool table.
 func PrunePendingNonce(db sql.Executor, address types.Address, to uint64) error {
 	txs, err := queryPending(db, `select tx, header, layer, block, timestamp, id from transactions
 		where principal = ?1 and nonce < ?2 and result is null`,
