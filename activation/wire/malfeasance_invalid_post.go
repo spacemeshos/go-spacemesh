@@ -33,8 +33,6 @@ type ProofInvalidPost struct {
 
 	// MarriageProof is the proof that NodeID and SmesherID are married. It is nil if NodeID == SmesherID.
 	MarriageProof *MarriageProof
-	// CommitmentProof is the proof for the commitment ATX of the smesher. Generated from the initial ATX of NodeID.
-	CommitmentProof CommitmentProof
 	// InvalidPostProof is the proof for the invalid PoST of the ATX. It contains the PoST and the merkle proofs to
 	// verify the PoST.
 	InvalidPostProof InvalidPostProof
@@ -44,10 +42,12 @@ var _ Proof = &ProofInvalidPost{}
 
 func NewInvalidPostProof(
 	db sql.Executor,
-	atx, initialATX *ActivationTxV2,
+	atx *ActivationTxV2,
+	commitmentATX types.ATXID,
 	nodeID types.NodeID,
 	nipostIndex int,
 	invalidPostIndex uint32,
+	validPostIndex uint32,
 ) (*ProofInvalidPost, error) {
 	if atx.SmesherID != nodeID && atx.MarriageATX == nil {
 		return nil, errors.New("ATX is not a merged ATX, but NodeID is different from SmesherID")
@@ -73,11 +73,14 @@ func NewInvalidPostProof(
 		}
 	}
 
-	commitmentProof, err := createCommitmentProof(initialATX, nodeID)
-	if err != nil {
-		return nil, fmt.Errorf("commitment proof: %w", err)
-	}
-	invalidPostProof, err := createInvalidPostProof(atx, nipostIndex, postIndex, invalidPostIndex)
+	invalidPostProof, err := createInvalidPostProof(
+		atx,
+		commitmentATX,
+		nipostIndex,
+		postIndex,
+		invalidPostIndex,
+		validPostIndex,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("invalid post proof: %w", err)
 	}
@@ -91,7 +94,6 @@ func NewInvalidPostProof(
 
 		MarriageProof: marriageProof,
 
-		CommitmentProof:  commitmentProof,
 		InvalidPostProof: invalidPostProof,
 	}, nil
 }
@@ -113,16 +115,11 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 		marriageIndex = &p.MarriageProof.NodeIDMarryProof.CertificateIndex
 	}
 
-	if err := p.CommitmentProof.Valid(malValidator, p.NodeID); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("invalid commitment proof: %w", err)
-	}
-
 	if err := p.InvalidPostProof.Valid(
 		ctx,
 		malValidator,
 		p.ATXID,
 		p.NodeID,
-		p.CommitmentProof.CommitmentATX,
 		marriageIndex,
 	); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("invalid invalid post proof: %w", err)
@@ -131,65 +128,11 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 	return p.NodeID, nil
 }
 
-// CommitmentProof is a proof for the commitment ATX of a smesher. It is generated from the initial ATX.
-type CommitmentProof struct {
-	// InitialATXID is the ID of the initial ATX of the smesher.
-	InitialATXID types.ATXID
-
-	// InitialPostRoot and its proof that it is contained in the InitialATX.
-	InitialPostRoot  InitialPostRoot
-	InitialPostProof InitialPostRootProof `scale:"max=32"`
-
-	// CommitmentATX and its proof that it is contained in the InitialPostRoot.
-	CommitmentATX      types.ATXID
-	CommitmentATXProof CommitmentATXProof `scale:"max=32"`
-
-	// Signature is the signature of the ATXID by the smesher.
-	Signature types.EdSignature
-}
-
-func createCommitmentProof(initialAtx *ActivationTxV2, nodeID types.NodeID) (CommitmentProof, error) {
-	if initialAtx.SmesherID != nodeID {
-		return CommitmentProof{}, errors.New("node ID does not match smesher ID of initial ATX")
-	}
-	if initialAtx.Initial == nil {
-		return CommitmentProof{}, errors.New("initial ATX does not contain initial PoST")
-	}
-
-	return CommitmentProof{
-		InitialATXID: initialAtx.ID(),
-
-		InitialPostRoot:  initialAtx.Initial.Root(),
-		InitialPostProof: initialAtx.InitialPostRootProof(),
-
-		CommitmentATX:      initialAtx.Initial.CommitmentATX,
-		CommitmentATXProof: initialAtx.Initial.CommitmentATXProof(),
-
-		Signature: initialAtx.Signature,
-	}, nil
-}
-
-func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID) error {
-	if !malValidator.Signature(signing.ATX, nodeID, p.InitialATXID.Bytes(), p.Signature) {
-		return errors.New("invalid signature")
-	}
-
-	if types.Hash32(p.InitialPostRoot) == types.EmptyHash32 {
-		return errors.New("invalid empty initial PoST root") // initial PoST root is empty for non-initial ATXs
-	}
-
-	if !p.InitialPostProof.Valid(p.InitialATXID, p.InitialPostRoot) {
-		return errors.New("invalid initial PoST proof")
-	}
-	if !p.CommitmentATXProof.Valid(p.InitialPostRoot, p.CommitmentATX) {
-		return errors.New("invalid commitment ATX proof")
-	}
-
-	return nil
-}
-
 // InvalidPostProof is a proof for an invalid PoST in an ATX. It contains the PoST and the merkle proofs to verify the
 // PoST.
+//
+// It contains both a valid and an invalid PoST index. This is required to proof that the commitment ATX was used to
+// initialize the data for the invalid PoST. If a PoST contains no valid indices, then the ATX is syntactically invalid.
 type InvalidPostProof struct {
 	// NIPostsRoot and its proof that it is contained in the ATX.
 	NIPostsRoot      NIPostsRoot
@@ -225,15 +168,23 @@ type InvalidPostProof struct {
 	NumUnits      uint32
 	NumUnitsProof NumUnitsProof `scale:"max=32"`
 
+	// CommitmentATX is the ATX that was used to initialize data for the invalid PoST.
+	CommitmentATX types.ATXID
+
 	// InvalidPostIndex is the index of the leaf that was identified to be invalid.
 	InvalidPostIndex uint32
+
+	// ValidPostIndex is the index of a leaf that was identified to be valid.
+	ValidPostIndex uint32
 }
 
 func createInvalidPostProof(
 	atx *ActivationTxV2,
+	commitmentATX types.ATXID,
 	nipostIndex,
 	postIndex int,
 	invalidPostIndex uint32,
+	validPostIndex uint32,
 ) (InvalidPostProof, error) {
 	if nipostIndex < 0 || nipostIndex >= len(atx.NIPosts) {
 		return InvalidPostProof{}, errors.New("invalid NIPoST index")
@@ -268,7 +219,10 @@ func createInvalidPostProof(
 		NumUnits:      atx.NIPosts[nipostIndex].Posts[postIndex].NumUnits,
 		NumUnitsProof: atx.NIPosts[nipostIndex].Posts[postIndex].NumUnitsProof(atx.PreviousATXs),
 
+		CommitmentATX: commitmentATX,
+
 		InvalidPostIndex: invalidPostIndex,
+		ValidPostIndex:   validPostIndex,
 	}, nil
 }
 
@@ -279,7 +233,6 @@ func (p InvalidPostProof) Valid(
 	malValidator MalfeasanceValidator,
 	atxID types.ATXID,
 	nodeID types.NodeID,
-	commitmentATX types.ATXID,
 	marriageIndex *uint32,
 ) error {
 	if !p.NIPostsRootProof.Valid(atxID, p.NIPostsRoot) {
@@ -312,7 +265,19 @@ func (p InvalidPostProof) Valid(
 	if err := malValidator.PostIndex(
 		ctx,
 		nodeID,
-		commitmentATX,
+		p.CommitmentATX,
+		PostFromWireV1(&p.Post),
+		p.Challenge.Bytes(),
+		p.NumUnits,
+		int(p.ValidPostIndex),
+	); err != nil {
+		return errors.New("Commitment ATX is not valid")
+	}
+
+	if err := malValidator.PostIndex(
+		ctx,
+		nodeID,
+		p.CommitmentATX,
 		PostFromWireV1(&p.Post),
 		p.Challenge.Bytes(),
 		p.NumUnits,

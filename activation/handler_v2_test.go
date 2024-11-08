@@ -1553,14 +1553,58 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
 			atx.NIPosts[0].Challenge.Bytes(),
 			atx.TotalNumUnits(),
-			gomock.Any(),
-		).Return(verifying.ErrInvalidIndex{Index: 7})
+			gomock.Cond(func(opt validatorOption) bool {
+				opts := &validatorOptions{}
+				opt(opts)
+				return opts.postSubsetSeed != nil
+			}),
+		).Return(&verifying.ErrInvalidIndex{Index: 7})
+
+		for invalidPostIdx := 0; invalidPostIdx < 10; invalidPostIdx++ {
+			atxHandler.mValidator.EXPECT().PostV2(
+				context.Background(),
+				atx.SmesherID,
+				atx.Initial.CommitmentATX,
+				wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+				atx.NIPosts[0].Challenge.Bytes(),
+				atx.TotalNumUnits(),
+				gomock.Cond(func(opt validatorOption) bool {
+					opts := &validatorOptions{}
+					opt(opts)
+					return opts.postIdx != nil && *opts.postIdx == invalidPostIdx
+				}),
+			).Return(&verifying.ErrInvalidIndex{Index: invalidPostIdx})
+		}
+
+		atxHandler.mValidator.EXPECT().PostV2(
+			context.Background(),
+			atx.SmesherID,
+			atx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			gomock.Cond(func(opt validatorOption) bool {
+				opts := &validatorOptions{}
+				opt(opts)
+				return opts.postIdx != nil && *opts.postIdx == 10
+			}),
+		).Return(nil)
 
 		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
 		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			atx.SmesherID,
+			atx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			10,
+		).Return(nil)
 
 		verifier.EXPECT().PostIndex(
 			context.Background(),
@@ -1585,7 +1629,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		})
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		vErr := &verifying.ErrInvalidIndex{}
-		require.ErrorAs(t, err, vErr)
+		require.ErrorAs(t, err, &vErr)
 		require.Equal(t, 7, vErr.Index)
 	})
 	t.Run("invalid PoST index solo ATX - generates a malfeasance proof", func(t *testing.T) {
@@ -1604,14 +1648,58 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
 			atx.NIPosts[0].Challenge.Bytes(),
 			atx.TotalNumUnits(),
-			gomock.Any(),
-		).Return(verifying.ErrInvalidIndex{Index: 7})
+			gomock.Cond(func(opt validatorOption) bool {
+				opts := &validatorOptions{}
+				opt(opts)
+				return opts.postSubsetSeed != nil
+			}),
+		).Return(&verifying.ErrInvalidIndex{Index: 7})
+
+		for invalidPostIdx := 0; invalidPostIdx < 10; invalidPostIdx++ {
+			atxHandler.mValidator.EXPECT().PostV2(
+				context.Background(),
+				atx.SmesherID,
+				initialAtx.Initial.CommitmentATX,
+				wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+				atx.NIPosts[0].Challenge.Bytes(),
+				atx.TotalNumUnits(),
+				gomock.Cond(func(opt validatorOption) bool {
+					opts := &validatorOptions{}
+					opt(opts)
+					return opts.postIdx != nil && *opts.postIdx == invalidPostIdx
+				}),
+			).Return(&verifying.ErrInvalidIndex{Index: invalidPostIdx})
+		}
+
+		atxHandler.mValidator.EXPECT().PostV2(
+			context.Background(),
+			atx.SmesherID,
+			initialAtx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			gomock.Cond(func(opt validatorOption) bool {
+				opts := &validatorOptions{}
+				opt(opts)
+				return opts.postIdx != nil && *opts.postIdx == 10
+			}),
+		).Return(nil)
 
 		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
 		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			atx.SmesherID,
+			initialAtx.Initial.CommitmentATX,
+			wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post),
+			atx.NIPosts[0].Challenge.Bytes(),
+			atx.TotalNumUnits(),
+			10,
+		).Return(nil)
 
 		verifier.EXPECT().PostIndex(
 			context.Background(),
@@ -1636,7 +1724,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		})
 		_, err := atxHandler.syntacticallyValidateDeps(context.Background(), atx)
 		vErr := &verifying.ErrInvalidIndex{}
-		require.ErrorAs(t, err, vErr)
+		require.ErrorAs(t, err, &vErr)
 		require.Equal(t, 7, vErr.Index)
 	})
 	t.Run("invalid PoST index merged ATX - generates a malfeasance proof", func(t *testing.T) {
@@ -1683,17 +1771,57 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 				gomock.Any(),
 			)
 			if equivocationSet[post.MarriageIndex] == sig.NodeID() {
-				call.Return(verifying.ErrInvalidIndex{Index: 7})
+				call.Return(&verifying.ErrInvalidIndex{Index: 7})
 			} else {
 				call.AnyTimes()
 			}
 		}
+
+		for invalidPostIdx := 0; invalidPostIdx < 10; invalidPostIdx++ {
+			atxHandler.mValidator.EXPECT().PostV2(
+				context.Background(),
+				sig.NodeID(),
+				gomock.Any(),
+				gomock.Any(),
+				merged.NIPosts[0].Challenge.Bytes(),
+				gomock.Any(),
+				gomock.Cond(func(opt validatorOption) bool {
+					opts := &validatorOptions{}
+					opt(opts)
+					return opts.postIdx != nil && *opts.postIdx == invalidPostIdx
+				}),
+			).Return(&verifying.ErrInvalidIndex{Index: invalidPostIdx})
+		}
+
+		atxHandler.mValidator.EXPECT().PostV2(
+			context.Background(),
+			sig.NodeID(),
+			gomock.Any(),
+			gomock.Any(),
+			merged.NIPosts[0].Challenge.Bytes(),
+			gomock.Any(),
+			gomock.Cond(func(opt validatorOption) bool {
+				opts := &validatorOptions{}
+				opt(opts)
+				return opts.postIdx != nil && *opts.postIdx == 10
+			}),
+		).Return(nil)
 
 		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
 		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			gomock.Any(),
+			gomock.Any(),
+			merged.NIPosts[0].Challenge.Bytes(),
+			gomock.Any(),
+			10,
+		).Return(nil)
 
 		verifier.EXPECT().PostIndex(
 			context.Background(),
@@ -1718,7 +1846,7 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 		})
 		_, err = atxHandler.syntacticallyValidateDeps(context.Background(), merged)
 		vErr := &verifying.ErrInvalidIndex{}
-		require.ErrorAs(t, err, vErr)
+		require.ErrorAs(t, err, &vErr)
 		require.Equal(t, 7, vErr.Index)
 	})
 	t.Run("invalid PoET membership proof", func(t *testing.T) {
