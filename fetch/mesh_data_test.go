@@ -960,7 +960,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			srv := server.New(
 				wrapHost(mesh.Hosts()[1]),
 				hashProtocol,
-				server.WrapHandler(func(_ context.Context, data []byte) ([]byte, error) {
+				server.WrapHandler(func(_ context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 					var requestBatch RequestBatch
 					require.NoError(t, codec.Decode(data, &requestBatch))
 					resBatch := ResponseBatch{
@@ -1120,14 +1120,14 @@ func TestBatchErrorIgnore(t *testing.T) {
 func FuzzCertRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleLayerOpinionsReq2(context.Background(), data)
+		h.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), data)
 	})
 }
 
 func FuzzMeshHashRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleMeshHashReq(context.Background(), data)
+		h.handleMeshHashReq(context.Background(), p2p.Peer(""), data)
 	})
 }
 
@@ -1135,14 +1135,14 @@ func FuzzMeshHashRequestStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleMeshHashReqStream(context.Background(), data, &b)
+		h.handleMeshHashReqStream(context.Background(), p2p.Peer(""), data, &b)
 	})
 }
 
 func FuzzLayerInfo(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleEpochInfoReq(context.Background(), data)
+		h.handleEpochInfoReq(context.Background(), p2p.Peer(""), data)
 	})
 }
 
@@ -1150,14 +1150,14 @@ func FuzzLayerInfoStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleEpochInfoReqStream(context.Background(), data, &b)
+		h.handleEpochInfoReqStream(context.Background(), p2p.Peer(""), data, &b)
 	})
 }
 
 func FuzzHashReq(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleHashReq(context.Background(), data)
+		h.handleHashReq(context.Background(), p2p.Peer(""), data)
 	})
 }
 
@@ -1165,6 +1165,6 @@ func FuzzHashReqStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleHashReqStream(context.Background(), data, &b)
+		h.handleHashReqStream(context.Background(), p2p.Peer(""), data, &b)
 	})
 }

@@ -6,6 +6,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+* [#6431](https://github.com/spacemeshos/go-spacemesh/pull/6431) Fix db-allow-schema-drift handling
 * [#6408](https://github.com/spacemeshos/go-spacemesh/pull/6408) Prevent empty DB connection pool by freeing connections
   upon errors during DB operations. This mostly fixes issues when a node is under heavy load from the API.
 

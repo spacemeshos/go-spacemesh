@@ -42,6 +42,7 @@ func (e *ErrAtxNotFound) Is(target error) bool {
 }
 
 type validatorOptions struct {
+	postIdx        *int
 	postSubsetSeed []byte
 	prioritized    bool
 }
@@ -51,6 +52,14 @@ type validatorOptions struct {
 func PostSubset(seed []byte) validatorOption {
 	return func(o *validatorOptions) {
 		o.postSubsetSeed = seed
+	}
+}
+
+// PostIndex configures the validator to validate only the POST index at the given `idx`.
+func PostIndex(idx int) validatorOption {
+	return func(o *validatorOptions) {
+		o.postIdx = new(int)
+		*o.postIdx = idx
 	}
 }
 
@@ -205,6 +214,9 @@ func (v *Validator) Post(
 	}
 
 	verifyOpts := []verifying.OptionFunc{verifying.WithLabelScryptParams(v.scrypt)}
+	if options.postIdx != nil {
+		verifyOpts = append(verifyOpts, verifying.SelectedIndex(*options.postIdx))
+	}
 	if options.postSubsetSeed != nil {
 		verifyOpts = append(verifyOpts, verifying.Subset(v.cfg.K3, options.postSubsetSeed))
 	}
@@ -487,7 +499,7 @@ func (v *Validator) getAtxDeps(ctx context.Context, id types.ATXID) (*atxDeps, e
 			previous:    atx.PreviousATXs,
 			commitment:  commitment,
 		}
-		for _, nipost := range atx.NiPosts {
+		for _, nipost := range atx.NIPosts {
 			for _, post := range nipost.Posts {
 				deps.niposts = append(deps.niposts, types.NIPost{
 					Post: wire.PostFromWireV1(&post.Post),

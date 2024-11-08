@@ -97,7 +97,7 @@ func createInitialAtx(
 			Post:          *wire.PostToWireV1(initial),
 		},
 		VRFNonce: uint64(nipost.VRFNonce),
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: wire.MerkleProofV2{
 					Nodes: nipost.Membership.Nodes,
@@ -121,7 +121,7 @@ func createSoloAtx(publish types.EpochID, prev, pos types.ATXID, nipost *nipost.
 		PreviousATXs:   []types.ATXID{prev},
 		PositioningATX: pos,
 		VRFNonce:       uint64(nipost.VRFNonce),
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: wire.MerkleProofV2{
 					Nodes: nipost.Membership.Nodes,
@@ -152,7 +152,7 @@ func createMerged(
 		PreviousATXs:   previous,
 		MarriageATX:    &marriage,
 		PositioningATX: positioning,
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: membership,
 				Challenge:  types.Hash32(niposts[0].PostMetadata.Challenge),
@@ -163,7 +163,7 @@ func createMerged(
 	for i, nipost := range niposts {
 		idx := slices.IndexFunc(previous, func(a types.ATXID) bool { return a == nipost.previous })
 		require.NotEqual(tb, -1, idx)
-		atx.NiPosts[0].Posts = append(atx.NiPosts[0].Posts, wire.SubPostV2{
+		atx.NIPosts[0].Posts = append(atx.NIPosts[0].Posts, wire.SubPostV2{
 			MarriageIndex:       uint32(i),
 			PrevATXIndex:        uint32(idx),
 			MembershipLeafIndex: nipost.Membership.LeafIndex,
@@ -264,6 +264,8 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
+	idStates := activation.NewIdentityStateStorage()
+
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -272,6 +274,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(poetSvc),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -316,6 +319,13 @@ func Test_MarryAndMerge(t *testing.T) {
 				InitialPost:    post,
 			}
 			challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
+
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForATXSyncing)
+			require.NoError(t, err)
+
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
+			require.NoError(t, err)
+
 			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
 			if err != nil {
 				return err

@@ -621,6 +621,8 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("creating poet db: %w", err)
 	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
+	idStates := activation.NewIdentityStateStorage()
+
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
 		activation.WithAutoscaling(postStates),
@@ -1113,6 +1115,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.NipostbuilderWithIdentityStates(idStates),
 		activation.WithPoetServices(poetClients...),
 	)
 	if err != nil {
@@ -1165,6 +1168,7 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithPostStates(postStates),
+		activation.WithIdentityStates(idStates),
 		activation.WithPoets(poetClients...),
 		activation.BuilderAtxVersions(app.Config.AtxVersions),
 	)
@@ -1666,11 +1670,24 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewAccountService(app.apiDB, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.SmeshingIdentities:
+		nodeIds := make(map[types.NodeID]struct{})
+		for _, signer := range app.signers {
+			nodeIds[signer.NodeID()] = struct{}{}
+		}
+
+		configuredPoets := make(map[string]struct{})
+		for _, server := range app.Config.PoetServers {
+			configuredPoets[server.Address] = struct{}{}
+		}
+
+		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.atxBuilder)
+		app.grpcServices[svc] = service
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
 
-func (app *App) startAPIServices(ctx context.Context) error {
+func (app *App) startAPIServices() error {
 	logger := app.addLogger(GRPCLogger, app.log)
 	grpczap.SetGrpcLoggerV2(grpcLog, logger.Zap())
 
@@ -2086,6 +2103,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithReadOnly(),
 		sql.WithLogger(apiDBLog),
 		sql.WithConnections(app.Config.API.DatabaseConnections),
+		sql.WithNoCheckSchemaDrift(), // already checked above
 		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {
@@ -2319,7 +2337,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		app.log.Info("no need to preserve data after recovery")
 	}
 
-	if err := app.startAPIServices(ctx); err != nil {
+	if err := app.startAPIServices(); err != nil {
 		return err
 	}
 

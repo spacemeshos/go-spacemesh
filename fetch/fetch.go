@@ -329,7 +329,7 @@ func NewFetch(
 			f.registerServer(host, hashProtocol, h.handleHashReqStream)
 			f.registerServer(
 				host, activeSetProtocol,
-				func(ctx context.Context, msg []byte, s io.ReadWriter) error {
+				func(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 					return h.doHandleHashReqStream(ctx, msg, s, datastore.ActiveSet)
 				})
 			f.registerServer(host, meshHashProtocol, h.handleMeshHashReqStream)
@@ -339,7 +339,7 @@ func NewFetch(
 			f.registerServer(host, hashProtocol, server.WrapHandler(h.handleHashReq))
 			f.registerServer(
 				host, activeSetProtocol,
-				server.WrapHandler(func(ctx context.Context, data []byte) ([]byte, error) {
+				server.WrapHandler(func(ctx context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 					return h.doHandleHashReq(ctx, data, datastore.ActiveSet)
 				}))
 			f.registerServer(host, meshHashProtocol, server.WrapHandler(h.handleMeshHashReq))

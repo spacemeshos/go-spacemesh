@@ -95,6 +95,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
 
+	idStates := activation.NewIdentityStateStorage()
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -103,6 +104,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(poetSvc),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -145,6 +147,14 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 				InitialPost:    post,
 			}
 			challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
+
+			// set up proper state for each signer
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForATXSyncing)
+			require.NoError(t, err)
+
+			err = idStates.Set(signer.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
+			require.NoError(t, err)
+
 			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
 			if err != nil {
 				return err
@@ -306,6 +316,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		activation.WithAtxVersions(activation.AtxVersions{0: types.AtxV2}),
 	)
 
+	idStates = activation.NewIdentityStateStorage()
 	nb, err = activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -314,6 +325,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(poetSvc),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -322,6 +334,13 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	publish = mergedATX.PublishEpoch + 1
 	eg, ctx = errgroup.WithContext(context.Background())
 	for i, sig := range signers {
+		// set up proper state for each signer
+		err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForATXSyncing)
+		require.NoError(t, err)
+
+		err = idStates.Set(sig.NodeID(), activation.IdentityStateWaitForPoetRoundStart)
+		require.NoError(t, err)
+
 		eg.Go(func() error {
 			n, err := buildNipost(ctx, nb, sig, publish, mergedATX.ID(), mergedATX.ID())
 			logger.Info("built NiPoST", zap.Any("post", n))

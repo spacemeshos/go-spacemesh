@@ -540,7 +540,7 @@ func (cl *lockstepCluster) setup() {
 					if other.peerId() == p {
 						b := make([]byte, 0, 1024)
 						buf := bytes.NewBuffer(b)
-						other.hare.handleProposalsStream(ctx, msg, buf)
+						other.hare.handleProposalsStream(ctx, p, msg, buf)
 						cb(ctx, buf)
 					}
 				}
@@ -1211,7 +1211,7 @@ func TestHare_ReconstructForward(t *testing.T) {
 					if other.peerId() == p {
 						b := make([]byte, 0, 1024)
 						buf := bytes.NewBuffer(b)
-						if err := other.hare.handleProposalsStream(ctx, msg, buf); err != nil {
+						if err := other.hare.handleProposalsStream(ctx, p, msg, buf); err != nil {
 							return fmt.Errorf("exec handleProposalStream: %w", err)
 						}
 						if err := cb(ctx, buf); err != nil {

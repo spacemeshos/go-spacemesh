@@ -225,7 +225,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	require.NoError(t, err)
 
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices()
 	}
 	defer app.stopServices(context.Background())
 
@@ -271,7 +271,7 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices()
 	}
 
 	str, err := testArgs(context.Background(), cmdWithRun(run))
@@ -304,7 +304,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices()
 	}
 
 	// Test starting the JSON server from the command line

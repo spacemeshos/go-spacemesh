@@ -8,6 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go -exclude_interfaces=Requester,SyncMessage,Conduit
+
 // RangeInfo contains information about a range of items in the OrderedSet as returned by
 // OrderedSet.GetRangeInfo.
 type RangeInfo struct {
@@ -67,6 +69,18 @@ type OrderedSet interface {
 	// timestamp. Some OrderedSet implementations may not have Recent implemented, in
 	// which case it should return an empty sequence.
 	Recent(since time.Time) (SeqResult, int)
+	// EnsureLoaded ensures that the set is loaded and ready for use.
+	// It may do nothing in case of in-memory sets, but may trigger loading
+	// from database in case of database-backed sets.
+	EnsureLoaded() error
+	// Advance advances the set by including the items since the set was last loaded
+	// or advanced.
+	Advance() error
+	// Has returns true if the specified key is present in OrderedSet.
+	Has(KeyBytes) (bool, error)
+	// Release releases the resources associated with the set.
+	// Calling Release on a set that is already released is a no-op.
+	Release() error
 }
 
 type Requester interface {

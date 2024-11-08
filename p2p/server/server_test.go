@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
 	"github.com/stretchr/testify/assert"
@@ -45,10 +46,10 @@ func TestServer(t *testing.T) {
 	request := []byte("test request")
 	testErr := errors.New("test error")
 
-	handler := func(_ context.Context, msg []byte) ([]byte, error) {
-		return msg, nil
+	handler := func(ctx context.Context, peerID peer.ID, msg []byte) ([]byte, error) {
+		return append(msg, []byte(peerID)...), nil
 	}
-	errhandler := func(_ context.Context, _ []byte) ([]byte, error) {
+	errhandler := func(_ context.Context, _ peer.ID, _ []byte) ([]byte, error) {
 		return nil, testErr
 	}
 	opts := []Opt{
@@ -109,7 +110,8 @@ func TestServer(t *testing.T) {
 		srvID := mesh.Hosts()[1].ID()
 		response, err := client.Request(ctx, srvID, request)
 		require.NoError(t, err)
-		require.Equal(t, request, response)
+		expResponse := append(request, []byte(mesh.Hosts()[0].ID())...)
+		require.Equal(t, expResponse, response)
 		srvConns := mesh.Hosts()[1].Network().ConnsToPeer(mesh.Hosts()[0].ID())
 		require.NotEmpty(t, srvConns)
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
@@ -129,7 +131,8 @@ func TestServer(t *testing.T) {
 		srvID := mesh.Hosts()[3].ID()
 		response, err := client.Request(ctx, srvID, request)
 		require.NoError(t, err)
-		require.Equal(t, request, response)
+		expResponse := append(request, []byte(mesh.Hosts()[0].ID())...)
+		require.Equal(t, expResponse, response)
 		srvConns := mesh.Hosts()[3].Network().ConnsToPeer(mesh.Hosts()[0].ID())
 		require.NotEmpty(t, srvConns)
 		require.Equal(t, n+1, srv1.NumAcceptedRequests())
@@ -188,7 +191,7 @@ func Test_Queued(t *testing.T) {
 	srv := New(
 		wrapHost(t, mesh.Hosts()[1]),
 		proto,
-		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, _ peer.ID, msg []byte) ([]byte, error) {
 			wg.Done()
 			<-stop
 			return msg, nil
@@ -240,7 +243,7 @@ func Test_RequestInterval(t *testing.T) {
 	srv := New(
 		wrapHost(t, mesh.Hosts()[1]),
 		proto,
-		WrapHandler(func(_ context.Context, msg []byte) ([]byte, error) {
+		WrapHandler(func(_ context.Context, _ peer.ID, msg []byte) ([]byte, error) {
 			return msg, nil
 		}),
 		WithRequestsPerInterval(maxReq, maxReqTime),

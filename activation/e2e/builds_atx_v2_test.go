@@ -98,6 +98,8 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	poetClient := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	localDB := localsql.InMemoryTest(t)
+	idStates := activation.NewIdentityStateStorage()
+
 	nb, err := activation.NewNIPostBuilder(
 		localDB,
 		svc,
@@ -106,6 +108,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		clock,
 		validator,
 		activation.WithPoetServices(poetClient),
+		activation.NipostbuilderWithIdentityStates(idStates),
 	)
 	require.NoError(t, err)
 
@@ -220,6 +223,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		logger,
 		activation.WithPoetConfig(poetCfg),
 		activation.BuilderAtxVersions(atxVersions),
+		activation.WithIdentityStates(idStates),
 	)
 	tab.Register(sig)
 

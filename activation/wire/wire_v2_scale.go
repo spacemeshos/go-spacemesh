@@ -45,7 +45,7 @@ func (t *ActivationTxV2) EncodeScale(enc *scale.Encoder) (total int, err error) 
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.NiPosts, 4)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NIPosts, 4)
 		if err != nil {
 			return total, err
 		}
@@ -129,12 +129,12 @@ func (t *ActivationTxV2) DecodeScale(dec *scale.Decoder) (total int, err error) 
 		t.PreviousATXs = field
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[NiPostsV2](dec, 4)
+		field, n, err := scale.DecodeStructSliceWithLimit[NIPostV2](dec, 4)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.NiPosts = field
+		t.NIPosts = field
 	}
 	{
 		field, n, err := scale.DecodeCompact64(dec)
@@ -213,16 +213,23 @@ func (t *InitialAtxPartsV2) DecodeScale(dec *scale.Decoder) (total int, err erro
 	return total, nil
 }
 
-func (t *MarriageCertificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *NIPostV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.ReferenceAtx[:])
+		n, err := t.Membership.EncodeScale(enc)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
+		n, err := scale.EncodeByteArray(enc, t.Challenge[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.Posts, 256)
 		if err != nil {
 			return total, err
 		}
@@ -231,20 +238,28 @@ func (t *MarriageCertificate) EncodeScale(enc *scale.Encoder) (total int, err er
 	return total, nil
 }
 
-func (t *MarriageCertificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *NIPostV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.ReferenceAtx[:])
+		n, err := t.Membership.DecodeScale(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
+		n, err := scale.DecodeByteArray(dec, t.Challenge[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[SubPostV2](dec, 256)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Posts = field
 	}
 	return total, nil
 }
@@ -354,23 +369,16 @@ func (t *SubPostV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *NiPostsV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
+func (t *MarriageCertificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := t.Membership.EncodeScale(enc)
+		n, err := scale.EncodeByteArray(enc, t.ReferenceAtx[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.Challenge[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Posts, 256)
+		n, err := scale.EncodeByteArray(enc, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
@@ -379,28 +387,20 @@ func (t *NiPostsV2) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	return total, nil
 }
 
-func (t *NiPostsV2) DecodeScale(dec *scale.Decoder) (total int, err error) {
+func (t *MarriageCertificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := t.Membership.DecodeScale(dec)
+		n, err := scale.DecodeByteArray(dec, t.ReferenceAtx[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.Challenge[:])
+		n, err := scale.DecodeByteArray(dec, t.Signature[:])
 		if err != nil {
 			return total, err
 		}
 		total += n
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[SubPostV2](dec, 256)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.Posts = field
 	}
 	return total, nil
 }
