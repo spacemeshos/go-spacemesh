@@ -306,12 +306,21 @@ func PrunePendingNonce(db sql.Executor, address types.Address, to uint64) error 
 		return fmt.Errorf("query pending: %w", err)
 	}
 	insert := func(txId []byte) error {
-		_, err := db.Exec(`insert into evicted_mempool (id) values (?1)
-		on conflict(id) do nothing; delete from transactions where id = ?1`,
+		if _, err := db.Exec("insert into evicted_mempool (id) values (?1) on conflict do nothing;",
 			func(stmt *sql.Statement) {
 				stmt.BindBytes(1, txId)
-			}, nil)
-		return err
+			}, nil); err != nil {
+			return fmt.Errorf("insert: %w", err)
+		}
+
+		if _, err := db.Exec("delete from transactions where id = ?1;",
+			func(stmt *sql.Statement) {
+				stmt.BindBytes(1, txId)
+			}, nil); err != nil {
+			return fmt.Errorf("delete: %w", err)
+		}
+
+		return nil
 	}
 
 	for _, tx := range txs {

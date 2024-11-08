@@ -334,10 +334,10 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance+income)
 	// mempool is unchanged
 	checkMempool(t, tc.Cache, expectedMempool)
+
+	// pruning has removed old and ineffective txs
 	for _, mtx := range append(oldNonces, sameNonces...) {
-		got, err := transactions.Get(tc.db, mtx.ID)
-		require.NoError(t, err)
-		require.Equal(t, types.MEMPOOL, got.State)
+		checkTXNotInDB(t, tc.db, mtx.ID)
 	}
 
 	// revert to one layer before lid
@@ -357,8 +357,6 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	}
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	checkTXStateFromDB(t, tc.db, mtxs, types.MEMPOOL)
-	checkTXStateFromDB(t, tc.db, oldNonces, types.MEMPOOL)
-	checkTXStateFromDB(t, tc.db, sameNonces, types.MEMPOOL)
 }
 
 func TestCache_Account_TXInMultipleLayers(t *testing.T) {
