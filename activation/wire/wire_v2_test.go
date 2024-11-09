@@ -189,6 +189,26 @@ func Test_NoATXv2IDCollisions(t *testing.T) {
 	}
 }
 
+func Fuzz_ATXv2IDConsistency(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzer := fuzz.NewFromGoFuzz(data).
+			// Ensure that `NIPosts` is at most 4 elements long
+			Funcs(func(niposts *NIPosts, c fuzz.Continue) {
+				*niposts = make([]NIPostV2, c.Intn(5))
+				for i := range *niposts {
+					c.Fuzz(&(*niposts)[i])
+				}
+			})
+		atx := &ActivationTxV2{}
+		fuzzer.Fuzz(atx)
+		id := atx.ID()
+		encoded := codec.MustEncode(atx)
+		decoded := &ActivationTxV2{}
+		codec.MustDecode(encoded, decoded)
+		require.Equal(t, id, atx.ID(), "ID should be consistent")
+	})
+}
+
 func Test_ATXv2_SupportUpTo4Niposts(t *testing.T) {
 	f := fuzz.New()
 	atx := &ActivationTxV2{}
