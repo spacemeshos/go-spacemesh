@@ -13,7 +13,6 @@ import (
 func Benchmark_ATXv1ID(b *testing.B) {
 	f := fuzz.New()
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		atx := &ActivationTxV1{}
