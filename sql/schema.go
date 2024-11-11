@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,14 +30,17 @@ func LoadDBSchemaScript(db Executor) (string, error) {
 		return "", err
 	}
 	fmt.Fprintf(&sb, "PRAGMA user_version = %d;\n", version)
+	// The following SQL query ensures that tables are listed first,
+	// ordered by name, and then all other objects, ordered by their table name
+	// and then by their own name.
 	if _, err = db.Exec(`
 		SELECT tbl_name, sql || ';'
 		FROM sqlite_master
 		WHERE sql IS NOT NULL AND tbl_name NOT LIKE 'sqlite_%'
 		ORDER BY
-			CASE WHEN type = 'table' THEN 1 ELSE 2 END, -- ensures tables are first
-			tbl_name,									-- tables are sorted by name, then all other objects
-			name										-- (indexes, triggers, etc.) also by name
+			CASE WHEN type = 'table' THEN 1 ELSE 2 END,
+			tbl_name,
+			name
 	`, nil, func(st *Statement) bool {
 		fmt.Fprintln(&sb, st.ColumnText(1))
 		return true
@@ -143,20 +145,13 @@ func (s *Schema) Migrate(logger *zap.Logger, db Database, before, vacuumState in
 		db.Intercept("logQueries", logQueryInterceptor(logger))
 		defer db.RemoveInterceptor("logQueries")
 	}
-	for i, m := range s.Migrations {
+	for _, m := range s.Migrations {
 		if m.Order() <= before {
 			continue
 		}
 		if err := db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 			if _, ok := s.skipMigration[m.Order()]; !ok {
 				if err := m.Apply(tx, logger); err != nil {
-					for j := i; j >= 0 && s.Migrations[j].Order() > before; j-- {
-						if e := s.Migrations[j].Rollback(); e != nil {
-							err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
-							break
-						}
-					}
-
 					return fmt.Errorf("apply %s: %w", m.Name(), err)
 				}
 			}

@@ -93,8 +93,6 @@ func Test_Migration_Rollback(t *testing.T) {
 	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 
-	migration2.EXPECT().Rollback().Return(nil)
-
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	_, err := Open("file:"+dbFile,
 		WithDatabaseSchema(&Schema{
@@ -129,7 +127,6 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
-	migration2.EXPECT().Rollback().Return(nil)
 
 	_, err = Open("file:"+dbFile,
 		WithLogger(logger),
@@ -637,4 +634,38 @@ func TestExclusive(t *testing.T) {
 			require.NoError(t, db.Close())
 		})
 	}
+}
+
+func TestConnection(t *testing.T) {
+	db := InMemoryTest(t)
+	c, err := db.Connection(context.Background())
+	require.NoError(t, err)
+	var r int
+	n, err := c.Exec("select ?", func(stmt *Statement) {
+		stmt.BindInt64(1, 42)
+	}, func(stmt *Statement) bool {
+		r = stmt.ColumnInt(0)
+		return true
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Equal(t, 42, r)
+	c.Release()
+
+	require.NoError(t, db.WithConnection(context.Background(), func(c Connection) error {
+		n, err := c.Exec("select ?", func(stmt *Statement) {
+			stmt.BindInt64(1, 42)
+		}, func(stmt *Statement) bool {
+			r = stmt.ColumnInt(0)
+			return true
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
+		require.Equal(t, 42, r)
+		return nil
+	}))
+
+	require.Error(t, db.WithConnection(context.Background(), func(c Connection) error {
+		return errors.New("error")
+	}))
 }

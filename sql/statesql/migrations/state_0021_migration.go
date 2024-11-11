@@ -32,10 +32,6 @@ func (*migration0021) Order() int {
 	return 21
 }
 
-func (*migration0021) Rollback() error {
-	return nil
-}
-
 func (m *migration0021) Apply(db sql.Executor, logger *zap.Logger) error {
 	if err := m.applySql(db); err != nil {
 		return err
