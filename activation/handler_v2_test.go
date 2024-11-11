@@ -2036,7 +2036,26 @@ func TestContextual_PreviousATX(t *testing.T) {
 	merged.Sign(signers[0])
 
 	atxHdlr.expectMergedAtxV2(merged, eqSet, []uint64{100})
-	atxHdlr.mMalPublish.EXPECT().Publish(gomock.Any(), signers[1].NodeID(), gomock.Any())
+
+	verifier := wire.NewMockMalfeasanceValidator(atxHdlr.ctrl)
+	verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+			return atxHdlr.edVerifier.Verify(d, nodeID, m, sig)
+		}).AnyTimes()
+
+	// TODO(mafa): also add a test where v1 ATX uses same prevATX as v2 ATX
+	atxHdlr.mMalPublish.EXPECT().Publish(
+		gomock.Any(),
+		signers[1].NodeID(),
+		gomock.AssignableToTypeOf(&wire.ProofInvalidPrevAtxV2{}),
+	).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
+		malProof := proof.(*wire.ProofInvalidPrevAtxV2)
+		nId, err := malProof.Valid(ctx, verifier)
+		require.NoError(t, err)
+		require.Equal(t, signers[1].NodeID(), nId)
+		return nil
+	})
+
 	err = atxHdlr.processATX(context.Background(), "", merged, time.Now())
 	require.NoError(t, err)
 }

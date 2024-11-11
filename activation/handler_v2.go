@@ -907,7 +907,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 			log.ZShortStringer("atx1", wireAtxV1.ID()),
 			log.ZShortStringer("atx2", atx.ActivationTxV2.ID()),
 		)
-		proof, err := wire.NewInvalidPrevAtxProofV1(atx.ActivationTxV2, wireAtxV1, id)
+		proof, err := wire.NewInvalidPrevAtxProofV1(tx, atx.ActivationTxV2, wireAtxV1, id)
 		if err != nil {
 			return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
 		}

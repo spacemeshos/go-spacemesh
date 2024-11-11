@@ -292,16 +292,16 @@ func (prevATXs PrevATXs) Root() PrevATXsRoot {
 	return PrevATXsRoot(createRoot(prevATXs.merkleTree))
 }
 
-func (prevATXs PrevATXs) Proof(index int) PrevATXProof {
+func (prevATXs PrevATXs) Proof(index int) PrevATXsProof {
 	if index < 0 || index >= len(prevATXs) {
 		panic("index out of range")
 	}
 	return createProof(uint64(index), prevATXs.merkleTree)
 }
 
-type PrevATXProof []types.Hash32
+type PrevATXsProof []types.Hash32
 
-func (p PrevATXProof) Valid(prevATXsRoot PrevATXsRoot, index int, prevATX types.ATXID) bool {
+func (p PrevATXsProof) Valid(prevATXsRoot PrevATXsRoot, index int, prevATX types.ATXID) bool {
 	return validateProof(types.Hash32(prevATXsRoot), types.Hash32(prevATX), p, uint64(index))
 }
 
@@ -488,21 +488,12 @@ func (post *SubPostV2) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func (sp *SubPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
+func (sp *SubPostV2) merkleTree(tree *merkle.Tree, prevATX types.ATXID) {
 	var marriageIndex types.Hash32
 	binary.LittleEndian.PutUint32(marriageIndex[:], sp.MarriageIndex)
 	tree.AddLeaf(marriageIndex.Bytes())
 
-	switch {
-	case len(prevATXs) == 0: // special case for initial ATX: prevATXs is empty
-		tree.AddLeaf(types.EmptyATXID.Bytes())
-	case int(sp.PrevATXIndex) < len(prevATXs):
-		tree.AddLeaf(prevATXs[sp.PrevATXIndex].Bytes())
-	default:
-		// prevATXIndex is out of range, don't fail ATXID generation
-		// will be detected by syntactical validation
-		tree.AddLeaf(types.EmptyATXID.Bytes())
-	}
+	tree.AddLeaf(prevATX.Bytes())
 
 	var leafIndex types.Hash32
 	binary.LittleEndian.PutUint64(leafIndex[:], sp.MembershipLeafIndex)
@@ -517,7 +508,17 @@ func (sp *SubPostV2) merkleTree(tree *merkle.Tree, prevATXs []types.ATXID) {
 
 func (sp *SubPostV2) merkleProof(leafIndex SubPostTreeIndex, prevATXs []types.ATXID) []types.Hash32 {
 	return createProof(uint64(leafIndex), func(tree *merkle.Tree) {
-		sp.merkleTree(tree, prevATXs)
+		var prevATX types.ATXID
+		switch {
+		case len(prevATXs) == 0: // special case for initial ATX: prevATXs is empty
+			prevATX = types.EmptyATXID
+		case int(sp.PrevATXIndex) < len(prevATXs):
+			prevATX = prevATXs[sp.PrevATXIndex]
+		default:
+			// not the full set of prevATXs is provided, proof cannot be generated
+			panic("prevATXIndex out of range or prevATXs incomplete")
+		}
+		sp.merkleTree(tree, prevATX)
 	})
 }
 
@@ -525,7 +526,18 @@ type SubPostRoot types.Hash32
 
 func (sp *SubPostV2) Root(prevATXs []types.ATXID) SubPostRoot {
 	return SubPostRoot(createRoot(func(tree *merkle.Tree) {
-		sp.merkleTree(tree, prevATXs)
+		var prevATX types.ATXID
+		switch {
+		case len(prevATXs) == 0: // special case for initial ATX: prevATXs is empty
+			prevATX = types.EmptyATXID
+		case int(sp.PrevATXIndex) < len(prevATXs):
+			prevATX = prevATXs[sp.PrevATXIndex]
+		default:
+			// prevATXIndex is out of range, don't fail ATXID generation
+			// will be detected by syntactical validation
+			prevATX = types.EmptyATXID
+		}
+		sp.merkleTree(tree, prevATX)
 	}))
 }
 
@@ -543,6 +555,18 @@ func (p MarriageIndexProof) Valid(subPostRoot SubPostRoot, marriageIndex uint32)
 
 func (sp *SubPostV2) PrevATXIndexProof(prevATXs []types.ATXID) []types.Hash32 {
 	return sp.merkleProof(PrevATXIndex, prevATXs)
+}
+
+func (sp *SubPostV2) PrevATXProof(prevATX types.ATXID) PrevATXProof {
+	return createProof(uint64(SubPostTreeIndex(PrevATXIndex)), func(tree *merkle.Tree) {
+		sp.merkleTree(tree, prevATX)
+	})
+}
+
+type PrevATXProof []types.Hash32
+
+func (p PrevATXProof) Valid(subPostRoot SubPostRoot, prevATX types.ATXID) bool {
+	return validateProof(types.Hash32(subPostRoot), types.Hash32(prevATX), p, uint64(PrevATXIndex))
 }
 
 func (sp *SubPostV2) MembershipLeafIndexProof(prevATXs []types.ATXID) []types.Hash32 {

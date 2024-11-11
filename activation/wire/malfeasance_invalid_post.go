@@ -213,8 +213,8 @@ type InvalidPostProof struct {
 	SubPostRootProof SubPostRootProof `scale:"max=32"`
 	SubPostRootIndex uint16
 
-	// MarriageIndexProof is the proof that the MarriageIndex (CertificateIndex from MarryProof) is contained in the
-	// SubPostRoot.
+	// MarriageIndexProof is the proof that the MarriageIndex (CertificateIndex from NodeIDMarryProof) is contained in
+	// the SubPostRoot.
 	MarriageIndexProof MarriageIndexProof `scale:"max=32"`
 
 	// Post is the invalid PoST and its proof that it is contained in the SubPostRoot.

@@ -66,13 +66,7 @@ func (t *ProofInvalidPrevAtxV1) EncodeScale(enc *scale.Encoder) (total int, err 
 		}
 		total += n
 	}
-	{
-		n, err := scale.EncodeStructArray(enc, t.Proofs[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+	
 	return total, nil
 }
 
@@ -84,47 +78,13 @@ func (t *ProofInvalidPrevAtxV1) DecodeScale(dec *scale.Decoder) (total int, err 
 		}
 		total += n
 	}
-	{
-		n, err := scale.DecodeStructArray(dec, t.Proofs[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
+
 	return total, nil
 }
 
 func (t *InvalidPrevAtxProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
 		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.PreviousATXsRoot[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.PreviousATXsRootProof, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeCompact32(enc, uint32(t.PrevATXIndex))
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.PrevATXProof, 32)
 		if err != nil {
 			return total, err
 		}
@@ -144,6 +104,97 @@ func (t *InvalidPrevAtxProof) EncodeScale(enc *scale.Encoder) (total int, err er
 		}
 		total += n
 	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.NIPostsRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NIPostsRootProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.NIPostRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.NIPostRootProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact16(enc, uint16(t.NIPostIndex))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SubPostsRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.SubPostsRootProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.SubPostRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.SubPostRootProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact16(enc, uint16(t.SubPostRootIndex))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.MarriageProof)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageIndexProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.PrevATXProof, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	return total, nil
 }
 
@@ -154,37 +205,6 @@ func (t *InvalidPrevAtxProof) DecodeScale(dec *scale.Decoder) (total int, err er
 			return total, err
 		}
 		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.PreviousATXsRoot[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.PreviousATXsRootProof = field
-	}
-	{
-		field, n, err := scale.DecodeCompact32(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.PrevATXIndex = uint32(field)
-	}
-	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		t.PrevATXProof = field
 	}
 	{
 		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
@@ -199,6 +219,106 @@ func (t *InvalidPrevAtxProof) DecodeScale(dec *scale.Decoder) (total int, err er
 			return total, err
 		}
 		total += n
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.NIPostsRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NIPostsRootProof = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.NIPostRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NIPostRootProof = field
+	}
+	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.NIPostIndex = uint16(field)
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SubPostsRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.SubPostsRootProof = field
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.SubPostRoot[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.SubPostRootProof = field
+	}
+	{
+		field, n, err := scale.DecodeCompact16(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.SubPostRootIndex = uint16(field)
+	}
+	{
+		field, n, err := scale.DecodeOption[MarriageProof](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MarriageProof = field
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.MarriageIndexProof = field
+	}
+	{
+		field, n, err := scale.DecodeStructSliceWithLimit[types.Hash32](dec, 32)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.PrevATXProof = field
 	}
 	return total, nil
 }
