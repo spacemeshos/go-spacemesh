@@ -1,12 +1,10 @@
 package rangesync
 
 var (
-	StartWireConduit              = startWireConduit
-	StringToFP                    = stringToFP
-	CHash                         = chash
-	NaiveFPFunc                   = naiveFPFunc
-	NewRangeSetReconcilerInternal = newRangeSetReconciler
-	NewPairwiseSetSyncerInternal  = newPairwiseSetSyncer
+	StartWireConduit = startWireConduit
+	StringToFP       = stringToFP
+	CHash            = chash
+	NaiveFPFunc      = naiveFPFunc
 )
 
 type (
