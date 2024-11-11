@@ -40,7 +40,6 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
-	github.com/spacemeshos/api/release/go v1.55.0
 	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.1
@@ -60,7 +59,7 @@ require (
 	golang.org/x/sync v0.8.0
 	golang.org/x/time v0.7.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241104194629-dd2ea8efbc28
-	google.golang.org/grpc v1.67.1
+	google.golang.org/grpc v1.68.0
 	google.golang.org/protobuf v1.35.1
 	k8s.io/api v0.31.2
 	k8s.io/apimachinery v0.31.2
@@ -214,7 +213,8 @@ require (
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
 	github.com/sagikazarmark/slog-shim v0.1.0 // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
-	github.com/spacemeshos/api v1.55.1-0.20241108174605-b9f28eeff6f8 // indirect
+	github.com/spacemeshos/api v1.55.1-0.20241111172452-53c7ab7d2740 // indirect
+	github.com/spacemeshos/api/release/go v1.55.1-0.20241111172452-53c7ab7d2740 // indirect
 	github.com/spacemeshos/sha256-simd v0.1.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cast v1.6.0 // indirect
