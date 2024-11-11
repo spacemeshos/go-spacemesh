@@ -635,7 +635,7 @@ func makeDBBackedFPTree(t *testing.T) []*fptree.FPTree {
 	t.Cleanup(func() { tx.Release() })
 	sts, err := st.Snapshot(tx)
 	require.NoError(t, err)
-	store := fptree.NewDBBackedStore(tx, sts, 0, testKeyLen)
+	store := fptree.NewDBBackedStore(tx, sts, testKeyLen)
 	ft := fptree.NewFPTree(0, store, testKeyLen, testDepth)
 	return []*fptree.FPTree{ft, store.FPTree}
 }

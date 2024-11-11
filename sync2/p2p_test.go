@@ -46,7 +46,7 @@ func (fh *fakeHandler) Receive(k rangesync.KeyBytes, peer p2p.Peer) (bool, error
 	return true, nil
 }
 
-func (fh *fakeHandler) Commit(peer p2p.Peer, base, new rangesync.OrderedSet) error {
+func (fh *fakeHandler) Commit(ctx context.Context, peer p2p.Peer, base, new rangesync.OrderedSet) error {
 	fh.mtx.Lock()
 	defer fh.mtx.Unlock()
 	for k := range fh.synced {
@@ -128,7 +128,8 @@ func TestP2P(t *testing.T) {
 			if !hsync.Synced() {
 				return false
 			}
-			os := hsync.Set().Copy(false)
+			os, err := hsync.Set().Copy(context.Background(), false)
+			require.NoError(t, err)
 			for _, k := range handlers[n].committedItems() {
 				os.(*rangesync.DumbSet).AddUnchecked(k)
 			}
@@ -150,7 +151,8 @@ func TestP2P(t *testing.T) {
 
 	for n, hsync := range hs {
 		hsync.Stop()
-		os := hsync.Set().Copy(false)
+		os, err := hsync.Set().Copy(context.Background(), false)
+		require.NoError(t, err)
 		for _, k := range handlers[n].committedItems() {
 			os.(*rangesync.DumbSet).AddUnchecked(k)
 		}

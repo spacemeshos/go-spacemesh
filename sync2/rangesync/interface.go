@@ -64,11 +64,13 @@ type OrderedSet interface {
 	// a synchronization run.
 	// If syncScope if false, then the lifetime of the copy is not clearly defined.
 	// The list of received items as returned by Received is also inherited by the copy.
-	Copy(syncScope bool) OrderedSet
+	Copy(ctx context.Context, syncScope bool) (OrderedSet, error)
 	// Recent returns an Iterator that yields the items added since the specified
 	// timestamp. Some OrderedSet implementations may not have Recent implemented, in
 	// which case it should return an empty sequence.
 	Recent(since time.Time) (SeqResult, int)
+	// Loaded returns true if the set is loaded and ready for use.
+	Loaded() bool
 	// EnsureLoaded ensures that the set is loaded and ready for use.
 	// It may do nothing in case of in-memory sets, but may trigger loading
 	// from database in case of database-backed sets.
@@ -80,7 +82,7 @@ type OrderedSet interface {
 	Has(KeyBytes) (bool, error)
 	// Release releases the resources associated with the set.
 	// Calling Release on a set that is already released is a no-op.
-	Release() error
+	Release()
 }
 
 type Requester interface {

@@ -21,12 +21,11 @@ var _ sqlstore.IDStore = &DBBackedStore{}
 func NewDBBackedStore(
 	db sql.Executor,
 	sts *sqlstore.SyncedTableSnapshot,
-	sizeHint int,
 	keyLen int,
 ) *DBBackedStore {
 	return &DBBackedStore{
 		SQLIDStore: sqlstore.NewSQLIDStore(db, sts, keyLen),
-		FPTree:     NewFPTreeWithValues(sizeHint, keyLen),
+		FPTree:     NewFPTreeWithValues(0, keyLen),
 	}
 }
 

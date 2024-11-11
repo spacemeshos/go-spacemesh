@@ -55,7 +55,7 @@ func TestDBBackedStore(t *testing.T) {
 	sts, err := st.Snapshot(db)
 	require.NoError(t, err)
 
-	store := NewDBBackedStore(db, sts, 0, keyLen)
+	store := NewDBBackedStore(db, sts, keyLen)
 	actualIDs, err := store.From(rangesync.KeyBytes{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, 5).FirstN(5)
 	require.NoError(t, err)
 	require.Equal(t, []rangesync.KeyBytes{

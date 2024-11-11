@@ -1,11 +1,13 @@
 package dbset_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2/dbset"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 	"github.com/spacemeshos/go-spacemesh/sync2/sqlstore"
@@ -220,7 +222,8 @@ func TestDBSet_Copy(t *testing.T) {
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		firstKey(t, s.Items()).String())
 
-	copy := s.Copy(false)
+	copy, err := s.Copy(context.Background(), false)
+	require.NoError(t, err)
 
 	info, err := copy.GetRangeInfo(ids[2], ids[0])
 	require.NoError(t, err)
@@ -259,64 +262,84 @@ func TestDBItemStore_Advance(t *testing.T) {
 		rangesync.MustParseHexKeyBytes("5555555555555555555555555555555555555555555555555555555555555555"),
 		rangesync.MustParseHexKeyBytes("8888888888888888888888888888888888888888888888888888888888888888"),
 	}
-	db := sqlstore.PopulateDB(t, testKeyLen, ids)
+
 	st := &sqlstore.SyncedTable{
 		TableName: "foo",
 		IDColumn:  "id",
 	}
-	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
-	defer s.Release()
-	require.NoError(t, s.EnsureLoaded())
 
-	copy := s.Copy(false)
+	verifyDS := func(db sql.Database, os rangesync.OrderedSet) {
+		require.NoError(t, os.EnsureLoaded())
 
-	info, err := s.GetRangeInfo(ids[0], ids[0])
-	require.NoError(t, err)
-	require.Equal(t, 4, info.Count)
-	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
-	require.Equal(t, ids[0], firstKey(t, info.Items))
+		copy, err := os.Copy(context.Background(), false)
+		require.NoError(t, err)
 
-	info, err = copy.GetRangeInfo(ids[0], ids[0])
-	require.NoError(t, err)
-	require.Equal(t, 4, info.Count)
-	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
-	require.Equal(t, ids[0], firstKey(t, info.Items))
+		info, err := os.GetRangeInfo(ids[0], ids[0])
+		require.NoError(t, err)
+		require.Equal(t, 4, info.Count)
+		require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
+		require.Equal(t, ids[0], firstKey(t, info.Items))
 
-	sqlstore.InsertDBItems(t, db, []rangesync.KeyBytes{
-		rangesync.MustParseHexKeyBytes("abcdef1234567890000000000000000000000000000000000000000000000000"),
+		info, err = copy.GetRangeInfo(ids[0], ids[0])
+		require.NoError(t, err)
+		require.Equal(t, 4, info.Count)
+		require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
+		require.Equal(t, ids[0], firstKey(t, info.Items))
+
+		sqlstore.InsertDBItems(t, db, []rangesync.KeyBytes{
+			rangesync.MustParseHexKeyBytes("abcdef1234567890000000000000000000000000000000000000000000000000"),
+		})
+
+		info, err = os.GetRangeInfo(ids[0], ids[0])
+		require.NoError(t, err)
+		require.Equal(t, 4, info.Count)
+		require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
+		require.Equal(t, ids[0], firstKey(t, info.Items))
+
+		info, err = copy.GetRangeInfo(ids[0], ids[0])
+		require.NoError(t, err)
+		require.Equal(t, 4, info.Count)
+		require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
+		require.Equal(t, ids[0], firstKey(t, info.Items))
+
+		require.NoError(t, os.Advance())
+
+		info, err = os.GetRangeInfo(ids[0], ids[0])
+		require.NoError(t, err)
+		require.Equal(t, 5, info.Count)
+		require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.String())
+		require.Equal(t, ids[0], firstKey(t, info.Items))
+
+		info, err = copy.GetRangeInfo(ids[0], ids[0])
+		require.NoError(t, err)
+		require.Equal(t, 4, info.Count)
+		require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
+		require.Equal(t, ids[0], firstKey(t, info.Items))
+
+		copy1, err := os.Copy(context.Background(), false)
+		require.NoError(t, err)
+		info, err = copy1.GetRangeInfo(ids[0], ids[0])
+		require.NoError(t, err)
+		require.Equal(t, 5, info.Count)
+		require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.String())
+		require.Equal(t, ids[0], firstKey(t, info.Items))
+	}
+
+	t.Run("original DBSet", func(t *testing.T) {
+		db := sqlstore.PopulateDB(t, testKeyLen, ids)
+		dbSet := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+		defer dbSet.Release()
+		verifyDS(db, dbSet)
 	})
 
-	info, err = s.GetRangeInfo(ids[0], ids[0])
-	require.NoError(t, err)
-	require.Equal(t, 4, info.Count)
-	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
-	require.Equal(t, ids[0], firstKey(t, info.Items))
-
-	info, err = copy.GetRangeInfo(ids[0], ids[0])
-	require.NoError(t, err)
-	require.Equal(t, 4, info.Count)
-	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
-	require.Equal(t, ids[0], firstKey(t, info.Items))
-
-	require.NoError(t, s.Advance())
-
-	info, err = s.GetRangeInfo(ids[0], ids[0])
-	require.NoError(t, err)
-	require.Equal(t, 5, info.Count)
-	require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.String())
-	require.Equal(t, ids[0], firstKey(t, info.Items))
-
-	info, err = copy.GetRangeInfo(ids[0], ids[0])
-	require.NoError(t, err)
-	require.Equal(t, 4, info.Count)
-	require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
-	require.Equal(t, ids[0], firstKey(t, info.Items))
-
-	info, err = s.Copy(false).GetRangeInfo(ids[0], ids[0])
-	require.NoError(t, err)
-	require.Equal(t, 5, info.Count)
-	require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.String())
-	require.Equal(t, ids[0], firstKey(t, info.Items))
+	t.Run("DBSet copy", func(t *testing.T) {
+		db := sqlstore.PopulateDB(t, testKeyLen, ids)
+		origSet := dbset.NewDBSet(db, st, testKeyLen, testDepth)
+		defer origSet.Release()
+		os, err := origSet.Copy(context.Background(), false)
+		require.NoError(t, err)
+		verifyDS(db, os)
+	})
 }
 
 func TestDBSet_Added(t *testing.T) {
@@ -353,7 +376,9 @@ func TestDBSet_Added(t *testing.T) {
 		rangesync.MustParseHexKeyBytes("4444444444444444444444444444444444444444444444444444444444444444"),
 	}, added)
 
-	added1, err := s.Copy(false).(*dbset.DBSet).Received().FirstN(3)
+	copy, err := s.Copy(context.Background(), false)
+	require.NoError(t, err)
+	added1, err := copy.(*dbset.DBSet).Received().FirstN(3)
 	require.NoError(t, err)
 	require.ElementsMatch(t, added, added1)
 }

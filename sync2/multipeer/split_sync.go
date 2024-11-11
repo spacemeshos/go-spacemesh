@@ -3,6 +3,7 @@ package multipeer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -80,22 +81,23 @@ func (s *splitSync) nextPeer() p2p.Peer {
 	return p
 }
 
-func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange) {
-	syncer := s.syncBase.Derive(p)
+func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange) error {
+	syncer, err := s.syncBase.Derive(ctx, p)
+	if err != nil {
+		return fmt.Errorf("derive syncer: %w", err)
+	}
 	sr.NumSyncers++
 	s.numRunning++
 	doneCh := make(chan struct{})
 	s.eg.Go(func() error {
-		defer func() {
-			syncer.Release()
-			close(doneCh)
-		}()
+		defer syncer.Release()
 		err := syncer.Sync(ctx, sr.X, sr.Y)
+		close(doneCh)
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case s.resCh <- syncResult{s: syncer, err: err}:
-			return syncer.Release()
+			return nil
 		}
 	})
 	gpTimer := s.clock.After(s.gracePeriod)
@@ -115,6 +117,7 @@ func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange
 		}
 		return nil
 	})
+	return nil
 }
 
 func (s *splitSync) handleSyncResult(r syncResult) error {
@@ -184,13 +187,15 @@ func (s *splitSync) Sync(ctx context.Context) error {
 			}
 			p := s.nextPeer()
 			s.syncMap[p] = sr
-			s.startPeerSync(syncCtx, p, sr)
+			if err := s.startPeerSync(syncCtx, p, sr); err != nil {
+				return err
+			}
 			break
 		}
 		s.clearDeadPeers()
 		for s.numRemaining > 0 && (s.sq.empty() || len(s.syncPeers) == 0) {
 			if s.numRunning == 0 && len(s.syncPeers) == 0 {
-				return errors.New("all peers dropped before full sync has completed")
+				return errors.New("all peers dropped before split sync has completed")
 			}
 			select {
 			case sr = <-s.slowRangeCh:

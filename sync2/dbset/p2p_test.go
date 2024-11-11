@@ -185,7 +185,9 @@ func runSync(
 	cfg.MaxReconcDiff = 1 // always reconcile
 	pssA := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideA"), nil, "test", cfg, &tr, clock)
 	d := rangesync.NewDispatcher(log)
-	syncSetA := setA.Copy(false).(*dbset.DBSet)
+	copyA, err := setA.Copy(context.Background(), false)
+	require.NoError(t, err)
+	syncSetA := copyA.(*dbset.DBSet)
 	pssA.Register(d, syncSetA)
 	srv := server.New(mesh.Hosts()[0], proto,
 		d.Dispatch,
@@ -223,7 +225,9 @@ func runSync(
 	pssB := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideB"), client, "test", cfg, &tr, clock)
 
 	tStart := time.Now()
-	syncSetB := setB.Copy(false).(*dbset.DBSet)
+	copyB, err := setB.Copy(context.Background(), false)
+	require.NoError(t, err)
+	syncSetB := copyB.(*dbset.DBSet)
 	require.NoError(t, pssB.Sync(ctx, srvPeerID, syncSetB, x, x))
 	stopTimer(t)
 	t.Logf("synced in %v, sent %d, recv %d", time.Since(tStart), pssB.Sent(), pssB.Received())
