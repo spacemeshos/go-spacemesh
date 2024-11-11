@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/spacemeshos/merkle-tree"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -46,7 +44,6 @@ func NewInvalidPrevAtxProofV2(
 	if atx1.ID() == atx2.ID() {
 		return nil, errors.New("ATXs have the same ID")
 	}
-
 	if atx1.MarriageATX == nil && atx1.SmesherID != nodeID {
 		return nil, fmt.Errorf("ATX1 was not created by %s", nodeID)
 	}
@@ -104,66 +101,20 @@ func NewInvalidPrevAtxProofV2(
 }
 
 func createInvalidPrevAtxProof(atx *ActivationTxV2, marriageIndex uint32) (InvalidPrevAtxProof, error) {
-	prevATXsRootProof, err := prevRootProof(atx)
-	if err != nil {
-		return InvalidPrevAtxProof{}, fmt.Errorf("create proof for previous atx root: %w", err)
-	}
-
-	prevATXProof, err := prevProof(atx.PreviousATXs, marriageIndex)
-	if err != nil {
-		return InvalidPrevAtxProof{}, fmt.Errorf("create proof for previous atx: %w", err)
-	}
-
 	proof := InvalidPrevAtxProof{
 		ATXID: atx.ID(),
 
-		PreviousATXsRoot:      types.Hash32(atx.PreviousATXs.Root()),
-		PreviousATXsRootProof: prevATXsRootProof,
+		PreviousATXsRoot:      atx.PreviousATXs.Root(),
+		PreviousATXsRootProof: atx.PreviousATXsRootProof(),
 
 		PrevATXIndex: marriageIndex,
-		PrevATXProof: prevATXProof,
+		PrevATXProof: atx.PreviousATXs.Proof(int(marriageIndex)),
 
 		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
 	}
 
 	return proof, nil
-}
-
-func prevRootProof(atx *ActivationTxV2) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(PreviousATXsRootIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	atx.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
-}
-
-func prevProof(prevATXs PrevATXs, prevAtxIndex uint32) ([]types.Hash32, error) {
-	tree, err := merkle.NewTreeBuilder().
-		WithLeavesToProve(map[uint64]bool{uint64(prevAtxIndex): true}).
-		WithHashFunc(atxTreeHash).
-		Build()
-	if err != nil {
-		return nil, err
-	}
-	prevATXs.merkleTree(tree)
-	proof := tree.Proof()
-
-	proofHashes := make([]types.Hash32, len(proof))
-	for i, p := range proof {
-		proofHashes[i] = types.Hash32(p)
-	}
-	return proofHashes, nil
 }
 
 func (p ProofInvalidPrevAtxV2) Valid(_ context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
@@ -216,12 +167,12 @@ type InvalidPrevAtxProof struct {
 	ATXID types.ATXID
 
 	// PreviousATXsRoot and its proof that it is contained in the ATX.
-	PreviousATXsRoot      types.Hash32
-	PreviousATXsRootProof []types.Hash32 `scale:"max=32"`
+	PreviousATXsRoot      PrevATXsRoot
+	PreviousATXsRootProof PrevATXsRootProof `scale:"max=32"`
 
 	// PrevATXProof is the proof that the PrevATX in question is contained in the ATX at the given index.
 	PrevATXIndex uint32
-	PrevATXProof []types.Hash32 `scale:"max=32"`
+	PrevATXProof PrevATXProof `scale:"max=32"`
 
 	// SmesherID is the ID of the smesher that published the ATX.
 	SmesherID types.NodeID

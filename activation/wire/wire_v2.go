@@ -129,7 +129,7 @@ func (atx *ActivationTxV2) merkleTree(tree *merkle.Tree) {
 		tree.AddLeaf(types.EmptyHash32.Bytes())
 	}
 
-	tree.AddLeaf(atx.PreviousATXs.Root().Bytes())
+	tree.AddLeaf(types.Hash32(atx.PreviousATXs.Root()).Bytes())
 	tree.AddLeaf(types.Hash32(atx.NIPosts.Root(atx.PreviousATXs)).Bytes())
 
 	var vrfNonce types.Hash32
@@ -188,8 +188,14 @@ func (p InitialPostRootProof) Valid(atxID types.ATXID, initialPostRoot InitialPo
 	return validateProof(types.Hash32(atxID), types.Hash32(initialPostRoot), p, uint64(InitialPostRootIndex))
 }
 
-func (atx *ActivationTxV2) PreviousATXsRootProof() []types.Hash32 {
+func (atx *ActivationTxV2) PreviousATXsRootProof() PrevATXsRootProof {
 	return atx.merkleProof(PreviousATXsRootIndex)
+}
+
+type PrevATXsRootProof []types.Hash32
+
+func (p PrevATXsRootProof) Valid(atxID types.ATXID, prevATXsRoot PrevATXsRoot) bool {
+	return validateProof(types.Hash32(atxID), types.Hash32(prevATXsRoot), p, uint64(PreviousATXsRootIndex))
 }
 
 func (atx *ActivationTxV2) NIPostsRootProof() NIPostsRootProof {
@@ -280,8 +286,23 @@ func (prevATXs PrevATXs) merkleTree(tree *merkle.Tree) {
 	}
 }
 
-func (prevATXs PrevATXs) Root() types.Hash32 {
-	return createRoot(prevATXs.merkleTree)
+type PrevATXsRoot types.Hash32
+
+func (prevATXs PrevATXs) Root() PrevATXsRoot {
+	return PrevATXsRoot(createRoot(prevATXs.merkleTree))
+}
+
+func (prevATXs PrevATXs) Proof(index int) PrevATXProof {
+	if index < 0 || index >= len(prevATXs) {
+		panic("index out of range")
+	}
+	return createProof(uint64(index), prevATXs.merkleTree)
+}
+
+type PrevATXProof []types.Hash32
+
+func (p PrevATXProof) Valid(prevATXsRoot PrevATXsRoot, index int, prevATX types.ATXID) bool {
+	return validateProof(types.Hash32(prevATXsRoot), types.Hash32(prevATX), p, uint64(index))
 }
 
 type NIPosts []NIPostV2
