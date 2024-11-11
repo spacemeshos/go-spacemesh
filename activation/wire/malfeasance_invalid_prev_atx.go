@@ -17,12 +17,11 @@ import (
 // identities.
 //
 // We are proving the following:
-// 1. The ATXs have different IDs.
-// 2. Both ATXs have a valid signature.
-// 3. Both ATXs reference the same previous ATX for the same identity.
-// 4. Both marriage certificates have valid signatures.
-//
-// HINT: this works if the identity that publishes the marriage ATX marries themselves.
+//  1. The ATXs have different IDs.
+//  2. Both ATXs have a valid signature.
+//  3. Both ATXs reference the same previous ATX for the same identity.
+//  4. If the signer of one of the two ATXs is not the identity that referenced the same previous ATX, then the included
+//     marriage the included marriage proof is valid.
 type ProofInvalidPrevAtxV2 struct {
 	// NodeID is the node ID that referenced the same previous ATX twice.
 	NodeID types.NodeID
@@ -175,12 +174,11 @@ func (p ProofInvalidPrevAtxV2) Valid(_ context.Context, malValidator Malfeasance
 // identity.
 //
 // We are proving the following:
-// 1. The ATXs have different IDs.
-// 2. Both ATXs have a valid signature.
-// 3. Both ATXs contain a marriage certificate created by the same identity.
-// 4. Both marriage certificates have valid signatures.
-//
-// HINT: this works if the identity that publishes the marriage ATX marries themselves.
+//  1. Both ATXs have a valid signature.
+//  2. Both ATXs reference the same previous ATX for the same identity.
+//  3. If the signer of the ATXv2 is not the identity that referenced the same previous ATX, then the included marriage
+//     proof is valid.
+//  4. The ATXv1 has been signed by the identity that referenced the same previous ATX.
 type ProofInvalidPrevAtxV1 struct {
 	// NodeID is the node ID that referenced the same previous ATX twice.
 	NodeID types.NodeID

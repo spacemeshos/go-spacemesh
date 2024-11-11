@@ -15,12 +15,10 @@ import (
 // ProofDoubleMarry is a proof that two distinct ATXs contain a marriage certificate signed by the same identity.
 //
 // We are proving the following:
-// 1. The ATXs have different IDs.
-// 2. Both ATXs have a valid signature.
-// 3. Both ATXs contain a marriage certificate created by the same identity.
-// 4. Both marriage certificates have valid signatures.
-//
-// HINT: this works if the identity that publishes the marriage ATX marries themselves.
+//  1. The ATXs have different IDs.
+//  2. Both ATXs have a valid signature.
+//  3. Both ATXs contain a marriage certificate created by the same identity.
+//  4. Both marriage certificates have valid signatures.
 type ProofDoubleMarry struct {
 	// NodeID is the node ID that married twice.
 	NodeID types.NodeID

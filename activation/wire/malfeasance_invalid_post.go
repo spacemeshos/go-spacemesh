@@ -16,10 +16,10 @@ import (
 // ProofInvalidPost is a proof that a merged ATX with an invalid Post was published by a smesher.
 //
 // We are proofing the following:
-// 1. The ATX has a valid signature.
-// 2. If NodeID is different from SmesherID, we prove that NodeID and SmesherID are married.
-// 3. The commitment ATX of NodeID used for the invalid PoST based on their initial ATX.
-// 4. The provided Post is invalid for the given NodeID.
+//  1. The ATX has a valid signature.
+//  2. If NodeID is different from SmesherID, we prove that NodeID and SmesherID are married.
+//  3. The commitment ATX of NodeID used for the invalid PoST based on their initial ATX.
+//  4. The provided Post is invalid for the given NodeID.
 type ProofInvalidPost struct {
 	// ATXID is the ID of the ATX containing the invalid PoST.
 	ATXID types.ATXID
