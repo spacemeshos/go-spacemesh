@@ -73,3 +73,8 @@ type forkFinder interface {
 	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
 	Purge(bool, ...p2p.Peer)
 }
+
+type multiEpochAtxSyncerV2 interface {
+	EnsureSync(ctx context.Context, lastWaitEpoch, newEpoch types.EpochID) (lastSynced types.EpochID, err error)
+	Stop()
+}

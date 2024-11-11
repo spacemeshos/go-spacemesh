@@ -30,7 +30,7 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 		return nil
 	}
 
-	options := system.GetAtxOpts{}
+	var options system.GetAtxOpts
 	for _, opt := range opts {
 		opt(&options)
 	}
@@ -41,10 +41,20 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 		zap.Bool("limiting", !options.LimitingOff),
 	)
 	hashes := types.ATXIDsToHashes(ids)
-	if options.LimitingOff {
-		return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	handler := f.validators.atx.HandleMessage
+	if options.RecvChannel != nil {
+		handler = func(ctx context.Context, id types.Hash32, p p2p.Peer, data []byte) error {
+			if err := f.validators.atx.HandleMessage(ctx, id, p, data); err != nil {
+				return err
+			}
+			options.RecvChannel <- types.ATXID(id)
+			return nil
+		}
 	}
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(f.getAtxsLimiter))
+	if options.LimitingOff {
+		return f.getHashes(ctx, hashes, datastore.ATXDB, handler)
+	}
+	return f.getHashes(ctx, hashes, datastore.ATXDB, handler, withLimiter(f.getAtxsLimiter))
 }
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error

@@ -1681,3 +1681,102 @@ func (c *MockforkFinderUpdateAgreementCall) DoAndReturn(f func(p2p.Peer, types.L
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockmultiEpochAtxSyncerV2 is a mock of multiEpochAtxSyncerV2 interface.
+type MockmultiEpochAtxSyncerV2 struct {
+	ctrl     *gomock.Controller
+	recorder *MockmultiEpochAtxSyncerV2MockRecorder
+	isgomock struct{}
+}
+
+// MockmultiEpochAtxSyncerV2MockRecorder is the mock recorder for MockmultiEpochAtxSyncerV2.
+type MockmultiEpochAtxSyncerV2MockRecorder struct {
+	mock *MockmultiEpochAtxSyncerV2
+}
+
+// NewMockmultiEpochAtxSyncerV2 creates a new mock instance.
+func NewMockmultiEpochAtxSyncerV2(ctrl *gomock.Controller) *MockmultiEpochAtxSyncerV2 {
+	mock := &MockmultiEpochAtxSyncerV2{ctrl: ctrl}
+	mock.recorder = &MockmultiEpochAtxSyncerV2MockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmultiEpochAtxSyncerV2) EXPECT() *MockmultiEpochAtxSyncerV2MockRecorder {
+	return m.recorder
+}
+
+// EnsureSync mocks base method.
+func (m *MockmultiEpochAtxSyncerV2) EnsureSync(ctx context.Context, lastWaitEpoch, newEpoch types.EpochID) (types.EpochID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureSync", ctx, lastWaitEpoch, newEpoch)
+	ret0, _ := ret[0].(types.EpochID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EnsureSync indicates an expected call of EnsureSync.
+func (mr *MockmultiEpochAtxSyncerV2MockRecorder) EnsureSync(ctx, lastWaitEpoch, newEpoch any) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureSync", reflect.TypeOf((*MockmultiEpochAtxSyncerV2)(nil).EnsureSync), ctx, lastWaitEpoch, newEpoch)
+	return &MockmultiEpochAtxSyncerV2EnsureSyncCall{Call: call}
+}
+
+// MockmultiEpochAtxSyncerV2EnsureSyncCall wrap *gomock.Call
+type MockmultiEpochAtxSyncerV2EnsureSyncCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmultiEpochAtxSyncerV2EnsureSyncCall) Return(lastSynced types.EpochID, err error) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	c.Call = c.Call.Return(lastSynced, err)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmultiEpochAtxSyncerV2EnsureSyncCall) Do(f func(context.Context, types.EpochID, types.EpochID) (types.EpochID, error)) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmultiEpochAtxSyncerV2EnsureSyncCall) DoAndReturn(f func(context.Context, types.EpochID, types.EpochID) (types.EpochID, error)) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Stop mocks base method.
+func (m *MockmultiEpochAtxSyncerV2) Stop() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Stop")
+}
+
+// Stop indicates an expected call of Stop.
+func (mr *MockmultiEpochAtxSyncerV2MockRecorder) Stop() *MockmultiEpochAtxSyncerV2StopCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockmultiEpochAtxSyncerV2)(nil).Stop))
+	return &MockmultiEpochAtxSyncerV2StopCall{Call: call}
+}
+
+// MockmultiEpochAtxSyncerV2StopCall wrap *gomock.Call
+type MockmultiEpochAtxSyncerV2StopCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmultiEpochAtxSyncerV2StopCall) Return() *MockmultiEpochAtxSyncerV2StopCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmultiEpochAtxSyncerV2StopCall) Do(f func()) *MockmultiEpochAtxSyncerV2StopCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmultiEpochAtxSyncerV2StopCall) DoAndReturn(f func()) *MockmultiEpochAtxSyncerV2StopCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
@@ -77,6 +78,14 @@ func MainnetConfig() Config {
 
 	hare4conf := hare4.DefaultConfig()
 	hare4conf.Enable = false
+
+	oldAtxSyncCfg := sync2.DefaultConfig()
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = time.Hour
+	oldAtxSyncCfg.MaxDepth = 16
+	newAtxSyncCfg := sync2.DefaultConfig()
+	newAtxSyncCfg.MaxDepth = 21
+	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
+
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:         defaultDataDir,
@@ -212,6 +221,11 @@ func MainnetConfig() Config {
 			DisableMeshAgreement:     true,
 			AtxSync:                  atxsync.DefaultConfig(),
 			MalSync:                  malsync.DefaultConfig(),
+			V2: syncer.SyncV2Config{
+				OldAtxSyncCfg:     oldAtxSyncCfg,
+				NewAtxSyncCfg:     newAtxSyncCfg,
+				ParallelLoadLimit: 10,
+			},
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

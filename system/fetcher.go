@@ -28,13 +28,23 @@ type BlockFetcher interface {
 
 type GetAtxOpts struct {
 	LimitingOff bool
+	RecvChannel chan<- types.ATXID
 }
 
 type GetAtxOpt func(*GetAtxOpts)
 
+// WithoutLimiting disables rate limiting when downloading ATXs.
 func WithoutLimiting() GetAtxOpt {
 	return func(opts *GetAtxOpts) {
 		opts.LimitingOff = true
+	}
+}
+
+// WithRecvChannel sets the channel to receive successfully downloaded and validated ATXs
+// IDs on.
+func WithRecvChannel(ch chan<- types.ATXID) GetAtxOpt {
+	return func(opts *GetAtxOpts) {
+		opts.RecvChannel = ch
 	}
 }
 

@@ -86,7 +86,7 @@ func startTestLoop(tb testing.TB, f *Fetch, eg *errgroup.Group, stop chan struct
 			default:
 				f.mu.Lock()
 				for h, req := range f.unprocessed {
-					require.NoError(tb, req.validator(req.ctx, types.Hash32{}, p2p.NoPeer, []byte{}))
+					require.NoError(tb, req.validator(req.ctx, h, p2p.NoPeer, []byte{}))
 					close(req.promise.completed)
 					delete(f.unprocessed, h)
 				}
@@ -591,7 +591,7 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 }
 
 func TestGetATXs(t *testing.T) {
-	atxs := genATXs(t, 2)
+	atxs := genATXs(t, 4)
 	f := createFetch(t)
 	f.mAtxH.EXPECT().
 		HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -602,10 +602,23 @@ func TestGetATXs(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	atxIDs := types.ToATXIDs(atxs)
-	require.NoError(t, f.GetAtxs(context.Background(), atxIDs))
+	atxIDs1 := types.ToATXIDs(atxs[:2])
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs1))
+
+	recvCh := make(chan types.ATXID)
+	atxIDs2 := types.ToATXIDs(atxs[2:])
+	var recvIDs []types.ATXID
+	eg.Go(func() error {
+		for id := range recvCh {
+			recvIDs = append(recvIDs, id)
+		}
+		return nil
+	})
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs2, system.WithRecvChannel(recvCh)))
+	close(recvCh)
 	close(stop)
 	require.NoError(t, eg.Wait())
+	require.ElementsMatch(t, atxIDs2, recvIDs)
 }
 
 func TestGetActiveSet(t *testing.T) {
