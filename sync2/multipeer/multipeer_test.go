@@ -66,6 +66,7 @@ type multiPeerSyncTester struct {
 	reconciler *multipeer.MultiPeerReconciler
 	cancel     context.CancelFunc
 	eg         errgroup.Group
+	kickCh     chan struct{}
 	// EXPECT() calls should not be done concurrently
 	// https://github.com/golang/mock/issues/533#issuecomment-821537840
 	mtx sync.Mutex
@@ -80,10 +81,13 @@ func newMultiPeerSyncTester(t *testing.T, addPeers int) *multiPeerSyncTester {
 		syncRunner: NewMocksyncRunner(ctrl),
 		peers:      peers.New(),
 		clock:      clockwork.NewFakeClock().(fakeClock),
+		kickCh:     make(chan struct{}, 1),
 	}
 	cfg := multipeer.DefaultConfig()
-	cfg.SyncInterval = time.Minute
+	cfg.SyncInterval = 40 * time.Second
+	cfg.SyncIntervalSpread = 0.1
 	cfg.SyncPeerCount = numSyncPeers
+	cfg.RetryInterval = 5 * time.Second
 	cfg.MinSplitSyncPeers = 2
 	cfg.MinSplitSyncCount = 90
 	cfg.MaxFullDiff = 20
@@ -110,7 +114,7 @@ func (mt *multiPeerSyncTester) addPeers(n int) []p2p.Peer {
 func (mt *multiPeerSyncTester) start() context.Context {
 	var ctx context.Context
 	ctx, mt.cancel = context.WithTimeout(context.Background(), 10*time.Second)
-	mt.eg.Go(func() error { return mt.reconciler.Run(ctx) })
+	mt.eg.Go(func() error { return mt.reconciler.Run(ctx, mt.kickCh) })
 	mt.Cleanup(func() {
 		mt.cancel()
 		if err := mt.eg.Wait(); err != nil {
@@ -118,6 +122,10 @@ func (mt *multiPeerSyncTester) start() context.Context {
 		}
 	})
 	return ctx
+}
+
+func (mt *multiPeerSyncTester) kick() {
+	mt.kickCh <- struct{}{}
 }
 
 func (mt *multiPeerSyncTester) expectProbe(times int, pr rangesync.ProbeResult) *peerList {
@@ -180,7 +188,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t, 0)
 		ctx := mt.start()
 		mt.clock.BlockUntilContext(ctx, 1)
-		// Advance by sync interval. No peers yet
+		// Advance by sync interval (incl. spread). No peers yet
 		mt.clock.Advance(time.Minute)
 		mt.clock.BlockUntilContext(ctx, 1)
 		// It is safe to do EXPECT() calls while the MultiPeerReconciler is blocked
@@ -239,6 +247,34 @@ func TestMultiPeerSync(t *testing.T) {
 		for i := 0; i < numSyncs; i++ {
 			expect()
 			mt.clock.Advance(time.Minute)
+			mt.clock.BlockUntilContext(ctx, 1)
+			mt.satisfy()
+		}
+		require.True(t, mt.reconciler.Synced())
+		mt.syncBase.EXPECT().Wait()
+	})
+
+	t.Run("sync after kick", func(t *testing.T) {
+		mt := newMultiPeerSyncTester(t, 10)
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
+		require.False(t, mt.reconciler.Synced())
+		expect := func() {
+			pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{
+				FP:    "foo",
+				Count: 100,
+				Sim:   0.99, // high enough for full sync
+			})
+			mt.expectFullSync(pl, numSyncPeers, 0)
+			mt.syncBase.EXPECT().Wait()
+		}
+		expect()
+		// first full sync happens immediately
+		ctx := mt.start()
+		mt.clock.BlockUntilContext(ctx, 1)
+		mt.satisfy()
+		for i := 0; i < numSyncs; i++ {
+			expect()
+			mt.kick()
 			mt.clock.BlockUntilContext(ctx, 1)
 			mt.satisfy()
 		}
@@ -344,6 +380,28 @@ func TestMultiPeerSync(t *testing.T) {
 		}
 		require.True(t, mt.reconciler.Synced())
 		mt.syncBase.EXPECT().Wait()
+	})
+
+	t.Run("all peers failed during full sync", func(t *testing.T) {
+		mt := newMultiPeerSyncTester(t, 10)
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
+
+		pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
+		mt.expectFullSync(pl, numSyncPeers, numSyncPeers)
+		mt.syncBase.EXPECT().Wait().AnyTimes()
+
+		ctx := mt.start()
+		mt.clock.BlockUntilContext(ctx, 1)
+		mt.satisfy()
+
+		pl = mt.expectProbe(numSyncPeers, rangesync.ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
+		mt.expectFullSync(pl, numSyncPeers, 0)
+		// Retry should happen after mere 5 seconds as no peers have succeeded, no
+		// need to wait full sync interval.
+		mt.clock.Advance(5 * time.Second)
+		mt.satisfy()
+
+		require.True(t, mt.reconciler.Synced())
 	})
 
 	t.Run("failed synced key handling during full sync", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -64,6 +65,9 @@ type MultiPeerReconcilerConfig struct {
 	MinCompleteFraction float64 `mapstructure:"min-complete-fraction"`
 	// Interval between syncs.
 	SyncInterval time.Duration `mapstructure:"sync-interval"`
+	// Interval spread factor for split sync.
+	// The actual interval will be SyncInterval * (1 + (random[0..2]*SplitSyncIntervalSpread-1)).
+	SyncIntervalSpread float64 `mapstructure:"sync-interval-spread"`
 	// Interval between retries after a failed sync.
 	RetryInterval time.Duration `mapstructure:"retry-interval"`
 	// Interval between rechecking for peers after no synchronization peers were
@@ -91,6 +95,7 @@ func DefaultConfig() MultiPeerReconcilerConfig {
 		MaxFullDiff:            10000,
 		MaxSyncDiff:            100,
 		SyncInterval:           5 * time.Minute,
+		SyncIntervalSpread:     0.5,
 		RetryInterval:          1 * time.Minute,
 		NoPeersRecheckInterval: 30 * time.Second,
 		SplitSyncGracePeriod:   time.Minute,
@@ -259,7 +264,11 @@ func (mpr *MultiPeerReconciler) needSplitSync(s syncability) bool {
 }
 
 func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Peer) error {
+	if len(syncPeers) == 0 {
+		return errors.New("no peers to sync against")
+	}
 	var eg errgroup.Group
+	numSucceeded := 0
 	for _, p := range syncPeers {
 		syncer, err := mpr.syncBase.Derive(ctx, p)
 		if err != nil {
@@ -270,6 +279,7 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 			err := syncer.Sync(ctx, nil, nil)
 			switch {
 			case err == nil:
+				numSucceeded++
 				mpr.sl.NoteSync()
 			case errors.Is(err, context.Canceled):
 				return err
@@ -281,7 +291,13 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 			return nil
 		})
 	}
-	return eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+	if numSucceeded == 0 {
+		return errors.New("all syncs failed")
+	}
+	return nil
 }
 
 func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context, lastWasSplit bool) (full bool, err error) {
@@ -341,7 +357,7 @@ func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context, lastWasSplit bool)
 }
 
 // Run runs the MultiPeerReconciler.
-func (mpr *MultiPeerReconciler) Run(ctx context.Context) error {
+func (mpr *MultiPeerReconciler) Run(ctx context.Context, kickCh chan struct{}) error {
 	// The point of using split sync, which syncs different key ranges against
 	// different peers, vs full sync which syncs the full key range against different
 	// peers, is:
@@ -379,7 +395,9 @@ func (mpr *MultiPeerReconciler) Run(ctx context.Context) error {
 	lastWasSplit := false
 LOOP:
 	for {
-		interval := mpr.cfg.SyncInterval
+		interval := time.Duration(
+			float64(mpr.cfg.SyncInterval) *
+				(1 + mpr.cfg.SyncIntervalSpread*(rand.Float64()*2-1)))
 		full, err = mpr.syncOnce(ctx, lastWasSplit)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -402,6 +420,7 @@ LOOP:
 			err = ctx.Err()
 			break LOOP
 		case <-mpr.clock.After(interval):
+		case <-kickCh:
 		}
 	}
 	// The loop is only exited upon context cancellation.
