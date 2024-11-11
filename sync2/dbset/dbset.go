@@ -291,12 +291,14 @@ func (d *DBSet) Recent(since time.Time) (rangesync.SeqResult, int) {
 func (d *DBSet) Release() {
 	d.loadMtx.Lock()
 	defer d.loadMtx.Unlock()
-	if d.ft == nil {
-		return
+	if d.ft != nil {
+		d.ft.Release()
+		d.ft = nil
 	}
-	d.ft.Release()
-	d.ft = nil
-	if c, ok := d.db.(sql.Connection); ok {
-		c.Release()
+	if d.db != nil {
+		if c, ok := d.db.(sql.Connection); ok {
+			c.Release()
+		}
+		d.db = nil
 	}
 }
