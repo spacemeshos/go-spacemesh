@@ -101,7 +101,7 @@ func (cs *ConservativeState) PredictBlock(lid types.LayerID, numEligibility int)
 	predictedBlock, _ := mi.PopAll()
 	numTXs := numEligibility * cs.cfg.NumTXsPerProposal
 	n := min(numTXs, len(predictedBlock))
-	txs := make([]types.TransactionID, 0, n)
+	txs := make([]types.TransactionID, n)
 	for i, tx := range predictedBlock[:n] {
 		txs[i] = tx.ID
 	}
