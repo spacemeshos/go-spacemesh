@@ -33,7 +33,12 @@ type RemoteProposalBuilder struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
-	epochEligibilities map[types.EpochID]uint32
+	epochEligibilities map[types.EpochID]map[types.NodeID]eligibilities
+}
+
+type eligibilities struct {
+	slots  uint32
+	proofs map[types.LayerID][]types.VotingEligibility
 }
 
 // New creates a struct of block builder type.
@@ -56,7 +61,7 @@ func NewRemoteBuilder(
 		clock:              clock,
 		publisher:          publisher,
 		nodeSvc:            svc,
-		epochEligibilities: make(map[types.EpochID]uint32),
+		epochEligibilities: make(map[types.EpochID]map[types.NodeID]eligibilities),
 		signers: struct {
 			mu      sync.Mutex
 			signers map[types.NodeID]*signerSession
@@ -140,11 +145,13 @@ func (pb *RemoteProposalBuilder) clean(layer types.LayerID) {
 }
 
 func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID) error {
+	epoch := layer.GetEpoch()
 	pb.signers.mu.Lock()
 	signers := maps.Values(pb.signers.signers)
 	pb.signers.mu.Unlock()
 	for _, signer := range signers {
-		proposal, nonce, err := pb.nodeSvc.Proposal(ctx, layer, signer.signer.NodeID())
+		nodeId := signer.signer.NodeID()
+		proposal, nonce, err := pb.nodeSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
 			continue
@@ -154,36 +161,49 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
 		}
-		bcn, err := pb.nodeSvc.Beacon(ctx, layer.GetEpoch())
+		bcn, err := pb.nodeSvc.Beacon(ctx, epoch)
 		if err != nil {
 			pb.logger.Error("get beacon", zap.Error(err))
 			continue
 		}
 		var (
-			elig uint32
-			ok   bool
+			elig   uint32
+			proofs map[types.LayerID][]types.VotingEligibility
+			ok     bool
 		)
 		if proposal.Ballot.EpochData != nil {
-			elig, ok = pb.epochEligibilities[layer.GetEpoch()]
+			_, ok := pb.epochEligibilities[epoch]
 			if !ok {
-				pb.epochEligibilities[layer.GetEpoch()] = proposal.Ballot.EpochData.EligibilityCount
+				pb.epochEligibilities[epoch] = make(map[types.NodeID]eligibilities)
+			}
+			nodeElig, ok := pb.epochEligibilities[epoch][nodeId]
+			if !ok {
 				elig = proposal.Ballot.EpochData.EligibilityCount
+				proofs = calcEligibilityProofs(
+					signer.signer.VRFSigner(),
+					epoch,
+					bcn,
+					types.VRFPostIndex(nonce),
+					elig,
+					pb.cfg.layersPerEpoch,
+				)
+				pb.epochEligibilities[epoch][nodeId] = eligibilities{slots: elig, proofs: proofs}
+			} else {
+				elig = nodeElig.slots
+				proofs = nodeElig.proofs
 			}
 		} else {
-			elig, ok = pb.epochEligibilities[layer.GetEpoch()]
+			nodeElig, ok := pb.epochEligibilities[epoch]
 			if !ok {
 				panic("missing epoch eligibilities")
 			}
+			eligibilities, ok := nodeElig[nodeId]
+			if !ok {
+				panic("missing node epoch eligibilities")
+			}
+			elig = eligibilities.slots
+			proofs = eligibilities.proofs
 		}
-
-		proofs := calcEligibilityProofs(
-			signer.signer.VRFSigner(),
-			layer.GetEpoch(),
-			bcn,
-			types.VRFPostIndex(nonce),
-			elig,
-			pb.cfg.layersPerEpoch,
-		)
 
 		eligibilities, ok := proofs[layer]
 		if !ok {
