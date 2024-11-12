@@ -11,5 +11,5 @@ for file in config.standalone.client.json config.standalone.node-service.json;do
   jq ".genesis.\"genesis-time\" |= \"$TIME\"" "$file" > temp.json && mv temp.json "$file"
 done
 
-rm -rf /tmp/space*
+rm -rf /tmp/spacemesh*
 docker compose up
