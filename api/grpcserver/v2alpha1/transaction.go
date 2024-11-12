@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
+	"go.uber.org/zap"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
@@ -207,6 +209,11 @@ func (s *TransactionService) SubmitTransaction(
 	}
 
 	raw := types.NewRawTx(request.Transaction)
+	ctxzap.Debug(ctx, "successfully submitted transaction",
+		zap.String("grpc_service", Transaction),
+		zap.String("grpc_method", "SubmitTransaction"),
+		zap.String("tx_id", raw.ID.String()),
+	)
 	return &spacemeshv2alpha1.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		TxId:   raw.ID[:],
