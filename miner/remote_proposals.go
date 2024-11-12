@@ -128,7 +128,7 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 
 func (pb *RemoteProposalBuilder) clean(layer types.LayerID) {
 	var vals []types.EpochID
-	lim := layer.GetEpoch() - 2
+	lim := layer.GetEpoch() - 1
 	for k := range pb.epochEligibilities {
 		if k <= lim {
 			vals = append(vals, k)
