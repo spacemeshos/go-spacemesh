@@ -1520,12 +1520,11 @@ func (app *App) startServices(ctx context.Context) error {
 		}
 		return nil
 	})
-	app.eg.Go(func() error {
-		if app.remoteProposalBuilder != nil {
+	if app.remoteProposalBuilder != nil {
+		app.eg.Go(func() error {
 			return app.remoteProposalBuilder.Run(ctx)
-		}
-		return nil
-	})
+		})
+	}
 
 	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
