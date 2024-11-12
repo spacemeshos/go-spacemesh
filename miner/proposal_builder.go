@@ -41,7 +41,6 @@ var errAtxNotAvailable = errors.New("atx not available")
 
 type conservativeState interface {
 	SelectProposalTXs(types.LayerID, int) []types.TransactionID
-	PredictBlock(types.LayerID, int) []types.TransactionID
 }
 
 type votesEncoder interface {
@@ -698,7 +697,7 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 	}
 	slots := signer.session.eligibilities.slots
 
-	txs := pb.conState.PredictBlock(lid, int(slots))
+	txs := pb.conState.SelectProposalTXs(lid, int(slots))
 
 	prop := createPartialProposal(
 		&signer.session,

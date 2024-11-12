@@ -33,12 +33,7 @@ type RemoteProposalBuilder struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
-	epochEligibilities map[types.EpochID]map[types.NodeID]eligibilities
-}
-
-type eligibilities struct {
-	slots  uint32
-	proofs map[types.LayerID][]types.VotingEligibility
+	epochEligibilities map[types.EpochID]map[types.NodeID]map[types.LayerID][]types.VotingEligibility
 }
 
 // New creates a struct of block builder type.
@@ -61,7 +56,7 @@ func NewRemoteBuilder(
 		clock:              clock,
 		publisher:          publisher,
 		nodeSvc:            svc,
-		epochEligibilities: make(map[types.EpochID]map[types.NodeID]eligibilities),
+		epochEligibilities: make(map[types.EpochID]map[types.NodeID]map[types.LayerID][]types.VotingEligibility),
 		signers: struct {
 			mu      sync.Mutex
 			signers map[types.NodeID]*signerSession
@@ -167,42 +162,37 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			continue
 		}
 		var (
-			elig   uint32
 			proofs map[types.LayerID][]types.VotingEligibility
 			ok     bool
 		)
 		if proposal.Ballot.EpochData != nil {
 			_, ok := pb.epochEligibilities[epoch]
 			if !ok {
-				pb.epochEligibilities[epoch] = make(map[types.NodeID]eligibilities)
+				pb.epochEligibilities[epoch] = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
 			}
 			nodeElig, ok := pb.epochEligibilities[epoch][nodeId]
 			if !ok {
-				elig = proposal.Ballot.EpochData.EligibilityCount
 				proofs = calcEligibilityProofs(
 					signer.signer.VRFSigner(),
 					epoch,
 					bcn,
 					types.VRFPostIndex(nonce),
-					elig,
+					proposal.Ballot.EpochData.EligibilityCount,
 					pb.cfg.layersPerEpoch,
 				)
-				pb.epochEligibilities[epoch][nodeId] = eligibilities{slots: elig, proofs: proofs}
+				pb.epochEligibilities[epoch][nodeId] = proofs
 			} else {
-				elig = nodeElig.slots
-				proofs = nodeElig.proofs
+				proofs = nodeElig
 			}
 		} else {
 			nodeElig, ok := pb.epochEligibilities[epoch]
 			if !ok {
 				panic("missing epoch eligibilities")
 			}
-			eligibilities, ok := nodeElig[nodeId]
+			proofs, ok = nodeElig[nodeId]
 			if !ok {
 				panic("missing node epoch eligibilities")
 			}
-			elig = eligibilities.slots
-			proofs = eligibilities.proofs
 		}
 
 		eligibilities, ok := proofs[layer]
