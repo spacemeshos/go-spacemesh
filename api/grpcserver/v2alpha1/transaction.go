@@ -209,9 +209,7 @@ func (s *TransactionService) SubmitTransaction(
 	}
 
 	raw := types.NewRawTx(request.Transaction)
-	ctxzap.Debug(ctx, "successfully submitted transaction",
-		zap.String("grpc_service", Transaction),
-		zap.String("grpc_method", "SubmitTransaction"),
+	ctxzap.Info(ctx, "successfully submitted transaction",
 		zap.String("tx_id", raw.ID.String()),
 	)
 	return &spacemeshv2alpha1.SubmitTransactionResponse{
