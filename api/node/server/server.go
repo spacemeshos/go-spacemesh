@@ -345,7 +345,7 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	if err != nil {
 		return &proposalResp{}, err
 	}
-	if proposal == nil && err == nil {
+	if proposal == nil {
 		return &proposalResp{}, nil
 	}
 	// we have to explicitly check this case otherwise the next line may panic
