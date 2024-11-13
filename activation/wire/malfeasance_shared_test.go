@@ -15,6 +15,8 @@ import (
 )
 
 func Test_MarryProof(t *testing.T) {
+	t.Parallel()
+
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -24,6 +26,8 @@ func Test_MarryProof(t *testing.T) {
 	edVerifier := signing.NewEdVerifier()
 
 	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
@@ -61,6 +65,8 @@ func Test_MarryProof(t *testing.T) {
 	})
 
 	t.Run("identity not included in certificates", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
@@ -82,6 +88,8 @@ func Test_MarryProof(t *testing.T) {
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
@@ -156,6 +164,8 @@ func Test_MarryProof(t *testing.T) {
 }
 
 func Test_MarriageProof(t *testing.T) {
+	t.Parallel()
+
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
@@ -165,6 +175,8 @@ func Test_MarriageProof(t *testing.T) {
 	edVerifier := signing.NewEdVerifier()
 
 	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
@@ -202,6 +214,8 @@ func Test_MarriageProof(t *testing.T) {
 	})
 
 	t.Run("node ID is the same as smesher ID", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
@@ -229,6 +243,8 @@ func Test_MarriageProof(t *testing.T) {
 	})
 
 	t.Run("marriage ATX is not available", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 
 		atx := newActivationTxV2(
@@ -242,6 +258,8 @@ func Test_MarriageProof(t *testing.T) {
 	})
 
 	t.Run("node ID isn't married in marriage ATX", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
@@ -281,6 +299,8 @@ func Test_MarriageProof(t *testing.T) {
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
+		t.Parallel()
+
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
@@ -333,5 +353,133 @@ func Test_MarriageProof(t *testing.T) {
 		proof.MarriageATX = marriageATX
 
 		// not valid for incorrect marriage ATX smesher ID
+		marriageATXSmesherID := proof.MarriageATXSmesherID
+		proof.MarriageATXSmesherID = types.RandomNodeID()
+		err = proof.Valid(verifier, atx.ID(), otherSig.NodeID(), sig.NodeID())
+		require.ErrorContains(t, err, "invalid certificate signature")
+		proof.MarriageATXSmesherID = marriageATXSmesherID
+	})
+}
+
+func Test_CommitmentProof(t *testing.T) {
+	t.Parallel()
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	edVerifier := signing.NewEdVerifier()
+
+	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
+
+		commitmentATX := types.RandomATXID()
+		atx := newActivationTxV2(
+			withInitial(commitmentATX, PostV1{}),
+		)
+		atx.Sign(sig)
+
+		proof, err := createCommitmentProof(atx, sig.NodeID())
+		require.NoError(t, err)
+		require.NotEmpty(t, proof)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		err = proof.Valid(verifier, sig.NodeID())
+		require.NoError(t, err)
+	})
+
+	t.Run("node ID isn't the same as smesher ID", func(t *testing.T) {
+		t.Parallel()
+
+		commitmentATX := types.RandomATXID()
+		atx := newActivationTxV2(
+			withInitial(commitmentATX, PostV1{}),
+		)
+		atx.Sign(sig)
+
+		proof, err := createCommitmentProof(atx, types.RandomNodeID())
+		require.EqualError(t, err, "node ID does not match smesher ID of initial ATX")
+		require.Empty(t, proof)
+	})
+
+	t.Run("atx doesn't contain initial post", func(t *testing.T) {
+		t.Parallel()
+
+		atx := newActivationTxV2()
+		atx.Sign(sig)
+
+		proof, err := createCommitmentProof(atx, sig.NodeID())
+		require.EqualError(t, err, "initial ATX does not contain initial PoST")
+		require.Empty(t, proof)
+	})
+
+	t.Run("invalid proof", func(t *testing.T) {
+		t.Parallel()
+
+		commitmentATX := types.RandomATXID()
+		atx := newActivationTxV2(
+			withInitial(commitmentATX, PostV1{}),
+		)
+		atx.Sign(sig)
+
+		proof, err := createCommitmentProof(atx, sig.NodeID())
+		require.NoError(t, err)
+		require.NotEmpty(t, proof)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		// not valid for random NodeID
+		err = proof.Valid(verifier, types.RandomNodeID())
+		require.EqualError(t, err, "invalid signature")
+
+		// not valid for incorrect initial ATX ID
+		initialATX := proof.InitialATXID
+		proof.InitialATXID = types.RandomATXID()
+		err = proof.Valid(verifier, sig.NodeID())
+		require.EqualError(t, err, "invalid signature")
+		proof.InitialATXID = initialATX
+
+		// not valid for invalid initial PoST root
+		initialPostRoot := proof.InitialPostRoot
+		proof.InitialPostRoot = InitialPostRoot(types.RandomHash())
+		err = proof.Valid(verifier, sig.NodeID())
+		require.EqualError(t, err, "invalid initial PoST proof")
+		proof.InitialPostRoot = initialPostRoot
+
+		// not valid for invalid initial PoST proof
+		hash := proof.InitialPostProof[0]
+		proof.InitialPostProof[0] = types.RandomHash()
+		err = proof.Valid(verifier, sig.NodeID())
+		require.EqualError(t, err, "invalid initial PoST proof")
+		proof.InitialPostProof[0] = hash
+
+		// not valid for invalid commitment ATX
+		proof.CommitmentATX = types.RandomATXID()
+		err = proof.Valid(verifier, sig.NodeID())
+		require.EqualError(t, err, "invalid commitment ATX proof")
+		proof.CommitmentATX = commitmentATX
+
+		// not valid if commitment ATX proof is invalid
+		hash = proof.CommitmentATXProof[0]
+		proof.CommitmentATXProof[0] = types.RandomHash()
+		err = proof.Valid(verifier, sig.NodeID())
+		require.EqualError(t, err, "invalid commitment ATX proof")
+		proof.CommitmentATXProof[0] = hash
+
+		// not valid if signature is invalid
+		proof.Signature = types.RandomEdSignature()
+		err = proof.Valid(verifier, sig.NodeID())
+		require.EqualError(t, err, "invalid signature")
+		proof.Signature = atx.Signature
 	})
 }

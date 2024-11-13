@@ -131,63 +131,6 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 	return p.NodeID, nil
 }
 
-// CommitmentProof is a proof for the commitment ATX of a smesher. It is generated from the initial ATX.
-type CommitmentProof struct {
-	// InitialATXID is the ID of the initial ATX of the smesher.
-	InitialATXID types.ATXID
-
-	// InitialPostRoot and its proof that it is contained in the InitialATX.
-	InitialPostRoot  InitialPostRoot
-	InitialPostProof InitialPostRootProof `scale:"max=32"`
-
-	// CommitmentATX and its proof that it is contained in the InitialPostRoot.
-	CommitmentATX      types.ATXID
-	CommitmentATXProof CommitmentATXProof `scale:"max=32"`
-
-	// Signature is the signature of the ATXID by the smesher.
-	Signature types.EdSignature
-}
-
-func createCommitmentProof(initialAtx *ActivationTxV2, nodeID types.NodeID) (CommitmentProof, error) {
-	if initialAtx.SmesherID != nodeID {
-		return CommitmentProof{}, errors.New("node ID does not match smesher ID of initial ATX")
-	}
-	if initialAtx.Initial == nil {
-		return CommitmentProof{}, errors.New("initial ATX does not contain initial PoST")
-	}
-
-	return CommitmentProof{
-		InitialATXID: initialAtx.ID(),
-
-		InitialPostRoot:  initialAtx.Initial.Root(),
-		InitialPostProof: initialAtx.InitialPostRootProof(),
-
-		CommitmentATX:      initialAtx.Initial.CommitmentATX,
-		CommitmentATXProof: initialAtx.Initial.CommitmentATXProof(),
-
-		Signature: initialAtx.Signature,
-	}, nil
-}
-
-func (p CommitmentProof) Valid(malValidator MalfeasanceValidator, nodeID types.NodeID) error {
-	if !malValidator.Signature(signing.ATX, nodeID, p.InitialATXID.Bytes(), p.Signature) {
-		return errors.New("invalid signature")
-	}
-
-	if types.Hash32(p.InitialPostRoot) == types.EmptyHash32 {
-		return errors.New("invalid empty initial PoST root") // initial PoST root is empty for non-initial ATXs
-	}
-
-	if !p.InitialPostProof.Valid(p.InitialATXID, p.InitialPostRoot) {
-		return errors.New("invalid initial PoST proof")
-	}
-	if !p.CommitmentATXProof.Valid(p.InitialPostRoot, p.CommitmentATX) {
-		return errors.New("invalid commitment ATX proof")
-	}
-
-	return nil
-}
-
 // InvalidPostProof is a proof for an invalid PoST in an ATX. It contains the PoST and the merkle proofs to verify the
 // PoST.
 type InvalidPostProof struct {
