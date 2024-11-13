@@ -148,7 +148,6 @@ func newTestSyncer(tb testing.TB, interval time.Duration) *testSyncer {
 	ts.syncer = NewSyncer(
 		ts.cdb,
 		ts.mTicker,
-		ts.mBeacon,
 		ts.msh,
 		ts.mTortoise,
 		nil,
@@ -755,15 +754,6 @@ func TestSyncer_setATXSyncedTwice_NoError(t *testing.T) {
 	require.NotPanics(t, func() { ts.syncer.setATXSynced() })
 }
 
-func TestSyncer_IsBeaconSynced(t *testing.T) {
-	ts := newSyncerWithoutPeriodicRuns(t)
-	epoch := types.EpochID(11)
-	ts.mBeacon.EXPECT().GetBeacon(epoch).Return(types.EmptyBeacon, errors.New("unknown"))
-	require.False(t, ts.syncer.IsBeaconSynced(epoch))
-	ts.mBeacon.EXPECT().GetBeacon(epoch).Return(types.RandomBeacon(), nil)
-	require.True(t, ts.syncer.IsBeaconSynced(epoch))
-}
-
 func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 	ts.expectDownloadLoop()
@@ -774,7 +764,6 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts.syncer = NewSyncer(
 		ts.cdb,
 		ts.mTicker,
-		ts.mBeacon,
 		ts.msh,
 		ts.mTortoise,
 		nil,

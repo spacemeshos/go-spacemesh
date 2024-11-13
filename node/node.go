@@ -852,7 +852,6 @@ func (app *App) initServices(ctx context.Context) error {
 	newSyncer := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
-		beaconProtocol,
 		msh,
 		trtl,
 		fetcher,
