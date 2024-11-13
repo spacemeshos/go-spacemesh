@@ -210,7 +210,7 @@ func (s *TransactionService) SubmitTransaction(
 
 	raw := types.NewRawTx(request.Transaction)
 	ctxzap.Info(ctx, "successfully submitted transaction",
-		zap.String("tx_id", raw.ID.String()),
+		zap.Stringer("tx_id", raw.ID),
 	)
 	return &spacemeshv2alpha1.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
