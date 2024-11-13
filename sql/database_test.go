@@ -641,22 +641,9 @@ func TestExclusive(t *testing.T) {
 
 func TestConnection(t *testing.T) {
 	db := InMemoryTest(t)
-	c, err := db.Connection(context.Background())
-	require.NoError(t, err)
 	var r int
-	n, err := c.Exec("select ?", func(stmt *Statement) {
-		stmt.BindInt64(1, 42)
-	}, func(stmt *Statement) bool {
-		r = stmt.ColumnInt(0)
-		return true
-	})
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
-	require.Equal(t, 42, r)
-	c.Release()
-
-	require.NoError(t, db.WithConnection(context.Background(), func(c Connection) error {
-		n, err := c.Exec("select ?", func(stmt *Statement) {
+	require.NoError(t, db.WithConnection(context.Background(), func(ex Executor) error {
+		n, err := ex.Exec("select ?", func(stmt *Statement) {
 			stmt.BindInt64(1, 42)
 		}, func(stmt *Statement) bool {
 			r = stmt.ColumnInt(0)
@@ -668,7 +655,7 @@ func TestConnection(t *testing.T) {
 		return nil
 	}))
 
-	require.Error(t, db.WithConnection(context.Background(), func(c Connection) error {
+	require.Error(t, db.WithConnection(context.Background(), func(Executor) error {
 		return errors.New("error")
 	}))
 }
