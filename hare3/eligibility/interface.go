@@ -24,3 +24,7 @@ type Rolacle interface {
 	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)
 	Proof(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)
 }
+
+type BeaconProvider interface {
+	Beacon(context.Context, types.EpochID) (types.Beacon, error)
+}
