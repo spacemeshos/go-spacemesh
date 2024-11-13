@@ -608,20 +608,15 @@ type Database interface {
 	// and rolls it back otherwise.
 	// If the context is canceled, the currently running SQL statement is interrupted.
 	WithTxImmediate(ctx context.Context, exec func(Transaction) error) error
-	// Connection returns a connection from the database pool.
+	// WithConnection executes the provided function with a connection from the
+	// database pool.
 	// If many queries are to be executed in a row, but there's no need for an
 	// explicit transaction which may be long-running and thus block
 	// WAL checkpointing, it may be preferable to use a single connection for
 	// it to avoid database pool overhead.
-	// The connection needs to be always returned to the pool by calling its Release
-	// method.
-	// If the context is canceled, the currently running SQL statement is interrupted.
-	Connection(ctx context.Context) (Connection, error)
-	// WithConnection executes the provided function with a connection from the
-	// database pool.
 	// The connection is released back to the pool after the function returns.
 	// If the context is canceled, the currently running SQL statement is interrupted.
-	WithConnection(ctx context.Context, exec func(Connection) error) error
+	WithConnection(ctx context.Context, exec func(Executor) error) error
 	// Intercept adds an interceptor function to the database. The interceptor
 	// functions are invoked upon each query on the database, including queries
 	// executed within transactions.
@@ -640,13 +635,6 @@ type Transaction interface {
 	// Release releases the transaction. If the transaction hasn't been committed,
 	// it's rolled back.
 	Release() error
-}
-
-// Connection represents a database connection.
-type Connection interface {
-	Executor
-	// Release releases the connection back to the connection pool.
-	Release()
 }
 
 type sqliteDatabase struct {
@@ -819,28 +807,21 @@ func (db *sqliteDatabase) Close() error {
 	return nil
 }
 
-// Connection implements Database.
-func (db *sqliteDatabase) Connection(ctx context.Context) (Connection, error) {
+// WithConnection implements Database.
+func (db *sqliteDatabase) WithConnection(ctx context.Context, exec func(Executor) error) error {
 	if db.closed {
-		return nil, ErrClosed
+		return ErrClosed
 	}
 	conCtx, cancel := context.WithCancel(ctx)
 	conn := db.getConn(conCtx)
-	if conn == nil {
+	defer func() {
 		cancel()
-		return nil, ErrNoConnection
+		db.pool.Put(conn)
+	}()
+	if conn == nil {
+		return ErrNoConnection
 	}
-	return &sqliteConn{queryCache: db.queryCache, db: db, conn: conn, freeConn: cancel}, nil
-}
-
-// WithConnection implements Database.
-func (db *sqliteDatabase) WithConnection(ctx context.Context, exec func(Connection) error) error {
-	conn, err := db.Connection(ctx)
-	if err != nil {
-		return err
-	}
-	defer conn.Release()
-	return exec(conn)
+	return exec(&sqliteConn{queryCache: db.queryCache, db: db, conn: conn})
 }
 
 // Intercept adds an interceptor function to the database. The interceptor functions
@@ -1166,16 +1147,8 @@ func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 
 type sqliteConn struct {
 	*queryCache
-	db       *sqliteDatabase
-	conn     *sqlite.Conn
-	freeConn func()
-}
-
-var _ Connection = &sqliteConn{}
-
-func (c *sqliteConn) Release() {
-	c.freeConn()
-	c.db.pool.Put(c.conn)
+	db   *sqliteDatabase
+	conn *sqlite.Conn
 }
 
 func (c *sqliteConn) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {

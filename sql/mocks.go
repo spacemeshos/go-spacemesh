@@ -216,3 +216,41 @@ func (c *MockMigrationOrderCall) DoAndReturn(f func() int) *MockMigrationOrderCa
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// Rollback mocks base method.
+func (m *MockMigration) Rollback() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rollback")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Rollback indicates an expected call of Rollback.
+func (mr *MockMigrationMockRecorder) Rollback() *MockMigrationRollbackCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rollback", reflect.TypeOf((*MockMigration)(nil).Rollback))
+	return &MockMigrationRollbackCall{Call: call}
+}
+
+// MockMigrationRollbackCall wrap *gomock.Call
+type MockMigrationRollbackCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockMigrationRollbackCall) Return(arg0 error) *MockMigrationRollbackCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockMigrationRollbackCall) Do(f func() error) *MockMigrationRollbackCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockMigrationRollbackCall) DoAndReturn(f func() error) *MockMigrationRollbackCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
