@@ -17,8 +17,9 @@ import (
 type SyncBase interface {
 	// Count returns the number of items in the set.
 	Count() (int, error)
-	// Derive creates a Syncer for the specified peer.
-	Derive(ctx context.Context, p p2p.Peer) (PeerSyncer, error)
+	// WithPeerSyncer creates a Syncer for the specified peer and passes it to the specified function.
+	// When the function returns, the syncer is discarded, releasing the resources associated with it.
+	WithPeerSyncer(ctx context.Context, p p2p.Peer, toCall func(PeerSyncer) error) error
 	// Probe probes the specified peer, obtaining its set fingerprint,
 	// the number of items and the similarity value.
 	Probe(ctx context.Context, p p2p.Peer) (rangesync.ProbeResult, error)
@@ -34,9 +35,6 @@ type PeerSyncer interface {
 	Sync(ctx context.Context, x, y rangesync.KeyBytes) error
 	// Serve serves a synchronization request on the specified stream.
 	Serve(ctx context.Context, stream io.ReadWriter) error
-	// Release releases the resources associated with the syncer.
-	// Calling Release on a syncer that is already released is a no-op.
-	Release()
 }
 
 // SyncKeyHandler is a handler for keys that are received from peers.

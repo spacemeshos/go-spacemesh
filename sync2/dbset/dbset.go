@@ -227,29 +227,16 @@ func (d *DBSet) Advance() error {
 	return d.snapshot.LoadSinceSnapshot(d.db, oldSnapshot, d.handleIDfromDB)
 }
 
-// Copy creates a copy of the DBSet.
+// WithCopy invokes the specified function, passing it a temporary copy of the DBSet.
 // Implements rangesync.OrderedSet.
-func (d *DBSet) Copy(ctx context.Context, syncScope bool) (rangesync.OrderedSet, error) {
+func (d *DBSet) WithCopy(ctx context.Context, toCall func(rangesync.OrderedSet) error) error {
 	if err := d.EnsureLoaded(); err != nil {
-		return nil, fmt.Errorf("loading DBSet: %w", err)
+		return fmt.Errorf("loading DBSet: %w", err)
 	}
 	d.loadMtx.Lock()
-	defer d.loadMtx.Unlock()
 	ft := d.ft.Clone().(*fptree.FPTree)
-	ex := d.db
-	if syncScope {
-		db, ok := d.db.(sql.Database)
-		if ok {
-			// We might want to pass a real context here, but FPTree relies on
-			var err error
-			ex, err = db.Connection(context.Background())
-			if err != nil {
-				return nil, fmt.Errorf("get connection: %w", err)
-			}
-		}
-	}
-	return &DBSet{
-		db:       ex,
+	ds := &DBSet{
+		db:       d.db,
 		ft:       ft,
 		st:       d.st,
 		snapshot: d.snapshot,
@@ -257,7 +244,18 @@ func (d *DBSet) Copy(ctx context.Context, syncScope bool) (rangesync.OrderedSet,
 		maxDepth: d.maxDepth,
 		dbStore:  d.dbStore,
 		received: maps.Clone(d.received),
-	}, nil
+	}
+	d.loadMtx.Unlock()
+	defer ds.release()
+	db, ok := d.db.(sql.Database)
+	if ok {
+		return db.WithConnection(ctx, func(ex sql.Executor) error {
+			ds.db = ex
+			return toCall(ds)
+		})
+	} else {
+		return toCall(ds)
+	}
 }
 
 // Has returns true if the DBSet contains the given item.
@@ -286,19 +284,9 @@ func (d *DBSet) Recent(since time.Time) (rangesync.SeqResult, int) {
 	return d.dbStore.Since(make(rangesync.KeyBytes, d.keyLen), since.UnixNano())
 }
 
-// Release releases resources associated with the DBSet.
-// Implements rangesync.OrderedSet.
-func (d *DBSet) Release() {
-	d.loadMtx.Lock()
-	defer d.loadMtx.Unlock()
+func (d *DBSet) release() {
 	if d.ft != nil {
 		d.ft.Release()
 		d.ft = nil
-	}
-	if d.db != nil {
-		if c, ok := d.db.(sql.Connection); ok {
-			c.Release()
-		}
-		d.db = nil
 	}
 }

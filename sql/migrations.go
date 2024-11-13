@@ -89,6 +89,11 @@ func (m *sqlMigration) Order() int {
 	return m.order
 }
 
+func (sqlMigration) Rollback() error {
+	// handled by the DB itself
+	return nil
+}
+
 func version(db Executor) (int, error) {
 	var current int
 	if _, err := db.Exec("PRAGMA user_version;", nil, func(stmt *Statement) bool {

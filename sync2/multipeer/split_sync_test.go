@@ -91,8 +91,12 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 
 func (tst *splitSyncTester) expectPeerSync(p p2p.Peer) {
 	tst.syncBase.EXPECT().
-		Derive(gomock.Any(), p).
-		DoAndReturn(func(_ context.Context, peer p2p.Peer) (multipeer.PeerSyncer, error) {
+		WithPeerSyncer(gomock.Any(), p, gomock.Any()).
+		DoAndReturn(func(
+			_ context.Context,
+			peer p2p.Peer,
+			toCall func(multipeer.PeerSyncer) error,
+		) error {
 			s := NewMockPeerSyncer(tst.ctrl)
 			s.EXPECT().Peer().Return(p).AnyTimes()
 			s.EXPECT().
@@ -118,8 +122,7 @@ func (tst *splitSyncTester) expectPeerSync(p p2p.Peer) {
 					}
 					return nil
 				})
-			s.EXPECT().Release()
-			return s, nil
+			return toCall(s)
 		}).AnyTimes()
 }
 
@@ -165,8 +168,12 @@ func TestSplitSync_SlowPeers(t *testing.T) {
 
 	for _, p := range tst.syncPeers[2:] {
 		tst.syncBase.EXPECT().
-			Derive(gomock.Any(), p).
-			DoAndReturn(func(_ context.Context, peer p2p.Peer) (multipeer.PeerSyncer, error) {
+			WithPeerSyncer(gomock.Any(), p, gomock.Any()).
+			DoAndReturn(func(
+				_ context.Context,
+				peer p2p.Peer,
+				toCall func(multipeer.PeerSyncer) error,
+			) error {
 				s := NewMockPeerSyncer(tst.ctrl)
 				s.EXPECT().Peer().Return(p).AnyTimes()
 				s.EXPECT().
@@ -175,8 +182,7 @@ func TestSplitSync_SlowPeers(t *testing.T) {
 						<-ctx.Done()
 						return nil
 					})
-				s.EXPECT().Release()
-				return s, nil
+				return toCall(s)
 			})
 	}
 

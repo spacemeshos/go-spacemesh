@@ -91,17 +91,10 @@ func NewP2PHashSync(
 
 func (s *P2PHashSync) serve(ctx context.Context, peer p2p.Peer, stream io.ReadWriter) error {
 	// We derive a dedicated Syncer for the peer being served to pass all the received
-	// items through the handler before adding them to the main ItemStore
-	syncer, err := s.syncBase.Derive(ctx, peer)
-	if err != nil {
-		return fmt.Errorf("derive syncer: %w", err)
-	}
-	defer syncer.Release()
-	if err := syncer.Serve(ctx, stream); err != nil {
-		syncer.Release()
-		return err
-	}
-	return nil
+	// items through the handler before adding them to the main OrderedSet.
+	return s.syncBase.WithPeerSyncer(ctx, peer, func(syncer multipeer.PeerSyncer) error {
+		return syncer.Serve(ctx, stream)
+	})
 }
 
 // Set returns the OrderedSet that is being synchronized.
