@@ -93,6 +93,8 @@ func Test_Migration_Rollback(t *testing.T) {
 	migration1.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(nil)
 	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
 
+	migration2.EXPECT().Rollback().Return(nil)
+
 	dbFile := filepath.Join(t.TempDir(), "test.sql")
 	_, err := Open("file:"+dbFile,
 		WithDatabaseSchema(&Schema{
@@ -127,6 +129,7 @@ func Test_Migration_Rollback_Only_NewMigrations(t *testing.T) {
 	migration2.EXPECT().Name().Return("test").AnyTimes()
 	migration2.EXPECT().Order().Return(2).AnyTimes()
 	migration2.EXPECT().Apply(gomock.Any(), gomock.Any()).Return(errors.New("migration 2 failed"))
+	migration2.EXPECT().Rollback().Return(nil)
 
 	_, err = Open("file:"+dbFile,
 		WithLogger(logger),
