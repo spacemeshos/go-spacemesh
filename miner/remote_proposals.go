@@ -18,18 +18,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-type nodeService interface {
+type proposalService interface {
 	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error)
+}
+
+type beaconService interface {
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
+
 type RemoteProposalBuilder struct {
 	logger *zap.Logger
 	cfg    config
 
-	clock     layerClock
-	publisher pubsub.Publisher
-	nodeSvc   nodeService
-	signers   struct {
+	clock       layerClock
+	publisher   pubsub.Publisher
+	beaconSvc   beaconService
+	proposalSvc proposalService
+	signers     struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
@@ -40,7 +45,8 @@ type RemoteProposalBuilder struct {
 func NewRemoteBuilder(
 	clock layerClock,
 	publisher pubsub.Publisher,
-	svc nodeService,
+	bcn beaconService,
+	prop proposalService,
 	layerSize uint32,
 	layersPerEpoch uint32,
 	logger *zap.Logger,
@@ -55,7 +61,8 @@ func NewRemoteBuilder(
 		logger:             logger,
 		clock:              clock,
 		publisher:          publisher,
-		nodeSvc:            svc,
+		beaconSvc:          bcn,
+		proposalSvc:        prop,
 		epochEligibilities: make(map[types.EpochID]map[types.NodeID]map[types.LayerID][]types.VotingEligibility),
 		signers: struct {
 			mu      sync.Mutex
@@ -146,7 +153,7 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 	pb.signers.mu.Unlock()
 	for _, signer := range signers {
 		nodeId := signer.signer.NodeID()
-		proposal, nonce, err := pb.nodeSvc.Proposal(ctx, layer, nodeId)
+		proposal, nonce, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
 			continue
@@ -156,7 +163,7 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
 		}
-		bcn, err := pb.nodeSvc.Beacon(ctx, epoch)
+		bcn, err := pb.beaconSvc.Beacon(ctx, epoch)
 		if err != nil {
 			pb.logger.Error("get beacon", zap.Error(err))
 			continue

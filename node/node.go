@@ -1048,7 +1048,9 @@ func (app *App) initServices(ctx context.Context) error {
 	var proposalBuilder *miner.ProposalBuilder
 	var remoteProposalBuilder *miner.RemoteProposalBuilder
 	if nodeServiceClient != nil {
-		remoteProposalBuilder = miner.NewRemoteBuilder(app.clock,
+		remoteProposalBuilder = miner.NewRemoteBuilder(
+			app.clock,
+			nodeServiceClient,
 			nodeServiceClient,
 			nodeServiceClient,
 			layerSize,
