@@ -1392,12 +1392,16 @@ func TestPrevIDByNodeID(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx2, types.AtxBlob{}))
 		require.NoError(t, atxs.SetPost(db, atx2.ID(), types.EmptyATXID, 0, sig.NodeID(), 4, atx2.PublishEpoch))
 
-		_, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 1)
+		_, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 0)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 
-		prevID, err := atxs.PrevIDByNodeID(db, sig.NodeID(), 2)
+		prevID, err := atxs.PrevIDByNodeID(db, sig.NodeID(), 1)
 		require.NoError(t, err)
 		require.Equal(t, atx1.ID(), prevID)
+
+		prevID, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 2)
+		require.NoError(t, err)
+		require.Equal(t, atx2.ID(), prevID)
 
 		prevID, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 3)
 		require.NoError(t, err)
