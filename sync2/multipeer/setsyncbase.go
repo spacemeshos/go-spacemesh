@@ -66,37 +66,31 @@ func (ssb *SetSyncBase) Count() (int, error) {
 	return info.Count, nil
 }
 
-// Derive implements SyncBase.
-func (ssb *SetSyncBase) Derive(ctx context.Context, p p2p.Peer) (PeerSyncer, error) {
-	ssb.mtx.Lock()
-	defer ssb.mtx.Unlock()
-	os, err := ssb.os.Copy(ctx, true)
-	if err != nil {
-		return nil, fmt.Errorf("copy set: %w", err)
-	}
-	return &peerSetSyncer{
-		SetSyncBase: ssb,
-		OrderedSet:  os,
-		p:           p,
-		handler:     ssb.handler,
-	}, nil
+// WithPeerSyncer implements SyncBase.
+func (ssb *SetSyncBase) WithPeerSyncer(ctx context.Context, p p2p.Peer, toCall func(PeerSyncer) error) error {
+	return ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
+		return toCall(&peerSetSyncer{
+			SetSyncBase: ssb,
+			OrderedSet:  os,
+			p:           p,
+			handler:     ssb.handler,
+		})
+	})
 }
 
 // Probe implements SyncBase.
-func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (rangesync.ProbeResult, error) {
+func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (pr rangesync.ProbeResult, err error) {
 	// Use a snapshot of the store to avoid holding the mutex for a long time
-	ssb.mtx.Lock()
-	os, err := ssb.os.Copy(ctx, true)
-	defer os.Release()
-	ssb.mtx.Unlock()
-	if err != nil {
-		return rangesync.ProbeResult{}, fmt.Errorf("copy set: %w", err)
+	if err := ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
+		pr, err = ssb.ps.Probe(ctx, p, os, nil, nil)
+		if err != nil {
+			return fmt.Errorf("probing peer %s: %w", p, err)
+		}
+		return nil
+	}); err != nil {
+		return rangesync.ProbeResult{}, fmt.Errorf("using set copy for probe: %w", err)
 	}
 
-	pr, err := ssb.ps.Probe(ctx, p, os, nil, nil)
-	if err != nil {
-		return rangesync.ProbeResult{}, fmt.Errorf("probing peer %s: %w", p, err)
-	}
 	return pr, nil
 }
 

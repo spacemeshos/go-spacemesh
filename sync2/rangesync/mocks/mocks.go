@@ -118,45 +118,6 @@ func (c *MockOrderedSetAdvanceCall) DoAndReturn(f func() error) *MockOrderedSetA
 	return c
 }
 
-// Copy mocks base method.
-func (m *MockOrderedSet) Copy(ctx context.Context, syncScope bool) (rangesync.OrderedSet, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Copy", ctx, syncScope)
-	ret0, _ := ret[0].(rangesync.OrderedSet)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Copy indicates an expected call of Copy.
-func (mr *MockOrderedSetMockRecorder) Copy(ctx, syncScope any) *MockOrderedSetCopyCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Copy", reflect.TypeOf((*MockOrderedSet)(nil).Copy), ctx, syncScope)
-	return &MockOrderedSetCopyCall{Call: call}
-}
-
-// MockOrderedSetCopyCall wrap *gomock.Call
-type MockOrderedSetCopyCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetCopyCall) Return(arg0 rangesync.OrderedSet, arg1 error) *MockOrderedSetCopyCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetCopyCall) Do(f func(context.Context, bool) (rangesync.OrderedSet, error)) *MockOrderedSetCopyCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetCopyCall) DoAndReturn(f func(context.Context, bool) (rangesync.OrderedSet, error)) *MockOrderedSetCopyCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Empty mocks base method.
 func (m *MockOrderedSet) Empty() (bool, error) {
 	m.ctrl.T.Helper()
@@ -503,42 +464,6 @@ func (c *MockOrderedSetRecentCall) DoAndReturn(f func(time.Time) (rangesync.SeqR
 	return c
 }
 
-// Release mocks base method.
-func (m *MockOrderedSet) Release() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Release")
-}
-
-// Release indicates an expected call of Release.
-func (mr *MockOrderedSetMockRecorder) Release() *MockOrderedSetReleaseCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockOrderedSet)(nil).Release))
-	return &MockOrderedSetReleaseCall{Call: call}
-}
-
-// MockOrderedSetReleaseCall wrap *gomock.Call
-type MockOrderedSetReleaseCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetReleaseCall) Return() *MockOrderedSetReleaseCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetReleaseCall) Do(f func()) *MockOrderedSetReleaseCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetReleaseCall) DoAndReturn(f func()) *MockOrderedSetReleaseCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // SplitRange mocks base method.
 func (m *MockOrderedSet) SplitRange(x, y rangesync.KeyBytes, count int) (rangesync.SplitInfo, error) {
 	m.ctrl.T.Helper()
@@ -574,6 +499,44 @@ func (c *MockOrderedSetSplitRangeCall) Do(f func(rangesync.KeyBytes, rangesync.K
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockOrderedSetSplitRangeCall) DoAndReturn(f func(rangesync.KeyBytes, rangesync.KeyBytes, int) (rangesync.SplitInfo, error)) *MockOrderedSetSplitRangeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// WithCopy mocks base method.
+func (m *MockOrderedSet) WithCopy(ctx context.Context, toCall func(rangesync.OrderedSet) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithCopy", ctx, toCall)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithCopy indicates an expected call of WithCopy.
+func (mr *MockOrderedSetMockRecorder) WithCopy(ctx, toCall any) *MockOrderedSetWithCopyCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithCopy", reflect.TypeOf((*MockOrderedSet)(nil).WithCopy), ctx, toCall)
+	return &MockOrderedSetWithCopyCall{Call: call}
+}
+
+// MockOrderedSetWithCopyCall wrap *gomock.Call
+type MockOrderedSetWithCopyCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockOrderedSetWithCopyCall) Return(arg0 error) *MockOrderedSetWithCopyCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockOrderedSetWithCopyCall) Do(f func(context.Context, func(rangesync.OrderedSet) error) error) *MockOrderedSetWithCopyCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockOrderedSetWithCopyCall) DoAndReturn(f func(context.Context, func(rangesync.OrderedSet) error) error) *MockOrderedSetWithCopyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

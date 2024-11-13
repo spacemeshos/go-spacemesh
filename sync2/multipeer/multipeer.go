@@ -261,22 +261,22 @@ func (mpr *MultiPeerReconciler) needSplitSync(s syncability) bool {
 func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Peer) error {
 	var eg errgroup.Group
 	for _, p := range syncPeers {
-		syncer, err := mpr.syncBase.Derive(ctx, p)
-		if err != nil {
-			return fmt.Errorf("derive syncer: %w", err)
-		}
 		eg.Go(func() error {
-			defer syncer.Release()
-			err := syncer.Sync(ctx, nil, nil)
-			switch {
-			case err == nil:
-				mpr.sl.NoteSync()
-			case errors.Is(err, context.Canceled):
-				return err
-			default:
-				// failing to sync against a particular peer is not considered
-				// a fatal sync failure, so we just log the error
-				mpr.logger.Error("error syncing peer", zap.Stringer("peer", p), zap.Error(err))
+			if err := mpr.syncBase.WithPeerSyncer(ctx, p, func(ps PeerSyncer) error {
+				err := ps.Sync(ctx, nil, nil)
+				switch {
+				case err == nil:
+					mpr.sl.NoteSync()
+				case errors.Is(err, context.Canceled):
+					return err
+				default:
+					// failing to sync against a particular peer is not considered
+					// a fatal sync failure, so we just log the error
+					mpr.logger.Error("error syncing peer", zap.Stringer("peer", p), zap.Error(err))
+				}
+				return nil
+			}); err != nil {
+				return fmt.Errorf("sync %s: %w", p, err)
 			}
 			return nil
 		})

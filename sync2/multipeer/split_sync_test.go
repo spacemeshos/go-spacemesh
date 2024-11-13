@@ -74,12 +74,15 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 	}
 	for index, p := range tst.syncPeers {
 		tst.syncBase.EXPECT().
-			Derive(gomock.Any(), p).
-			DoAndReturn(func(_ context.Context, peer p2p.Peer) (multipeer.PeerSyncer, error) {
+			WithPeerSyncer(gomock.Any(), p, gomock.Any()).
+			DoAndReturn(func(
+				_ context.Context,
+				peer p2p.Peer,
+				toCall func(multipeer.PeerSyncer) error,
+			) error {
 				s := NewMockPeerSyncer(ctrl)
 				s.EXPECT().Peer().Return(p).AnyTimes()
 				// TODO: do better job at tracking Release() calls
-				s.EXPECT().Release().AnyTimes()
 				s.EXPECT().
 					Sync(gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, x, y rangesync.KeyBytes) error {
@@ -103,7 +106,7 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 						}
 						return nil
 					})
-				return s, nil
+				return toCall(s)
 			}).
 			AnyTimes()
 	}

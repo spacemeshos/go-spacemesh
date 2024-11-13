@@ -83,45 +83,6 @@ func (c *MockSyncBaseCountCall) DoAndReturn(f func() (int, error)) *MockSyncBase
 	return c
 }
 
-// Derive mocks base method.
-func (m *MockSyncBase) Derive(ctx context.Context, p p2p.Peer) (multipeer.PeerSyncer, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Derive", ctx, p)
-	ret0, _ := ret[0].(multipeer.PeerSyncer)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Derive indicates an expected call of Derive.
-func (mr *MockSyncBaseMockRecorder) Derive(ctx, p any) *MockSyncBaseDeriveCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Derive", reflect.TypeOf((*MockSyncBase)(nil).Derive), ctx, p)
-	return &MockSyncBaseDeriveCall{Call: call}
-}
-
-// MockSyncBaseDeriveCall wrap *gomock.Call
-type MockSyncBaseDeriveCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSyncBaseDeriveCall) Return(arg0 multipeer.PeerSyncer, arg1 error) *MockSyncBaseDeriveCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSyncBaseDeriveCall) Do(f func(context.Context, p2p.Peer) (multipeer.PeerSyncer, error)) *MockSyncBaseDeriveCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncBaseDeriveCall) DoAndReturn(f func(context.Context, p2p.Peer) (multipeer.PeerSyncer, error)) *MockSyncBaseDeriveCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Probe mocks base method.
 func (m *MockSyncBase) Probe(ctx context.Context, p p2p.Peer) (rangesync.ProbeResult, error) {
 	m.ctrl.T.Helper()
@@ -199,6 +160,44 @@ func (c *MockSyncBaseWaitCall) DoAndReturn(f func() error) *MockSyncBaseWaitCall
 	return c
 }
 
+// WithPeerSyncer mocks base method.
+func (m *MockSyncBase) WithPeerSyncer(ctx context.Context, p p2p.Peer, toCall func(multipeer.PeerSyncer) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "WithPeerSyncer", ctx, p, toCall)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// WithPeerSyncer indicates an expected call of WithPeerSyncer.
+func (mr *MockSyncBaseMockRecorder) WithPeerSyncer(ctx, p, toCall any) *MockSyncBaseWithPeerSyncerCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithPeerSyncer", reflect.TypeOf((*MockSyncBase)(nil).WithPeerSyncer), ctx, p, toCall)
+	return &MockSyncBaseWithPeerSyncerCall{Call: call}
+}
+
+// MockSyncBaseWithPeerSyncerCall wrap *gomock.Call
+type MockSyncBaseWithPeerSyncerCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSyncBaseWithPeerSyncerCall) Return(arg0 error) *MockSyncBaseWithPeerSyncerCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSyncBaseWithPeerSyncerCall) Do(f func(context.Context, p2p.Peer, func(multipeer.PeerSyncer) error) error) *MockSyncBaseWithPeerSyncerCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSyncBaseWithPeerSyncerCall) DoAndReturn(f func(context.Context, p2p.Peer, func(multipeer.PeerSyncer) error) error) *MockSyncBaseWithPeerSyncerCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockPeerSyncer is a mock of PeerSyncer interface.
 type MockPeerSyncer struct {
 	ctrl     *gomock.Controller
@@ -257,42 +256,6 @@ func (c *MockPeerSyncerPeerCall) Do(f func() p2p.Peer) *MockPeerSyncerPeerCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockPeerSyncerPeerCall) DoAndReturn(f func() p2p.Peer) *MockPeerSyncerPeerCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Release mocks base method.
-func (m *MockPeerSyncer) Release() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Release")
-}
-
-// Release indicates an expected call of Release.
-func (mr *MockPeerSyncerMockRecorder) Release() *MockPeerSyncerReleaseCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Release", reflect.TypeOf((*MockPeerSyncer)(nil).Release))
-	return &MockPeerSyncerReleaseCall{Call: call}
-}
-
-// MockPeerSyncerReleaseCall wrap *gomock.Call
-type MockPeerSyncerReleaseCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockPeerSyncerReleaseCall) Return() *MockPeerSyncerReleaseCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockPeerSyncerReleaseCall) Do(f func()) *MockPeerSyncerReleaseCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPeerSyncerReleaseCall) DoAndReturn(f func()) *MockPeerSyncerReleaseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
