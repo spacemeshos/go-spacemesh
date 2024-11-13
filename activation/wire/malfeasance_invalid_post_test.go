@@ -41,20 +41,8 @@ func Test_InvalidPostProof(t *testing.T) {
 		nipostChallenge types.Hash32,
 		post PostV1,
 		numUnits uint32,
-	) (*ActivationTxV2, *ActivationTxV2) {
-		wInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
-		)
-		wInitialAtx.Sign(sig)
-		initialAtx := &types.ActivationTx{
-			CommitmentATX: &wInitialAtx.Initial.CommitmentATX,
-		}
-		initialAtx.SetID(wInitialAtx.ID())
-		initialAtx.SmesherID = sig.NodeID()
-		require.NoError(t, atxs.Add(db, initialAtx, wInitialAtx.Blob()))
-
+	) *ActivationTxV2 {
 		atx := newActivationTxV2(
-			withPreviousATXs(wInitialAtx.ID()),
 			withNIPost(
 				withNIPostChallenge(nipostChallenge),
 				withNIPostSubPost(SubPostV2{
@@ -64,7 +52,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			),
 		)
 		atx.Sign(sig)
-		return atx, wInitialAtx
+		return atx
 	}
 
 	newMergedATXv2 := func(
@@ -72,7 +60,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		nipostChallenge types.Hash32,
 		post PostV1,
 		numUnits uint32,
-	) (*ActivationTxV2, *ActivationTxV2) {
+	) *ActivationTxV2 {
 		wInitialAtx := newActivationTxV2(
 			withInitial(types.RandomATXID(), PostV1{}),
 		)
@@ -132,7 +120,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			),
 		)
 		atx.Sign(pubSig)
-		return atx, wInitialAtx
+		return atx
 	}
 
 	t.Run("valid", func(t *testing.T) {
@@ -146,10 +134,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentATX := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentATX, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -162,7 +152,17 @@ func Test_InvalidPostProof(t *testing.T) {
 		verifier.EXPECT().PostIndex(
 			context.Background(),
 			sig.NodeID(),
-			initialAtx.Initial.CommitmentATX,
+			commitmentATX,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(nil)
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentATX,
 			PostFromWireV1(&post),
 			nipostChallenge.Bytes(),
 			numUnits,
@@ -185,10 +185,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentATX := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentATX, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -201,12 +203,22 @@ func Test_InvalidPostProof(t *testing.T) {
 		verifier.EXPECT().PostIndex(
 			context.Background(),
 			sig.NodeID(),
-			initialAtx.Initial.CommitmentATX,
+			commitmentATX,
 			PostFromWireV1(&post),
 			nipostChallenge.Bytes(),
 			numUnits,
 			invalidPostIndex,
 		).Return(errors.New("invalid post"))
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentATX,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(nil)
 
 		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
@@ -224,10 +236,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -240,7 +254,17 @@ func Test_InvalidPostProof(t *testing.T) {
 		verifier.EXPECT().PostIndex(
 			context.Background(),
 			sig.NodeID(),
-			initialAtx.Initial.CommitmentATX,
+			commitmentAtx,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(nil)
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentAtx,
 			PostFromWireV1(&post),
 			nipostChallenge.Bytes(),
 			numUnits,
@@ -249,6 +273,46 @@ func Test_InvalidPostProof(t *testing.T) {
 
 		id, err := proof.Valid(context.Background(), verifier)
 		require.EqualError(t, err, "invalid invalid post proof: PoST is valid")
+		require.Equal(t, types.EmptyNodeID, id)
+	})
+
+	t.Run("commitment ATX is not valid", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+
+		nipostChallenge := types.RandomHash()
+		const numUnits = uint32(11)
+		post := PostV1{
+			Nonce:   rand.Uint32(),
+			Indices: types.RandomBytes(11),
+			Pow:     rand.Uint64(),
+		}
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
+
+		const invalidPostIndex = 7
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
+		require.NoError(t, err)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentAtx,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(errors.New("invalid post"))
+
+		id, err := proof.Valid(context.Background(), verifier)
+		require.EqualError(t, err, "invalid invalid post proof: Commitment ATX is not valid")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
 
@@ -263,10 +327,13 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, types.RandomNodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		nodeID := types.RandomNodeID()
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, nodeID, 0, invalidPostIndex, validPostIndex)
 		require.EqualError(t, err, "ATX is not a merged ATX, but NodeID is different from SmesherID")
 		require.Nil(t, proof)
 	})
@@ -282,10 +349,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 1, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 1, invalidPostIndex, validPostIndex)
 		require.EqualError(t, err, "invalid NIPoST index")
 		require.Nil(t, proof)
 	})
@@ -301,11 +370,13 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
+		const validPostIndex = 15
 		nodeID := types.RandomNodeID()
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, nodeID, 0, invalidPostIndex)
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, nodeID, 0, invalidPostIndex, validPostIndex)
 		require.ErrorContains(t, err,
 			fmt.Sprintf("does not contain a marriage certificate signed by %s", nodeID.ShortString()),
 		)
@@ -323,34 +394,16 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 		atx.NIPosts[0].Posts = slices.DeleteFunc(atx.NIPosts[0].Posts, func(subPost SubPostV2) bool {
 			return cmp.Equal(subPost.Post, post)
 		})
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.EqualError(t, err, fmt.Sprintf("no PoST from %s in ATX", sig))
-		require.Nil(t, proof)
-	})
-
-	t.Run("initial ATX is invalid", func(t *testing.T) {
-		t.Parallel()
-		db := statesql.InMemoryTest(t)
-
-		nipostChallenge := types.RandomHash()
-		const numUnits = uint32(11)
-		post := PostV1{
-			Nonce:   rand.Uint32(),
-			Indices: types.RandomBytes(11),
-			Pow:     rand.Uint64(),
-		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
-		initialAtx.SmesherID = types.RandomNodeID() // initial ATX published by different identity
-
-		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
-		require.ErrorContains(t, err, "node ID does not match smesher ID of initial ATX")
 		require.Nil(t, proof)
 	})
 
@@ -365,10 +418,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -547,10 +602,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)

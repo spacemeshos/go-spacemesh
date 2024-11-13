@@ -45,13 +45,6 @@ func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := t.CommitmentProof.EncodeScale(enc)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
 		n, err := t.InvalidPostProof.EncodeScale(enc)
 		if err != nil {
 			return total, err
@@ -97,13 +90,6 @@ func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error
 		}
 		total += n
 		t.MarriageProof = field
-	}
-	{
-		n, err := t.CommitmentProof.DecodeScale(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
 	}
 	{
 		n, err := t.InvalidPostProof.DecodeScale(dec)
@@ -236,7 +222,21 @@ func (t *InvalidPostProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
+		n, err := scale.EncodeByteArray(enc, t.CommitmentATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeCompact32(enc, uint32(t.InvalidPostIndex))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeCompact32(enc, uint32(t.ValidPostIndex))
 		if err != nil {
 			return total, err
 		}
@@ -377,12 +377,27 @@ func (t *InvalidPostProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.NumUnitsProof = field
 	}
 	{
+		n, err := scale.DecodeByteArray(dec, t.CommitmentATX[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		field, n, err := scale.DecodeCompact32(dec)
 		if err != nil {
 			return total, err
 		}
 		total += n
 		t.InvalidPostIndex = uint32(field)
+	}
+	{
+		field, n, err := scale.DecodeCompact32(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.ValidPostIndex = uint32(field)
 	}
 	return total, nil
 }

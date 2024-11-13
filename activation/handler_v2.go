@@ -338,7 +338,7 @@ func (h *HandlerV2) validateCommitmentAtx(golden, commitmentAtxId types.ATXID, p
 	if commitmentAtxId != golden {
 		commitment, err := atxs.Get(h.cdb, commitmentAtxId)
 		if err != nil {
-			return &ErrAtxNotFound{Id: commitmentAtxId, source: err}
+			return fmt.Errorf("ATX (%s) not found: %w", commitmentAtxId.ShortString(), err)
 		}
 		if publish <= commitment.PublishEpoch {
 			return fmt.Errorf(
@@ -359,7 +359,7 @@ func (h *HandlerV2) validatePositioningAtx(publish types.EpochID, golden, positi
 
 	posAtx, err := atxs.Get(h.cdb, positioning)
 	if err != nil {
-		return 0, &ErrAtxNotFound{Id: positioning, source: err}
+		return 0, fmt.Errorf("positioning ATX (%s) not found: %w", positioning.ShortString(), err)
 	}
 	if posAtx.PublishEpoch >= publish {
 		return 0, fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, publish)
@@ -607,104 +607,124 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate all niposts
+	if atx.Initial != nil {
+		commitment := atx.Initial.CommitmentATX
+		nipostIdx := 0
+		challenge := atx.NIPosts[nipostIdx].Challenge
+		post := atx.NIPosts[nipostIdx].Posts[0]
+		if err := h.validatePost(ctx, atx.SmesherID, atx, commitment, challenge, post, nipostIdx); err != nil {
+			return nil, err
+		}
+		result.ids[atx.SmesherID] = idData{
+			previous:      types.EmptyATXID,
+			previousIndex: 0,
+			units:         post.NumUnits,
+		}
+		result.ticks = nipostSizes.minTicks()
+		return &result, nil
+	}
+
 	var smesherCommitment *types.ATXID
 	for idx, niposts := range atx.NIPosts {
 		for _, post := range niposts.Posts {
 			id := equivocationSet[post.MarriageIndex]
-			var commitment types.ATXID
-			var previous types.ATXID
-			if atx.Initial != nil {
-				commitment = atx.Initial.CommitmentATX
-			} else {
-				var err error
-				commitment, err = atxs.CommitmentATX(h.cdb, id)
-				if err != nil {
-					return nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
-				}
-				if id == atx.SmesherID {
-					smesherCommitment = &commitment
-				}
-				previous = previousAtxs[post.PrevATXIndex].ID()
+			commitment, err := atxs.CommitmentATX(h.cdb, id)
+			if err != nil {
+				return nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
 			}
-
-			err := h.nipostValidator.PostV2(
-				ctx,
-				id,
-				commitment,
-				wire.PostFromWireV1(&post.Post),
-				niposts.Challenge.Bytes(),
-				post.NumUnits,
-				PostSubset([]byte(h.local)),
-			)
-			invalidIdx := &verifying.ErrInvalidIndex{}
-			switch {
-			case errors.As(err, invalidIdx):
-				if err := h.publishInvalidPostProof(ctx, atx, id, idx, uint32(invalidIdx.Index)); err != nil {
-					return nil, fmt.Errorf("publishing invalid post proof: %w", err)
-				}
-				return nil, fmt.Errorf("invalid post for ID %s: %w", id.ShortString(), err)
-			case err != nil:
-				return nil, fmt.Errorf("validating post for ID %s: %w", id.ShortString(), err)
+			if id == atx.SmesherID {
+				smesherCommitment = &commitment
+			}
+			if err := h.validatePost(ctx, id, atx, commitment, niposts.Challenge, post, idx); err != nil {
+				return nil, err
 			}
 			result.ids[id] = idData{
-				previous:      previous,
+				previous:      previousAtxs[post.PrevATXIndex].ID(),
 				previousIndex: int(post.PrevATXIndex),
 				units:         post.NumUnits,
 			}
 		}
 	}
 
-	if atx.Initial == nil {
-		if smesherCommitment == nil {
-			return nil, errors.New("ATX signer not present in merged ATX")
-		}
-		err := h.nipostValidator.VRFNonceV2(atx.SmesherID, *smesherCommitment, atx.VRFNonce, atx.TotalNumUnits())
-		if err != nil {
-			return nil, fmt.Errorf("validating VRF nonce: %w", err)
-		}
+	if smesherCommitment == nil {
+		return nil, errors.New("ATX signer not present in merged ATX")
+	}
+	err = h.nipostValidator.VRFNonceV2(atx.SmesherID, *smesherCommitment, atx.VRFNonce, atx.TotalNumUnits())
+	if err != nil {
+		return nil, fmt.Errorf("validating VRF nonce: %w", err)
 	}
 
 	result.ticks = nipostSizes.minTicks()
 	return &result, nil
 }
 
-func (h *HandlerV2) publishInvalidPostProof(
+func (h *HandlerV2) validatePost(
 	ctx context.Context,
-	atx *wire.ActivationTxV2,
 	nodeID types.NodeID,
+	atx *wire.ActivationTxV2,
+	commitment types.ATXID,
+	challenge types.Hash32,
+	post wire.SubPostV2,
 	nipostIndex int,
-	invalidPostIndex uint32,
 ) error {
-	initialAtx := atx
-	if initialAtx.Initial == nil {
-		initialID, err := atxs.GetFirstIDByNodeID(h.cdb, nodeID)
-		if err != nil {
-			return fmt.Errorf("fetch initial ATX for ID %s: %w", nodeID.ShortString(), err)
-		}
-
-		// TODO(mafa): implement for v1 initial ATXs: https://github.com/spacemeshos/go-spacemesh/issues/6433
-		initialAtx, err = h.fetchWireAtx(ctx, h.cdb, initialID)
-		if err != nil {
-			return fmt.Errorf("fetch initial ATX blob for ID %s: %w", nodeID.ShortString(), err)
-		}
+	err := h.nipostValidator.PostV2(
+		ctx,
+		nodeID,
+		commitment,
+		wire.PostFromWireV1(&post.Post),
+		challenge.Bytes(),
+		post.NumUnits,
+		PostSubset([]byte(h.local)),
+	)
+	if err == nil {
+		return nil
+	}
+	errInvalid := &verifying.ErrInvalidIndex{}
+	if !errors.As(err, &errInvalid) {
+		return fmt.Errorf("validating post for ID %s: %w", nodeID.ShortString(), err)
 	}
 
-	// TODO(mafa): checkpoints need to include all initial ATXs in full to be able to create this malfeasance proof:
-	//
-	// see https://github.com/spacemeshos/go-spacemesh/issues/6436
-	//
+	// check if post contains at least one valid label
+	validIdx := 0
+	for {
+		err := h.nipostValidator.PostV2(
+			ctx,
+			nodeID,
+			commitment,
+			wire.PostFromWireV1(&post.Post),
+			challenge.Bytes(),
+			post.NumUnits,
+			PostIndex(validIdx),
+		)
+		if err == nil {
+			break
+		}
+		if errors.Is(err, ErrPostIndexOutOfRange) {
+			return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), err)
+		}
+		validIdx++
+	}
+
 	// TODO(mafa): checkpoints need to include all marriage ATXs in full to be able to create malfeasance proofs
 	// like this one (but also others)
 	//
 	// see https://github.com/spacemeshos/go-spacemesh/issues/6435
-	proof, err := wire.NewInvalidPostProof(h.cdb, atx, initialAtx, nodeID, nipostIndex, invalidPostIndex)
+	proof, err := wire.NewInvalidPostProof(
+		h.cdb,
+		atx,
+		commitment,
+		nodeID,
+		nipostIndex,
+		uint32(errInvalid.Index),
+		uint32(validIdx),
+	)
 	if err != nil {
 		return fmt.Errorf("creating invalid post proof: %w", err)
 	}
 	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
 		return fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 	}
-	return nil
+	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalid)
 }
 
 func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {

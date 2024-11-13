@@ -21,24 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
-type ErrAtxNotFound struct {
-	Id types.ATXID
-	// the source (if any) that caused the error
-	source error
-}
-
-func (e *ErrAtxNotFound) Error() string {
-	return fmt.Sprintf("ATX ID (%v) not found (%v)", e.Id.String(), e.source)
-}
-
-func (e *ErrAtxNotFound) Unwrap() error { return e.source }
-
-func (e *ErrAtxNotFound) Is(target error) bool {
-	if err, ok := target.(*ErrAtxNotFound); ok {
-		return err.Id == e.Id
-	}
-	return false
-}
+var ErrPostIndexOutOfRange = errors.New("post index out of range")
 
 type validatorOptions struct {
 	postIdx        *int
@@ -214,6 +197,9 @@ func (v *Validator) Post(
 
 	verifyOpts := []verifying.OptionFunc{verifying.WithLabelScryptParams(v.scrypt)}
 	if options.postIdx != nil {
+		if *options.postIdx >= int(v.cfg.K2) {
+			return ErrPostIndexOutOfRange
+		}
 		verifyOpts = append(verifyOpts, verifying.SelectedIndex(*options.postIdx))
 	}
 	if options.postSubsetSeed != nil {
@@ -309,7 +295,7 @@ func (v *Validator) InitialNIPostChallengeV1(
 	if commitmentATXId != goldenATXID {
 		commitmentAtx, err := atxs.GetAtx(commitmentATXId)
 		if err != nil {
-			return &ErrAtxNotFound{Id: commitmentATXId, source: err}
+			return fmt.Errorf("ATX (%s) not found: %w", commitmentATXId.ShortString(), err)
 		}
 		if challenge.PublishEpoch <= commitmentAtx.PublishEpoch {
 			return fmt.Errorf(
@@ -362,7 +348,7 @@ func (v *Validator) PositioningAtx(
 	}
 	posAtx, err := atxs.GetAtx(id)
 	if err != nil {
-		return &ErrAtxNotFound{Id: id, source: err}
+		return fmt.Errorf("positioning atx (%s) not found: %w", id.ShortString(), err)
 	}
 	if posAtx.PublishEpoch >= pubepoch {
 		return fmt.Errorf("positioning atx epoch (%v) must be before %v", posAtx.PublishEpoch, pubepoch)
