@@ -259,7 +259,7 @@ func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID
 
 	if rows, err := db.Exec(`
 		SELECT atxid FROM posts
-		WHERE pubkey = ?1 AND publish_epoch < ?2
+		WHERE pubkey = ?1 AND publish_epoch <= ?2
 		ORDER BY publish_epoch DESC
 		LIMIT 1;`, enc, dec); err != nil {
 		return types.EmptyATXID, fmt.Errorf("exec nodeID %v, epoch %d: %w", nodeID, pubEpoch, err)
