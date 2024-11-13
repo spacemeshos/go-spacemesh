@@ -40,6 +40,10 @@ func (*migration0025) Order() int {
 	return 25
 }
 
+func (*migration0025) Rollback() error {
+	return nil
+}
+
 func (m *migration0025) Apply(db sql.Executor, logger *zap.Logger) error {
 	updates := map[types.NodeID][]byte{}
 

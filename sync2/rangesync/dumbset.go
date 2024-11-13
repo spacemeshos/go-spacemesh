@@ -307,11 +307,9 @@ func (ds *DumbSet) Items() SeqResult {
 	return ds.seq(0)
 }
 
-// Copy implements OrderedSet.
-func (ds *DumbSet) Copy(_ context.Context, syncScope bool) (OrderedSet, error) {
-	return &DumbSet{
-		keys: slices.Clone(ds.keys),
-	}, nil
+// WithCopy implements OrderedSet.
+func (ds *DumbSet) WithCopy(_ context.Context, toCall func(OrderedSet) error) error {
+	return toCall(&DumbSet{keys: slices.Clone(ds.keys)})
 }
 
 // Recent implements OrderedSet.

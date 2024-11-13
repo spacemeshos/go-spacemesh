@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -145,13 +146,20 @@ func (s *Schema) Migrate(logger *zap.Logger, db Database, before, vacuumState in
 		db.Intercept("logQueries", logQueryInterceptor(logger))
 		defer db.RemoveInterceptor("logQueries")
 	}
-	for _, m := range s.Migrations {
+	for i, m := range s.Migrations {
 		if m.Order() <= before {
 			continue
 		}
 		if err := db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 			if _, ok := s.skipMigration[m.Order()]; !ok {
 				if err := m.Apply(tx, logger); err != nil {
+					for j := i; j >= 0 && s.Migrations[j].Order() > before; j-- {
+						if e := s.Migrations[j].Rollback(); e != nil {
+							err = errors.Join(err, fmt.Errorf("rollback %s: %w", m.Name(), e))
+							break
+						}
+					}
+
 					return fmt.Errorf("apply %s: %w", m.Name(), err)
 				}
 			}

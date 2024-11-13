@@ -128,21 +128,29 @@ func TestP2P(t *testing.T) {
 			if !hsync.Synced() {
 				return false
 			}
-			os, err := hsync.Set().Copy(context.Background(), false)
-			require.NoError(t, err)
-			for _, k := range handlers[n].committedItems() {
-				os.(*rangesync.DumbSet).AddUnchecked(k)
-			}
-			empty, err := os.Empty()
-			require.NoError(t, err)
-			if empty {
-				return false
-			}
-			k, err := os.Items().First()
-			require.NoError(t, err)
-			info, err := os.GetRangeInfo(k, k)
-			require.NoError(t, err)
-			if info.Count < numHashes {
+			r := true
+			require.NoError(t, hsync.Set().WithCopy(
+				context.Background(),
+				func(os rangesync.OrderedSet) error {
+					for _, k := range handlers[n].committedItems() {
+						os.(*rangesync.DumbSet).AddUnchecked(k)
+					}
+					empty, err := os.Empty()
+					require.NoError(t, err)
+					if empty {
+						r = false
+					} else {
+						k, err := os.Items().First()
+						require.NoError(t, err)
+						info, err := os.GetRangeInfo(k, k)
+						require.NoError(t, err)
+						if info.Count < numHashes {
+							r = false
+						}
+					}
+					return nil
+				}))
+			if !r {
 				return false
 			}
 		}
@@ -151,13 +159,16 @@ func TestP2P(t *testing.T) {
 
 	for n, hsync := range hs {
 		hsync.Stop()
-		os, err := hsync.Set().Copy(context.Background(), false)
-		require.NoError(t, err)
-		for _, k := range handlers[n].committedItems() {
-			os.(*rangesync.DumbSet).AddUnchecked(k)
-		}
-		actualItems, err := os.Items().Collect()
-		require.NoError(t, err)
-		require.ElementsMatch(t, initialSet, actualItems)
+		require.NoError(t, hsync.Set().WithCopy(
+			context.Background(),
+			func(os rangesync.OrderedSet) error {
+				for _, k := range handlers[n].committedItems() {
+					os.(*rangesync.DumbSet).AddUnchecked(k)
+				}
+				actualItems, err := os.Items().Collect()
+				require.NoError(t, err)
+				require.ElementsMatch(t, initialSet, actualItems)
+				return nil
+			}))
 	}
 }
