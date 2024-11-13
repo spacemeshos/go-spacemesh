@@ -2,10 +2,8 @@ package miner
 
 import (
 	"context"
-	"math/rand"
 	"runtime"
 	"sync"
-	"time"
 
 	"go.uber.org/zap"
 	"golang.org/x/exp/maps"
@@ -208,11 +206,6 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			pb.logger.Info("node not eligible in this layer, will try later")
 			continue
 		}
-
-		rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-		rng.Shuffle(len(proposal.TxIDs), func(i, j int) {
-			proposal.TxIDs[i], proposal.TxIDs[j] = proposal.TxIDs[j], proposal.TxIDs[i]
-		})
 
 		proposal.EligibilityProofs = eligibilities
 		proposal.Ballot.Signature = signer.signer.Sign(signing.BALLOT, proposal.Ballot.SignedBytes())
