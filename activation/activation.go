@@ -102,6 +102,9 @@ type Builder struct {
 	// states of each known identity
 	postStates PostStates
 
+	// identity states of each known identity
+	identitiesStates IdentityStates
+
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
 	// since they (can) modify the fields below.
 	smeshingMutex sync.Mutex
@@ -158,6 +161,12 @@ func WithPostStates(ps PostStates) BuilderOption {
 	}
 }
 
+func WithIdentityStates(is IdentityStates) BuilderOption {
+	return func(b *Builder) {
+		b.identitiesStates = is
+	}
+}
+
 func BuilderAtxVersions(v AtxVersions) BuilderOption {
 	return func(h *Builder) {
 		h.versions = append([]atxVersion{{0, types.AtxV1}}, v.asSlice()...)
@@ -191,6 +200,7 @@ func NewBuilder(
 		logger:            log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postStates:        NewPostStates(log),
+		identitiesStates:  NewIdentityStateStorage(),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
 			logger: log,
@@ -498,6 +508,8 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
+	b.identitiesStates.Set(nodeID, nil, IdentityStateWaitForATXSyncing, "")
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -551,6 +563,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
 		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
+		b.identitiesStates.Set(nodeID, &publishEpochId, IdentityStateWaitingForPoetRegistrationWindow, "")
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -715,6 +728,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
 		zap.Object("challenge", challenge),
 	)
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStatePoetChallengeReady, "")
+
 	targetEpoch := challenge.PublishEpoch.Add(1)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
 	defer cancel()
@@ -729,6 +744,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_layer", b.layerClock.CurrentLayer().Uint32()),
 		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStateATXReady, "")
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("wait for publication epoch: %w", ctx.Err())
@@ -774,6 +790,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		atx.ID(),
 		b.layerClock.LayerToTime(target.FirstLayer()),
 	)
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStateATXBroadcasted, "")
 	return nil
 }
 

@@ -426,7 +426,9 @@ type App struct {
 	postVerifier       activation.PostVerifier
 	postSupervisor     *activation.PostSupervisor
 	malfeasanceHandler *malfeasance.Handler
-	errCh              chan error
+	idStates           *activation.IdentityStateStorage
+
+	errCh chan error
 
 	host *p2p.Host
 
@@ -621,6 +623,9 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("creating poet db: %w", err)
 	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
+
+	app.idStates = activation.NewIdentityStateStorage()
+
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
 		activation.WithAutoscaling(postStates),
@@ -1113,6 +1118,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
+		activation.NipostbuilderWithIdentityStates(app.idStates),
 		activation.WithPoetServices(poetClients...),
 	)
 	if err != nil {
@@ -1165,6 +1171,7 @@ func (app *App) initServices(ctx context.Context) error {
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithPostStates(postStates),
+		activation.WithIdentityStates(app.idStates),
 		activation.WithPoets(poetClients...),
 		activation.BuilderAtxVersions(app.Config.AtxVersions),
 	)
@@ -1664,6 +1671,20 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case v2alpha1.Account:
 		service := v2alpha1.NewAccountService(app.apiDB, app.conState)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2alpha1.SmeshingIdentities:
+		nodeIds := make(map[types.NodeID]struct{})
+		for _, signer := range app.signers {
+			nodeIds[signer.NodeID()] = struct{}{}
+		}
+
+		configuredPoets := make(map[string]struct{})
+		for _, server := range app.Config.PoetServers {
+			configuredPoets[server.Address] = struct{}{}
+		}
+
+		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.idStates)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
