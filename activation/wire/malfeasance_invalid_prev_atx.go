@@ -202,6 +202,10 @@ func NewInvalidPrevAtxProofV1(
 		return nil, errors.New("ATX1 is not a merged ATX, but NodeID is different from SmesherID")
 	}
 
+	if atx2.SmesherID != nodeID {
+		return nil, errors.New("ATX2 is not signed by NodeID")
+	}
+
 	var marriageProof *MarriageProof
 	nipostIndex := 0
 	postIndex := 0
