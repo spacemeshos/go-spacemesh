@@ -70,9 +70,9 @@ CREATE TABLE certificates
     PRIMARY KEY (layer, block)
 );
 CREATE TABLE evicted_mempool (
-  id CHAR(32) NOT NULL,
-  time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (id)
+    id CHAR(32) NOT NULL,
+    time INT NOT NULL,
+    PRIMARY KEY (id)
 );
 CREATE TABLE identities
 (

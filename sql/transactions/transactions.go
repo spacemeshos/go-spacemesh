@@ -306,50 +306,56 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		}, "get acct pending from nonce")
 }
 
-// EvictPendingNonce will evict the pending transactions
-// from a given principal address into the evited_mempool table.
-func EvictPendingNonce(db sql.Executor, address types.Address, to uint64) error {
-	txs, err := queryPending(db, `select tx, header, layer, block, timestamp, id from transactions
-		where principal = ?1 and nonce < ?2 and result is null`,
+// GetAcctPendingToNonce get all pending transactions with nonce before `to` for the given address.
+func GetAcctPendingToNonce(db sql.Executor, address types.Address, to uint64) ([]types.TransactionID, error) {
+	ids := make([]types.TransactionID, 0)
+	_, err := db.Exec(`select id from transactions
+		where principal = ?1 and nonce < ?2 and result is null
+		order by nonce asc, timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(to))
-		}, "get acct pending to nonce")
+		}, func(stmt *sql.Statement) bool {
+			id := types.TransactionID{}
+			stmt.ColumnBytes(0, id[:])
+			ids = append(ids, id)
+			return true
+		})
 	if err != nil {
-		return fmt.Errorf("query pending: %w", err)
+		return nil, fmt.Errorf("get acct pending to nonce %s: %w", address, err)
 	}
-	insert := func(txId []byte) error {
-		if _, err := db.Exec("insert into evicted_mempool (id) values (?1) on conflict do nothing;",
-			func(stmt *sql.Statement) {
-				stmt.BindBytes(1, txId)
-			}, nil); err != nil {
-			return fmt.Errorf("insert: %w", err)
-		}
+	return ids, nil
+}
 
-		if _, err := db.Exec("delete from transactions where id = ?1;",
-			func(stmt *sql.Statement) {
-				stmt.BindBytes(1, txId)
-			}, nil); err != nil {
-			return fmt.Errorf("delete: %w", err)
-		}
-
-		return nil
-	}
-
-	for _, tx := range txs {
-		if err := insert(tx.ID.Bytes()); err != nil {
-			return fmt.Errorf("insert evicted: %w", err)
-		}
+func SetEvicted(db sql.Executor, id types.TransactionID) error {
+	if _, err := db.Exec("insert into evicted_mempool (id, time) values (?1, ?2) on conflict do nothing;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+			stmt.BindInt64(2, time.Now().UnixNano())
+		}, nil); err != nil {
+		return fmt.Errorf("set evicted %s: %w", id, err)
 	}
 	return nil
 }
 
-const PRUNE_PERIOD = "-12 hours"
+func Delete(db sql.Executor, id types.TransactionID) error {
+	if _, err := db.Exec("delete from transactions where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil); err != nil {
+		return fmt.Errorf("delete %s: %w", id, err)
+	}
+	return nil
+}
 
-func PruneEvicted(db sql.Executor) error {
-	sql := fmt.Sprintf("delete from evicted_mempool where time < DATETIME(CURRENT_TIMESTAMP,'%s');", PRUNE_PERIOD)
-	_, err := db.Exec(sql, nil, nil)
-	return err
+func PruneEvicted(db sql.Executor, before time.Time) error {
+	if _, err := db.Exec("delete from evicted_mempool where time < ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, before.UnixNano())
+		}, nil); err != nil {
+		return fmt.Errorf("prune evicted %w", err)
+	}
+	return nil
 }
 
 // query MUST ensure that this order of fields tx, header, layer, block, timestamp, id.

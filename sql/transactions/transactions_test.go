@@ -587,7 +587,10 @@ func TestTransactionEvictMempool(t *testing.T) {
 	for _, tx := range txs {
 		require.NoError(t, transactions.Add(db, &tx, time.Time{}))
 	}
-	err := transactions.EvictPendingNonce(db, principals[0], 1)
+	err := transactions.SetEvicted(db, types.TransactionID{1})
+	require.NoError(t, err)
+
+	err = transactions.Delete(db, types.TransactionID{1})
 	require.NoError(t, err)
 
 	pending, err := transactions.GetAcctPendingFromNonce(db, principals[0], 1)
@@ -612,17 +615,17 @@ func TestTransactionEvictMempool(t *testing.T) {
 func TestPruneEvicted(t *testing.T) {
 	txId := types.TransactionID{1}
 	db := statesql.InMemoryTest(t)
-	db.Exec(`insert into evicted_mempool (id,time) 
-						values (?1,DATETIME(CURRENT_TIMESTAMP,'-13 hours'));`,
+	db.Exec(`insert into evicted_mempool (id, time) values (?1,?2);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, txId.Bytes())
+			stmt.BindInt64(2, time.Now().Add(-13*time.Hour).UnixNano())
 		}, nil)
 
 	has, err := transactions.HasEvicted(db, txId)
 	require.True(t, has)
 	require.NoError(t, err)
 
-	err = transactions.PruneEvicted(db)
+	err = transactions.PruneEvicted(db, time.Now().Add(-12*time.Hour))
 	require.NoError(t, err)
 
 	has, err = transactions.HasEvicted(db, txId)
