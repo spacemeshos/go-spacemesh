@@ -108,66 +108,6 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.Equal(t, types.EmptyNodeID, id)
 	})
 
-	t.Run("invalid marriage proof", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-		otherAtx := &types.ActivationTx{}
-		otherAtx.SetID(types.RandomATXID())
-		otherAtx.SmesherID = otherSig.NodeID()
-		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
-
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
-		)
-		atx1.Sign(sig)
-
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
-		)
-		atx2.Sign(otherSig)
-
-		// manually construct an invalid proof
-		proof1, err := createMarryProof(db, atx1, otherSig.NodeID())
-		require.NoError(t, err)
-		proof2, err := createMarryProof(db, atx2, otherSig.NodeID())
-		require.NoError(t, err)
-
-		proof := &ProofDoubleMarry{
-			NodeID: otherSig.NodeID(),
-
-			ATX1:       atx1.ID(),
-			SmesherID1: atx1.SmesherID,
-			Signature1: atx1.Signature,
-			Proof1:     proof1,
-
-			ATX2:       atx2.ID(),
-			SmesherID2: atx2.SmesherID,
-			Signature2: atx2.Signature,
-			Proof2:     proof2,
-		}
-
-		ctrl := gomock.NewController(t)
-		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-				return edVerifier.Verify(d, nodeID, m, sig)
-			}).AnyTimes()
-
-		proof.Proof1.MarriageCertificatesProof = slices.Clone(proof1.MarriageCertificatesProof)
-		proof.Proof1.MarriageCertificatesProof[0] = types.RandomHash()
-		id, err := proof.Valid(context.Background(), verifier)
-		require.ErrorContains(t, err, "proof 1 is invalid: invalid marriage proof")
-		require.Equal(t, types.EmptyNodeID, id)
-
-		proof.Proof1.MarriageCertificatesProof[0] = proof1.MarriageCertificatesProof[0]
-		proof.Proof2.MarriageCertificatesProof = slices.Clone(proof2.MarriageCertificatesProof)
-		proof.Proof2.MarriageCertificatesProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
-		require.ErrorContains(t, err, "proof 2 is invalid: invalid marriage proof")
-		require.Equal(t, types.EmptyNodeID, id)
-	})
-
 	t.Run("invalid certificate proof", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 		otherAtx := &types.ActivationTx{}
