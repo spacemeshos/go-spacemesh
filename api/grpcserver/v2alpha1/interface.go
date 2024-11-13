@@ -12,6 +12,5 @@ type malfeasanceInfo interface {
 }
 
 type identityState interface {
-	// IdentityStates returns the current state of all registered IDs.
-	IdentityStates() map[types.IdentityDescriptor]activation.IdentityState
+	All() map[types.NodeID]*activation.Identity
 }

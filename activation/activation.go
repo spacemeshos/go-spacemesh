@@ -251,20 +251,6 @@ func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 	return res
 }
 
-// IdentityStates returns the current state of the identity for each smesher.
-func (b *Builder) IdentityStates() map[types.IdentityDescriptor]IdentityState {
-	states := b.identitiesStates.All()
-	res := make(map[types.IdentityDescriptor]IdentityState, len(states))
-	b.smeshingMutex.Lock()
-	defer b.smeshingMutex.Unlock()
-	for id, state := range states {
-		if sig, exists := b.signers[id]; exists {
-			res[sig] = state
-		}
-	}
-	return res
-}
-
 // StartSmeshing is the main entry point of the atx builder. It runs the main
 // loop of the builder in a new go-routine and shouldn't be called more than
 // once without calling StopSmeshing in between. If the post data is incomplete
@@ -454,14 +440,6 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 	}
 	eg.Wait()
 
-	if err := b.identitiesStates.Set(sig.NodeID(), IdentityStateWaitForATXSyncing); err != nil {
-		b.logger.Warn("failed to switch identity state",
-			zap.Stringer("smesherID", sig.NodeID()),
-			zap.Error(err),
-		)
-		return
-	}
-
 	for {
 		err := b.PublishActivationTx(ctx, sig)
 		if err == nil {
@@ -530,6 +508,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
+	b.identitiesStates.Set(nodeID, nil, IdentityStateWaitForATXSyncing, "")
 
 	select {
 	case <-ctx.Done():
@@ -537,14 +516,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	case <-b.syncer.RegisterForATXSynced():
 	}
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
-
-	if err := b.identitiesStates.Set(nodeID, IdentityStateWaitForPoetRoundStart); err != nil {
-		b.logger.Warn("failed to switch identity state",
-			zap.Stringer("smesherID", nodeID),
-			zap.Error(err),
-		)
-		return nil, err
-	}
 
 	// Try to get existing challenge
 	existingChallenge, err := b.getExistingChallenge(logger, currentEpochId, nodeID)
@@ -591,6 +562,9 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
 		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
+
+		b.identitiesStates.Set(nodeID, &publishEpochId, IdentityStateWaitingForPoetRegistrationWindow, "")
+
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -755,6 +729,8 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
 		zap.Object("challenge", challenge),
 	)
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStatePoetChallengeReady, "")
+
 	targetEpoch := challenge.PublishEpoch.Add(1)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
 	defer cancel()
@@ -770,6 +746,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_layer", b.layerClock.CurrentLayer().Uint32()),
 		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStateATXReady, "")
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("wait for publication epoch: %w", ctx.Err())
@@ -815,6 +792,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		atx.ID(),
 		b.layerClock.LayerToTime(target.FirstLayer()),
 	)
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStateATXBroadcasted, "")
 	return nil
 }
 

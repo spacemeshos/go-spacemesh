@@ -427,8 +427,8 @@ type App struct {
 	postSupervisor     *activation.PostSupervisor
 	malfeasanceHandler *malfeasance.Handler
 	errCh              chan error
-
-	host *p2p.Host
+	idStates           *activation.IdentityStateStorage
+	host               *p2p.Host
 
 	loggers map[string]*zap.AtomicLevel
 	started chan struct{} // this channel is closed once the app has finished starting
@@ -622,6 +622,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 	idStates := activation.NewIdentityStateStorage()
+	app.idStates = idStates
 
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -1681,8 +1682,9 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			configuredPoets[server.Address] = struct{}{}
 		}
 
-		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.atxBuilder)
+		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.idStates)
 		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }

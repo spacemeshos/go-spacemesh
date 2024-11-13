@@ -234,7 +234,7 @@ type PostStates interface {
 }
 
 type IdentityStates interface {
-	Set(id types.NodeID, state IdentityState) error
-	Get(id types.NodeID) (IdentityState, error)
-	All() map[types.NodeID]IdentityState
+	Set(id types.NodeID, publishEpoch *types.EpochID, newState IdentityState, message string)
+	Get(id types.NodeID) (*Identity, error)
+	All() map[types.NodeID]*Identity
 }

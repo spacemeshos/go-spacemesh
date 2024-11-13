@@ -3,10 +3,14 @@ version: '3'
 services:
   activation-service:
     image: ${IMAGE}
-    command: ["-c", "/config.json", "--node-service-address", "http://node-service:9099"]
+    command: ["-c", "/config.json", "--node-service-address", "http://node-service:9099", "--grpc-json-listener", "0.0.0.0:9084"]
     volumes:
       - /tmp/spacemesh-client:/tmp/spacemesh-client
       - ./config.standalone.client.json:/config.json
+    ports:
+        - "9082:9082"
+        - "9083:9083"
+        - "9084:9084"
     networks:
       - spacemesh-net
 
