@@ -75,7 +75,6 @@ type testSyncer struct {
 	mDataFetcher *mocks.MockfetchLogic
 	mAtxSyncer   *mocks.MockatxSyncer
 	mMalSyncer   *mocks.MockmalSyncer
-	mBeacon      *smocks.MockBeaconGetter
 	mLyrPatrol   *mocks.MocklayerPatrol
 	mVm          *mmocks.MockvmState
 	mConState    *mmocks.MockconservativeState
@@ -120,7 +119,6 @@ func newTestSyncer(tb testing.TB, interval time.Duration) *testSyncer {
 		mDataFetcher: mocks.NewMockfetchLogic(ctrl),
 		mAtxSyncer:   mocks.NewMockatxSyncer(ctrl),
 		mMalSyncer:   mocks.NewMockmalSyncer(ctrl),
-		mBeacon:      smocks.NewMockBeaconGetter(ctrl),
 		mLyrPatrol:   mocks.NewMocklayerPatrol(ctrl),
 		mVm:          mmocks.NewMockvmState(ctrl),
 		mConState:    mmocks.NewMockconservativeState(ctrl),
