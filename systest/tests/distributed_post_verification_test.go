@@ -278,6 +278,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Pow:     challenge.InitialPost.Pow,
 		},
 	}
+	err = nipost.AddChallenge(localDb, signer.NodeID(), nipostChallenge)
+	require.NoError(t, err)
 
 	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.Hash(), nipostChallenge)
 	require.NoError(t, err)
