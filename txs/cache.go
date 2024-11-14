@@ -514,7 +514,7 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 			acctsAdded++
 		}
 	}
-	c.logger.Sugar().Debug("added pending tx for %d accounts", acctsAdded)
+	c.logger.Sugar().Debugf("added pending tx for %d accounts", acctsAdded)
 	return nil
 }
 

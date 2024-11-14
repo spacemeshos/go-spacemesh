@@ -393,14 +393,12 @@ type MerkleProofV2 struct {
 	Nodes []types.Hash32 `scale:"max=32"`
 }
 
-func (mp MerkleProofV2) Root() types.Hash32 {
-	hasher := hash.GetHasher()
-	defer hash.PutHasher(hasher)
-	hasher.Write([]byte{0x01})
-	for _, node := range mp.Nodes {
-		hasher.Write(node.Bytes())
-	}
-	return types.Hash32(hasher.Sum(nil))
+func (mp *MerkleProofV2) Root() (result types.Hash32) {
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	codec.MustEncodeTo(h, mp)
+	h.Sum(result[:0])
+	return result
 }
 
 type SubPostsV2 []SubPostV2
@@ -603,34 +601,21 @@ func (mc *MarriageCertificate) MarshalLogObject(encoder zapcore.ObjectEncoder) e
 	return nil
 }
 
-func (mc *MarriageCertificate) merkleTree(tree *merkle.Tree) {
-	tree.AddLeaf(mc.ReferenceAtx.Bytes())
-	tree.AddLeaf(mc.Signature.Bytes())
-}
-
-func (mc *MarriageCertificate) merkleProof(leafIndex MarriageCertificateIndex) []types.Hash32 {
-	return createProof(uint64(leafIndex), mc.merkleTree)
-}
-
-func (mc *MarriageCertificate) Root() types.Hash32 {
-	return createRoot(mc.merkleTree)
-}
-
-func (mc *MarriageCertificate) ReferenceATXProof() []types.Hash32 {
-	return mc.merkleProof(ReferenceATXIndex)
-}
-
-func (mc *MarriageCertificate) SignatureProof() []types.Hash32 {
-	return mc.merkleProof(SignatureIndex)
+func (mc *MarriageCertificate) Root() (result types.Hash32) {
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	codec.MustEncodeTo(h, mc)
+	h.Sum(result[:0])
+	return result
 }
 
 func atxTreeHash(buf, lChild, rChild []byte) []byte {
-	hasher := hash.GetHasher()
-	defer hash.PutHasher(hasher)
-	hasher.Write([]byte{0x01})
-	hasher.Write(lChild)
-	hasher.Write(rChild)
-	return hasher.Sum(buf)
+	h := hash.GetHasher()
+	defer hash.PutHasher(h)
+	h.Write([]byte{0x01})
+	h.Write(lChild)
+	h.Write(rChild)
+	return h.Sum(buf)
 }
 
 func createRoot(addLeaves func(tree *merkle.Tree)) types.Hash32 {
