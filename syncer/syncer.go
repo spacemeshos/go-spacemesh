@@ -127,7 +127,6 @@ type Syncer struct {
 	atxsyncer    atxSyncer
 	malsyncer    malSyncer
 	ticker       layerTicker
-	beacon       system.BeaconGetter
 	mesh         *mesh.Mesh
 	tortoise     system.Tortoise
 	certHandler  certHandler
@@ -168,7 +167,6 @@ type Syncer struct {
 func NewSyncer(
 	cdb *datastore.CachedDB,
 	ticker layerTicker,
-	beacon system.BeaconGetter,
 	mesh *mesh.Mesh,
 	tortoise system.Tortoise,
 	fetcher fetcher,
@@ -185,7 +183,6 @@ func NewSyncer(
 		atxsyncer:        atxSyncer,
 		malsyncer:        malSyncer,
 		ticker:           ticker,
-		beacon:           beacon,
 		mesh:             mesh,
 		tortoise:         tortoise,
 		certHandler:      ch,
@@ -239,11 +236,6 @@ func (s *Syncer) ListenToATXGossip() bool {
 // IsSynced returns true if the node is in synced state.
 func (s *Syncer) IsSynced(ctx context.Context) bool {
 	return s.getSyncState() == synced
-}
-
-func (s *Syncer) IsBeaconSynced(epoch types.EpochID) bool {
-	_, err := s.beacon.GetBeacon(epoch)
-	return err == nil
 }
 
 // Start starts the main sync loop that tries to sync data for every SyncInterval.
