@@ -735,7 +735,24 @@ func (app *App) initServices(ctx context.Context) error {
 		return nil
 	})
 
-	fetcherWrapped := &layerFetcher{}
+	proposalsStore := store.New(
+		store.WithEvictedLayer(app.clock.CurrentLayer()),
+		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+		store.WithCapacity(app.Config.Tortoise.Zdist+1),
+	)
+
+	flog := app.addLogger(Fetcher, lg)
+	fetcher, err := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
+		fetch.WithContext(ctx),
+		fetch.WithConfig(app.Config.FETCH),
+		fetch.WithLogger(flog.Zap()),
+	)
+	if err != nil {
+		return fmt.Errorf("create fetcher: %w", err)
+	}
+	app.eg.Go(func() error {
+		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
+	})
 
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
@@ -744,7 +761,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edVerifier,
 		app.clock,
 		app.host,
-		fetcherWrapped,
+		fetcher,
 		goldenATXID,
 		validator,
 		beaconProtocol,
@@ -768,8 +785,9 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 	}
 
-	blockHandler := blocks.NewHandler(fetcherWrapped, app.db, trtl, msh,
-		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()))
+	blockHandler := blocks.NewHandler(fetcher, app.db, trtl, msh,
+		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()),
+	)
 
 	app.txHandler = txs.NewTxHandler(
 		app.conState,
@@ -818,26 +836,6 @@ func (app *App) initServices(ctx context.Context) error {
 	for _, sig := range app.signers {
 		app.certifier.Register(sig)
 	}
-
-	proposalsStore := store.New(
-		store.WithEvictedLayer(app.clock.CurrentLayer()),
-		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
-		store.WithCapacity(app.Config.Tortoise.Zdist+1),
-	)
-
-	flog := app.addLogger(Fetcher, lg)
-	fetcher, err := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
-		fetch.WithContext(ctx),
-		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(flog.Zap()),
-	)
-	if err != nil {
-		return fmt.Errorf("create fetcher: %w", err)
-	}
-	fetcherWrapped.Fetcher = fetcher
-	app.eg.Go(func() error {
-		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
-	})
 
 	patrol := layerpatrol.New()
 	syncerConf := app.Config.Sync
@@ -955,7 +953,7 @@ func (app *App) initServices(ctx context.Context) error {
 		propHare,
 		app.edVerifier,
 		app.host,
-		fetcherWrapped,
+		fetcher,
 		beaconProtocol,
 		msh,
 		trtl,
@@ -978,7 +976,7 @@ func (app *App) initServices(ctx context.Context) error {
 		proposalsStore,
 		executor,
 		msh,
-		fetcherWrapped,
+		fetcher,
 		app.certifier,
 		patrol,
 		blocks.WithConfig(blocks.Config{
@@ -2282,10 +2280,6 @@ func (app *App) preserveAfterRecovery(ctx context.Context, preserved checkpoint.
 
 func (app *App) Host() *p2p.Host {
 	return app.host
-}
-
-type layerFetcher struct {
-	system.Fetcher
 }
 
 func decodeLoggerLevel(cfg *config.Config, name string) (zap.AtomicLevel, error) {

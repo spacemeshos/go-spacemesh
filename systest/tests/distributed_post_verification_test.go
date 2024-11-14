@@ -25,10 +25,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -95,9 +97,36 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	logger.Info("p2p host created", zap.Stringer("id", host.ID()))
 	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error { return nil })
-
 	require.NoError(t, host.Start())
 	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
+
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zap.NewNop())
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
+
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(cl.Genesis()),
+		timesync.WithLogger(logger.Named("clock")),
+	)
+	require.NoError(t, err)
+	t.Cleanup(clock.Close)
+
+	proposalsStore := store.New(
+		store.WithEvictedLayer(clock.CurrentLayer()),
+		store.WithLogger(logger.Named("proposals-store")),
+		store.WithCapacity(cfg.Tortoise.Zdist+1),
+	)
+
+	fetcher, err := fetch.NewFetch(cdb, proposalsStore, host,
+		fetch.WithContext(ctx),
+		fetch.WithConfig(cfg.FETCH),
+		fetch.WithLogger(logger.Named("fetcher")),
+	)
+	require.NoError(t, err)
+	require.NoError(t, fetcher.Start())
+	t.Cleanup(fetcher.Stop)
 
 	ctrl := gomock.NewController(t)
 	syncer := activation.NewMocksyncer(ctrl)
@@ -108,9 +137,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	}).AnyTimes()
 
 	// 1. Initialize
-	db := statesql.InMemoryTest(t)
-	cdb := datastore.NewCachedDB(db, zap.NewNop())
-	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
@@ -135,15 +161,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
 	// 2. create ATX with invalid POST labels
-	clock, err := timesync.NewClock(
-		timesync.WithLayerDuration(cfg.LayerDuration),
-		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(cl.Genesis()),
-		timesync.WithLogger(logger.Named("clock")),
-	)
-	require.NoError(t, err)
-	t.Cleanup(clock.Close)
-
 	grpcPostService := grpcserver.NewPostService(
 		logger.Named("grpc-post-service"),
 		grpcserver.PostServiceQueryInterval(500*time.Millisecond),
@@ -297,7 +314,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 	eg.Go(func() error {
 		for {
-			logger.Sugar().Infow("publishing ATX", "atx", atx)
+			logger.Info("publishing ATX", zap.Object("atx", &atx))
 			buf := codec.MustEncode(&atx)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)
