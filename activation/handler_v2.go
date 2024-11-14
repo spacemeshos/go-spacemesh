@@ -875,9 +875,6 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 		}
 
 		var wireAtxV1 *wire.ActivationTxV1
-		var wireAtxV2 *wire.ActivationTxV2
-
-	collisionCheck:
 		for _, collision := range collisions {
 			if collision == atx.ID() {
 				continue
@@ -896,9 +893,19 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 					codec.MustDecode(blob.Bytes, wireAtxV1)
 				}
 			case types.AtxV2:
-				wireAtxV2 = &wire.ActivationTxV2{}
-				codec.MustDecode(blob.Bytes, wireAtxV2)
-				break collisionCheck // if we have one v2 ATX we can create the proof
+				wireAtx := &wire.ActivationTxV2{}
+				codec.MustDecode(blob.Bytes, wireAtx)
+				// prefer creating a proof with 2 ATXs of version 2
+				h.logger.Debug("creating a malfeasance proof for invalid previous ATX",
+					log.ZShortStringer("smesherID", id),
+					log.ZShortStringer("atx1", wireAtx.ID()),
+					log.ZShortStringer("atx2", atx.ActivationTxV2.ID()),
+				)
+				proof, err := wire.NewInvalidPrevAtxProofV2(tx, atx.ActivationTxV2, wireAtx, id)
+				if err != nil {
+					return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
+				}
+				return true, h.malPublisher.Publish(ctx, id, proof)
 			default:
 				h.logger.Fatal("Failed to create invalid previous ATX proof: unknown ATX version",
 					zap.Stringer("atx_id", collision),
@@ -906,20 +913,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 			}
 		}
 
-		if wireAtxV2 != nil {
-			// prefer creating a proof with 2 ATXs of version 2
-			h.logger.Debug("creating a malfeasance proof for invalid previous ATX",
-				log.ZShortStringer("smesherID", id),
-				log.ZShortStringer("atx1", wireAtxV2.ID()),
-				log.ZShortStringer("atx2", atx.ActivationTxV2.ID()),
-			)
-			proof, err := wire.NewInvalidPrevAtxProofV2(tx, atx.ActivationTxV2, wireAtxV2, id)
-			if err != nil {
-				return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
-			}
-			return true, h.malPublisher.Publish(ctx, id, proof)
-		}
-
+		// no ATXv2 found, create a proof with an ATXv1
 		h.logger.Debug("creating a malfeasance proof for invalid previous ATX",
 			log.ZShortStringer("smesherID", id),
 			log.ZShortStringer("atx1", wireAtxV1.ID()),
