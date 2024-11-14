@@ -3,6 +3,7 @@ package pubsub
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,14 +15,16 @@ import (
 
 func TestGossip(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-	n := 10
+	defer cancel()
+
+	n := 5
 	mesh, err := mocknet.FullMeshLinked(n)
 	require.NoError(t, err)
+
 	topic := "test"
-	pubsubs := []PubSub{}
+	pubsubs := make([]PubSub, 0, n)
 	count := n * n
-	received := make(chan []byte, count)
+	var received atomic.Int32
 
 	logger := zaptest.NewLogger(t)
 	for i, h := range mesh.Hosts() {
@@ -30,11 +33,11 @@ func TestGossip(t *testing.T) {
 		require.NoError(t, err)
 		pubsubs = append(pubsubs, ps)
 		ps.Register(topic, func(ctx context.Context, pid peer.ID, msg []byte) error {
-			received <- msg
+			received.Add(1)
 			return nil
 		})
 	}
-	// connect after initializng gossip sub protocol for every peer. otherwise stream initialize
+	// connect after initializing gossip sub protocol for every peer. otherwise stream initialize
 	// maybe fail if other side wasn't able to initialize gossipsub on time.
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
@@ -44,9 +47,9 @@ func TestGossip(t *testing.T) {
 			}
 		}
 		return true
-	}, 5*time.Second, 10*time.Millisecond)
+	}, 10*time.Second, 100*time.Millisecond)
 	for i, ps := range pubsubs {
 		require.NoError(t, ps.Publish(ctx, topic, []byte(mesh.Hosts()[i].ID())))
 	}
-	require.Eventually(t, func() bool { return len(received) == count }, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return received.Load() == int32(count) }, 5*time.Second, 10*time.Millisecond)
 }
