@@ -245,8 +245,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 }
 
 // PrevIDByNodeID returns the previous ATX ID for a given node ID and public epoch.
-// It returns the newest ATX ID containing PoST of the given node ID
-// that was published before the given public epoch.
+// It returns the newest ATX ID containing PoST of the given node ID that was published in or before the given epoch.
 func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())

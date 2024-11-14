@@ -20,8 +20,8 @@ import (
 //  1. The ATXs have different IDs.
 //  2. Both ATXs have a valid signature.
 //  3. Both ATXs reference the same previous ATX for the same identity.
-//  4. If the signer of one of the two ATXs is not the identity that referenced the same previous ATX, then the included
-//     marriage the included marriage proof is valid.
+//  4. If the signer of one of the two ATXs is not the identity that referenced the same previous ATX, then the identity
+//     that did is married to the signer via a valid marriage certificate in the referenced marriage ATX.
 type ProofInvalidPrevAtxV2 struct {
 	// NodeID is the node ID that referenced the same previous ATX twice.
 	NodeID types.NodeID
