@@ -19,6 +19,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6451](https://github.com/spacemeshos/go-spacemesh/pull/6451) Fix a possible deadloop in the beacon protocol.
 
+* [#6457](https://github.com/spacemeshos/go-spacemesh/pull/6457) Fix trying to certify POST when certifier URL is empty.
+
 ## v1.7.6
 
 ### Upgrade information
