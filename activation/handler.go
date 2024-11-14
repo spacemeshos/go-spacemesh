@@ -146,7 +146,7 @@ func NewHandler(
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
-			malPublisher:    &ATXMalfeasancePublisher{},
+			malPublisher:    &ATXMalfeasancePublisher{}, // TODO(mafa): pass real publisher when available
 		},
 	}
 

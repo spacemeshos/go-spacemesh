@@ -126,7 +126,6 @@ func NewDoubleMergeProof(db sql.Executor, atx1, atx2 *ActivationTxV2) (*ProofDou
 	return &proof, nil
 }
 
-// Valid implements Proof.Valid.
 func (p *ProofDoubleMerge) Valid(_ context.Context, edVerifier MalfeasanceValidator) (types.NodeID, error) {
 	// 1. The ATXs have different IDs.
 	if p.ATXID1 == p.ATXID2 {

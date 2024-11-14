@@ -297,7 +297,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 	eg.Go(func() error {
 		for {
-			logger.Sugar().Infow("publishing ATX", "atx", atx)
+			logger.Info("publishing ATX", zap.Object("atx", &atx))
 			buf := codec.MustEncode(&atx)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)
