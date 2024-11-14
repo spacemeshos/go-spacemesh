@@ -36,7 +36,6 @@ type RemoteProposalBuilder struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
-	epochEligibilities map[types.EpochID]map[types.NodeID]map[types.LayerID][]types.VotingEligibility
 }
 
 // New creates a struct of block builder type.
@@ -56,12 +55,11 @@ func NewRemoteBuilder(
 			layerSize:      layerSize,
 			layersPerEpoch: layersPerEpoch,
 		},
-		logger:             logger,
-		clock:              clock,
-		publisher:          publisher,
-		beaconSvc:          bcn,
-		proposalSvc:        prop,
-		epochEligibilities: make(map[types.EpochID]map[types.NodeID]map[types.LayerID][]types.VotingEligibility),
+		logger:      logger,
+		clock:       clock,
+		publisher:   publisher,
+		beaconSvc:   bcn,
+		proposalSvc: prop,
 		signers: struct {
 			mu      sync.Mutex
 			signers map[types.NodeID]*signerSession
@@ -90,10 +88,13 @@ func (pb *RemoteProposalBuilder) Register(sig *signing.EdSigner) {
 
 // Start the loop that listens to layers and build proposals.
 func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
-	current := pb.clock.CurrentLayer()
-	next := current + 1
+	var (
+		eg            errgroup.Group
+		current       = pb.clock.CurrentLayer()
+		next          = current + 1
+		eligibilities = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
+	)
 	pb.logger.Info("started", zap.Inline(&pb.cfg), zap.Uint32("next", next.Uint32()))
-	var eg errgroup.Group
 	prepareDisabled := pb.cfg.activeSet.Tries == 0 || pb.cfg.activeSet.RetryInterval == 0
 	if prepareDisabled {
 		pb.logger.Warn("activeset will not be prepared in advance")
@@ -118,7 +119,10 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 			if current <= types.GetEffectiveGenesis() {
 				continue
 			}
-			if err := pb.build(ctx, current); err != nil {
+			if current.FirstInEpoch() {
+				eligibilities = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
+			}
+			if err := pb.build(ctx, current, eligibilities); err != nil {
 				pb.logger.Warn("failed to build proposal",
 					log.ZContext(ctx),
 					zap.Uint32("lid", current.Uint32()),
@@ -126,25 +130,15 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 				)
 			}
 
-			pb.clean(current)
 		}
 	}
 }
 
-func (pb *RemoteProposalBuilder) clean(layer types.LayerID) {
-	var vals []types.EpochID
-	lim := layer.GetEpoch() - 1
-	for k := range pb.epochEligibilities {
-		if k <= lim {
-			vals = append(vals, k)
-		}
-	}
-	for _, v := range vals {
-		delete(pb.epochEligibilities, v)
-	}
-}
-
-func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID) error {
+func (pb *RemoteProposalBuilder) build(
+	ctx context.Context,
+	layer types.LayerID,
+	eligibilities map[types.NodeID]map[types.LayerID][]types.VotingEligibility,
+) error {
 	epoch := layer.GetEpoch()
 	pb.signers.mu.Lock()
 	signers := maps.Values(pb.signers.signers)
@@ -171,11 +165,8 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 			ok     bool
 		)
 		if proposal.Ballot.EpochData != nil {
-			_, ok := pb.epochEligibilities[epoch]
-			if !ok {
-				pb.epochEligibilities[epoch] = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
-			}
-			nodeElig, ok := pb.epochEligibilities[epoch][nodeId]
+
+			nodeElig, ok := eligibilities[nodeId]
 			if !ok {
 				proofs = calcEligibilityProofs(
 					signer.signer.VRFSigner(),
@@ -185,16 +176,12 @@ func (pb *RemoteProposalBuilder) build(ctx context.Context, layer types.LayerID)
 					proposal.Ballot.EpochData.EligibilityCount,
 					pb.cfg.layersPerEpoch,
 				)
-				pb.epochEligibilities[epoch][nodeId] = proofs
+				eligibilities[nodeId] = proofs
 			} else {
 				proofs = nodeElig
 			}
 		} else {
-			nodeElig, ok := pb.epochEligibilities[epoch]
-			if !ok {
-				panic("missing epoch eligibilities")
-			}
-			proofs, ok = nodeElig[nodeId]
+			proofs, ok = eligibilities[nodeId]
 			if !ok {
 				panic("missing node epoch eligibilities")
 			}
