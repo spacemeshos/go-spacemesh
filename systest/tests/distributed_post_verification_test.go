@@ -358,7 +358,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.NoError(t, codec.Decode(malf.Proof.Proof, &proof))
 		require.Equal(t, mwire.InvalidPostIndex, proof.Proof.Type)
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
-		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
+		logger.Info("malfeasance post proof", zap.Object("proof", invalidPostProof))
 		invalidAtx := invalidPostProof.Atx
 		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
