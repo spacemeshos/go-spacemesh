@@ -896,11 +896,9 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 					codec.MustDecode(blob.Bytes, wireAtxV1)
 				}
 			case types.AtxV2:
-				if wireAtxV2 == nil {
-					wireAtxV2 = &wire.ActivationTxV2{}
-					codec.MustDecode(blob.Bytes, wireAtxV2)
-					break collisionCheck // if we have one v2 ATX we can create the proof
-				}
+				wireAtxV2 = &wire.ActivationTxV2{}
+				codec.MustDecode(blob.Bytes, wireAtxV2)
+				break collisionCheck // if we have one v2 ATX we can create the proof
 			default:
 				h.logger.Fatal("Failed to create invalid previous ATX proof: unknown ATX version",
 					zap.Stringer("atx_id", collision),
