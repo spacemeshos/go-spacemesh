@@ -197,10 +197,10 @@ func (c *MockconservativeStateHasTxCall) DoAndReturn(f func(types.TransactionID)
 }
 
 // Validation mocks base method.
-func (m *MockconservativeState) Validation(arg0 types.RawTx) system.ValidationRequestNew {
+func (m *MockconservativeState) Validation(arg0 types.RawTx) system.ValidationRequest {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validation", arg0)
-	ret0, _ := ret[0].(system.ValidationRequestNew)
+	ret0, _ := ret[0].(system.ValidationRequest)
 	return ret0
 }
 
@@ -217,19 +217,19 @@ type MockconservativeStateValidationCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockconservativeStateValidationCall) Return(arg0 system.ValidationRequestNew) *MockconservativeStateValidationCall {
+func (c *MockconservativeStateValidationCall) Return(arg0 system.ValidationRequest) *MockconservativeStateValidationCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockconservativeStateValidationCall) Do(f func(types.RawTx) system.ValidationRequestNew) *MockconservativeStateValidationCall {
+func (c *MockconservativeStateValidationCall) Do(f func(types.RawTx) system.ValidationRequest) *MockconservativeStateValidationCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockconservativeStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequestNew) *MockconservativeStateValidationCall {
+func (c *MockconservativeStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequest) *MockconservativeStateValidationCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -492,10 +492,10 @@ func (c *MockvmStateGetStateRootCall) DoAndReturn(f func() (types.Hash32, error)
 }
 
 // Validation mocks base method.
-func (m *MockvmState) Validation(arg0 types.RawTx) system.ValidationRequestNew {
+func (m *MockvmState) Validation(arg0 types.RawTx) system.ValidationRequest {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validation", arg0)
-	ret0, _ := ret[0].(system.ValidationRequestNew)
+	ret0, _ := ret[0].(system.ValidationRequest)
 	return ret0
 }
 
@@ -512,19 +512,19 @@ type MockvmStateValidationCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockvmStateValidationCall) Return(arg0 system.ValidationRequestNew) *MockvmStateValidationCall {
+func (c *MockvmStateValidationCall) Return(arg0 system.ValidationRequest) *MockvmStateValidationCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockvmStateValidationCall) Do(f func(types.RawTx) system.ValidationRequestNew) *MockvmStateValidationCall {
+func (c *MockvmStateValidationCall) Do(f func(types.RawTx) system.ValidationRequest) *MockvmStateValidationCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockvmStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequestNew) *MockvmStateValidationCall {
+func (c *MockvmStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequest) *MockvmStateValidationCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

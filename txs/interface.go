@@ -12,14 +12,14 @@ import (
 
 type conservativeState interface {
 	HasTx(types.TransactionID) (bool, error)
-	Validation(types.RawTx) system.ValidationRequestNew
+	Validation(types.RawTx) system.ValidationRequest
 	AddToCache(context.Context, *types.Transaction, time.Time) error
 	AddToDB(*types.Transaction) error
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 }
 
 type vmState interface {
-	Validation(types.RawTx) system.ValidationRequestNew
+	Validation(types.RawTx) system.ValidationRequest
 	GetStateRoot() (types.Hash32, error)
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetLayerApplied(types.TransactionID) (types.LayerID, error)

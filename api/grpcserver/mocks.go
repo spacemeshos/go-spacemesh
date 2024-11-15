@@ -690,10 +690,10 @@ func (c *MockconservativeStateGetTransactionsByAddressCall) DoAndReturn(f func(t
 }
 
 // Validation mocks base method.
-func (m *MockconservativeState) Validation(raw types.RawTx) system.ValidationRequestNew {
+func (m *MockconservativeState) Validation(raw types.RawTx) system.ValidationRequest {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Validation", raw)
-	ret0, _ := ret[0].(system.ValidationRequestNew)
+	ret0, _ := ret[0].(system.ValidationRequest)
 	return ret0
 }
 
@@ -710,19 +710,19 @@ type MockconservativeStateValidationCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockconservativeStateValidationCall) Return(arg0 system.ValidationRequestNew) *MockconservativeStateValidationCall {
+func (c *MockconservativeStateValidationCall) Return(arg0 system.ValidationRequest) *MockconservativeStateValidationCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockconservativeStateValidationCall) Do(f func(types.RawTx) system.ValidationRequestNew) *MockconservativeStateValidationCall {
+func (c *MockconservativeStateValidationCall) Do(f func(types.RawTx) system.ValidationRequest) *MockconservativeStateValidationCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockconservativeStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequestNew) *MockconservativeStateValidationCall {
+func (c *MockconservativeStateValidationCall) DoAndReturn(f func(types.RawTx) system.ValidationRequest) *MockconservativeStateValidationCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

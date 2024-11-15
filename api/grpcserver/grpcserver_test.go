@@ -382,7 +382,7 @@ func (t *ConStateAPIMock) GetNonce(addr types.Address) (types.Nonce, error) {
 	return t.nonces[addr], nil
 }
 
-func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequestNew {
+func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequest {
 	panic("dont use this")
 }
 
