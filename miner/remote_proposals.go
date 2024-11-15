@@ -91,6 +91,7 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 	var (
 		eg            errgroup.Group
 		current       = pb.clock.CurrentLayer()
+		epoch         = current.GetEpoch()
 		next          = current + 1
 		eligibilities = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
 	)
@@ -119,8 +120,9 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 			if current <= types.GetEffectiveGenesis() {
 				continue
 			}
-			if current.FirstInEpoch() {
+			if e := current.GetEpoch(); e > epoch {
 				eligibilities = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
+				epoch = e
 			}
 			if err := pb.build(ctx, current, eligibilities); err != nil {
 				pb.logger.Warn("failed to build proposal",

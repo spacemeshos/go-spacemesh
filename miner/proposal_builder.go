@@ -586,30 +586,6 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 	}
 
 	signer := &signerSession{}
-	encodeVotes := func() (*types.Opinion, error) {
-		pb.tortoise.TallyVotes(lid)
-		opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))
-		if err != nil {
-			return nil, fmt.Errorf("encoding votes: %w", err)
-		}
-		return opinion, nil
-	}
-
-	calcMeshHash := func() types.Hash32 {
-		meshHash := pb.decideMeshHash(ctx, lid)
-		return meshHash
-	}
-
-	persistActiveSet := func() error {
-		err := activesets.Add(pb.db, pb.shared.active.id, &types.EpochActiveSet{
-			Epoch: pb.shared.epoch,
-			Set:   pb.shared.active.set,
-		})
-		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
-			return err
-		}
-		return nil
-	}
 
 	if err := pb.initSignerSessionData(ctx, &signer.session, lid, nodeID); err != nil {
 		if errors.Is(err, errAtxNotAvailable) {
@@ -642,16 +618,21 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 		zap.Int("num proposals", int(proofs)),
 	)
 
-	opinion, err := encodeVotes()
+	pb.tortoise.TallyVotes(lid)
+	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, fmt.Errorf("encoding votes: %w", err)
 	}
 
-	meshHash := calcMeshHash()
+	meshHash := pb.decideMeshHash(ctx, lid)
 
 	if signer.session.ref == types.EmptyBallotID {
-		if err := persistActiveSet(); err != nil {
-			return nil, 0, err
+		err := activesets.Add(pb.db, pb.shared.active.id, &types.EpochActiveSet{
+			Epoch: pb.shared.epoch,
+			Set:   pb.shared.active.set,
+		})
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return nil, 0, fmt.Errorf("persist activeset: %w", err)
 		}
 	}
 	slots := signer.session.eligibilities.slots
