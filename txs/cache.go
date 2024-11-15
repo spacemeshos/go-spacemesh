@@ -405,7 +405,7 @@ func (ac *accountCache) resetAfterApply(
 }
 
 func (ac *accountCache) evictPendingNonce(db sql.StateDatabase) error {
-	return db.WithTx(context.Background(), func(tx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
 		txIds, err := transactions.GetAcctPendingToNonce(tx, ac.addr, ac.startNonce)
 		if err != nil {
 			return fmt.Errorf("get pending to nonce: %w", err)
