@@ -167,9 +167,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	poetService, err := activation.NewPoetService(
 		poetDb,
-		types.PoetServer{
-			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
-		}, cfg.POET,
+		types.PoetServer{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
+		cfg.POET,
 		logger,
 		1,
 		activation.WithCertifier(certifier),
