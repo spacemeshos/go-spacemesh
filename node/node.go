@@ -1674,17 +1674,17 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.SmeshingIdentities:
-		nodeIds := make(map[types.NodeID]struct{})
-		for _, signer := range app.signers {
-			nodeIds[signer.NodeID()] = struct{}{}
-		}
+		//nodeIds := make(map[types.NodeID]struct{})
+		//for _, signer := range app.signers {
+		//	nodeIds[signer.NodeID()] = struct{}{}
+		//}
+		//
+		//configuredPoets := make(map[string]struct{})
+		//for _, server := range app.Config.PoetServers {
+		//	configuredPoets[server.Address] = struct{}{}
+		//}
 
-		configuredPoets := make(map[string]struct{})
-		for _, server := range app.Config.PoetServers {
-			configuredPoets[server.Address] = struct{}{}
-		}
-
-		service := v2alpha1.NewSmeshingIdentitiesService(app.db, configuredPoets, app.idStates)
+		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates)
 		app.grpcServices[svc] = service
 		return service, nil
 	}

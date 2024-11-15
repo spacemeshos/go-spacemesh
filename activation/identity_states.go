@@ -21,9 +21,9 @@ const (
 
 	IdentityStateWaitForATXSyncing
 
-	// poet
+	// poet.
 	IdentityStateWaitingForPoetRegistrationWindow
-	// building nipost challenge
+	// building nipost challenge.
 	IdentityStatePoetChallengeReady
 	IdentityStatePoetRegistered
 	IdentityStatePoetRegistrationFailed
@@ -32,12 +32,12 @@ const (
 	IdentityStatePoetProofReceived
 	IdentityStatePoetProofFailed
 
-	// post
+	// post.
 	IdentityStateGeneratingPostProof
 	IdentityStatePostProofReady
 	IdentityStatePostProofFailed
 
-	// atx
+	// atx.
 	IdentityStateATXExpired
 	IdentityStateATXReady
 	IdentityStateATXBroadcasted
@@ -124,7 +124,9 @@ func NewIdentityStateStorage() *IdentityStateStorage {
 //	},
 //}
 
-func (s *IdentityStateStorage) Set(id types.NodeID, publishEpoch *types.EpochID, newState IdentityState, message string) {
+func (s *IdentityStateStorage) Set(id types.NodeID, publishEpoch *types.EpochID, newState IdentityState,
+	message string,
+) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

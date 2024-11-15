@@ -2,33 +2,28 @@ package v2alpha1
 
 import (
 	"context"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
 
 type SmeshingIdentitiesService struct {
-	db                     sql.Database
-	states                 identityState
-	configuredPoetServices map[string]struct{}
+	states identityState
 }
 
 func NewSmeshingIdentitiesService(
-	db sql.Database,
-	configuredPoetServices map[string]struct{},
 	states identityState,
 ) *SmeshingIdentitiesService {
 	return &SmeshingIdentitiesService{
-		db:                     db,
-		configuredPoetServices: configuredPoetServices,
-		states:                 states,
+		states: states,
 	}
 }
 
