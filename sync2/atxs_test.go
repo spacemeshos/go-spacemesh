@@ -38,7 +38,8 @@ func TestAtxHandler_Success(t *testing.T) {
 		allAtxs[i] = types.RandomATXID()
 	}
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, nil)
+	clock := clockwork.NewFakeClock()
+	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
@@ -106,7 +107,8 @@ func TestAtxHandler_Retry(t *testing.T) {
 		allAtxs[i] = types.RandomATXID()
 	}
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, nil)
+	clock := clockwork.NewFakeClock()
+	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
@@ -164,6 +166,31 @@ func TestAtxHandler_Retry(t *testing.T) {
 		},
 		Error: rangesync.NoSeqError,
 	})
+
+	// If it so happens that a full batch fails, we need to advance the clock to
+	// trigger the retry.
+	ctx, cancel := context.WithCancel(context.Background())
+	var eg errgroup.Group
+	eg.Go(func() error {
+		for {
+			// FIXME: BlockUntilContext is not included in FakeClock interface.
+			// This will be fixed in a post-0.4.0 clockwork release, but with a breaking change that
+			// makes FakeClock a struct instead of an interface.
+			// See: https://github.com/jonboulle/clockwork/pull/71
+			clock.(interface {
+				BlockUntilContext(ctx context.Context, n int) error
+			}).BlockUntilContext(ctx, 1)
+			if ctx.Err() != nil {
+				return nil
+			}
+			clock.Advance(batchRetryDelay)
+		}
+	})
+	defer func() {
+		cancel()
+		eg.Wait()
+	}()
+
 	require.NoError(t, h.Commit(context.Background(), peer, baseSet, newSet))
 	require.ElementsMatch(t, allAtxs[1:], fetched)
 }
@@ -180,7 +207,8 @@ func TestAtxHandler_Cancel(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	peer := p2p.Peer("foobar")
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, nil)
+	clock := clockwork.NewFakeClock()
+	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	newSet := mocks.NewMockOrderedSet(ctrl)
 	baseSet.EXPECT().Has(rangesync.KeyBytes(atxID[:])).Return(false, nil)

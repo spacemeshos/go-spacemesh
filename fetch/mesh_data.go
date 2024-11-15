@@ -42,12 +42,18 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 	)
 	hashes := types.ATXIDsToHashes(ids)
 	handler := f.validators.atx.HandleMessage
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	if options.RecvChannel != nil {
 		handler = func(ctx context.Context, id types.Hash32, p p2p.Peer, data []byte) error {
 			if err := f.validators.atx.HandleMessage(ctx, id, p, data); err != nil {
 				return err
 			}
-			options.RecvChannel <- types.ATXID(id)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case options.RecvChannel <- types.ATXID(id):
+			}
 			return nil
 		}
 	}

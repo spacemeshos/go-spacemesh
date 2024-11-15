@@ -24,10 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-const (
-	proto = "sync/2"
-)
-
 type ATXHandler struct {
 	logger           *zap.Logger
 	f                Fetcher
@@ -95,7 +91,7 @@ func (h *ATXHandler) Commit(ctx context.Context, peer p2p.Peer, base, new ranges
 	}
 	total := len(state)
 	items := make([]types.ATXID, 0, h.batchSize)
-	startTime := time.Now()
+	startTime := h.clock.Now()
 	batchAttemptsRemaining := h.maxBatchRetries
 	for len(state) > 0 {
 		items = items[:0]
@@ -117,17 +113,22 @@ func (h *ATXHandler) Commit(ctx context.Context, peer p2p.Peer, base, new ranges
 
 		var eg errgroup.Group
 		recvCh := make(chan types.ATXID)
+		doneCh := make(chan struct{})
 		someSucceeded := false
 		eg.Go(func() error {
-			for id := range recvCh {
-				numDownloaded++
-				someSucceeded = true
-				delete(state, id)
+			for {
+				select {
+				case id := <-recvCh:
+					numDownloaded++
+					someSucceeded = true
+					delete(state, id)
+				case <-doneCh:
+					return nil
+				}
 			}
-			return nil
 		})
 		err := h.f.GetAtxs(ctx, items, system.WithRecvChannel(recvCh))
-		close(recvCh)
+		close(doneCh)
 		eg.Wait()
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -135,7 +136,6 @@ func (h *ATXHandler) Commit(ctx context.Context, peer p2p.Peer, base, new ranges
 			}
 			batchError := &fetch.BatchError{}
 			if errors.As(err, &batchError) {
-				h.logger.Debug("QQQQQ: batch error", zap.Error(err))
 				for hash, err := range batchError.Errors {
 					if _, exists := state[types.ATXID(hash)]; !exists {
 						continue
@@ -166,10 +166,11 @@ func (h *ATXHandler) Commit(ctx context.Context, peer p2p.Peer, base, new ranges
 			}
 		} else {
 			batchAttemptsRemaining = h.maxBatchRetries
+			elapsed := h.clock.Since(startTime)
 			h.logger.Debug("fetched atxs",
 				zap.Int("total", total),
 				zap.Int("downloaded", numDownloaded),
-				zap.Float64("rate per sec", float64(numDownloaded)/time.Since(startTime).Seconds()))
+				zap.Float64("rate per sec", float64(numDownloaded)/elapsed.Seconds()))
 		}
 	}
 	return nil
@@ -306,7 +307,7 @@ func NewATXSyncer(
 
 func NewDispatcher(logger *zap.Logger, f Fetcher) *rangesync.Dispatcher {
 	d := rangesync.NewDispatcher(logger)
-	d.SetupServer(f.Host(), proto, server.WithHardTimeout(20*time.Minute))
+	d.SetupServer(f.Host(), multipeer.Protocol, server.WithHardTimeout(20*time.Minute))
 	return d
 }
 
