@@ -1483,7 +1483,10 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					}
 
 					app.hOracle.UpdateActiveSet(epoch, set)
-					app.proposalBuilder.UpdateActiveSet(epoch, set)
+
+					if app.proposalBuilder != nil {
+						app.proposalBuilder.UpdateActiveSet(epoch, set)
+					}
 
 					app.eg.Go(func() error {
 						select {
