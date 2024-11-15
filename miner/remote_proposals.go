@@ -96,6 +96,7 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 		epoch         = current.GetEpoch()
 		next          = current + 1
 		eligibilities = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
+		epochBeacon   = make(map[types.EpochID]types.Beacon) // cache beacon values within an epoch
 	)
 	pb.logger.Info("started", zap.Inline(&pb.cfg), zap.Uint32("next", next.Uint32()))
 	prepareDisabled := pb.cfg.activeSet.Tries == 0 || pb.cfg.activeSet.RetryInterval == 0
@@ -118,15 +119,15 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 			}
 			next = current.Add(1)
 			ctx := log.WithNewSessionID(ctx)
-
 			if current <= types.GetEffectiveGenesis() {
 				continue
 			}
 			if e := current.GetEpoch(); e > epoch {
 				eligibilities = make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
+				epochBeacon = make(map[types.EpochID]types.Beacon)
 				epoch = e
 			}
-			if err := pb.build(ctx, current, eligibilities); err != nil {
+			if err := pb.build(ctx, current, eligibilities, epochBeacon); err != nil {
 				pb.logger.Warn("failed to build proposal",
 					log.ZContext(ctx),
 					zap.Uint32("lid", current.Uint32()),
@@ -142,6 +143,7 @@ func (pb *RemoteProposalBuilder) build(
 	ctx context.Context,
 	layer types.LayerID,
 	eligibilities map[types.NodeID]map[types.LayerID][]types.VotingEligibility,
+	beacons map[types.EpochID]types.Beacon,
 ) error {
 	epoch := layer.GetEpoch()
 	pb.signers.mu.Lock()
@@ -159,17 +161,19 @@ func (pb *RemoteProposalBuilder) build(
 			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
 		}
-		bcn, err := pb.beaconSvc.Beacon(ctx, epoch)
-		if err != nil {
-			pb.logger.Error("get beacon", zap.Error(err))
-			continue
-		}
-		var (
-			proofs map[types.LayerID][]types.VotingEligibility
-			ok     bool
-		)
-		if proposal.Ballot.EpochData != nil {
 
+		bcn, ok := beacons[epoch]
+		if !ok {
+			bcn, err = pb.beaconSvc.Beacon(ctx, epoch)
+			if err != nil {
+				pb.logger.Error("get beacon", zap.Error(err))
+				continue
+			}
+			beacons[epoch] = bcn
+		}
+
+		var proofs map[types.LayerID][]types.VotingEligibility
+		if proposal.Ballot.EpochData != nil {
 			nodeElig, ok := eligibilities[nodeId]
 			if !ok {
 				proofs = calcEligibilityProofs(
