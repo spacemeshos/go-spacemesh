@@ -19,7 +19,7 @@ type IdentityState int
 const (
 	IdentityStateNotSet IdentityState = iota
 
-	IdentityStateWaitForATXSyncing
+	IdentityStateWaitForATXSynced
 
 	// poet.
 	IdentityStateWaitingForPoetRegistrationWindow
@@ -47,8 +47,8 @@ func (s IdentityState) String() string {
 	switch s {
 	case IdentityStateNotSet:
 		return "not set"
-	case IdentityStateWaitForATXSyncing:
-		return "wait for atx syncing"
+	case IdentityStateWaitForATXSynced:
+		return "wait for atx synced"
 	case IdentityStatePoetChallengeReady:
 		return "poet challenge ready"
 	case IdentityStateWaitingForPoetRegistrationWindow:
@@ -77,18 +77,14 @@ func (s IdentityState) String() string {
 }
 
 type IdentityStateInfo struct {
-	Message string
-	Time    time.Time
-}
-
-type IdentityInfo struct {
-	PublishEpoch types.EpochID
-	States       map[IdentityState]IdentityStateInfo
+	State        IdentityState
+	PublishEpoch *types.EpochID
+	Message      string
+	Time         time.Time
 }
 
 type Identity struct {
-	EpochStates map[types.EpochID]*IdentityInfo
-	States      map[IdentityState]IdentityStateInfo
+	History []IdentityStateInfo
 }
 
 type IdentityStateStorage struct {
@@ -102,29 +98,10 @@ func NewIdentityStateStorage() *IdentityStateStorage {
 	}
 }
 
-// TODO: validate state switch
-//var validStateSwitch = map[IdentityState][]IdentityState{
-//	IdentityStateWaitForATXSyncing: {
-//		IdentityStateWaitForPoetRoundStart,
-//	},
-//	IdentityStatePostProving: {
-//		IdentityStateWaitForPoetRoundStart,
-//	},
-//	IdentityStateWaitForPoetRoundStart: {
-//		IdentityStateWaitForPoetRoundEnd,
-//		IdentityStateWaitForATXSyncing,
-//	},
-//	IdentityStateWaitForPoetRoundEnd: {
-//		IdentityStateFetchingProofs,
-//		IdentityStateWaitForPoetRoundStart,
-//	},
-//	IdentityStateFetchingProofs: {
-//		IdentityStatePostProving,
-//		IdentityStateWaitForPoetRoundStart,
-//	},
-//}
-
-func (s *IdentityStateStorage) Set(id types.NodeID, publishEpoch *types.EpochID, newState IdentityState,
+func (s *IdentityStateStorage) Set(
+	id types.NodeID,
+	publishEpoch *types.EpochID,
+	newState IdentityState,
 	message string,
 ) {
 	s.mu.Lock()
@@ -132,53 +109,20 @@ func (s *IdentityStateStorage) Set(id types.NodeID, publishEpoch *types.EpochID,
 
 	if _, exists := s.identities[id]; !exists {
 		s.identities[id] = &Identity{
-			EpochStates: map[types.EpochID]*IdentityInfo{},
-			States:      map[IdentityState]IdentityStateInfo{},
+			History: []IdentityStateInfo{},
 		}
 	}
 
-	if publishEpoch != nil {
-		if _, exists := s.identities[id].EpochStates[*publishEpoch]; !exists {
-			s.identities[id].EpochStates[*publishEpoch] = &IdentityInfo{
-				PublishEpoch: *publishEpoch,
-				States:       make(map[IdentityState]IdentityStateInfo),
-			}
-		}
-		s.identities[id].EpochStates[*publishEpoch].States[newState] = IdentityStateInfo{
-			Time:    time.Now(),
-			Message: message,
-		}
-	} else {
-		s.identities[id].States[newState] = IdentityStateInfo{
-			Time:    time.Now(),
-			Message: message,
-		}
+	if len(s.identities[id].History) > 100 {
+		s.identities[id].History = s.identities[id].History[1:]
 	}
-	// TODO: validate state switch
-	//currentState, exists := s.states[id]
-	//switch {
-	//case !exists:
-	//	if newState == IdentityStateWaitForATXSyncing {
-	//		s.states[id] = newState
-	//		return nil
-	//	}
-	//case currentState == newState:
-	//	return nil
-	//
-	//default:
-	//	if validNextStates, ok := validStateSwitch[currentState]; ok &&
-	//		slices.Contains(validNextStates, newState) {
-	//		s.states[id] = newState
-	//		return nil
-	//	}
-	//}
-	//
-	//return fmt.Errorf(
-	//	"%w: state %v can't be switched to %v",
-	//	ErrInvalidIdentityStateSwitch,
-	//	currentState,
-	//	newState,
-	//)
+
+	s.identities[id].History = append(s.identities[id].History, IdentityStateInfo{
+		State:        newState,
+		PublishEpoch: publishEpoch,
+		Message:      message,
+		Time:         time.Now(),
+	})
 }
 
 func (s *IdentityStateStorage) Get(id types.NodeID) (*Identity, error) {

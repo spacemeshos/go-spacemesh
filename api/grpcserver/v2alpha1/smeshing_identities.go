@@ -27,22 +27,22 @@ func NewSmeshingIdentitiesService(
 	}
 }
 
-var statusMap = map[activation.IdentityState]pb.IdentityStatus{
-	activation.IdentityStateNotSet:                           pb.IdentityStatus_UNSPECIFIED,
-	activation.IdentityStateWaitForATXSyncing:                pb.IdentityStatus_WAIT_FOR_ATX_SYNCING,
-	activation.IdentityStateWaitingForPoetRegistrationWindow: pb.IdentityStatus_WAITING_FOR_POET_REGISTRATION_WINDOW,
-	activation.IdentityStatePoetChallengeReady:               pb.IdentityStatus_POET_CHALLENGE_READY,
-	activation.IdentityStatePoetRegistered:                   pb.IdentityStatus_POET_REGISTERED,
-	activation.IdentityStatePoetRegistrationFailed:           pb.IdentityStatus_POET_REGISTRATION_FAILED,
-	activation.IdentityStateWaitForPoetRoundEnd:              pb.IdentityStatus_WAIT_FOR_POET_ROUND_END,
-	activation.IdentityStatePoetProofReceived:                pb.IdentityStatus_POET_PROOF_RECEIVED,
-	activation.IdentityStatePoetProofFailed:                  pb.IdentityStatus_POET_PROOF_FAILED,
-	activation.IdentityStateGeneratingPostProof:              pb.IdentityStatus_GENERATING_POST_PROOF,
-	activation.IdentityStatePostProofReady:                   pb.IdentityStatus_POST_PROOF_READY,
-	activation.IdentityStatePostProofFailed:                  pb.IdentityStatus_POST_PROOF_FAILED,
-	activation.IdentityStateATXExpired:                       pb.IdentityStatus_ATX_EXPIRED,
-	activation.IdentityStateATXReady:                         pb.IdentityStatus_ATX_READY,
-	activation.IdentityStateATXBroadcasted:                   pb.IdentityStatus_ATX_BROADCASTED,
+var statusMap = map[activation.IdentityState]pb.IdentityState{
+	activation.IdentityStateNotSet:                           pb.IdentityState_UNSPECIFIED,
+	activation.IdentityStateWaitForATXSynced:                 pb.IdentityState_WAIT_FOR_ATX_SYNCED,
+	activation.IdentityStateWaitingForPoetRegistrationWindow: pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
+	activation.IdentityStatePoetChallengeReady:               pb.IdentityState_POET_CHALLENGE_READY,
+	activation.IdentityStatePoetRegistered:                   pb.IdentityState_POET_REGISTERED,
+	activation.IdentityStatePoetRegistrationFailed:           pb.IdentityState_POET_REGISTRATION_FAILED,
+	activation.IdentityStateWaitForPoetRoundEnd:              pb.IdentityState_WAIT_FOR_POET_ROUND_END,
+	activation.IdentityStatePoetProofReceived:                pb.IdentityState_POET_PROOF_RECEIVED,
+	activation.IdentityStatePoetProofFailed:                  pb.IdentityState_POET_PROOF_FAILED,
+	activation.IdentityStateGeneratingPostProof:              pb.IdentityState_GENERATING_POST_PROOF,
+	activation.IdentityStatePostProofReady:                   pb.IdentityState_POST_PROOF_READY,
+	activation.IdentityStatePostProofFailed:                  pb.IdentityState_POST_PROOF_FAILED,
+	activation.IdentityStateATXExpired:                       pb.IdentityState_ATX_EXPIRED,
+	activation.IdentityStateATXReady:                         pb.IdentityState_ATX_READY,
+	activation.IdentityStateATXBroadcasted:                   pb.IdentityState_ATX_BROADCASTED,
 }
 
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
@@ -67,35 +67,22 @@ func (s *SmeshingIdentitiesService) States(
 	for desc, state := range s.states.All() {
 		pbIdentities[desc] = &pb.Identity{
 			SmesherId: desc.Bytes(),
-			Epochs:    []*pb.IdentityStateEpoch{},
-			States:    []*pb.IdentityState{},
+			History:   []*pb.IdentityStateInfo{},
 		}
 
-		for epoch, info := range state.EpochStates {
-			pbEpoch := &pb.IdentityStateEpoch{
-				Epoch:  epoch.Uint32(),
-				States: []*pb.IdentityState{},
-			}
-
-			for status, statusInfo := range info.States {
-				ts := timestamppb.New(statusInfo.Time)
-				pbEpoch.States = append(pbEpoch.States, &pb.IdentityState{
-					State:   statusMap[status],
-					Time:    ts,
-					Message: statusInfo.Message,
-				})
-			}
-
-			pbIdentities[desc].Epochs = append(pbIdentities[desc].Epochs, pbEpoch)
-		}
-
-		for status, statusInfo := range state.States {
-			ts := timestamppb.New(statusInfo.Time)
-			pbIdentities[desc].States = append(pbIdentities[desc].States, &pb.IdentityState{
-				State:   statusMap[status],
+		for i := len(state.History) - 1; i >= 0; i-- {
+			info := state.History[i]
+			ts := timestamppb.New(info.Time)
+			identityStateInfo := &pb.IdentityStateInfo{
+				State:   statusMap[info.State],
 				Time:    ts,
-				Message: statusInfo.Message,
-			})
+				Message: info.Message,
+			}
+			if info.PublishEpoch != nil {
+				epoch := info.PublishEpoch.Uint32()
+				identityStateInfo.PublishEpoch = &epoch
+			}
+			pbIdentities[desc].History = append(pbIdentities[desc].History, identityStateInfo)
 		}
 	}
 

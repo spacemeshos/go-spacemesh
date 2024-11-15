@@ -508,12 +508,18 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
-	b.identitiesStates.Set(nodeID, nil, IdentityStateWaitForATXSyncing, "")
+
+	atxSyncedCh := b.syncer.RegisterForATXSynced()
+	select {
+	case <-atxSyncedCh:
+	default:
+		b.identitiesStates.Set(nodeID, nil, IdentityStateWaitForATXSynced, "")
+	}
 
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-b.syncer.RegisterForATXSynced():
+	case <-atxSyncedCh:
 	}
 
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()
@@ -521,6 +527,8 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	// Try to get existing challenge
 	existingChallenge, err := b.getExistingChallenge(logger, currentEpochId, nodeID)
 	if err != nil {
+		b.identitiesStates.Set(nodeID, nil, IdentityStatePostProofFailed,
+			fmt.Sprintf("getting existing NiPoST challenge: %s", err.Error()))
 		return nil, fmt.Errorf("getting existing NiPoST challenge: %w", err)
 	}
 
