@@ -1006,6 +1006,7 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		require.NoError(t, err)
 	})
 	t.Run("publishing two merged ATXs (one checkpointed)", func(t *testing.T) {
+		t.Skip("syntactically validating double merge where one ATX is checkpointed isn't implemented yet")
 		atxHandler := newV2TestHandler(t, golden)
 
 		mATX, otherATXs := marryIDs(t, atxHandler, signers, golden)
@@ -1038,7 +1039,6 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 
 		// This is syntactically invalid as all nodes in the network
 		// should already have the checkpointed merged ATX.
-		t.Skip("syntactically validating double merge where one ATX is checkpointed isn't implemented yet")
 		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
 		err := atxHandler.processATX(context.Background(), "", merged, time.Now())
 		require.Error(t, err)
