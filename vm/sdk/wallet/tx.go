@@ -40,7 +40,11 @@ func Spawn(
 	}
 
 	// Encode using the VM
-	vmlib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	libPath, err := host.AthenaLibPath()
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	vmlib, err := athcon.LoadLibrary(libPath)
 	if err != nil {
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
@@ -78,7 +82,11 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	}
 
 	// Encode using the VM
-	vmlib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	libPath, err := host.AthenaLibPath()
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	vmlib, err := athcon.LoadLibrary(libPath)
 	if err != nil {
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}

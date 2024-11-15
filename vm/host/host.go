@@ -3,7 +3,6 @@ package host
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -15,30 +14,38 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
-func AthenaLibPath() string {
-	var err error
+func libName() string {
+	switch runtime.GOOS {
+	case "windows":
+		return "libathenavmwrapper.dll"
+	case "darwin":
+		return "libathenavmwrapper.dylib"
+	default:
+		return "libathenavmwrapper.so"
+	}
+}
 
-	constructPath := func(path string) string {
-		switch runtime.GOOS {
-		case "windows":
-			return filepath.Join(path, "../build/libathenavmwrapper.dll")
-		case "darwin":
-			return filepath.Join(path, "../build/libathenavmwrapper.dylib")
-		default:
-			return filepath.Join(path, "../build/libathenavmwrapper.so")
+func AthenaLibPath() (string, error) {
+	// check first for an env var
+	if path := os.Getenv("ATHENA_LIB_PATH"); path != "" {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		} else {
+			return "", fmt.Errorf("athena lib doesn't exist at path ATHENA_LIB_PATH=%s", path)
 		}
 	}
 
-	// check first for an env var
-	if path := os.Getenv("ATHENA_LIB_PATH"); path != "" {
-		return constructPath(path)
-	}
-
+	// look in CWD
 	cwd, err := os.Getwd()
 	if err != nil {
-		log.Fatalf("Failed to get current working directory: %v", err)
+		return "", fmt.Errorf("getting CWD: %w", err)
 	}
-	return constructPath(cwd)
+	path := filepath.Join(cwd, libName())
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	}
+
+	return "", errors.New("athena library not found")
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host
@@ -54,7 +61,11 @@ type Host struct {
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
 func NewHost(host core.Host) (*Host, error) {
-	vm, err := athcon.Load(AthenaLibPath())
+	libPath, err := AthenaLibPath()
+	if err != nil {
+		return nil, err
+	}
+	vm, err := athcon.Load(libPath)
 	if err != nil {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}

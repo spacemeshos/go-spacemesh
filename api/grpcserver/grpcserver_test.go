@@ -136,7 +136,6 @@ func dialGrpc(tb testing.TB, cfg Config) *grpc.ClientConn {
 }
 
 func TestMain(m *testing.M) {
-	os.Setenv("ATHENA_LIB_PATH", "../../build")
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	var err error

@@ -2,7 +2,6 @@ package host
 
 import (
 	"encoding/binary"
-	"os"
 	"testing"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -17,7 +16,6 @@ import (
 )
 
 func getHost(t *testing.T) (*Host, *core.StagedCache) {
-	os.Setenv("ATHENA_LIB_PATH", "../../build")
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
 	ctx := &core.Context{Loader: cache, Logger: zaptest.NewLogger(t)}
 	host, err := NewHost(ctx)

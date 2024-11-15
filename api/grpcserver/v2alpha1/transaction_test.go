@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"math/rand"
-	"os"
 	"testing"
 	"time"
 
@@ -33,10 +32,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
-
-func init() {
-	os.Setenv("ATHENA_LIB_PATH", "../../../build")
-}
 
 func TestTransactionService_List(t *testing.T) {
 	types.SetLayersPerEpoch(5)
