@@ -137,7 +137,7 @@ func TestFetch_getHashes(t *testing.T) {
 		f.Start()
 		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
-			f.peers.Add(peer)
+			f.peers.Add(peer, nil)
 		}
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.RegisterPeerHashes(peers[0], hashes[:2])
@@ -249,7 +249,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.Start()
 		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
-			f.peers.Add(peer)
+			f.peers.Add(peer, nil)
 		}
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.RegisterPeerHashes(peers[0], hashes[:2])

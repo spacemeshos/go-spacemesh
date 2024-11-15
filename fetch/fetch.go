@@ -298,7 +298,13 @@ func NewFetch(
 	// there is one test that covers this part.
 	if host != nil {
 		connectedf := func(peer p2p.Peer) {
-			if f.peers.Add(peer) {
+			protocols, err := host.Peerstore().GetProtocols(peer)
+			if err != nil {
+				f.logger.Debug("failed to get protocols for peer",
+					zap.Stringer("id", peer), zap.Error(err))
+				return
+			}
+			if f.peers.Add(peer, protocols) {
 				f.logger.Debug("adding peer", zap.Stringer("id", peer))
 			}
 		}

@@ -187,7 +187,7 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			f := createFetch(t)
 			f.cfg.MaxRetriesForRequest = 0
 			peer := p2p.Peer("buddy")
-			f.peers.Add(peer)
+			f.peers.Add(peer, nil)
 
 			hsh0 := types.RandomHash()
 			res0 := ResponseMessage{
@@ -259,7 +259,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f.cfg.BatchTimeout = 1
 	f.cfg.BatchSize = 2
 	peer := p2p.Peer("buddy")
-	f.peers.Add(peer)
+	f.peers.Add(peer, nil)
 
 	h1 := types.RandomHash()
 	h2 := types.RandomHash()

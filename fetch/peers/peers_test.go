@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,6 +23,7 @@ type event struct {
 	success     int
 	failure     int
 	latency     time.Duration
+	protocols   []protocol.ID
 }
 
 func withEvents(events []event) *Peers {
@@ -30,7 +32,7 @@ func withEvents(events []event) *Peers {
 		if ev.delete {
 			tracker.Delete(ev.id)
 		} else if ev.add {
-			tracker.Add(ev.id)
+			tracker.Add(ev.id, ev.protocols)
 		}
 		for i := 0; i < ev.failure; i++ {
 			tracker.OnFailure(ev.id, 0, ev.latency)
@@ -208,6 +210,74 @@ func TestSelect(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSelectBestWithProtocols(t *testing.T) {
+	for _, tc := range []struct {
+		desc   string
+		events []event
+
+		n         int
+		protocols []protocol.ID
+		expect    []peer.ID
+	}{
+		{
+			desc: "no protocols required and no peer protocols",
+			events: []event{
+				{id: "a", success: 1, latency: 8, add: true},
+				{id: "b", success: 1, latency: 9, add: true},
+				{id: "c", success: 3, latency: 14, add: true},
+			},
+			n:         2,
+			expect:    []peer.ID{"a", "b"},
+			protocols: nil,
+		},
+		{
+			desc: "no protocols required, peers have protocols",
+			events: []event{
+				{id: "a", success: 1, latency: 8, add: true, protocols: []protocol.ID{"a", "b"}},
+				{id: "b", success: 1, latency: 9, add: true, protocols: []protocol.ID{"b", "c"}},
+				{id: "c", success: 3, latency: 14, add: true, protocols: []protocol.ID{"c", "d"}},
+			},
+			n:         2,
+			expect:    []peer.ID{"a", "b"},
+			protocols: nil,
+		},
+		{
+			desc: "single protocol required, peers have protocols",
+			events: []event{
+				{id: "a", success: 1, latency: 8, add: true, protocols: []protocol.ID{"a", "b"}},
+				{id: "b", success: 1, latency: 9, add: true, protocols: []protocol.ID{"b", "c"}},
+				{id: "c", success: 3, latency: 14, add: true, protocols: []protocol.ID{"c", "d"}},
+			},
+			n:         2,
+			expect:    []peer.ID{"b", "c"},
+			protocols: []protocol.ID{"c"},
+		},
+		{
+			desc: "multiple protocols required, peers have protocols",
+			events: []event{
+				{id: "a", success: 1, latency: 8, add: true, protocols: []protocol.ID{"a", "b"}},
+				{id: "b", success: 1, latency: 9, add: true, protocols: []protocol.ID{"b", "c"}},
+				{id: "c", success: 3, latency: 14, add: true, protocols: []protocol.ID{"c", "d"}},
+				{id: "d", success: 3, latency: 12, add: true, protocols: []protocol.ID{"a", "e"}},
+			},
+			n:         3,
+			expect:    []peer.ID{"a", "b", "c"},
+			protocols: []protocol.ID{"b", "c"},
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			require.Equal(
+				t,
+				tc.expect,
+				withEvents(tc.events).SelectBestWithProtocols(tc.n, tc.protocols),
+				"select best %d",
+				tc.n,
+			)
+		})
+	}
+
 }
 
 func TestTotal(t *testing.T) {
