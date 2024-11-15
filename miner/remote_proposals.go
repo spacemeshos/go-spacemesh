@@ -16,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/remote_mocks.go -source=./remote_proposals.go
+
 type proposalService interface {
 	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error)
 }
