@@ -7,7 +7,7 @@ import (
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -19,9 +19,7 @@ import (
 func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	os.Setenv("ATHENA_LIB_PATH", "../../build")
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
-	logger, err := zap.NewDevelopment()
-	require.NoError(t, err)
-	ctx := &core.Context{Loader: cache, Logger: logger}
+	ctx := &core.Context{Loader: cache, Logger: zaptest.NewLogger(t)}
 	host, err := NewHost(ctx)
 	require.NoError(t, err)
 	return host, cache
