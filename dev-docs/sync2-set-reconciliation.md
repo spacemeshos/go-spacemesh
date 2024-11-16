@@ -27,6 +27,14 @@
         - [Redundant ItemChunk messages](#redundant-itemchunk-messages)
         - [Range checksums](#range-checksums)
         - [Bloom filters for recent sync](#bloom-filters-for-recent-sync)
+- [FPTree Data Structure](#fptree-data-structure)
+    - [Tree structure](#tree-structure)
+    - [Aggregation](#aggregation)
+        - [Aggregation of normal ranges](#aggregation-of-normal-ranges)
+        - [Aggregation of wraparound ranges](#aggregation-of-wraparound-ranges)
+    - [Splitting ranges and limited aggregation](#splitting-ranges-and-limited-aggregation)
+    - [Tree node representation](#tree-node-representation)
+    - [Accessing the database](#accessing-the-database)
 - [Multi-peer Reconciliation](#multi-peer-reconciliation)
     - [Deciding on the sync strategy](#deciding-on-the-sync-strategy)
     - [Split sync](#split-sync)
@@ -775,11 +783,291 @@ just want to bring them closer to each other. That being said, a
 sufficient size of the Bloom filter needs to be chosen to minimize the
 number of missed elements.
 
+# FPTree Data Structure
+
+FPTree (fingerprint tree) is data structure intended to facilitate
+synchronization of objects stored in an SQLite database, with
+hash-based IDs. It stores fingerprints (IDs XORed together) and item
+counts for ID ranges.
+
+## Tree structure
+
+FPTree has the following properties:
+
+1. FPTree is an in-memory structure that provides efficient item count
+   and fingerprints for ID (item/key) ranges, trying to do its best to
+   avoid doing database queries. The queries may be entirely avoided
+   if ranges are aligned on the node boundaries.
+1. FPTree is a binary trie (prefix tree), following the bits in the
+   IDs starting from the highest one. The intent is to convert it to a
+   proper radix tree instead, but that's not implemented yet.
+1. FPTree relies on IDs being hashes and thus being uniformly
+   distributed to ensure balancedness of the tree, instead of using a
+   balancing mechanism such as red-black tree.
+1. FPTree provides a range split mechanism (needed for pairwise sync)
+   which tries to ensure that the ranges are aligned on node
+   boundaries up to certain subdivision depth.
+1. Full FPTree copy operation is `O(1)` in terms of time and
+   memory. The copies are safe for concurrent use.
+1. FPTree can also store the actual IDs without the use of an
+   underlying table.
+1. FPTrees can be "stacked" together. The FPTree-based `OrderedSet`
+   implementation uses 2 FPTrees, one database-bound and another one
+   fully in-memory. The in-memory FPTree is used to store fresh items
+   received via the [Recent sync](#recent-sync) mechanism.
+1. FPTrees performs queries on ranges `[x,y)`, supporting normal `x <
+   y` ranges, as well as wraparound `x > y` ranges and full set range
+   `[x,x)` (see [Range representation](#range-representation)).
+1. Each FPTree node has corresponding bit prefix by which it can be
+   reached.
+
+The tree structure is shown on the diagram below. The leaf nodes
+correspond to the rows in database table with IDs having the bit prefix
+corresponding to the leaf node.
+
+![FPTree structure](fptree.png)
+
+As it is mentioned above, FPTree itself can also store the actual IDs,
+without using an underlying database table.\
+
+![FPTree with values](fptree-with-values.png)
+
+## Aggregation
+
+Aggregation means calculation of fingerprint and item count for a
+range. The aggregation is done using different methods depending on
+whether the `[x,y)` range is normal (`x<y`), wrapped around (`x>y`) or
+indicates the whole set (`x=y`). Aggregation may also be bounded by
+the maximum number of items to include. The easiest case is full set
+aggregation, in which we just take the fingerprint and count values
+from the root node of the FPTree.
+
+### Aggregation of normal ranges
+
+In case of a normal range `[x,y)` with `x<y` is done starting from the
+lowest common ancestor (LCA) of the nodes corresponding to `x` and
+`y`, as all the nodes that are not descendants of that LCA do not fall
+into the `[x,y)` range. Let's say we need to find the fingerprint and
+item count for a range with `x=0x20...` (highest byte only shown) and
+`y=0xD9...`.  As `x` starts with bit `0` (highest bit), and `y` starts
+with `1`, they have no common prefix and thus the LCA node is the root
+node.
+
+Aggregation is done in two parts: left-side aggregation
+(`aggregateLeft`), which is done on all nodes in the left subtree of
+the LCA, and right-side aggregation (`aggregateRight`) which is done
+on the right subtree of the LCA.
+
+Left aggregation (`aggregateLeft`) is done like this: we follow the
+bits of the ID (note that in the picture below, where left aggregation
+starts with node `0`, this doesn't include the highest bit which was
+"used up" already b/c we're starting with the left subtree).
+
+If we encounter 0, we include the right child's count and fingerprint
+in aggregation (`01`, `0011` nodes shown in blue), and then we descend
+to the left node.
+
+If we encounter 1, we just descend to the right node.
+
+Upon reaching a leaf node, in case if the tree is database-bound, we
+use `SELECT` to get items from the table which fall within the `[x,y)`
+range and correspond to that leaf node (having corresponding bit
+prefix), and include these nodes' fingerprints and counts in
+aggregation.
+
+Right aggregation (`aggregateRight`) is inverse of left
+aggregation. We also follow the bits of the ID, but upon a `0`, we
+just descend to the left child, and upon `1`, we include the left
+subtree of the current node and descend to the right. The leaf nodes
+are handled similarly to the left aggregation.
+
+![Aggregation of a normal range starting from root](fptree-agg-from-root.png)
+
+Another figure below shows aggregation starting from a non-root LCA,
+with `x=0x48...` and `y=0xD6...`.
+
+![Aggregation of a normal range starting from a lower node](fptree-agg-lca.png)
+
+### Aggregation of wraparound ranges
+
+In case of wraparound ranges `[x,y)` with `x>y`, `aggregateLeft` and
+`aggregateRight` are used, too. Somewhat unintuitively, in this case
+`aggregateLeft` is used on the right side of the tree, b/c that's
+where the beginning ("left side") of the wrapped-around `[x,y)` range
+lies, whereas `aggregateRight` is applied to the left side of the tree
+corresponding to the end ("right side") of the range.
+
+The subtree on which `aggregateLeft` is done is rooted at the node
+reachable by following the longest prefix of `x` consisting entirely
+of `1`s.  Conversely, the subtree on which `aggregateRight` is done is
+rooted at the node reachable by following the longest prefix of `y`
+consisting entirely of `0`s.
+
+The figure below shows aggregation of the `[x,y)` range with
+`x=0xD1..` and `y=0x29`.
+
+![Aggregation of a wrapped-around range](fptree-agg-wraparound.png)
+
+## Splitting ranges and limited aggregation
+
+During recursive set reconciliation, range split operation often needs
+to be performed. This involves partitioning the range roughly in half
+with respect to the number of items in each new subrange, and
+calculating item count and fingerprint for each part resulting from
+the split. FPTree will try to perform such an operation on node
+boundary, but if the range is to small or not aligned to the node
+boundary, the following is done:
+
+1. The number of items in the range obtained (`N`).
+2. The items in the range are aggregated with the cap on maximum
+   aggregated count equal to `N/2`, and the non-inclusive upper bound
+   of the aggregated subrange is noted (`m`). The aggregated items
+   can be said to lie in range `[x,m)`
+3. The second half of the range is aggregated starting with `m`. This
+   part of the range is `[m,y)`.
+
+In both cases, the operation is based upon imposing the limit on
+number of items aggregated. In the easy, node-aligned case, the
+aggregation continues after exhausting the limit on the total item
+count, but using separate places for accumulation of remaining nodes'
+fingerprints and counts. The initial accumulated fingerprint and count
+are returned for the first resulting subrange, and the second
+accumulated fingerprint and count are returned for the second subrange
+resulting from the partition. In case if node-aligned "easy split"
+cannot be done, aggregation stops after exhausting the limit.
+
+When limited aggregation is done, instead of including full right
+subtrees during `aggregateLeft`, including full left subtrees during
+`aggregateRight`, and including the whole tree during `[x,x)` (full
+set) range aggregation, when subtree count exceeds the remaining limit
+after processing all the nodes visited so far, the corresponding
+subtrees are descended into to find the cutoff point.
+
+Below limited aggregation is shown for a normal `x<y` range:
+
+![Limited aggregation](fptree-agg-limit.png)
+
+In similar way, the cutoff point is located when aggregating wrapped
+around ranges:
+
+![Limited aggregation for wraparound range](fptree-agg-limit-wraparound.png)
+
+## Tree node representation
+
+FPTree nodes are stored in a reference-counted pool. The rationale for
+using the pool is the following:
+* GC pressure and heap fragmentation are reduced
+* instead of 64-bit pointers, 32-bit indices are used to refer to the
+  nodes in the pool, which is enough given expected number of IDs
+  stored in the tree
+
+Each FPTree node is represented by a structure contains the following info:
+* left and right nodes (if present), corresponding to the following
+  `0` or `1` bit, referred
+* item count in the ID subset with the corresponding prefix
+* item fingerprint in the ID subset with the corresponding prefix
+* reference count
+
+Reference count includes the number of other nodes (belonging to
+different copies of the tree which may differ) referring to this node
+plus the number of FPTrees that have the particular node as their root.
+
+Tree copy operation increments its root's count by 1.
+
+When a new item is added to the FPTree, as many nodes as possible of
+the original tree are reused. The old nodes which are no longer used
+by the tree after the release operation have their reference counts
+decremented as necessary. Nodes that reach reference count of 0 are
+released back to the pool and reused for new nodes.
+
+Additionally, there's a hash table linking pool indices to actual ID
+values in case if the FPTree stores values (that is, the FPTree is not
+database-bound). The hash table entries are removed when pool entries
+are released.
+
+FPTree also uses finalizer to make sure pool nodes are released when
+the tree object is being GC'd by the Go runtime.
+
+Node pool uses read-write locking with multiple reader locks but a
+single write lock allowed at any time to ensure thread safety.
+
+## Accessing the database
+
+When accessing database, the IDs in the underlying table, e.g. `atxs`,
+must correspond to the state of the FPTree object. Yet, the tree may not
+be synchronized immediately with the table when new IDs are added.
+Moreover, the copies of the original set include database-bound FPTree
+that must not change even when new IDs are added to the database table.
+
+To solve this issue, the code relies on the ever-increasing SQLite
+rowid values in the append-only tables such as `atxs`. Eventually,
+explicit integer autoincrement ID column will be used, which always
+ensures that old rowids (equal to these integer IDs in that case) are
+not reused, but for most practical purposes it's safe to assume rowids
+aren't reused change while go-spacemesh runs.
+
+When an `OrderedSet` (the database-bound implementation is called
+`DBSet`) is first built from the database table, the max rowid value
+for the table is remembered and then used in a filter in database
+queries. Afterwards, as new IDs arrive, `DBSet` can be "advanced" by
+increasing max rowid value used in the filter and updating FPTree to
+include new IDs. The state of the table defined by maximum rowid value
+is called "snapshot".
+
+The implementation of database-bound FPTrees has several layers.
+* `sync2/sqlstore` package implements relatively simple sequence
+  implementations that can be used to iterate over database tables,
+  based on ID ranges and also local timestamps in case of recent sync
+* `sync2/fptree` contains FPTree implementation itself, which can use
+  `sync2/sqlstore` as underlying ID storage
+* `sync2/dbset` is an `OrderedSet` implementation based on `FPTree`
+
+Below are SQL queries used for a database-bound FPTree in
+`sync2/sqlstore`. The queries are auto-generated from table
+description. The table description may include additional filter, in
+this case ATX epoch ID.
+
+Select maximum current rowid for a table:
+```sql
+SELECT max("rowid") FROM "atxs"
+```
+
+Select number of IDs in the snapshot (used to pre-allocate the FPTree node pool):
+```sql
+SELECT count("id") FROM "atxs" WHERE "epoch" = ? AND "rowid" <= ?
+```
+
+Select the IDs in the snapshot:
+```sql
+SELECT "id" FROM "atxs" WHERE "epoch" = ? AND "rowid" <= ?
+```
+
+Select IDs starting from the specified ID, this is used in database
+sequences which are in turn used to get IDs for an FPTree leaf:
+```sql
+SELECT "id" FROM "atxs" WHERE "epoch" = ? AND "id" >= ? AND
+  "rowid" <= ? ORDER BY "id" LIMIT ?
+```
+
+Select number of recently received items items for recent sync
+(which is not done using FPTree):
+```sql
+SELECT count("id") FROM "atxs" WHERE "epoch" = ? AND
+  "rowid" <= ? AND "received" >= ?
+```
+
+Select recently received IDs:
+```sql
+SELECT "id" FROM "atxs" WHERE "epoch" = ? AND "id" >= ? AND
+  "rowid" <= ? AND "received" >= ? ORDER BY "id" LIMIT ?
+```
+
 # Multi-peer Reconciliation
 
-The multi-peer reconciliation approach is loosely based on
-[SREP: Out-Of-Band Sync of Transaction Pools for Large-Scale Blockchains](https://people.bu.edu/staro/2023-ICBC-Novak.pdf)
-paper by Novak Boškov, Sevval Simsek, Ari Trachtenberg, and David Starobinski.
+The multi-peer reconciliation approach is loosely based on [SREP:
+Out-Of-Band Sync of Transaction Pools for Large-Scale
+Blockchains](https://people.bu.edu/staro/2023-ICBC-Novak.pdf) paper by
+Novak Boškov, Sevval Simsek, Ari Trachtenberg, and David Starobinski.
 
 ![Multi-peer set reconciliation](multipeer.png)
 

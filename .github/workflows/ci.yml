@@ -86,6 +86,8 @@ jobs:
           make test-fmt
           make test-tidy
           make test-generate
+      - name: Check for vulnerabilities
+        run: make vulncheck
 
   lint:
     runs-on: ubuntu-22.04
@@ -203,7 +205,7 @@ jobs:
       - name: test coverage
         run: make cover
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 

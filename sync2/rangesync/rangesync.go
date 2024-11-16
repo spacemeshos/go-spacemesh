@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	DefaultMaxSendRange  = 16
+	DefaultMaxSendRange  = 1
 	DefaultItemChunkSize = 1024
 	DefaultSampleSize    = 200
 	maxSampleSize        = 1000
@@ -85,7 +85,10 @@ type RangeSetReconciler struct {
 	logger *zap.Logger
 }
 
-func newRangeSetReconciler(
+// NewRangeSetReconcilerInternal creates a new RangeSetReconciler.
+// It is only directly called by the tests.
+// It accepts extra tracer and clock parameters.
+func NewRangeSetReconcilerInternal(
 	logger *zap.Logger,
 	cfg RangeSetReconcilerConfig,
 	os OrderedSet,
@@ -107,7 +110,7 @@ func newRangeSetReconciler(
 
 // NewRangeSetReconciler creates a new RangeSetReconciler.
 func NewRangeSetReconciler(logger *zap.Logger, cfg RangeSetReconcilerConfig, os OrderedSet) *RangeSetReconciler {
-	return newRangeSetReconciler(logger, cfg, os, nullTracer{}, clockwork.NewRealClock())
+	return NewRangeSetReconcilerInternal(logger, cfg, os, nullTracer{}, clockwork.NewRealClock())
 }
 
 func (rsr *RangeSetReconciler) defaultRange() (x, y KeyBytes, err error) {

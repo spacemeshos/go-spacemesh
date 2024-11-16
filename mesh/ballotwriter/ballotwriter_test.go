@@ -26,7 +26,7 @@ import (
 var testLayer = types.LayerID(5)
 
 func TestMain(m *testing.M) {
-	types.SetLayersPerEpoch(10)
+	types.SetLayersPerEpoch(1)
 	res := m.Run()
 	os.Exit(res)
 }

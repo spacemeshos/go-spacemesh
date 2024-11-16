@@ -23,7 +23,8 @@ func TestNodeService_Status(t *testing.T) {
 		timesync.WithLayerDuration(layerDuration),
 		timesync.WithTickInterval(1*time.Second),
 		timesync.WithGenesisTime(time.Now()),
-		timesync.WithLogger(zaptest.NewLogger(t)))
+		timesync.WithLogger(zaptest.NewLogger(t)),
+	)
 	require.NoError(t, err)
 	defer clock.Close()
 

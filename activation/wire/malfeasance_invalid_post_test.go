@@ -20,6 +20,8 @@ import (
 )
 
 func Test_InvalidPostProof(t *testing.T) {
+	t.Parallel()
+
 	// sig is the identity that creates the invalid PoST
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -39,20 +41,8 @@ func Test_InvalidPostProof(t *testing.T) {
 		nipostChallenge types.Hash32,
 		post PostV1,
 		numUnits uint32,
-	) (*ActivationTxV2, *ActivationTxV2) {
-		wInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
-		)
-		wInitialAtx.Sign(sig)
-		initialAtx := &types.ActivationTx{
-			CommitmentATX: &wInitialAtx.Initial.CommitmentATX,
-		}
-		initialAtx.SetID(wInitialAtx.ID())
-		initialAtx.SmesherID = sig.NodeID()
-		require.NoError(t, atxs.Add(db, initialAtx, wInitialAtx.Blob()))
-
+	) *ActivationTxV2 {
 		atx := newActivationTxV2(
-			withPreviousATXs(wInitialAtx.ID()),
 			withNIPost(
 				withNIPostChallenge(nipostChallenge),
 				withNIPostSubPost(SubPostV2{
@@ -62,7 +52,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			),
 		)
 		atx.Sign(sig)
-		return atx, wInitialAtx
+		return atx
 	}
 
 	newMergedATXv2 := func(
@@ -70,7 +60,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		nipostChallenge types.Hash32,
 		post PostV1,
 		numUnits uint32,
-	) (*ActivationTxV2, *ActivationTxV2) {
+	) *ActivationTxV2 {
 		wInitialAtx := newActivationTxV2(
 			withInitial(types.RandomATXID(), PostV1{}),
 		)
@@ -130,10 +120,11 @@ func Test_InvalidPostProof(t *testing.T) {
 			),
 		)
 		atx.Sign(pubSig)
-		return atx, wInitialAtx
+		return atx
 	}
 
 	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -143,10 +134,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentATX := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentATX, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -159,7 +152,17 @@ func Test_InvalidPostProof(t *testing.T) {
 		verifier.EXPECT().PostIndex(
 			context.Background(),
 			sig.NodeID(),
-			initialAtx.Initial.CommitmentATX,
+			commitmentATX,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(nil)
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentATX,
 			PostFromWireV1(&post),
 			nipostChallenge.Bytes(),
 			numUnits,
@@ -172,6 +175,7 @@ func Test_InvalidPostProof(t *testing.T) {
 	})
 
 	t.Run("valid merged atx", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -181,10 +185,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentATX := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentATX, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -197,12 +203,22 @@ func Test_InvalidPostProof(t *testing.T) {
 		verifier.EXPECT().PostIndex(
 			context.Background(),
 			sig.NodeID(),
-			initialAtx.Initial.CommitmentATX,
+			commitmentATX,
 			PostFromWireV1(&post),
 			nipostChallenge.Bytes(),
 			numUnits,
 			invalidPostIndex,
 		).Return(errors.New("invalid post"))
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentATX,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(nil)
 
 		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
@@ -210,6 +226,7 @@ func Test_InvalidPostProof(t *testing.T) {
 	})
 
 	t.Run("post is valid", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -219,10 +236,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -235,7 +254,17 @@ func Test_InvalidPostProof(t *testing.T) {
 		verifier.EXPECT().PostIndex(
 			context.Background(),
 			sig.NodeID(),
-			initialAtx.Initial.CommitmentATX,
+			commitmentAtx,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(nil)
+
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentAtx,
 			PostFromWireV1(&post),
 			nipostChallenge.Bytes(),
 			numUnits,
@@ -247,7 +276,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		require.Equal(t, types.EmptyNodeID, id)
 	})
 
-	t.Run("differing node ID without marriage ATX", func(t *testing.T) {
+	t.Run("commitment ATX is not valid", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -257,16 +286,13 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, types.RandomNodeID(), 0, invalidPostIndex)
-		require.EqualError(t, err, "ATX is not a merged ATX, but NodeID is different from SmesherID")
-		require.Nil(t, proof)
-
-		proof, err = NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
-		require.NotNil(t, proof)
 
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
@@ -275,14 +301,23 @@ func Test_InvalidPostProof(t *testing.T) {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		proof.NodeID = types.RandomNodeID() // invalid node ID
+		verifier.EXPECT().PostIndex(
+			context.Background(),
+			sig.NodeID(),
+			commitmentAtx,
+			PostFromWireV1(&post),
+			nipostChallenge.Bytes(),
+			numUnits,
+			validPostIndex,
+		).Return(errors.New("invalid post"))
 
 		id, err := proof.Valid(context.Background(), verifier)
-		require.EqualError(t, err, "missing marriage proof")
+		require.EqualError(t, err, "invalid invalid post proof: Commitment ATX is not valid")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
 
-	t.Run("node ID not in marriage ATX", func(t *testing.T) {
+	t.Run("differing node ID without marriage ATX", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -292,52 +327,64 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
+		const validPostIndex = 15
 		nodeID := types.RandomNodeID()
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, nodeID, 0, invalidPostIndex)
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, nodeID, 0, invalidPostIndex, validPostIndex)
+		require.EqualError(t, err, "ATX is not a merged ATX, but NodeID is different from SmesherID")
+		require.Nil(t, proof)
+	})
+
+	t.Run("nipost index is invalid", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		nipostChallenge := types.RandomHash()
+		const numUnits = uint32(11)
+		post := PostV1{
+			Nonce:   rand.Uint32(),
+			Indices: types.RandomBytes(11),
+			Pow:     rand.Uint64(),
+		}
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
+
+		const invalidPostIndex = 7
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 1, invalidPostIndex, validPostIndex)
+		require.EqualError(t, err, "invalid NIPoST index")
+		require.Nil(t, proof)
+	})
+
+	t.Run("node ID not in marriage ATX", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		nipostChallenge := types.RandomHash()
+		const numUnits = uint32(11)
+		post := PostV1{
+			Nonce:   rand.Uint32(),
+			Indices: types.RandomBytes(11),
+			Pow:     rand.Uint64(),
+		}
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
+
+		const invalidPostIndex = 7
+		const validPostIndex = 15
+		nodeID := types.RandomNodeID()
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, nodeID, 0, invalidPostIndex, validPostIndex)
 		require.ErrorContains(t, err,
 			fmt.Sprintf("does not contain a marriage certificate signed by %s", nodeID.ShortString()),
 		)
 		require.Nil(t, proof)
 	})
 
-	t.Run("invalid marriage proof", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-
-		nipostChallenge := types.RandomHash()
-		const numUnits = uint32(11)
-		post := PostV1{
-			Nonce:   rand.Uint32(),
-			Indices: types.RandomBytes(11),
-			Pow:     rand.Uint64(),
-		}
-		atx, _ := newMergedATXv2(db, nipostChallenge, post, numUnits)
-
-		ctrl := gomock.NewController(t)
-		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-				return edVerifier.Verify(d, nodeID, m, sig)
-			}).AnyTimes()
-
-		// manually construct an invalid proof
-		proof, err := createMarriageProof(db, atx, sig.NodeID())
-		require.NoError(t, err)
-
-		marriageATX := proof.MarriageATX
-		proof.MarriageATX = types.RandomATXID() // invalid ATX
-		err = proof.Valid(verifier, atx.ID(), sig.NodeID(), pubSig.NodeID())
-		require.ErrorContains(t, err, "invalid marriage ATX proof")
-
-		proof.MarriageATX = marriageATX
-		proof.MarriageATXProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(verifier, atx.ID(), sig.NodeID(), pubSig.NodeID())
-		require.ErrorContains(t, err, "invalid marriage ATX proof")
-	})
-
 	t.Run("node ID did not include post in merged ATX", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -347,18 +394,21 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 		atx.NIPosts[0].Posts = slices.DeleteFunc(atx.NIPosts[0].Posts, func(subPost SubPostV2) bool {
 			return cmp.Equal(subPost.Post, post)
 		})
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.EqualError(t, err, fmt.Sprintf("no PoST from %s in ATX", sig))
 		require.Nil(t, proof)
 	})
 
-	t.Run("initial ATX is invalid", func(t *testing.T) {
+	t.Run("invalid solo proof", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -368,54 +418,12 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
-		initialAtx.SmesherID = types.RandomNodeID() // initial ATX published by different identity
+		atx := newSoloATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
 		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
-		require.ErrorContains(t, err, "node ID does not match smesher ID of initial ATX")
-		require.Nil(t, proof)
-
-		atx, initialAtx = newMergedATXv2(db, nipostChallenge, post, numUnits)
-		initialAtx.Initial = nil // not an initial ATX
-
-		proof, err = NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
-		require.ErrorContains(t, err, "initial ATX does not contain initial PoST")
-		require.Nil(t, proof)
-	})
-
-	t.Run("invalid nipost index", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-
-		nipostChallenge := types.RandomHash()
-		const numUnits = uint32(11)
-		post := PostV1{
-			Nonce:   rand.Uint32(),
-			Indices: types.RandomBytes(11),
-			Pow:     rand.Uint64(),
-		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
-
-		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 1, invalidPostIndex) // 1 is invalid
-		require.EqualError(t, err, "invalid NIPoST index")
-		require.Nil(t, proof)
-	})
-
-	t.Run("invalid ATX signature", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-
-		nipostChallenge := types.RandomHash()
-		const numUnits = uint32(11)
-		post := PostV1{
-			Nonce:   rand.Uint32(),
-			Indices: types.RandomBytes(11),
-			Pow:     rand.Uint64(),
-		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
-
-		const invalidPostIndex = 7
-		proof, err := NewInvalidPostProof(db, atx, initialAtx, sig.NodeID(), 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -425,14 +433,166 @@ func Test_InvalidPostProof(t *testing.T) {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		proof.Signature = types.RandomEdSignature() // invalid signature
-
+		// invalid ATXID
+		proof.ATXID = types.RandomATXID()
 		id, err := proof.Valid(context.Background(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
+		proof.ATXID = atx.ID()
+
+		// invalid smesher ID
+		proof.SmesherID = types.RandomNodeID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.EqualError(t, err, "invalid signature")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.SmesherID = atx.SmesherID
+
+		// invalid signature
+		proof.Signature = types.RandomEdSignature()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.EqualError(t, err, "invalid signature")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.Signature = atx.Signature
+
+		// invalid node ID
+		proof.NodeID = types.RandomNodeID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.EqualError(t, err, "missing marriage proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.NodeID = sig.NodeID()
+
+		// invalid niposts root
+		nipostsRoot := proof.InvalidPostProof.NIPostsRoot
+		proof.InvalidPostProof.NIPostsRoot = NIPostsRoot(types.RandomHash())
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid NIPosts root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NIPostsRoot = nipostsRoot
+
+		// invalid niposts root proof
+		hash := proof.InvalidPostProof.NIPostsRootProof[0]
+		proof.InvalidPostProof.NIPostsRootProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid NIPosts root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NIPostsRootProof[0] = hash
+
+		// invalid nipost root
+		nipostRoot := proof.InvalidPostProof.NIPostRoot
+		proof.InvalidPostProof.NIPostRoot = NIPostRoot(types.RandomHash())
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid NIPoST root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NIPostRoot = nipostRoot
+
+		// invalid nipost root proof
+		hash = proof.InvalidPostProof.NIPostRootProof[0]
+		proof.InvalidPostProof.NIPostRootProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid NIPoST root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NIPostRootProof[0] = hash
+
+		// invalid nipost index
+		proof.InvalidPostProof.NIPostIndex = 1
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid NIPoST root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NIPostIndex = 0
+
+		// invalid challenge
+		challenge := proof.InvalidPostProof.Challenge
+		proof.InvalidPostProof.Challenge = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid challenge proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.Challenge = challenge
+
+		// invalid challenge proof
+		hash = proof.InvalidPostProof.ChallengeProof[0]
+		proof.InvalidPostProof.ChallengeProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid challenge proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.ChallengeProof[0] = hash
+
+		// invalid subposts root
+		subPostsRoot := proof.InvalidPostProof.SubPostsRoot
+		proof.InvalidPostProof.SubPostsRoot = SubPostsRoot(types.RandomHash())
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid sub PoSTs root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.SubPostsRoot = subPostsRoot
+
+		// invalid subposts root proof
+		hash = proof.InvalidPostProof.SubPostsRootProof[0]
+		proof.InvalidPostProof.SubPostsRootProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid sub PoSTs root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.SubPostsRootProof[0] = hash
+
+		// invalid subpost root
+		subPostRoot := proof.InvalidPostProof.SubPostRoot
+		proof.InvalidPostProof.SubPostRoot = SubPostRoot(types.RandomHash())
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid sub PoST root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.SubPostRoot = subPostRoot
+
+		// invalid subpost root proof
+		hash = proof.InvalidPostProof.SubPostRootProof[0]
+		proof.InvalidPostProof.SubPostRootProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid sub PoST root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.SubPostRootProof[0] = hash
+
+		// invalid subpost root index
+		proof.InvalidPostProof.SubPostRootIndex++
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid sub PoST root proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.SubPostRootIndex--
+
+		// invalid post
+		post = proof.InvalidPostProof.Post
+		proof.InvalidPostProof.Post = PostV1{
+			Nonce:   rand.Uint32(),
+			Indices: types.RandomBytes(11),
+			Pow:     rand.Uint64(),
+		}
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid post proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.Post = post
+
+		// invalid post proof
+		hash = proof.InvalidPostProof.PostProof[0]
+		proof.InvalidPostProof.PostProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid post proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.PostProof[0] = hash
+
+		// invalid numunits
+		proof.InvalidPostProof.NumUnits++
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid post proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NumUnits--
+
+		// invalid numunits proof
+		hash = proof.InvalidPostProof.NumUnitsProof[0]
+		proof.InvalidPostProof.NumUnitsProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid post proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NumUnitsProof[0] = hash
 	})
 
-	t.Run("commitment proof is invalid", func(t *testing.T) {
+	t.Run("invalid merged proof", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
 		nipostChallenge := types.RandomHash()
@@ -442,172 +602,13 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		_, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		atx := newMergedATXv2(db, nipostChallenge, post, numUnits)
+		commitmentAtx := types.RandomATXID()
 
-		ctrl := gomock.NewController(t)
-		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-				return edVerifier.Verify(d, nodeID, m, sig)
-			}).AnyTimes()
-
-		// manually construct an invalid proof
-		proof, err := createCommitmentProof(initialAtx, sig.NodeID())
-		require.NoError(t, err)
-
-		signature := proof.Signature
-		proof.Signature = types.RandomEdSignature() // invalid signature
-		err = proof.Valid(verifier, sig.NodeID())
-		require.ErrorContains(t, err, "invalid signature")
-		proof.Signature = signature
-
-		proof.InitialATXID = types.RandomATXID() // invalid ATX
-		err = proof.Valid(verifier, sig.NodeID())
-		require.ErrorContains(t, err, "invalid signature")
-		proof.InitialATXID = initialAtx.ID()
-
-		proofHash := proof.InitialPostProof[0]
-		proof.InitialPostProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(verifier, sig.NodeID())
-		require.ErrorContains(t, err, "invalid initial PoST proof")
-		proof.InitialPostProof[0] = proofHash
-
-		initialPostRoot := proof.InitialPostRoot
-		proof.InitialPostRoot = InitialPostRoot(types.EmptyHash32) // invalid initial post root
-		err = proof.Valid(verifier, sig.NodeID())
-		require.ErrorContains(t, err, "invalid empty initial PoST root")
-		proof.InitialPostRoot = initialPostRoot
-
-		commitmentATX := proof.CommitmentATX
-		proof.CommitmentATX = types.RandomATXID() // invalid ATX
-		err = proof.Valid(verifier, sig.NodeID())
-		require.ErrorContains(t, err, "invalid commitment ATX proof")
-		proof.CommitmentATX = commitmentATX
-
-		proofHash = proof.CommitmentATXProof[0]
-		proof.CommitmentATXProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(verifier, sig.NodeID())
-		require.ErrorContains(t, err, "invalid commitment ATX proof")
-		proof.CommitmentATXProof[0] = proofHash
-	})
-
-	t.Run("solo invalid post proof is not valid", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-
-		nipostChallenge := types.RandomHash()
-		const numUnits = uint32(11)
-		post := PostV1{
-			Nonce:   rand.Uint32(),
-			Indices: types.RandomBytes(11),
-			Pow:     rand.Uint64(),
-		}
-		atx, initialAtx := newSoloATXv2(db, nipostChallenge, post, numUnits)
-
-		ctrl := gomock.NewController(t)
-		verifier := NewMockMalfeasanceValidator(ctrl)
-		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-				return edVerifier.Verify(d, nodeID, m, sig)
-			}).AnyTimes()
-
-		// manually construct an invalid proof
 		const invalidPostIndex = 7
-		proof, err := createInvalidPostProof(atx, 0, 0, invalidPostIndex)
+		const validPostIndex = 15
+		proof, err := NewInvalidPostProof(db, atx, commitmentAtx, sig.NodeID(), 0, invalidPostIndex, validPostIndex)
 		require.NoError(t, err)
-		require.NotNil(t, proof)
-
-		nipostsRoot := proof.NIPostsRoot
-		proof.NIPostsRoot = NIPostsRoot(types.RandomHash()) // invalid root
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid NIPosts root proof")
-		proof.NIPostsRoot = nipostsRoot
-
-		proofHash := proof.NIPostsRootProof[0]
-		proof.NIPostsRootProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid NIPosts root proof")
-		proof.NIPostsRootProof[0] = proofHash
-
-		proof.NIPostIndex = 1 // invalid index
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid NIPoST root proof")
-		proof.NIPostIndex = 0
-
-		nipostRoot := proof.NIPostRoot
-		proof.NIPostRoot = NIPostRoot(types.RandomHash()) // invalid root
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid NIPoST root proof")
-		proof.NIPostRoot = nipostRoot
-
-		proofHash = proof.NIPostRootProof[0]
-		proof.NIPostRootProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid NIPoST root proof")
-		proof.NIPostRootProof[0] = proofHash
-
-		challenge := proof.Challenge
-		proof.Challenge = types.RandomHash() // invalid challenge
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid challenge proof")
-		proof.Challenge = challenge
-
-		proofHash = proof.ChallengeProof[0]
-		proof.ChallengeProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid challenge proof")
-		proof.ChallengeProof[0] = proofHash
-
-		subPostsRoot := proof.SubPostsRoot
-		proof.SubPostsRoot = SubPostsRoot(types.RandomHash()) // invalid root
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid sub PoSTs root proof")
-		proof.SubPostsRoot = subPostsRoot
-
-		proofHash = proof.SubPostsRootProof[0]
-		proof.SubPostsRootProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid sub PoSTs root proof")
-		proof.SubPostsRootProof[0] = proofHash
-
-		proof.SubPostRootIndex = 1 // invalid index
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid sub PoST root proof")
-		proof.SubPostRootIndex = 0
-
-		subPost := proof.SubPostRoot
-		proof.SubPostRoot = SubPostRoot(types.RandomHash()) // invalid root
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid sub PoST root proof")
-		proof.SubPostRoot = subPost
-
-		proofHash = proof.SubPostRootProof[0]
-		proof.SubPostRootProof[0] = types.RandomHash() // invalid proof
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid sub PoST root proof")
-		proof.SubPostRootProof[0] = proofHash
-
-		proof.Post = PostV1{} // invalid post
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid PoST proof")
-		proof.Post = post
-
-		proof.NumUnits++ // invalid number of units
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), initialAtx.Initial.CommitmentATX, nil)
-		require.EqualError(t, err, "invalid num units proof")
-		proof.NumUnits--
-	})
-
-	t.Run("merged invalid post proof is not valid", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-
-		nipostChallenge := types.RandomHash()
-		const numUnits = uint32(11)
-		post := PostV1{
-			Nonce:   rand.Uint32(),
-			Indices: types.RandomBytes(11),
-			Pow:     rand.Uint64(),
-		}
-		atx, initialAtx := newMergedATXv2(db, nipostChallenge, post, numUnits)
 
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
@@ -616,17 +617,48 @@ func Test_InvalidPostProof(t *testing.T) {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		// manually construct an invalid proof
-		marriageIndex := uint32(1)
-		commitmentAtx := initialAtx.Initial.CommitmentATX
-		const invalidPostIndex = 7
-		proof, err := createInvalidPostProof(atx, 0, 1, invalidPostIndex)
-		require.NoError(t, err)
-		require.NotNil(t, proof)
+		// invalid ATXID
+		proof.ATXID = types.RandomATXID()
+		id, err := proof.Valid(context.Background(), verifier)
+		require.EqualError(t, err, "invalid signature")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.ATXID = atx.ID()
 
-		invalidMarriageIndex := marriageIndex + 1
+		// invalid smesher ID
+		proof.SmesherID = types.RandomNodeID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.EqualError(t, err, "invalid signature")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.SmesherID = atx.SmesherID
 
-		err = proof.Valid(context.Background(), verifier, atx.ID(), sig.NodeID(), commitmentAtx, &invalidMarriageIndex)
-		require.EqualError(t, err, "invalid marriage index proof")
+		// invalid signature
+		proof.Signature = types.RandomEdSignature()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.EqualError(t, err, "invalid signature")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.Signature = atx.Signature
+
+		// invalid node ID
+		proof.NodeID = types.RandomNodeID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid marriage proof for NodeID")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.NodeID = sig.NodeID()
+
+		// invalid marriage index proof
+		hash := proof.InvalidPostProof.MarriageIndexProof[0]
+		proof.InvalidPostProof.MarriageIndexProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid marriage index proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.MarriageIndexProof[0] = hash
+
+		// invalid numunits proof
+		hash = proof.InvalidPostProof.NumUnitsProof[0]
+		proof.InvalidPostProof.NumUnitsProof[0] = types.RandomHash()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid post proof")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.InvalidPostProof.NumUnitsProof[0] = hash
 	})
 }

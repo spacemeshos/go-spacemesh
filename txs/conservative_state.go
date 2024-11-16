@@ -283,3 +283,7 @@ func ShuffleWithNonceOrder(
 	})))
 	return result
 }
+
+func (cs *ConservativeState) HasEvicted(tid types.TransactionID) (bool, error) {
+	return transactions.HasEvicted(cs.db, tid)
+}
