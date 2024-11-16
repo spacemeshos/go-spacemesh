@@ -17,7 +17,7 @@ type data struct {
 	success, failures int
 	failRate          float64
 	averageLatency    float64
-	protocols         []protocol.ID
+	protocols         func() []protocol.ID
 }
 
 func (d *data) latency(global float64) float64 {
@@ -63,7 +63,7 @@ func (p *Peers) Contains(id peer.ID) bool {
 	return exist
 }
 
-func (p *Peers) Add(id peer.ID, protocols []protocol.ID) bool {
+func (p *Peers) Add(id peer.ID, protocols func() []protocol.ID) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, exist := p.peers[id]
@@ -181,7 +181,7 @@ func (p *Peers) selectBest(n int, protocols []protocol.ID) []peer.ID {
 	for _, peer := range p.peers {
 		if protoMap != nil {
 			found := false
-			for _, proto := range peer.protocols {
+			for _, proto := range peer.protocols() {
 				if _, exist := protoMap[proto]; exist {
 					found = true
 					break

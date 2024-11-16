@@ -13,6 +13,7 @@ import (
 
 	corehost "github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -298,11 +299,14 @@ func NewFetch(
 	// there is one test that covers this part.
 	if host != nil {
 		connectedf := func(peer p2p.Peer) {
-			protocols, err := host.Peerstore().GetProtocols(peer)
-			if err != nil {
-				f.logger.Debug("failed to get protocols for peer",
-					zap.Stringer("id", peer), zap.Error(err))
-				return
+			protocols := func() []protocol.ID {
+				ps, err := host.Peerstore().GetProtocols(peer)
+				if err != nil {
+					f.logger.Debug("failed to get protocols for peer",
+						zap.Stringer("id", peer), zap.Error(err))
+					return nil
+				}
+				return ps
 			}
 			if f.peers.Add(peer, protocols) {
 				f.logger.Debug("adding peer", zap.Stringer("id", peer))
