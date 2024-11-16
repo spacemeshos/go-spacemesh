@@ -23,7 +23,7 @@ type PairwiseSetSyncer struct {
 	clock  clockwork.Clock
 }
 
-func newPairwiseSetSyncer(
+func NewPairwiseSetSyncerInternal(
 	logger *zap.Logger,
 	r Requester,
 	name string,
@@ -47,7 +47,7 @@ func NewPairwiseSetSyncer(
 	name string,
 	cfg RangeSetReconcilerConfig,
 ) *PairwiseSetSyncer {
-	return newPairwiseSetSyncer(logger, r, name, cfg, nullTracer{}, clockwork.NewRealClock())
+	return NewPairwiseSetSyncerInternal(logger, r, name, cfg, nullTracer{}, clockwork.NewRealClock())
 }
 
 func (pss *PairwiseSetSyncer) updateCounts(c *wireConduit) {
@@ -56,7 +56,7 @@ func (pss *PairwiseSetSyncer) updateCounts(c *wireConduit) {
 }
 
 func (pss *PairwiseSetSyncer) createReconciler(os OrderedSet) *RangeSetReconciler {
-	return newRangeSetReconciler(pss.logger, pss.cfg, os, pss.tracer, pss.clock)
+	return NewRangeSetReconcilerInternal(pss.logger, pss.cfg, os, pss.tracer, pss.clock)
 }
 
 func (pss *PairwiseSetSyncer) Probe(

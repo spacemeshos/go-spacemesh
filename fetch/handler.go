@@ -291,7 +291,8 @@ func (h *handler) doHandleHashReq(ctx context.Context, data []byte, hint datasto
 			h.logger.Debug("remote peer requested nonexistent hash",
 				log.ZContext(ctx),
 				zap.Stringer("hash", r.Hash),
-				zap.String("hint", string(r.Hint)))
+				zap.String("hint", string(r.Hint)),
+			)
 			hashMissing.WithLabelValues(string(r.Hint)).Add(1)
 			continue
 		} else if len(blob.Bytes) == 0 {
@@ -302,7 +303,8 @@ func (h *handler) doHandleHashReq(ctx context.Context, data []byte, hint datasto
 			h.logger.Debug("responded to hash request",
 				log.ZContext(ctx),
 				zap.Stringer("hash", r.Hash),
-				zap.Int("dataSize", len(blob.Bytes)))
+				zap.Int("dataSize", len(blob.Bytes)),
+			)
 		}
 		// add response to batch
 		m := ResponseMessage{

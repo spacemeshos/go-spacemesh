@@ -233,6 +233,17 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 	return rows > 0, nil
 }
 
+func HasEvicted(db sql.Executor, id types.TransactionID) (bool, error) {
+	rows, err := db.Exec("select 1 from evicted_mempool where id = ?1",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil)
+	if err != nil {
+		return false, fmt.Errorf("has evicted %s: %w", id, err)
+	}
+	return rows > 0, nil
+}
+
 // GetByAddress finds all transactions for an address.
 func GetByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	var txs []*types.MeshTransaction
@@ -293,6 +304,58 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(from))
 		}, "get acct pending from nonce")
+}
+
+// GetAcctPendingToNonce get all pending transactions with nonce before `to` for the given address.
+func GetAcctPendingToNonce(db sql.Executor, address types.Address, to uint64) ([]types.TransactionID, error) {
+	ids := make([]types.TransactionID, 0)
+	_, err := db.Exec(`select id from transactions
+		where principal = ?1 and nonce < ?2 and result is null
+		order by nonce asc, timestamp asc;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address.Bytes())
+			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(to))
+		}, func(stmt *sql.Statement) bool {
+			id := types.TransactionID{}
+			stmt.ColumnBytes(0, id[:])
+			ids = append(ids, id)
+			return true
+		})
+	if err != nil {
+		return nil, fmt.Errorf("get acct pending to nonce %s: %w", address, err)
+	}
+	return ids, nil
+}
+
+func SetEvicted(db sql.Executor, id types.TransactionID) error {
+	if _, err := db.Exec("insert into evicted_mempool (id, time) values (?1, ?2) on conflict do nothing;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+			stmt.BindInt64(2, time.Now().UnixNano())
+		}, nil); err != nil {
+		return fmt.Errorf("set evicted %s: %w", id, err)
+	}
+	return nil
+}
+
+func Delete(db sql.Executor, id types.TransactionID) error {
+	if _, err := db.Exec("delete from transactions where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil); err != nil {
+		return fmt.Errorf("delete %s: %w", id, err)
+	}
+	return nil
+}
+
+func PruneEvicted(db sql.Executor, before time.Time) error {
+	if _, err := db.Exec("delete from evicted_mempool where time < ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, before.UnixNano())
+		}, nil); err != nil {
+		return fmt.Errorf("prune evicted %w", err)
+	}
+	return nil
 }
 
 // query MUST ensure that this order of fields tx, header, layer, block, timestamp, id.

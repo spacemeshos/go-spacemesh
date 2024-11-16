@@ -245,8 +245,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 }
 
 // PrevIDByNodeID returns the previous ATX ID for a given node ID and public epoch.
-// It returns the newest ATX ID containing PoST of the given node ID
-// that was published before the given public epoch.
+// It returns the newest ATX ID containing PoST of the given node ID that was published in or before the given epoch.
 func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
@@ -259,7 +258,7 @@ func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID
 
 	if rows, err := db.Exec(`
 		SELECT atxid FROM posts
-		WHERE pubkey = ?1 AND publish_epoch < ?2
+		WHERE pubkey = ?1 AND publish_epoch <= ?2
 		ORDER BY publish_epoch DESC
 		LIMIT 1;`, enc, dec); err != nil {
 		return types.EmptyATXID, fmt.Errorf("exec nodeID %v, epoch %d: %w", nodeID, pubEpoch, err)
@@ -863,7 +862,10 @@ func IterateAtxIdsWithMalfeasance(
 	return err
 }
 
-func PrevATXCollision(db sql.Executor, prev types.ATXID, id types.NodeID) (types.ATXID, types.ATXID, error) {
+// PrevATXCollisions returns all ATXs with the same prevATX as the given ATX ID from the same node ID.
+// It is used to detect double-publishing and double poet registrations.
+// The ATXs returned are ordered by received time so that the first one is the one that was seen first by the node.
+func PrevATXCollisions(db sql.Executor, prev types.ATXID, id types.NodeID) ([]types.ATXID, error) {
 	var atxs []types.ATXID
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, prev[:])
@@ -873,16 +875,22 @@ func PrevATXCollision(db sql.Executor, prev types.ATXID, id types.NodeID) (types
 		var id types.ATXID
 		stmt.ColumnBytes(0, id[:])
 		atxs = append(atxs, id)
-		return len(atxs) < 2
+		return true
 	}
-	_, err := db.Exec("SELECT atxid FROM posts WHERE prev_atxid = ?1 AND pubkey = ?2;", enc, dec)
+	query := `SELECT atxid FROM posts
+		WHERE prev_atxid = ?1 AND pubkey = ?2
+		ORDER BY (
+			SELECT received FROM atxs
+			WHERE id = atxid
+		);`
+	_, err := db.Exec(query, enc, dec)
 	if err != nil {
-		return types.EmptyATXID, types.EmptyATXID, fmt.Errorf("error getting ATXs with same prevATX: %w", err)
+		return nil, fmt.Errorf("error getting ATXs with same prevATX: %w", err)
 	}
-	if len(atxs) != 2 {
-		return types.EmptyATXID, types.EmptyATXID, sql.ErrNotFound
+	if len(atxs) < 2 {
+		return nil, sql.ErrNotFound
 	}
-	return atxs[0], atxs[1], nil
+	return atxs, nil
 }
 
 func Units(db sql.Executor, atxID types.ATXID, nodeID types.NodeID) (uint32, error) {

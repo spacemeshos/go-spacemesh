@@ -332,8 +332,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider.EXPECT().GetAtx(posAtxId).Return(nil, errors.New("db error"))
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
-		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
-		require.ErrorContains(t, err, "db error")
+		require.EqualError(t, err, fmt.Sprintf("positioning atx (%s) not found: db error", posAtxId.ShortString()))
 	})
 
 	t.Run("positioning atx published in higher epoch than expected", func(t *testing.T) {
