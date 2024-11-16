@@ -396,7 +396,30 @@ func (ac *accountCache) resetAfterApply(
 	ac.txsByNonce = list.New()
 	ac.startNonce = nextNonce
 	ac.startBalance = newBalance
+
+	err := ac.evictPendingNonce(db)
+	if err != nil {
+		return fmt.Errorf("evict pending: %w", err)
+	}
 	return ac.addPendingFromNonce(logger, db, ac.startNonce, applied)
+}
+
+func (ac *accountCache) evictPendingNonce(db sql.StateDatabase) error {
+	return db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+		txIds, err := transactions.GetAcctPendingToNonce(tx, ac.addr, ac.startNonce)
+		if err != nil {
+			return fmt.Errorf("get pending to nonce: %w", err)
+		}
+		for _, tid := range txIds {
+			if err := transactions.SetEvicted(tx, tid); err != nil {
+				return fmt.Errorf("set evicted for %s: %w", tid, err)
+			}
+			if err := transactions.Delete(tx, tid); err != nil {
+				return fmt.Errorf("delete tx %s: %w", tid, err)
+			}
+		}
+		return nil
+	})
 }
 
 func (ac *accountCache) shouldEvict() bool {
@@ -775,6 +798,11 @@ func (c *Cache) ApplyLayer(
 			return err
 		}
 		acctResetDuration.Observe(float64(time.Since(t2)))
+	}
+
+	err := transactions.PruneEvicted(db, time.Now().Add(-12*time.Hour))
+	if err != nil {
+		logger.Warn("failed to prune evicted", zap.Error(err))
 	}
 	return nil
 }

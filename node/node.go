@@ -748,7 +748,7 @@ func (app *App) initServices(ctx context.Context) error {
 		fetch.WithLogger(flog.Zap()),
 	)
 	if err != nil {
-		return fmt.Errorf("creating fetcher: %w", err)
+		return fmt.Errorf("create fetcher: %w", err)
 	}
 	app.eg.Go(func() error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
