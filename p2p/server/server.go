@@ -25,6 +25,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
+const dumpMaxIdle = 10 * time.Millisecond
+
 type DecayingTagSpec struct {
 	Interval time.Duration `mapstructure:"interval"`
 	Inc      int           `mapstructure:"inc"`
@@ -112,6 +114,14 @@ func WithDecayingTag(tag DecayingTagSpec) Opt {
 	}
 }
 
+// WithDump enables dumping of all the data into separate files
+// under the specified directory.
+func WithDump(dir string) Opt {
+	return func(s *Server) {
+		s.dumpDir = dir
+	}
+}
+
 // Handler is a handler to be defined by the application.
 type Handler func(context.Context, peer.ID, []byte) ([]byte, error)
 
@@ -158,6 +168,7 @@ type Server struct {
 	interval            time.Duration
 	decayingTagSpec     *DecayingTagSpec
 	decayingTag         connmgr.DecayingTag
+	dumpDir             string
 
 	limit   *rate.Limiter
 	sem     *semaphore.Weighted
@@ -234,6 +245,16 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 	return srv
 }
 
+func (s *Server) maybeDump(stream network.Stream) peerStream {
+	if s.dumpDir == "" {
+		return stream
+	}
+	remote := fmt.Sprintf("%s-%s",
+		stream.Conn().RemoteMultiaddr().String()[1:],
+		stream.Conn().RemotePeer().String())
+	return newDumpStream(stream, s.protocol, remote, s.dumpDir, dumpMaxIdle)
+}
+
 type request struct {
 	stream   network.Stream
 	received time.Time
@@ -301,7 +322,7 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.Stream) bool {
-	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
+	dadj := newDeadlineAdjuster(s.maybeDump(stream), s.timeout, s.hardTimeout)
 	defer dadj.Close()
 	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
@@ -461,7 +482,7 @@ func (s *Server) streamRequest(
 	if s.peerInfo() != nil {
 		info = s.peerInfo().EnsurePeerInfo(stream.Conn().RemotePeer())
 	}
-	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
+	dadj := newDeadlineAdjuster(s.maybeDump(stream), s.timeout, s.hardTimeout)
 	defer func() {
 		if err != nil {
 			dadj.Close()

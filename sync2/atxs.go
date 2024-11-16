@@ -307,7 +307,10 @@ func NewATXSyncer(
 
 func NewDispatcher(logger *zap.Logger, f Fetcher) *rangesync.Dispatcher {
 	d := rangesync.NewDispatcher(logger)
-	d.SetupServer(f.Host(), multipeer.Protocol, server.WithHardTimeout(20*time.Minute))
+	d.SetupServer(f.Host(), multipeer.Protocol, server.WithHardTimeout(20*time.Minute),
+		// QQQQQ: TBD: rmme
+		server.WithDump("/tmp/atxsync"),
+	)
 	return d
 }
 

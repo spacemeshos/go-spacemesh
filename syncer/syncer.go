@@ -242,6 +242,7 @@ func NewSyncer(
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
 	if s.cfg.V2.Enable && s.asv2 == nil {
+		// QQQQQ: TBD: server options for the dispatcher!!!
 		s.dispatcher = sync2.NewDispatcher(s.logger, fetcher.(sync2.Fetcher))
 		hss := sync2.NewATXSyncSource(
 			s.logger, s.dispatcher, cdb.Database.(sql.StateDatabase),
