@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"strings"
 	"sync"
@@ -58,6 +59,7 @@ type dumpItem struct {
 	data  []byte
 	ts    time.Time
 	error error
+	stack string
 }
 
 type dumpStream struct {
@@ -95,13 +97,13 @@ func newDumpStream(s peerStream, proto, remote, outDir string, maxIdle time.Dura
 	}
 }
 
-func (ds *dumpStream) flush() {
+func (ds *dumpStream) flush(timedOut bool) {
 	if len(ds.acc) == 0 {
 		ds.curDir = dumpOpNone
 		return
 	}
 
-	var dir, afterStr string
+	var dir string
 	switch ds.curDir {
 	case dumpOpNone:
 		return
@@ -110,35 +112,58 @@ func (ds *dumpStream) flush() {
 	case dumpOpRemoteToLocal:
 		dir = "remote -> local (recv)"
 	}
-	startTS := ds.acc[0].ts
 	if !ds.started {
 		ds.started = true
+		startTS := ds.acc[0].ts
 		fmt.Fprintf(ds.out, "*** BEGIN @ %s ***\n\n", startTS.Format(time.RFC3339Nano))
 	}
-	var d []byte
-	for _, item := range ds.acc {
-		d = append(d, item.data...)
-	}
-	if !ds.prevTime.IsZero() {
-		afterStr = fmt.Sprintf(" (after %v)", startTS.Sub(ds.prevTime))
-	}
-	if len(d) > 0 {
-		fmt.Fprintf(ds.out, "--- %s%s: %s ---\n%s\n\n",
-			startTS.Format(time.RFC3339Nano), afterStr, dir, hex.Dump(d))
-	}
-	last := ds.acc[len(ds.acc)-1]
-	ds.prevTime = last.ts
-	if last.op.blocking() {
-		fmt.Fprintf(ds.out, "--- %s: %s: blocked for %v ---\n\n",
-			startTS.Format(time.RFC3339Nano), dir,
-			time.Now().Sub(last.ts))
-	}
-	for _, item := range ds.acc {
-		if item.error != nil {
-			fmt.Fprintf(ds.out, "Error: %v\n\n", item.error)
-			break
+
+	for n, item := range ds.acc {
+		fmt.Fprintf(ds.out, "--- %s (count %d): %s", dir, item.count, item.ts.Format(time.RFC3339Nano))
+		if !ds.prevTime.IsZero() {
+			fmt.Fprintf(ds.out, " (after %v)", item.ts.Sub(ds.prevTime))
 		}
+		ds.prevTime = item.ts
+		fmt.Fprintln(ds.out)
+		if len(item.data) > 0 {
+			fmt.Fprintln(ds.out, hex.Dump(item.data))
+		}
+		if item.error != nil {
+			fmt.Fprintf(ds.out, "Error: %v\n", item.error)
+		}
+		if timedOut && n == len(ds.acc)-1 && item.op.blocking() {
+			fmt.Fprintf(ds.out, "Blocked for %v:\n%s\n",
+				time.Now().Sub(item.ts),
+				item.stack)
+		}
+		fmt.Fprintln(ds.out)
 	}
+
+	// var d []byte
+	// for _, item := range ds.acc {
+	// 	d = append(d, item.data...)
+	// }
+	// if !ds.prevTime.IsZero() {
+	// 	afterStr = fmt.Sprintf(" (after %v)", startTS.Sub(ds.prevTime))
+	// }
+	// if len(d) > 0 {
+	// 	fmt.Fprintf(ds.out, "--- %s%s: %s ---\n%s\n\n",
+	// 		startTS.Format(time.RFC3339Nano), afterStr, dir, hex.Dump(d))
+	// }
+	// last := ds.acc[len(ds.acc)-1]
+	// ds.prevTime = last.ts
+	// if last.op.blocking() {
+	// 	fmt.Fprintf(ds.out, "--- %s: %s: blocked for %v ---\n\n",
+	// 		startTS.Format(time.RFC3339Nano), dir,
+	// 		time.Now().Sub(last.ts))
+	// }
+	// for _, item := range ds.acc {
+	// 	if item.error != nil {
+	// 		fmt.Fprintf(ds.out, "Error: %v\n\n", item.error)
+	// 		break
+	// 	}
+	// }
+
 	ds.acc = ds.acc[:0]
 	ds.curDir = dumpOpNone
 }
@@ -146,12 +171,12 @@ func (ds *dumpStream) flush() {
 func (ds *dumpStream) handleDumpItem(item dumpItem) {
 	dir := item.op.dir()
 	if ds.curDir != dir {
-		ds.flush()
+		ds.flush(false)
 		ds.curDir = dir
 	}
 	ds.acc = append(ds.acc, item)
 	if item.error != nil {
-		ds.flush()
+		ds.flush(false)
 	}
 }
 
@@ -164,10 +189,10 @@ func (ds *dumpStream) begin() {
 			for {
 				select {
 				case <-time.After(ds.maxIdle):
-					ds.flush()
+					ds.flush(true)
 				case item, ok := <-ds.ch:
 					if !ok {
-						ds.flush()
+						ds.flush(false)
 						return nil
 					}
 					ds.handleDumpItem(item)
@@ -193,6 +218,7 @@ func (ds *dumpStream) toDump(op dumpOp, count int, data []byte) {
 			count: count,
 			data:  slices.Clone(data),
 			ts:    time.Now(),
+			stack: string(debug.Stack()),
 		}
 	}
 }
