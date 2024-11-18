@@ -178,5 +178,6 @@ type CompactIdRequest struct {
 }
 
 type CompactIdResponse struct {
-	Ids []types.ProposalID `scale:"max=2050"`
+	MsgId types.Hash32
+	Ids   []types.ProposalID `scale:"max=2050"`
 }

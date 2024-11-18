@@ -1,8 +1,10 @@
 package hare4
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +14,8 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-varint"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
@@ -206,17 +210,18 @@ func New(
 ) *Hare {
 	ctx, cancel := context.WithCancel(context.Background())
 	hr := &Hare{
-		ctx:          ctx,
-		cancel:       cancel,
-		results:      make(chan ConsensusOutput, 32),
-		coins:        make(chan WeakCoinOutput, 32),
-		signers:      make(map[string]*signing.EdSigner),
-		sessions:     make(map[types.LayerID]*protocol),
-		messageCache: make(map[types.Hash32]Message),
-
-		config:    DefaultConfig(),
-		log:       zap.NewNop(),
-		wallClock: clockwork.NewRealClock(),
+		ctx:             ctx,
+		cancel:          cancel,
+		results:         make(chan ConsensusOutput, 32),
+		coins:           make(chan WeakCoinOutput, 32),
+		signers:         make(map[string]*signing.EdSigner),
+		sessions:        make(map[types.LayerID]*protocol),
+		messageCache:    make(map[types.Hash32]Message),
+		peerStreamClose: make(map[peer.ID]chan struct{}),
+		peerStreams:     make(map[peer.ID][]*stream),
+		config:          DefaultConfig(),
+		log:             zap.NewNop(),
+		wallClock:       clockwork.NewRealClock(),
 
 		nodeClock: nodeClock,
 		pubsub:    pubsub,
@@ -238,23 +243,24 @@ func New(
 	}
 
 	if host != nil {
-		hr.p2p = server.New(host, PROTOCOL_NAME, hr.handleProposalsStream)
+		hr.p2p = server.New(host, PROTOCOL_NAME, nil, server.WithProtoHandler(hr.handleStreamIn))
 	}
 	return hr
 }
 
 type Hare struct {
 	// state
-	ctx          context.Context
-	cancel       context.CancelFunc
-	eg           errgroup.Group
-	results      chan ConsensusOutput
-	coins        chan WeakCoinOutput
-	mu           sync.Mutex
-	signers      map[string]*signing.EdSigner
-	sessions     map[types.LayerID]*protocol
-	messageCache map[types.Hash32]Message
-
+	ctx             context.Context
+	cancel          context.CancelFunc
+	eg              errgroup.Group
+	results         chan ConsensusOutput
+	coins           chan WeakCoinOutput
+	mu              sync.Mutex
+	signers         map[string]*signing.EdSigner
+	sessions        map[types.LayerID]*protocol
+	messageCache    map[types.Hash32]Message
+	peerStreamClose map[peer.ID]chan struct{}
+	peerStreams     map[peer.ID][]*stream
 	// options
 	config    Config
 	log       *zap.Logger
@@ -289,9 +295,67 @@ func (h *Hare) Coins() <-chan WeakCoinOutput {
 	return h.coins
 }
 
+func (h *Hare) Connected(p peer.ID) {
+	streamOpenOut.Inc()
+	var (
+		c  chan struct{}
+		ok bool
+	)
+	h.mu.Lock()
+	c, ok = h.peerStreamClose[p]
+	if !ok {
+		c = make(chan struct{})
+		h.peerStreamClose[p] = c
+	}
+	h.mu.Unlock()
+	// note the lock is not held here, this do
+	st, err := h.p2p.NewStream(h.ctx, p)
+	if err != nil {
+		streamOpenErr.Inc()
+		h.mu.Lock()
+		close(c)
+		delete(h.peerStreamClose, p)
+		h.mu.Unlock()
+		h.log.Error("connected open stream", zap.Error(err))
+		return
+	}
+	h.mu.Lock()
+	// we intentionally insert only streams which we opened into this slice
+	// this is because we don't want incoming streams to show up as streams
+	// available to sending requests.
+	h.peerStreams[p] = append(h.peerStreams[p], newStream(st))
+	h.mu.Unlock()
+
+	streamLiveOpen.Inc()
+
+	ctx, cancel := context.WithCancel(h.ctx)
+	go func() {
+		defer cancel()
+		select {
+		case <-c:
+			// if the client goes away or we disconnect, this channel will be closed
+		case <-ctx.Done():
+		}
+	}()
+
+	go h.handleStream(ctx, p, st)
+}
+
+func (h *Hare) Disconnected(p peer.ID) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if c, ok := h.peerStreamClose[p]; ok {
+		close(c)
+		delete(h.peerStreamClose, p)
+		streamDisconnect.Inc()
+	} else {
+		streamDisconnectMiss.Inc()
+	}
+}
+
 func (h *Hare) Start() {
 	h.pubsub.Register(h.config.ProtocolName, h.Handler, pubsub.WithValidatorInline(true))
-	h.eg.Go(func() error { return h.p2p.Run(h.ctx) })
+	h.eg.Go(func() error { return h.p2p.RunProto(h.ctx) })
 	current := h.nodeClock.CurrentLayer() + 1
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
 	disabled := types.LayerID(math.MaxUint32)
@@ -328,45 +392,252 @@ func (h *Hare) Running() int {
 func (h *Hare) fetchFull(ctx context.Context, peer p2p.Peer, msgId types.Hash32) (
 	[]types.ProposalID, error,
 ) {
+	var st *stream
+
 	ctx, cancel := context.WithTimeout(ctx, fetchFullTimeout)
 	defer cancel()
 
-	requestCompactCounter.Inc()
-	req := &CompactIdRequest{MsgId: msgId}
-	reqBytes := codec.MustEncode(req)
-	resp := &CompactIdResponse{}
-	cb := func(ctx context.Context, rw io.ReadWriter) error {
-		respLen, _, err := codec.DecodeLen(rw)
+	h.mu.Lock()
+	streams, ok := h.peerStreams[peer]
+	if !ok {
+		// it's important that the context does not cancel unless node exits or peer goes away
+		str, err := h.p2p.NewStream(h.ctx, peer) // this might hold the lock for long
 		if err != nil {
-			return fmt.Errorf("decode length: %w", err)
+			h.mu.Unlock()
+			return nil, fmt.Errorf("new stream: %w", err)
 		}
-		if respLen >= MAX_EXCHANGE_SIZE {
-			return errResponseTooBig
-		}
-		b, err := codec.DecodeFrom(rw, resp)
-		if err != nil || b != int(respLen) {
-			return fmt.Errorf("decode response: %w", err)
-		}
-		return nil
+		st = newStream(str)
+		h.peerStreams[peer] = append(h.peerStreams[peer], st)
+		streams = h.peerStreams[peer]
+		go st.run()
 	}
-
-	err := h.p2p.StreamRequest(ctx, peer, reqBytes, cb)
-	if err != nil {
-		requestCompactErrorCounter.Inc()
-		return nil, fmt.Errorf("stream request: %w", err)
+	st = streams[0]
+	h.mu.Unlock()
+	r := st.req(ctx, msgId)
+	select {
+	case err := <-r.err:
+		return nil, err
+	case resp := <-r.c:
+		h.tracer.OnCompactIdResponse(resp)
+		return resp.Ids, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
-
-	h.tracer.OnCompactIdResponse(resp)
-
-	return resp.Ids, nil
 }
 
-func (h *Hare) handleProposalsStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
+type stream struct {
+	st   io.ReadWriteCloser
+	reqC chan reqResp
+	resC chan []byte
+}
+
+func newStream(st io.ReadWriteCloser) *stream {
+	return &stream{
+		st:   st,
+		reqC: make(chan reqResp),
+		resC: make(chan []byte),
+	}
+}
+
+type reqResp struct {
+	ctx context.Context
+	id  types.Hash32
+	c   chan *CompactIdResponse
+	err chan error
+}
+
+// run is the upstream part of a stream, it only runs
+// on the upstream peer that opened the stream. the responsibility
+// of the loop is to process requests - write to peer which message
+// we're after, and read the responses. the response can come back unordered
+// in case of multiple messages that were written at the same time, so
+// the message format has been changed accordingly such that message
+// ids are transmitted alongside the response as well.
+func (s *stream) run() {
+	reqs := make(map[types.Hash32]reqResp)
+	ticker := time.NewTicker(30 * time.Second)
+	go func() {
+		for {
+			b, err := protoRead(s.st)
+			if err != nil {
+				return
+			}
+			select {
+			case s.resC <- b:
+			}
+		}
+	}()
+	for {
+		select {
+		case rr := <-s.reqC:
+			reqs[rr.id] = rr
+			requestCompactCounter.Inc()
+			req := &CompactIdRequest{MsgId: rr.id}
+			reqBytes := codec.MustEncode(req)
+			if err := protoWrite(s.st, reqBytes); err != nil {
+				rr.err <- err
+			}
+		case b := <-s.resC:
+			resp := &CompactIdResponse{}
+			err := codec.Decode(b, resp)
+			if err != nil {
+				// handle error somehow
+				// we don't know the owner of the request at this point, so we can't
+				// notify them about the failure, since the ID of the message is in the
+				// decoded message.
+				panic("TODO")
+			}
+
+			v, ok := reqs[resp.MsgId]
+			if ok {
+				v.c <- resp
+			} else {
+				// log it here because we know the id of the message, log that we couldn't
+				// find the owner.
+				panic("TODO") // missing logger with peer id on stream type
+			}
+		case <-ticker.C:
+			// occassionally clean up the map
+			for k, v := range reqs {
+				select {
+				case <-v.ctx.Done():
+					// log the msg id that's being deleted
+					delete(reqs, k)
+				default:
+				}
+			}
+		}
+	}
+}
+
+func (s *stream) req(ctx context.Context, msgId types.Hash32) reqResp {
+	r := reqResp{
+		ctx: ctx,
+		id:  msgId,
+		c:   make(chan *CompactIdResponse),
+		err: make(chan error),
+	}
+	select {
+	case s.reqC <- r:
+	case <-ctx.Done():
+	}
+
+	return r
+}
+
+func (h *Hare) handleStreamIn(ctx context.Context, peer p2p.Peer, st io.ReadWriteCloser) error {
+	streamOpenIn.Inc()
+	return h.handleStream(ctx, peer, st)
+}
+
+func protoRead(r io.Reader) ([]byte, error) {
+	// the protocol read is simple:
+	// - read the uvarint bytes to read
+	// - allocate the buffer and read into it
+	rd := bufio.NewReader(r)
+
+	// this will block until new data arrives or the stream
+	// is closed/reset. that's why the context may not be respected
+	// immediately in the for-select below
+	size, err := varint.ReadUvarint(rd)
+	if err != nil {
+		return nil, err
+	}
+
+	// todo check that size <= max exchange size
+	buf := make([]byte, size)
+	_, err = io.ReadFull(rd, buf)
+	return buf, err
+}
+
+func protoWrite(w io.Writer, b []byte) error {
+	// the protocol write is symmetric to read:
+	// - write the uvarint bytes to write
+	// - write the data into the writer
+
+	wr := bufio.NewWriter(w)
+	sz := make([]byte, binary.MaxVarintLen64)
+	n := binary.PutUvarint(sz, uint64(len(b)))
+	if _, err := wr.Write(sz[:n]); err != nil {
+		return fmt.Errorf("write size: %w", err)
+	}
+	_, err := wr.Write(b)
+	if err != nil {
+		return fmt.Errorf("write data: %w", err)
+	}
+	return wr.Flush()
+}
+
+// handleStream handles a stream for a peer.
+// multiple streams per peer are allowed.
+// for every stream we want to launch a goroutine that would read the data out of the stream
+// and process it. the sequence is read from the stream, then write the response.
+func (h *Hare) handleStream(ctx context.Context, peer p2p.Peer, st io.ReadWriteCloser) error {
+	h.mu.Lock()
+	c, ok := h.peerStreamClose[peer]
+	if !ok {
+		c = make(chan struct{})
+		h.peerStreamClose[peer] = c
+	}
+	h.mu.Unlock()
+
+	result := make(chan error)
+	go func() {
+		defer st.Close()
+		defer streamClose.Inc()
+		defer streamLiveOpen.Dec()
+		for {
+			select {
+			case <-c:
+				// c is closed when the peer disconnected
+				return
+			case <-ctx.Done():
+				// this case is only checked occasionally, so one cannot assume
+				// that a cancelled context immediately returns here
+				return
+			default:
+				data, err := protoRead(st)
+				if err != nil {
+					select {
+					case result <- err:
+						return
+					case <-ctx.Done():
+						return
+					}
+				}
+				data, err = h.handleProposalsStream(ctx, peer, data, st)
+				if err != nil {
+					// here an error doesn't necessarily imply we wanna cut down the loop and return
+					continue
+				}
+				err = protoWrite(st, data)
+				if err != nil {
+					select {
+					case result <- err:
+						return
+					case <-ctx.Done():
+						return
+					}
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-result:
+		return err
+	}
+}
+
+func (h *Hare) handleProposalsStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) ([]byte, error) {
+	writer := new(bytes.Buffer)
 	requestCompactHandlerCounter.Inc()
 	compactProps := &CompactIdRequest{}
 	if err := codec.Decode(msg, compactProps); err != nil {
 		malformedError.Inc()
-		return fmt.Errorf("%w: decoding error %s", pubsub.ErrValidationReject, err.Error())
+		return nil, fmt.Errorf("%w: decoding error %s", pubsub.ErrValidationReject, err.Error())
 	}
 	h.tracer.OnCompactIdRequest(compactProps)
 	h.mu.Lock()
@@ -374,19 +645,16 @@ func (h *Hare) handleProposalsStream(ctx context.Context, _ p2p.Peer, msg []byte
 	h.mu.Unlock()
 	if !ok {
 		messageCacheMiss.Inc()
-		return fmt.Errorf("message %s: cache miss", compactProps.MsgId)
+		return nil, fmt.Errorf("message %s: cache miss", compactProps.MsgId)
 	}
-	resp := &CompactIdResponse{Ids: m.Body.Value.Proposals}
+	resp := &CompactIdResponse{MsgId: compactProps.MsgId, Ids: m.Body.Value.Proposals}
 	respBytes := codec.MustEncode(resp)
-	if _, err := codec.EncodeLen(s, uint32(len(respBytes))); err != nil {
-		return fmt.Errorf("encode length: %w", err)
+
+	if _, err := writer.Write(respBytes); err != nil {
+		return nil, fmt.Errorf("write response: %w", err)
 	}
 
-	if _, err := s.Write(respBytes); err != nil {
-		return fmt.Errorf("write response: %w", err)
-	}
-
-	return nil
+	return writer.Bytes(), nil
 }
 
 // reconstructProposals tries to reconstruct the full list of proposals from a peer based on a delivered

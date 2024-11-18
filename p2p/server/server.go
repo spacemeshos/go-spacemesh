@@ -112,12 +112,25 @@ func WithDecayingTag(tag DecayingTagSpec) Opt {
 	}
 }
 
+// WithProtoHandler defines a protocol handler that would handle incoming stream directly
+// which would no longer handle individual requests through this abstraction (protcol manages
+// all message serialization and must close streams once done with them).
+func WithProtoHandler(fn ProtocolStreamHandler) Opt {
+	return func(s *Server) {
+		s.protoHandler = fn
+	}
+}
+
 // Handler is a handler to be defined by the application.
 type Handler func(context.Context, peer.ID, []byte) ([]byte, error)
 
 // StreamHandler is a handler that writes the response to the stream directly instead of
 // buffering the serialized representation.
 type StreamHandler func(context.Context, peer.ID, []byte, io.ReadWriter) error
+
+// ProtocolStreamHandler is a handler that allows the protocol to use streams as it seems
+// fit. This way, streams can be reused or polled using various concurrency patterns.
+type ProtocolStreamHandler func(context.Context, peer.ID, io.ReadWriteCloser) error
 
 // StreamRequestCallback is a function that executes a streamed request.
 type StreamRequestCallback func(context.Context, io.ReadWriter) error
@@ -150,6 +163,7 @@ type Server struct {
 	logger              *zap.Logger
 	protocol            string
 	handler             StreamHandler
+	protoHandler        ProtocolStreamHandler // call when the protocol handles all streams directly
 	timeout             time.Duration
 	hardTimeout         time.Duration
 	requestLimit        int
@@ -246,7 +260,15 @@ func (s *Server) peerInfo() peerinfo.PeerInfo {
 	return nil
 }
 
-func (s *Server) Run(ctx context.Context) error {
+// RunProto runs the queue loop for protocols that require handling of bare streams
+// using the WithProtoHandler option.
+func (s *Server) RunProto(ctx context.Context) error {
+	return s.run(ctx, func(ctx context.Context, peer peer.ID, stream network.Stream) bool {
+		return s.protoHandler(ctx, peer, stream) == nil
+	})
+}
+
+func (s *Server) run(ctx context.Context, queueFn func(ctx context.Context, peer peer.ID, stream network.Stream) bool) error {
 	var eg errgroup.Group
 	for {
 		select {
@@ -280,7 +302,7 @@ func (s *Server) Run(ctx context.Context) error {
 				if s.decayingTag != nil {
 					s.decayingTag.Bump(peer, s.decayingTagSpec.Inc)
 				}
-				ok := s.queueHandler(ctx, peer, req.stream)
+				ok := queueFn(ctx, peer, req.stream)
 				duration := time.Since(req.received)
 				if s.peerInfo() != nil {
 					info := s.peerInfo().EnsurePeerInfo(conn.RemotePeer())
@@ -298,6 +320,10 @@ func (s *Server) Run(ctx context.Context) error {
 			})
 		}
 	}
+}
+
+func (s *Server) Run(ctx context.Context) error {
+	return s.run(ctx, s.queueHandler)
 }
 
 func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.Stream) bool {
@@ -483,6 +509,25 @@ func (s *Server) streamRequest(
 			pid, stream.Conn().RemoteMultiaddr(), err)
 	}
 	return dadj, info, nil
+}
+
+func (s *Server) NewStream(
+	ctx context.Context,
+	pid peer.ID,
+) (
+	stm io.ReadWriteCloser,
+	err error,
+) {
+	stream, err := s.h.NewStream(
+		network.WithNoDial(ctx, "existing connection"),
+		pid,
+		protocol.ID(s.protocol),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("new stream: %w", err)
+	}
+
+	return stream, nil
 }
 
 // NumAcceptedRequests returns the number of accepted requests for this server.

@@ -93,4 +93,27 @@ var (
 		"preround_signature_fail_count",
 		"counter for signature fails on preround with compact message",
 	)
+
+	streamCounter = metrics.NewCounter(
+		"streams",
+		namespace,
+		"stream counters",
+		[]string{"state"},
+	)
+	streamOpenOut        = streamCounter.WithLabelValues("open_out")
+	streamOpenIn         = streamCounter.WithLabelValues("open_in")
+	streamOpenErr        = streamCounter.WithLabelValues("open_err")
+	streamErr            = streamCounter.WithLabelValues("err")
+	streamClose          = streamCounter.WithLabelValues("close")
+	streamDisconnect     = streamCounter.WithLabelValues("disconnect")
+	streamDisconnectMiss = streamCounter.WithLabelValues("disconnect_miss")
+
+	streamGauge = metrics.NewGauge(
+		"live_stream",
+		namespace,
+		"streams gauge",
+		[]string{"state"},
+	)
+
+	streamLiveOpen = streamGauge.WithLabelValues("open")
 )

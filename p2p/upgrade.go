@@ -113,6 +113,8 @@ type Host struct {
 	}
 
 	ping *Ping
+
+	notify *PeerNotifier
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -322,6 +324,10 @@ func (fh *Host) ConnectedPeerInfo(id peer.ID) *PeerInfo {
 		},
 		Tags: tags,
 	}
+}
+
+func (fh *Host) SubscribeNotify(n NotifyProtocol) {
+	fh.notify.subscribe(n)
 }
 
 // ProtocolDataStats returns per-protocol data stats.

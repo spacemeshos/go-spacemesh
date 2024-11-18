@@ -2,18 +2,18 @@ package hare4
 
 import (
 	"context"
+	"io"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type streamRequester interface {
-	Run(ctx context.Context) error
-	StreamRequest(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error
+	RunProto(ctx context.Context) error
+	NewStream(context.Context, p2p.Peer) (io.ReadWriteCloser, error)
 }
 
 type verifier interface {

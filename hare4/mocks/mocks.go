@@ -11,11 +11,11 @@ package mocks
 
 import (
 	context "context"
+	io "io"
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
-	server "github.com/spacemeshos/go-spacemesh/p2p/server"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -44,83 +44,79 @@ func (m *MockstreamRequester) EXPECT() *MockstreamRequesterMockRecorder {
 	return m.recorder
 }
 
-// Run mocks base method.
-func (m *MockstreamRequester) Run(ctx context.Context) error {
+// NewStream mocks base method.
+func (m *MockstreamRequester) NewStream(arg0 context.Context, arg1 p2p.Peer) (io.ReadWriteCloser, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Run", ctx)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret := m.ctrl.Call(m, "NewStream", arg0, arg1)
+	ret0, _ := ret[0].(io.ReadWriteCloser)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// Run indicates an expected call of Run.
-func (mr *MockstreamRequesterMockRecorder) Run(ctx any) *MockstreamRequesterRunCall {
+// NewStream indicates an expected call of NewStream.
+func (mr *MockstreamRequesterMockRecorder) NewStream(arg0, arg1 any) *MockstreamRequesterNewStreamCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Run", reflect.TypeOf((*MockstreamRequester)(nil).Run), ctx)
-	return &MockstreamRequesterRunCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewStream", reflect.TypeOf((*MockstreamRequester)(nil).NewStream), arg0, arg1)
+	return &MockstreamRequesterNewStreamCall{Call: call}
 }
 
-// MockstreamRequesterRunCall wrap *gomock.Call
-type MockstreamRequesterRunCall struct {
+// MockstreamRequesterNewStreamCall wrap *gomock.Call
+type MockstreamRequesterNewStreamCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockstreamRequesterRunCall) Return(arg0 error) *MockstreamRequesterRunCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockstreamRequesterNewStreamCall) Return(arg0 io.ReadWriteCloser, arg1 error) *MockstreamRequesterNewStreamCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockstreamRequesterRunCall) Do(f func(context.Context) error) *MockstreamRequesterRunCall {
+func (c *MockstreamRequesterNewStreamCall) Do(f func(context.Context, p2p.Peer) (io.ReadWriteCloser, error)) *MockstreamRequesterNewStreamCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockstreamRequesterRunCall) DoAndReturn(f func(context.Context) error) *MockstreamRequesterRunCall {
+func (c *MockstreamRequesterNewStreamCall) DoAndReturn(f func(context.Context, p2p.Peer) (io.ReadWriteCloser, error)) *MockstreamRequesterNewStreamCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
-// StreamRequest mocks base method.
-func (m *MockstreamRequester) StreamRequest(arg0 context.Context, arg1 p2p.Peer, arg2 []byte, arg3 server.StreamRequestCallback, arg4 ...string) error {
+// RunProto mocks base method.
+func (m *MockstreamRequester) RunProto(ctx context.Context) error {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2, arg3}
-	for _, a := range arg4 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "StreamRequest", varargs...)
+	ret := m.ctrl.Call(m, "RunProto", ctx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// StreamRequest indicates an expected call of StreamRequest.
-func (mr *MockstreamRequesterMockRecorder) StreamRequest(arg0, arg1, arg2, arg3 any, arg4 ...any) *MockstreamRequesterStreamRequestCall {
+// RunProto indicates an expected call of RunProto.
+func (mr *MockstreamRequesterMockRecorder) RunProto(ctx any) *MockstreamRequesterRunProtoCall {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2, arg3}, arg4...)
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StreamRequest", reflect.TypeOf((*MockstreamRequester)(nil).StreamRequest), varargs...)
-	return &MockstreamRequesterStreamRequestCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RunProto", reflect.TypeOf((*MockstreamRequester)(nil).RunProto), ctx)
+	return &MockstreamRequesterRunProtoCall{Call: call}
 }
 
-// MockstreamRequesterStreamRequestCall wrap *gomock.Call
-type MockstreamRequesterStreamRequestCall struct {
+// MockstreamRequesterRunProtoCall wrap *gomock.Call
+type MockstreamRequesterRunProtoCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockstreamRequesterStreamRequestCall) Return(arg0 error) *MockstreamRequesterStreamRequestCall {
+func (c *MockstreamRequesterRunProtoCall) Return(arg0 error) *MockstreamRequesterRunProtoCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockstreamRequesterStreamRequestCall) Do(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error) *MockstreamRequesterStreamRequestCall {
+func (c *MockstreamRequesterRunProtoCall) Do(f func(context.Context) error) *MockstreamRequesterRunProtoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockstreamRequesterStreamRequestCall) DoAndReturn(f func(context.Context, p2p.Peer, []byte, server.StreamRequestCallback, ...string) error) *MockstreamRequesterStreamRequestCall {
+func (c *MockstreamRequesterRunProtoCall) DoAndReturn(f func(context.Context) error) *MockstreamRequesterRunProtoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

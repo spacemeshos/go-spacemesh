@@ -1,9 +1,9 @@
 package hare4
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	"runtime/pprof"
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zapcore"
@@ -29,7 +30,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -221,7 +221,7 @@ func (n *node) withPublisher() *node {
 
 func (n *node) withStreamRequester() *node {
 	n.mockStreamRequester = hmock.NewMockstreamRequester(n.ctrl)
-	n.mockStreamRequester.EXPECT().Run(gomock.Any()).Return(nil).AnyTimes()
+	n.mockStreamRequester.EXPECT().RunProto(gomock.Any()).Return(nil).AnyTimes()
 	return n
 }
 
@@ -534,20 +534,43 @@ func (cl *lockstepCluster) setup() {
 				return nil
 			}).
 			AnyTimes()
-		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Do(
-			func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
+		n.mockStreamRequester.EXPECT().NewStream(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, p p2p.Peer) (io.ReadWriteCloser, error) {
+				readerUpstream, writerDownstream := io.Pipe()
+				readerDownstream, writerUpstream := io.Pipe()
+				streamDown := newCloser(readerDownstream, writerDownstream)
+				streamUp := newCloser(readerUpstream, writerUpstream)
+
 				for _, other := range cl.nodes {
 					if other.peerId() == p {
-						b := make([]byte, 0, 1024)
-						buf := bytes.NewBuffer(b)
-						other.hare.handleProposalsStream(ctx, p, msg, buf)
-						cb(ctx, buf)
+						go other.hare.handleStreamIn(ctx, p, streamDown)
 					}
 				}
-				return nil
+				return streamUp, nil
 			},
 		).AnyTimes()
+
 	}
+}
+
+type pipeCloser struct {
+	*io.PipeReader
+	*io.PipeWriter
+	closed chan struct{}
+}
+
+func newCloser(r *io.PipeReader, w *io.PipeWriter) *pipeCloser {
+	return &pipeCloser{
+		PipeReader: r, PipeWriter: w,
+		closed: make(chan struct{}),
+	}
+}
+
+func (p *pipeCloser) Close() error {
+	p.PipeReader.Close()
+	p.PipeWriter.Close()
+	close(p.closed)
+	return nil
 }
 
 func (cl *lockstepCluster) movePreround(layer types.LayerID) {
@@ -1159,7 +1182,6 @@ func TestHare_ReconstructForward(t *testing.T) {
 	}
 	cluster.drainInteractiveMessages()
 	layer := tst.genesis + 1
-
 	// cluster setup
 	active := cluster.activeSet()
 	for _, n := range cluster.nodes {
@@ -1205,23 +1227,22 @@ func TestHare_ReconstructForward(t *testing.T) {
 			}).
 			AnyTimes()
 
-		n.mockStreamRequester.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			Do(func(ctx context.Context, p p2p.Peer, msg []byte, cb server.StreamRequestCallback, _ ...string) error {
+		n.mockStreamRequester.EXPECT().NewStream(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, p p2p.Peer) (io.ReadWriteCloser, error) {
+				readerUpstream, writerDownstream := io.Pipe()
+				readerDownstream, writerUpstream := io.Pipe()
+				streamDown := newCloser(readerDownstream, writerDownstream)
+				streamUp := newCloser(readerUpstream, writerUpstream)
+
 				for _, other := range cluster.nodes {
 					if other.peerId() == p {
-						b := make([]byte, 0, 1024)
-						buf := bytes.NewBuffer(b)
-						if err := other.hare.handleProposalsStream(ctx, p, msg, buf); err != nil {
-							return fmt.Errorf("exec handleProposalStream: %w", err)
-						}
-						if err := cb(ctx, buf); err != nil {
-							return fmt.Errorf("exec callback: %w", err)
-						}
+						go other.hare.handleStreamIn(ctx, p, streamDown)
 					}
 				}
-				return nil
-			}).
-			AnyTimes()
+				return streamUp, nil
+			},
+		).AnyTimes()
+
 	}
 
 	cluster.genProposals(layer, 2)
@@ -1402,4 +1423,38 @@ func TestHare_ReconstructCollision(t *testing.T) {
 
 func compactVrf(v types.VrfSignature) (c types.CompactProposalID) {
 	return types.CompactProposalID(v[:])
+}
+
+func TestConnections(t *testing.T) {
+	tst := &tester{
+		TB:            t,
+		rng:           rand.New(rand.NewSource(1001)),
+		start:         time.Now(),
+		cfg:           DefaultConfig(),
+		layerDuration: 5 * time.Minute,
+		beacon:        types.Beacon{1, 1, 1, 1},
+		genesis:       types.GetEffectiveGenesis(),
+	}
+	cluster := newLockstepCluster(tst).addActive(1)
+	cluster.drainInteractiveMessages()
+	readerUpstream, writerDownstream := io.Pipe()
+	_, writerUpstream := io.Pipe()
+	streamUp := newCloser(readerUpstream, writerUpstream)
+
+	for _, n := range cluster.nodes {
+		n.mockStreamRequester.EXPECT().NewStream(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, p p2p.Peer) (io.ReadWriteCloser, error) {
+				return streamUp, nil
+			},
+		).Times(1)
+	}
+	cluster.nodes[0].hare.Connected(peer.ID("abcd"))
+	cluster.nodes[0].hare.Disconnected(peer.ID("abcd"))
+	// need to close the other end of the pipe so that the reader
+	// returns an error so that we actually get out of the loop. this is
+	// in order to simulate a blocking behavior on Reads which is similar to
+	// blocking on libp2p streams.
+	writerDownstream.Close()
+	// expect the stream Close() to be called
+	<-streamUp.closed
 }

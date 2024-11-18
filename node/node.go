@@ -929,6 +929,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.hare4.Register(sig)
 		}
 		app.hare4.Start()
+		app.host.SubscribeNotify(app.hare4)
 		app.eg.Go(func() error {
 			compat.ReportWeakcoin(
 				ctx,

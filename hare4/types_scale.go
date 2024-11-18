@@ -238,6 +238,13 @@ func (t *CompactIdRequest) DecodeScale(dec *scale.Decoder) (total int, err error
 
 func (t *CompactIdResponse) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
+		n, err := scale.EncodeByteArray(enc, t.MsgId[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
 		n, err := scale.EncodeStructSliceWithLimit(enc, t.Ids, 2050)
 		if err != nil {
 			return total, err
@@ -248,6 +255,13 @@ func (t *CompactIdResponse) EncodeScale(enc *scale.Encoder) (total int, err erro
 }
 
 func (t *CompactIdResponse) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		n, err := scale.DecodeByteArray(dec, t.MsgId[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
 	{
 		field, n, err := scale.DecodeStructSliceWithLimit[types.ProposalID](dec, 2050)
 		if err != nil {
