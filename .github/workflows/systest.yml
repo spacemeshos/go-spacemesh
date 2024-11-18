@@ -110,6 +110,7 @@ jobs:
             --node-labels env=dev,cluster=${{ secrets.CI_CLUSTER_NAME }},pipeline-id=${{ github.run_id }} \
             --metadata disable-legacy-endpoints=true \
             --service-account ${{ secrets.CI_GKE_NODEPOOL_SA }} \
+            --project ${{ secrets.CI_GCP_PROJECT_ID }} \
             --quiet
 
           echo "Node pool created: $NODE_POOL_NAME"
@@ -182,6 +183,7 @@ jobs:
           gcloud container node-pools delete $NODE_POOL_NAME \
             --cluster ${{ secrets.CI_CLUSTER_NAME }} \
             --location ${{ secrets.CI_REGION_NAME }} \
+            --project ${{ secrets.CI_GCP_PROJECT_ID }} \
             --quiet
           echo "Node pool deleted: $NODE_POOL_NAME"
 
