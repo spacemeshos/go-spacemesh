@@ -25,7 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 )
 
-const dumpMaxIdle = 10 * time.Millisecond
+const dumpMaxIdle = time.Second
 
 type DecayingTagSpec struct {
 	Interval time.Duration `mapstructure:"interval"`
