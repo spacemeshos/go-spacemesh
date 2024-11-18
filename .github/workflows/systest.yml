@@ -100,7 +100,7 @@ jobs:
             --cluster ${{ secrets.CI_CLUSTER_NAME }} \
             --num-nodes 8 \
             --preemptible \
-            --machine-type ${{ CI_NODE_MACHINE_TYPE }} \
+            --machine-type ${{ secrets.CI_NODE_MACHINE_TYPE }} \
             --disk-type pd-ssd \
             --disk-size 300GB \
             --image-type COS_CONTAINERD \
