@@ -17,19 +17,18 @@ func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	ctx := &core.Context{Loader: cache, Logger: zaptest.NewLogger(t)}
 	host, err := NewHost(ctx)
 	require.NoError(t, err)
+	t.Cleanup(host.Destroy)
 	return host, cache
 }
 
 func TestNewHost(t *testing.T) {
 	host, _ := getHost(t)
-	defer host.Destroy()
 
 	require.Equal(t, "Athena", host.vm.Name())
 }
 
 func TestGetBalance(t *testing.T) {
 	host, cache := getHost(t)
-	defer host.Destroy()
 
 	account := types.Account{
 		Layer:   types.LayerID(15),
@@ -61,7 +60,6 @@ func TestSetGetStorage(t *testing.T) {
 			},
 		}
 		host, cache := getHost(t)
-		t.Cleanup(host.Destroy)
 		err := cache.Update(account)
 		require.NoError(t, err)
 
