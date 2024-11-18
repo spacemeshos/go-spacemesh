@@ -98,7 +98,7 @@ jobs:
 
           gcloud container node-pools create $NODE_POOL_NAME \
             --cluster ${{ secrets.CI_CLUSTER_NAME }} \
-            --num-nodes 8 \
+            --num-nodes 2 \
             --preemptible \
             --location ${{ secrets.CI_REGION_NAME }} \
             --machine-type ${{ secrets.CI_NODE_MACHINE_TYPE }} \
