@@ -2,7 +2,6 @@ package tests
 
 import (
 	"context"
-	"os"
 	"strings"
 	"testing"
 
@@ -11,18 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/systest/chaos"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
-
-func TestMain(m *testing.M) {
-	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
-	types.SetNetworkHRP("stest")
-	res := m.Run()
-	os.Exit(res)
-}
 
 // TestAddNodes tests adding new nodes to the network and asserts that they start creating proposals.
 func TestAddNodes(t *testing.T) {
