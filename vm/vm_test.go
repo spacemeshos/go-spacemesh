@@ -142,8 +142,7 @@ func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		address, err := sdkwallet.Address(*signing.NewPublicKey(pub))
-		require.NoError(t, err)
+		address := sdkwallet.Address(*signing.NewPublicKey(pub))
 		t.addAccount(&singlesigAccount{pk, address}, 1_000_000_000)
 	}
 	return t

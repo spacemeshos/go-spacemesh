@@ -1,6 +1,8 @@
 package core
 
 import (
+	"fmt"
+
 	"github.com/ChainSafe/gossamer/pkg/scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -26,14 +28,14 @@ func ComputePrincipalFromBlob(template types.Address, blob []byte) Address {
 	return types.GenerateAddress(sum)
 }
 
-func ComputePrincipalFromPubkey(template types.Address, pubkey signing.PublicKey) (Address, error) {
+func ComputePrincipalFromPubkey(template types.Address, pubkey signing.PublicKey) Address {
 	// construct and encode the blob, which is a SCALE-encoded Athena wallet template instance
 	blob, err := scale.Marshal(struct {
 		Nonce, Balance uint64
 		Owner          [32]byte
 	}{0, 0, [32]byte(pubkey.PublicKey)})
 	if err != nil {
-		return Address{}, err
+		panic(fmt.Sprintf("scale-encoding spawn args failed: %s", err))
 	}
-	return ComputePrincipalFromBlob(template, blob), nil
+	return ComputePrincipalFromBlob(template, blob)
 }

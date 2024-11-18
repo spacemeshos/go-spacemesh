@@ -613,13 +613,10 @@ func parse(
 		return nil, nil, fmt.Errorf("%w: non-spawn tx with unspawned principal", core.ErrNotSpawned)
 	}
 
-	computedPrincipal, err := core.ComputePrincipalFromPubkey(
+	computedPrincipal := core.ComputePrincipalFromPubkey(
 		ctx.Header.TemplateAddress,
 		unmarshaled.PublicKey,
 	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: computing spawn principal: %w", core.ErrInternal, err)
-	}
 
 	if ctx.IsSpawn() && computedPrincipal != principal {
 		return nil, nil, fmt.Errorf(

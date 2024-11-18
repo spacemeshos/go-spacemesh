@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
@@ -47,8 +45,7 @@ func (g *AtxsGenerator) WithEpochs(start, n int) *AtxsGenerator {
 func (g *AtxsGenerator) Next(t *testing.T) *types.ActivationTx {
 	var nodeID types.NodeID
 	g.rng.Read(nodeID[:])
-	addr, err := wallet.Address(*signing.NewPublicKey(nodeID.Bytes()))
-	require.NoError(t, err)
+	addr := wallet.Address(*signing.NewPublicKey(nodeID.Bytes()))
 
 	atx := &types.ActivationTx{
 		Sequence:     g.rng.Uint64(),

@@ -155,16 +155,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	addr1, err = wallet.Address(*signer1.PublicKey())
-	if err != nil {
-		log.Println("failed to create address:", err)
-		os.Exit(1)
-	}
-	addr2, err = wallet.Address(*signer2.PublicKey())
-	if err != nil {
-		log.Println("failed to create address:", err)
-		os.Exit(1)
-	}
+	addr1 = wallet.Address(*signer1.PublicKey())
+	addr2 = wallet.Address(*signer2.PublicKey())
 
 	globalAtx = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
@@ -387,10 +379,7 @@ func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequest {
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
-	principal, err := wallet.Address(*signer.PublicKey())
-	if err != nil {
-		panic(err)
-	}
+	principal := wallet.Address(*signer.PublicKey())
 	tx.Principal = principal
 	if nonce == 0 {
 		tx2, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGasPrice(0))
@@ -2329,8 +2318,7 @@ func TestTransactionsRewards(t *testing.T) {
 	t.Cleanup(cancel)
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 
-	address, err := wallet.Address(*signing.NewPublicKey(types.RandomNodeID().Bytes()))
-	req.NoError(err)
+	address := wallet.Address(*signing.NewPublicKey(types.RandomNodeID().Bytes()))
 	weight := new(big.Rat).SetFloat64(18.7)
 	rewards := []types.CoinbaseReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
 
@@ -2400,8 +2388,7 @@ func TestVMAccountUpdates(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		keys[i] = signer
-		addr, err := wallet.Address(*signing.NewPublicKey(signer.NodeID().Bytes()))
-		require.NoError(t, err)
+		addr := wallet.Address(*signing.NewPublicKey(signer.NodeID().Bytes()))
 		accounts[i] = types.Account{
 			Address: addr,
 			Balance: initial,
