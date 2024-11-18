@@ -1,7 +1,6 @@
 package host
 
 import (
-	"encoding/binary"
 	"testing"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -11,8 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/programs/getbalance"
-	hostprogram "github.com/spacemeshos/go-spacemesh/vm/programs/host"
 )
 
 func getHost(t *testing.T) (*Host, *core.StagedCache) {
@@ -41,86 +38,65 @@ func TestGetBalance(t *testing.T) {
 	}
 	err := cache.Update(account)
 	require.NoError(t, err)
-
-	out, gasLeft, err := host.Execute(
-		account.Layer,
-		10000,
-		account.Address,
-		account.Address,
-		nil,
-		0,
-		getbalance.PROGRAM,
-	)
-
-	require.NoError(t, err)
-	balance := binary.LittleEndian.Uint64(out)
-	require.Equal(t, account.Balance, balance)
-	require.NotZero(t, gasLeft)
-}
-
-func TestNotEnoughGas(t *testing.T) {
-	host, _ := getHost(t)
-	defer host.Destroy()
-
-	_, gasLeft, err := host.Execute(
-		10,
-		10,
-		types.Address{1, 2, 3, 4},
-		types.Address{1, 2, 3, 4},
-		nil,
-		0,
-		getbalance.PROGRAM,
-	)
-
-	require.ErrorIs(t, err, athcon.OutOfGas)
-	require.Zero(t, gasLeft)
-}
-
-func TestEmptyCode(t *testing.T) {
-	host, _ := getHost(t)
-	defer host.Destroy()
-
-	_, _, err := host.Execute(
-		10,
-		10,
-		types.Address{1, 2, 3, 4},
-		types.Address{1, 2, 3, 4},
-		nil,
-		0,
-		[]byte{},
-	)
-
-	require.ErrorContains(t, err, "athcon execute: no input code")
+	hostCtx := hostContext{
+		host: host.host,
+	}
+	b := hostCtx.GetBalance(athcon.Address(account.Address))
+	require.Equal(t, account.Balance, b)
+	b = hostCtx.GetBalance(athcon.Address{5, 4, 3, 2})
+	require.Equal(t, uint64(0), b)
 }
 
 func TestSetGetStorage(t *testing.T) {
-	host, cache := getHost(t)
-	defer host.Destroy()
-
 	storageKey := athcon.Bytes32{0xc0, 0xff, 0xee}
 	storageValue := athcon.Bytes32{0xde, 0xad, 0xbe, 0xef}
 
 	address := types.Address{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}
-	account := types.Account{
-		Address: address,
-		Balance: 10000,
-		Storage: []types.StorageItem{
-			{Key: storageKey, Value: storageValue},
-		},
+	getHostCtx := func(t *testing.T) *hostContext {
+		account := types.Account{
+			Address: address,
+			Balance: 10000,
+			Storage: []types.StorageItem{
+				{Key: storageKey, Value: storageValue},
+			},
+		}
+		host, cache := getHost(t)
+		t.Cleanup(host.Destroy)
+		err := cache.Update(account)
+		require.NoError(t, err)
+
+		hostCtx := &hostContext{
+			host: host.host,
+		}
+		return hostCtx
 	}
-	err := cache.Update(account)
-	require.NoError(t, err)
+	t.Run("get existing storage value", func(t *testing.T) {
+		t.Parallel()
+		hostCtx := getHostCtx(t)
+		value := hostCtx.GetStorage(athcon.Address(address), storageKey)
+		require.Equal(t, storageValue, value)
+	})
+	t.Run("modify storage value", func(t *testing.T) {
+		t.Parallel()
+		hostCtx := getHostCtx(t)
+		status := hostCtx.SetStorage(athcon.Address(address), storageKey, athcon.Bytes32{9, 8, 7, 6})
+		require.Equal(t, athcon.StorageModified, status)
 
-	_, gasLeft, err := host.Execute(
-		account.Layer,
-		100000,
-		account.Address,
-		account.Address,
-		nil,
-		0,
-		hostprogram.PROGRAM,
-	)
+		value := hostCtx.GetStorage(athcon.Address(address), storageKey)
+		require.Equal(t, athcon.Bytes32{9, 8, 7, 6}, value)
+	})
+	t.Run("get for non-existing account", func(t *testing.T) {
+		t.Parallel()
+		hostCtx := getHostCtx(t)
 
-	require.NoError(t, err)
-	require.NotZero(t, gasLeft)
+		value := hostCtx.GetStorage(athcon.Address{1, 2, 3}, storageKey)
+		require.Equal(t, athcon.Bytes32{}, value)
+	})
+	t.Run("get for non-existing key", func(t *testing.T) {
+		t.Parallel()
+		hostCtx := getHostCtx(t)
+
+		value := hostCtx.GetStorage(athcon.Address(address), athcon.Bytes32{1, 2, 3})
+		require.Equal(t, athcon.Bytes32{}, value)
+	})
 }
