@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -111,43 +112,28 @@ func (h *ATXHandler) Commit(ctx context.Context, peer p2p.Peer, base, new ranges
 			break
 		}
 
-		var eg errgroup.Group
-		recvCh := make(chan types.ATXID)
-		doneCh := make(chan struct{})
 		someSucceeded := false
-		eg.Go(func() error {
-			for {
-				select {
-				case id := <-recvCh:
-					numDownloaded++
-					someSucceeded = true
-					delete(state, id)
-				case <-doneCh:
-					return nil
-				}
+		var mtx sync.Mutex
+		err := h.f.GetAtxs(ctx, items, system.WithATXCallback(func(id types.ATXID, err error) {
+			mtx.Lock()
+			defer mtx.Unlock()
+			switch {
+			case err == nil:
+				numDownloaded++
+				someSucceeded = true
+				delete(state, id)
+			case errors.Is(err, pubsub.ErrValidationReject):
+				// if the atx invalid there's no point downloading it again
+				state[id] = h.maxAttempts
+			default:
+				state[id]++
 			}
-		})
-		err := h.f.GetAtxs(ctx, items, system.WithRecvChannel(recvCh))
-		close(doneCh)
-		eg.Wait()
+		}))
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
 				return err
 			}
-			batchError := &fetch.BatchError{}
-			if errors.As(err, &batchError) {
-				for hash, err := range batchError.Errors {
-					if _, exists := state[types.ATXID(hash)]; !exists {
-						continue
-					}
-					if errors.Is(err, pubsub.ErrValidationReject) {
-						// if the atx invalid there's no point downloading it again
-						state[types.ATXID(hash)] = h.maxAttempts
-					} else {
-						state[types.ATXID(hash)]++
-					}
-				}
-			} else {
+			if !errors.Is(err, &fetch.BatchError{}) {
 				h.logger.Debug("failed to download ATXs", zap.Error(err))
 			}
 		}

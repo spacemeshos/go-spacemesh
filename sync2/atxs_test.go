@@ -61,15 +61,11 @@ func TestAtxHandler_Success(t *testing.T) {
 			for _, opt := range opts {
 				opt(&atxOpts)
 			}
-			require.NotNil(t, atxOpts.RecvChannel)
+			require.NotNil(t, atxOpts.Callback)
 			for _, id := range atxs {
 				require.True(t, toFetch[id], "already fetched or bad ID")
 				delete(toFetch, id)
-				select {
-				case <-time.After(100 * time.Millisecond):
-					t.Error("timeout sending recvd id")
-				case atxOpts.RecvChannel <- id:
-				}
+				atxOpts.Callback(id, nil)
 			}
 			return nil
 		}).Times(3)
@@ -128,23 +124,21 @@ func TestAtxHandler_Retry(t *testing.T) {
 			for _, opt := range opts {
 				opt(&atxOpts)
 			}
-			require.NotNil(t, atxOpts.RecvChannel)
+			require.NotNil(t, atxOpts.Callback)
 			for _, id := range atxs {
 				switch {
 				case id == allAtxs[0]:
 					require.False(t, validationFailed, "retried after validation error")
 					errs[id.Hash32()] = pubsub.ErrValidationReject
+					atxOpts.Callback(id, errs[id.Hash32()])
 					validationFailed = true
 				case id == allAtxs[1] && failCount < 2:
 					errs[id.Hash32()] = errors.New("fetch failed")
+					atxOpts.Callback(id, errs[id.Hash32()])
 					failCount++
 				default:
 					fetched = append(fetched, id)
-					select {
-					case <-time.After(100 * time.Millisecond):
-						t.Error("timeout sending recvd id")
-					case atxOpts.RecvChannel <- id:
-					}
+					atxOpts.Callback(id, nil)
 				}
 			}
 			if len(errs) > 0 {
@@ -285,15 +279,11 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 			for _, opt := range opts {
 				opt(&atxOpts)
 			}
-			require.NotNil(t, atxOpts.RecvChannel)
+			require.NotNil(t, atxOpts.Callback)
 			for _, id := range atxs {
 				require.True(t, toFetch[id], "already fetched or bad ID")
 				delete(toFetch, id)
-				select {
-				case <-time.After(100 * time.Millisecond):
-					t.Error("timeout sending recvd id")
-				case atxOpts.RecvChannel <- id:
-				}
+				atxOpts.Callback(id, nil)
 			}
 			return nil
 		}).Times(3)

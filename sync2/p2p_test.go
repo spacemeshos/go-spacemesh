@@ -90,7 +90,9 @@ func TestP2P(t *testing.T) {
 		ps := peers.New()
 		for m := 0; m < numNodes; m++ {
 			if m != n {
-				ps.Add(mesh.Hosts()[m].ID(), []protocol.ID{multipeer.Protocol})
+				ps.Add(mesh.Hosts()[m].ID(), func() []protocol.ID {
+					return []protocol.ID{multipeer.Protocol}
+				})
 			}
 		}
 		cfg := sync2.DefaultConfig()
