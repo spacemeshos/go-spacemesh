@@ -21,5 +21,7 @@
         "data-folder": "/tmp/spacemesh-node-service",
         "filelock": "/tmp/spacemesh-node-service/node.lock"
     },
-    "smeshing-start": false
+    "smeshing": {
+      "smeshing-start": false
+    }
 }
