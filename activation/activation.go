@@ -104,7 +104,7 @@ type Builder struct {
 
 	posAtxFinder positioningAtxFinder
 
-	// states of each known identity
+	// post states of each known identity
 	postStates PostStates
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
@@ -239,7 +239,7 @@ func (b *Builder) Smeshing() bool {
 	return b.stop != nil
 }
 
-// PostState returns the current state of the post service for each registered smesher.
+// PostStates returns the current state of the post service for each registered smesher.
 func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 	states := b.postStates.Get()
 	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
@@ -340,7 +340,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 }
 
-// SmesherID returns the ID of the smesher that created this activation.
+// SmesherIDs returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherIDs() []types.NodeID {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
