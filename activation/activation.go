@@ -450,6 +450,8 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		b.logger.Warn("failed to publish atx", zap.Error(err))
 
+		b.identitiesStates.Set(sig.NodeID(), nil, IdentityStateRetrying, err.Error())
+
 		poetErr := &PoetSvcUnstableError{}
 		switch {
 		case errors.Is(err, ErrATXChallengeExpired):
@@ -527,8 +529,6 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	// Try to get existing challenge
 	existingChallenge, err := b.getExistingChallenge(logger, currentEpochId, nodeID)
 	if err != nil {
-		b.identitiesStates.Set(nodeID, nil, IdentityStatePostProofFailed,
-			fmt.Sprintf("getting existing NiPoST challenge: %s", err.Error()))
 		return nil, fmt.Errorf("getting existing NiPoST challenge: %w", err)
 	}
 

@@ -20,25 +20,22 @@ const (
 	IdentityStateNotSet IdentityState = iota
 
 	IdentityStateWaitForATXSynced
+	IdentityStateRetrying
 
 	// poet.
 	IdentityStateWaitingForPoetRegistrationWindow
 	// building nipost challenge.
 	IdentityStatePoetChallengeReady
 	IdentityStatePoetRegistered
-	IdentityStatePoetRegistrationFailed
 	// 2w pass ...
 	IdentityStateWaitForPoetRoundEnd
 	IdentityStatePoetProofReceived
-	IdentityStatePoetProofFailed
 
 	// post.
 	IdentityStateGeneratingPostProof
 	IdentityStatePostProofReady
-	IdentityStatePostProofFailed
 
 	// atx.
-	IdentityStateATXExpired
 	IdentityStateATXReady
 	IdentityStateATXBroadcasted
 )
@@ -49,6 +46,8 @@ func (s IdentityState) String() string {
 		return "not set"
 	case IdentityStateWaitForATXSynced:
 		return "wait for atx synced"
+	case IdentityStateRetrying:
+		return "retrying"
 	case IdentityStatePoetChallengeReady:
 		return "poet challenge ready"
 	case IdentityStateWaitingForPoetRegistrationWindow:
@@ -59,14 +58,10 @@ func (s IdentityState) String() string {
 		return "wait for poet round end"
 	case IdentityStatePoetProofReceived:
 		return "poet proof received"
-	case IdentityStatePoetProofFailed:
-		return "poet proof failed"
 	case IdentityStateGeneratingPostProof:
 		return "generating post proof"
 	case IdentityStatePostProofReady:
 		return "post proof ready"
-	case IdentityStatePostProofFailed:
-		return "post proof failed"
 	case IdentityStateATXReady:
 		return "atx ready"
 	case IdentityStateATXBroadcasted:

@@ -247,8 +247,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 	regErr := &PoetRegistrationMismatchError{}
 	switch {
 	case errors.As(err, &regErr):
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetRegistrationFailed,
-			regErr.Error())
 		logger.Fatal(
 			"None of the poets listed in the config matches the existing registrations. "+
 				"Verify your config and local database state.",
@@ -257,8 +255,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 		)
 		return nil, err
 	case err != nil:
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetRegistrationFailed,
-			err.Error())
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
@@ -273,11 +269,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 		// Deadline: the end of the publish epoch minus the cycle gap. A node that is setup correctly (i.e. can
 		// generate a PoST proof within the cycle gap) has enough time left to generate a post proof and publish.
 		if poetProofDeadline.Before(now) {
-			nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStateATXExpired, fmt.Sprintf(
-				"deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)",
-				postChallenge.PublishEpoch,
-				poetProofDeadline,
-				now))
 			return nil, fmt.Errorf(
 				"%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)",
 				ErrATXChallengeExpired,
@@ -296,8 +287,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
 		if poetProofRef == types.EmptyPoetProofRef {
-			nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetProofFailed,
-				"poet proof not received")
 			return nil, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
 		}
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
@@ -316,11 +305,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 		// Deadline: the end of the publish epoch. If we do not publish within
 		// the publish epoch we won't receive any rewards in the target epoch.
 		if publishEpochEnd.Before(now) {
-			nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStateATXExpired, fmt.Sprintf(
-				"deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)",
-				postChallenge.PublishEpoch,
-				publishEpochEnd,
-				now))
 			return nil, fmt.Errorf(
 				"%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)",
 				ErrATXChallengeExpired,
@@ -338,8 +322,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
-			nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePostProofFailed,
-				fmt.Sprintf("failed to generate Post: %v", err))
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
 		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePostProofReady, "")

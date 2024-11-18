@@ -30,17 +30,14 @@ func NewSmeshingIdentitiesService(
 var statusMap = map[activation.IdentityState]pb.IdentityState{
 	activation.IdentityStateNotSet:                           pb.IdentityState_UNSPECIFIED,
 	activation.IdentityStateWaitForATXSynced:                 pb.IdentityState_WAIT_FOR_ATX_SYNCED,
+	activation.IdentityStateRetrying:                         pb.IdentityState_RETRYING,
 	activation.IdentityStateWaitingForPoetRegistrationWindow: pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
 	activation.IdentityStatePoetChallengeReady:               pb.IdentityState_POET_CHALLENGE_READY,
 	activation.IdentityStatePoetRegistered:                   pb.IdentityState_POET_REGISTERED,
-	activation.IdentityStatePoetRegistrationFailed:           pb.IdentityState_POET_REGISTRATION_FAILED,
 	activation.IdentityStateWaitForPoetRoundEnd:              pb.IdentityState_WAIT_FOR_POET_ROUND_END,
 	activation.IdentityStatePoetProofReceived:                pb.IdentityState_POET_PROOF_RECEIVED,
-	activation.IdentityStatePoetProofFailed:                  pb.IdentityState_POET_PROOF_FAILED,
 	activation.IdentityStateGeneratingPostProof:              pb.IdentityState_GENERATING_POST_PROOF,
 	activation.IdentityStatePostProofReady:                   pb.IdentityState_POST_PROOF_READY,
-	activation.IdentityStatePostProofFailed:                  pb.IdentityState_POST_PROOF_FAILED,
-	activation.IdentityStateATXExpired:                       pb.IdentityState_ATX_EXPIRED,
 	activation.IdentityStateATXReady:                         pb.IdentityState_ATX_READY,
 	activation.IdentityStateATXBroadcasted:                   pb.IdentityState_ATX_BROADCASTED,
 }
