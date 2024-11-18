@@ -166,3 +166,9 @@ func (dadj *deadlineAdjuster) Write(p []byte) (n int, err error) {
 	}
 	return n, nil
 }
+
+func (dadj *deadlineAdjuster) ReadByte() (byte, error) {
+	var b [1]byte
+	_, err := io.ReadFull(dadj, b[:])
+	return b[0], err
+}
