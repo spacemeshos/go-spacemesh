@@ -245,11 +245,12 @@ func New(h Host, proto string, handler StreamHandler, opts ...Opt) *Server {
 	return srv
 }
 
-func (s *Server) maybeDump(stream network.Stream) peerStream {
+func (s *Server) maybeDump(stream network.Stream, prefix string) peerStream {
 	if s.dumpDir == "" {
 		return stream
 	}
-	remote := fmt.Sprintf("%s-%s",
+	remote := fmt.Sprintf("%s-%s-%s",
+		prefix,
 		stream.Conn().RemoteMultiaddr().String()[1:],
 		stream.Conn().RemotePeer().String())
 	return newDumpStream(stream, s.protocol, remote, s.dumpDir, dumpMaxIdle)
@@ -322,7 +323,7 @@ func (s *Server) Run(ctx context.Context) error {
 }
 
 func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.Stream) bool {
-	dadj := newDeadlineAdjuster(s.maybeDump(stream), s.timeout, s.hardTimeout)
+	dadj := newDeadlineAdjuster(s.maybeDump(stream, "server"), s.timeout, s.hardTimeout)
 	defer dadj.Close()
 	rd := bufio.NewReader(dadj)
 	size, err := varint.ReadUvarint(rd)
@@ -482,7 +483,7 @@ func (s *Server) streamRequest(
 	if s.peerInfo() != nil {
 		info = s.peerInfo().EnsurePeerInfo(stream.Conn().RemotePeer())
 	}
-	dadj := newDeadlineAdjuster(s.maybeDump(stream), s.timeout, s.hardTimeout)
+	dadj := newDeadlineAdjuster(s.maybeDump(stream, "client"), s.timeout, s.hardTimeout)
 	defer func() {
 		if err != nil {
 			dadj.Close()
