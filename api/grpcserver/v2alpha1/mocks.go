@@ -12,6 +12,8 @@ package v2alpha1
 import (
 	reflect "reflect"
 
+	activation "github.com/spacemeshos/go-spacemesh/activation"
+	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -74,6 +76,68 @@ func (c *MockmalfeasanceInfoInfoCall) Do(f func([]byte) (map[string]string, erro
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func([]byte) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockidentityState is a mock of identityState interface.
+type MockidentityState struct {
+	ctrl     *gomock.Controller
+	recorder *MockidentityStateMockRecorder
+	isgomock struct{}
+}
+
+// MockidentityStateMockRecorder is the mock recorder for MockidentityState.
+type MockidentityStateMockRecorder struct {
+	mock *MockidentityState
+}
+
+// NewMockidentityState creates a new mock instance.
+func NewMockidentityState(ctrl *gomock.Controller) *MockidentityState {
+	mock := &MockidentityState{ctrl: ctrl}
+	mock.recorder = &MockidentityStateMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockidentityState) EXPECT() *MockidentityStateMockRecorder {
+	return m.recorder
+}
+
+// All mocks base method.
+func (m *MockidentityState) All() map[types.NodeID][]activation.IdentityStateInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "All")
+	ret0, _ := ret[0].(map[types.NodeID][]activation.IdentityStateInfo)
+	return ret0
+}
+
+// All indicates an expected call of All.
+func (mr *MockidentityStateMockRecorder) All() *MockidentityStateAllCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "All", reflect.TypeOf((*MockidentityState)(nil).All))
+	return &MockidentityStateAllCall{Call: call}
+}
+
+// MockidentityStateAllCall wrap *gomock.Call
+type MockidentityStateAllCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockidentityStateAllCall) Return(arg0 map[types.NodeID][]activation.IdentityStateInfo) *MockidentityStateAllCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockidentityStateAllCall) Do(f func() map[types.NodeID][]activation.IdentityStateInfo) *MockidentityStateAllCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockidentityStateAllCall) DoAndReturn(f func() map[types.NodeID][]activation.IdentityStateInfo) *MockidentityStateAllCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

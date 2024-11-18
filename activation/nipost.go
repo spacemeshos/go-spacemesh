@@ -49,13 +49,14 @@ var ErrInvalidInitialPost = errors.New("invalid initial post")
 type NIPostBuilder struct {
 	localDB sql.LocalDatabase
 
-	poetProvers map[string]PoetService
-	postService postService
-	logger      *zap.Logger
-	poetCfg     PoetConfig
-	layerClock  layerClock
-	postStates  PostStates
-	validator   nipostValidator
+	poetProvers    map[string]PoetService
+	postService    postService
+	logger         *zap.Logger
+	poetCfg        PoetConfig
+	layerClock     layerClock
+	postStates     PostStates
+	validator      nipostValidator
+	identityStates IdentityStates
 }
 
 type NIPostBuilderOption func(*NIPostBuilder)
@@ -75,6 +76,12 @@ func NipostbuilderWithPostStates(ps PostStates) NIPostBuilderOption {
 	}
 }
 
+func NipostbuilderWithIdentityStates(is IdentityStates) NIPostBuilderOption {
+	return func(nb *NIPostBuilder) {
+		nb.identityStates = is
+	}
+}
+
 // NewNIPostBuilder returns a NIPostBuilder.
 func NewNIPostBuilder(
 	db sql.LocalDatabase,
@@ -86,13 +93,14 @@ func NewNIPostBuilder(
 	opts ...NIPostBuilderOption,
 ) (*NIPostBuilder, error) {
 	b := &NIPostBuilder{
-		localDB:     db,
-		postService: postService,
-		logger:      lg,
-		poetCfg:     poetCfg,
-		layerClock:  layerClock,
-		postStates:  NewPostStates(lg),
-		validator:   validator,
+		localDB:        db,
+		postService:    postService,
+		logger:         lg,
+		poetCfg:        poetCfg,
+		layerClock:     layerClock,
+		postStates:     NewPostStates(lg),
+		validator:      validator,
+		identityStates: NewIdentityStateStorage(),
 	}
 
 	for _, opt := range opts {
@@ -250,6 +258,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
+	nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetRegistered, "")
 	// Phase 1: query PoET services for proofs
 	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -271,6 +280,8 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
 		events.EmitWaitingForPoETRoundEnd(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStateWaitForPoetRoundEnd, "")
+
 		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
@@ -281,6 +292,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetProofReceived, "")
 	}
 
 	// Phase 2: Post execution.
@@ -305,12 +317,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 		defer cancel()
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStateGeneratingPostProof, "")
 
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePostProofReady, "")
 
 		postGenDuration := time.Since(startTime)
 
