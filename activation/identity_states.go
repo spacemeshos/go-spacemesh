@@ -78,13 +78,9 @@ type IdentityStateInfo struct {
 	Time         time.Time
 }
 
-type Identity struct {
-	History []IdentityStateInfo
-}
-
 type IdentityStateStorage struct {
 	mu         sync.RWMutex
-	identities map[types.NodeID]*Identity
+	identities map[types.NodeID][]IdentityStateInfo
 }
 
 func NewIdentityStateStorage() *IdentityStateStorage {
