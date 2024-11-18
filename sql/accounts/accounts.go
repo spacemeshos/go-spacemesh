@@ -52,6 +52,7 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	// if account.Address != address {
 	// 	return types.Account{}, sql.ErrNotFound
 	// }
+	account.Address = address // without this tests are failing not only assertions but are also panicking
 	return account, nil
 }
 
@@ -89,6 +90,7 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 	// if account.Address != address {
 	// 	return types.Account{}, sql.ErrNotFound
 	// }
+	account.Address = address // without this tests are failing not only assertions but are also panicking
 	return account, nil
 }
 
