@@ -59,6 +59,14 @@ type ProofDoubleMerge struct {
 	SmesherID2MarryProof MarryProof
 }
 
+func (p ProofDoubleMerge) String() string {
+	return "Double Merge Proof"
+}
+
+func (p ProofDoubleMerge) Type() ProofType {
+	return DoubleMerge
+}
+
 var _ Proof = &ProofDoubleMerge{}
 
 func NewDoubleMergeProof(db sql.Executor, atx1, atx2 *ActivationTxV2) (*ProofDoubleMerge, error) {

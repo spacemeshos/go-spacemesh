@@ -38,6 +38,14 @@ type ProofInvalidPost struct {
 	InvalidPostProof InvalidPostProof
 }
 
+func (p ProofInvalidPost) String() string {
+	return "Invalid PoST Proof"
+}
+
+func (p ProofInvalidPost) Type() ProofType {
+	return InvalidPost
+}
+
 var _ Proof = &ProofInvalidPost{}
 
 func NewInvalidPostProof(

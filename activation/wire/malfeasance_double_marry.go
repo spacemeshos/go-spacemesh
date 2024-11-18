@@ -42,6 +42,14 @@ type ProofDoubleMarry struct {
 	Proof2 MarryProof
 }
 
+func (p ProofDoubleMarry) String() string {
+	return "Double Marry Proof"
+}
+
+func (p ProofDoubleMarry) Type() ProofType {
+	return DoubleMarry
+}
+
 var _ Proof = &ProofDoubleMarry{}
 
 func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID types.NodeID) (*ProofDoubleMarry, error) {

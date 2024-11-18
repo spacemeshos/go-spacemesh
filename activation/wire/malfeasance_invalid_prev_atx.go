@@ -32,6 +32,14 @@ type ProofInvalidPrevAtxV2 struct {
 	Proofs [2]InvalidPrevAtxProof
 }
 
+func (p ProofInvalidPrevAtxV2) String() string {
+	return "Invalid Previous ATX Proof V2"
+}
+
+func (p ProofInvalidPrevAtxV2) Type() ProofType {
+	return InvalidPreviousV2
+}
+
 var _ Proof = &ProofInvalidPrevAtxV2{}
 
 func NewInvalidPrevAtxProofV2(
@@ -188,6 +196,14 @@ type ProofInvalidPrevAtxV1 struct {
 
 	Proof InvalidPrevAtxProof
 	ATXv1 ActivationTxV1
+}
+
+func (p ProofInvalidPrevAtxV1) String() string {
+	return "Invalid Previous ATX Proof V1"
+}
+
+func (p ProofInvalidPrevAtxV1) Type() ProofType {
+	return InvalidPreviousV1
 }
 
 var _ Proof = &ProofInvalidPrevAtxV1{}

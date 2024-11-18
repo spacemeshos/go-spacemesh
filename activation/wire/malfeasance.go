@@ -2,7 +2,6 @@ package wire
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -69,11 +68,22 @@ const (
 	LegacyInvalidPost    ProofType = 0x01
 	LegacyInvalidPrevATX ProofType = 0x02
 
-	DoubleMarry     ProofType = 0x10
-	DoubleMerge     ProofType = 0x11
-	InvalidPost     ProofType = 0x12
-	InvalidPrevious ProofType = 0x13
+	DoubleMarry       ProofType = 0x10
+	DoubleMerge       ProofType = 0x11
+	InvalidPost       ProofType = 0x12
+	InvalidPreviousV1 ProofType = 0x13
+	InvalidPreviousV2 ProofType = 0x14
 )
+
+var proofTypes = map[ProofType]Proof{
+	// TODO(mafa): legacy proofs
+
+	DoubleMarry:       &ProofDoubleMarry{},
+	DoubleMerge:       &ProofDoubleMerge{},
+	InvalidPost:       &ProofInvalidPost{},
+	InvalidPreviousV1: &ProofInvalidPrevAtxV1{},
+	InvalidPreviousV2: &ProofInvalidPrevAtxV2{},
+}
 
 // ProofVersion is an identifier for the version of the proof that is encoded in the ATXProof.
 type ProofVersion byte
@@ -83,41 +93,29 @@ type ATXProof struct {
 	Version ProofVersion
 	// ProofType is the type of proof that is being provided.
 	ProofType ProofType
+
 	// Proof is the actual proof. Its type depends on the ProofType.
 	Proof []byte `scale:"max=1048576"` // max size of proof is 1MiB
 }
 
 func (p *ATXProof) Decode() (Proof, error) {
-	switch p.ProofType {
-	case DoubleMarry:
-		rst := &ProofDoubleMarry{}
-		if err := codec.Decode(p.Proof, rst); err != nil {
-			return nil, fmt.Errorf("decoding ATX double marry proof: %w", err)
-		}
-		return rst, nil
-	case DoubleMerge:
-		rst := &ProofDoubleMerge{}
-		if err := codec.Decode(p.Proof, rst); err != nil {
-			return nil, fmt.Errorf("decoding ATX double merge proof: %w", err)
-		}
-		return rst, nil
-	case InvalidPost:
-		rst := &ProofInvalidPost{}
-		if err := codec.Decode(p.Proof, rst); err != nil {
-			return nil, fmt.Errorf("decoding ATX invalid post proof: %w", err)
-		}
-		return rst, nil
-	case InvalidPrevious:
-		return nil, errors.New("invalid previous proof is not supported")
-	default:
-		return nil, fmt.Errorf("unknown ATX malfeasance proof type: %d", p.ProofType)
+	rst, ok := proofTypes[p.ProofType]
+	if !ok {
+		return nil, fmt.Errorf("unknown ATX malfeasance proof type: 0x%x", p.ProofType)
 	}
+	if err := codec.Decode(p.Proof, rst); err != nil {
+		return nil, fmt.Errorf("decoding ATX malfeasance proof of type 0x%x: %w", p.ProofType, err)
+	}
+	return rst, nil
 }
 
 // Proof is an interface for all types of proofs that can be provided in an ATXProof.
 // Generally the proof should be able to validate itself and be scale encoded.
 type Proof interface {
 	scale.Encodable
+	scale.Decodable
+	fmt.Stringer
 
+	Type() ProofType
 	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
 }

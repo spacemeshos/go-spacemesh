@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
 // ATXMalfeasancePublisher is the publisher for ATX proofs.
@@ -20,7 +20,14 @@ func NewATXMalfeasancePublisher(
 	}
 }
 
-func (p *ATXMalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
-	// TODO(mafa): implement me
-	return nil
+// Publish publishes an ATX proof by encoding it and sending it to the malfeasance publisher.
+func (p *ATXMalfeasancePublisher) Publish(ctx context.Context, proof wire.Proof) error {
+	atxProof := &wire.ATXProof{
+		Version:   0x01, // for now we only have one version
+		ProofType: proof.Type(),
+
+		Proof: codec.MustEncode(proof),
+	}
+
+	return p.malPublisher.PublishATXProof(ctx, codec.MustEncode(atxProof))
 }
