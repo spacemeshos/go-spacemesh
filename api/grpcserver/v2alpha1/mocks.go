@@ -105,10 +105,10 @@ func (m *MockidentityState) EXPECT() *MockidentityStateMockRecorder {
 }
 
 // All mocks base method.
-func (m *MockidentityState) All() map[types.NodeID]*activation.Identity {
+func (m *MockidentityState) All() map[types.NodeID][]activation.IdentityStateInfo {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "All")
-	ret0, _ := ret[0].(map[types.NodeID]*activation.Identity)
+	ret0, _ := ret[0].(map[types.NodeID][]activation.IdentityStateInfo)
 	return ret0
 }
 
@@ -125,19 +125,19 @@ type MockidentityStateAllCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockidentityStateAllCall) Return(arg0 map[types.NodeID]*activation.Identity) *MockidentityStateAllCall {
+func (c *MockidentityStateAllCall) Return(arg0 map[types.NodeID][]activation.IdentityStateInfo) *MockidentityStateAllCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockidentityStateAllCall) Do(f func() map[types.NodeID]*activation.Identity) *MockidentityStateAllCall {
+func (c *MockidentityStateAllCall) Do(f func() map[types.NodeID][]activation.IdentityStateInfo) *MockidentityStateAllCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStateAllCall) DoAndReturn(f func() map[types.NodeID]*activation.Identity) *MockidentityStateAllCall {
+func (c *MockidentityStateAllCall) DoAndReturn(f func() map[types.NodeID][]activation.IdentityStateInfo) *MockidentityStateAllCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

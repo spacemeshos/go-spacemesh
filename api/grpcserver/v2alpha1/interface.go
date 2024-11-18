@@ -12,5 +12,5 @@ type malfeasanceInfo interface {
 }
 
 type identityState interface {
-	All() map[types.NodeID]*activation.Identity
+	All() map[types.NodeID][]activation.IdentityStateInfo
 }

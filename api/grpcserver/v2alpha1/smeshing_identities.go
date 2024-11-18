@@ -5,12 +5,10 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-	"golang.org/x/exp/maps"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
@@ -59,16 +57,15 @@ func (s *SmeshingIdentitiesService) States(
 	ctx context.Context,
 	_ *pb.IdentityStatesRequest,
 ) (*pb.IdentityStatesResponse, error) {
-	pbIdentities := make(map[types.NodeID]*pb.Identity)
+	pbIdentities := make(map[string]*pb.Identity)
 
-	for desc, state := range s.states.All() {
-		pbIdentities[desc] = &pb.Identity{
-			SmesherId: desc.Bytes(),
-			History:   []*pb.IdentityStateInfo{},
+	for nodeId, history := range s.states.All() {
+		pbIdentities[nodeId.String()] = &pb.Identity{
+			History: []*pb.IdentityStateInfo{},
 		}
 
-		for i := len(state.History) - 1; i >= 0; i-- {
-			info := state.History[i]
+		for i := len(history) - 1; i >= 0; i-- {
+			info := history[i]
 			ts := timestamppb.New(info.Time)
 			identityStateInfo := &pb.IdentityStateInfo{
 				State:   statusMap[info.State],
@@ -79,9 +76,9 @@ func (s *SmeshingIdentitiesService) States(
 				epoch := info.PublishEpoch.Uint32()
 				identityStateInfo.PublishEpoch = &epoch
 			}
-			pbIdentities[desc].History = append(pbIdentities[desc].History, identityStateInfo)
+			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)
 		}
 	}
 
-	return &pb.IdentityStatesResponse{Identities: maps.Values(pbIdentities)}, nil
+	return &pb.IdentityStatesResponse{Identities: pbIdentities}, nil
 }

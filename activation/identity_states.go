@@ -85,7 +85,7 @@ type IdentityStateStorage struct {
 
 func NewIdentityStateStorage() *IdentityStateStorage {
 	return &IdentityStateStorage{
-		identities: make(map[types.NodeID]*Identity),
+		identities: make(map[types.NodeID][]IdentityStateInfo),
 	}
 }
 
@@ -99,16 +99,14 @@ func (s *IdentityStateStorage) Set(
 	defer s.mu.Unlock()
 
 	if _, exists := s.identities[id]; !exists {
-		s.identities[id] = &Identity{
-			History: []IdentityStateInfo{},
-		}
+		s.identities[id] = []IdentityStateInfo{}
 	}
 
-	if len(s.identities[id].History) > 100 {
-		s.identities[id].History = s.identities[id].History[1:]
+	if len(s.identities[id]) > 100 {
+		s.identities[id] = s.identities[id][1:]
 	}
 
-	s.identities[id].History = append(s.identities[id].History, IdentityStateInfo{
+	s.identities[id] = append(s.identities[id], IdentityStateInfo{
 		State:        newState,
 		PublishEpoch: publishEpoch,
 		Message:      message,
@@ -116,7 +114,7 @@ func (s *IdentityStateStorage) Set(
 	})
 }
 
-func (s *IdentityStateStorage) Get(id types.NodeID) (*Identity, error) {
+func (s *IdentityStateStorage) Get(id types.NodeID) ([]IdentityStateInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -127,7 +125,7 @@ func (s *IdentityStateStorage) Get(id types.NodeID) (*Identity, error) {
 	return state, nil
 }
 
-func (s *IdentityStateStorage) All() map[types.NodeID]*Identity {
+func (s *IdentityStateStorage) All() map[types.NodeID][]IdentityStateInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.identities
