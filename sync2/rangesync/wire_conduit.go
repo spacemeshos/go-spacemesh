@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
@@ -143,6 +144,16 @@ func (c *wireConduit) NextMessage() (SyncMessage, error) {
 }
 
 func (c *wireConduit) nextMessage() (SyncMessage, int, error) {
+	msg, n, err := c.xNextMessage()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "QQQQQ: wireConduit: error: %v\n", err)
+	} else {
+		fmt.Fprintf(os.Stderr, "QQQQQ: wireConduit: message: %T (n=%d)\n", msg, n)
+	}
+	return msg, n, err
+}
+
+func (c *wireConduit) xNextMessage() (SyncMessage, int, error) {
 	var b [1]byte
 	if n, err := io.ReadFull(c.stream, b[:]); err != nil {
 		if !errors.Is(err, io.EOF) {
