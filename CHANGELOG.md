@@ -21,6 +21,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6451](https://github.com/spacemeshos/go-spacemesh/pull/6451) Fix a possible deadloop in the beacon protocol.
 
+* [#6470](https://github.com/spacemeshos/go-spacemesh/pull/6470) Fix I/O buffering issue which could be affecting QUIC connections.
+
 ## v1.7.6
 
 ### Upgrade information
