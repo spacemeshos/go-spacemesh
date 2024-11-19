@@ -304,7 +304,10 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 	return ops, nil
 }
 
-func (s *TransactionService) toTx(ctx context.Context, tx *types.MeshTransaction, result *types.TransactionResult,
+func (s *TransactionService) toTx(
+	ctx context.Context,
+	tx *types.MeshTransaction,
+	result *types.TransactionResult,
 	includeResult, includeState bool,
 ) *spacemeshv2alpha1.TransactionResponse {
 	rst := &spacemeshv2alpha1.TransactionResponse{}
