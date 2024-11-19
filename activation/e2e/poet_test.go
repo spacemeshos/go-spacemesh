@@ -88,6 +88,12 @@ func WithCertifier(certifier *registration.CertifierConfig) HTTPPoetOpt {
 	}
 }
 
+func WithTrustedKeysDirPath(path string) HTTPPoetOpt {
+	return func(cfg *server.Config) {
+		cfg.Registration.Certifier.TrustedKeysDirPath = path
+	}
+}
+
 // NewHTTPPoetTestHarness returns a new instance of HTTPPoetHarness.
 func NewHTTPPoetTestHarness(ctx context.Context, poetDir string, opts ...HTTPPoetOpt) (*HTTPPoetTestHarness, error) {
 	cfg := server.DefaultConfig()

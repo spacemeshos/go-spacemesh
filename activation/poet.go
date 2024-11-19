@@ -51,6 +51,8 @@ type PoetPoW struct {
 type PoetAuth struct {
 	*PoetPoW
 	*certifier.PoetCert
+
+	CertPubKey []byte
 }
 
 type PoetClient interface {
@@ -235,13 +237,19 @@ func (c *HTTPPoetClient) Submit(
 			Data:      auth.PoetCert.Data,
 			Signature: auth.PoetCert.Signature,
 		}
+
+		if len(auth.CertPubKey) > shared.CertKeyHintSize {
+			request.CertificatePubkeyHint = auth.CertPubKey[:shared.CertKeyHintSize]
+		} else {
+			request.CertificatePubkeyHint = auth.CertPubKey
+		}
 	}
 
 	resBody := rpcapi.SubmitResponse{}
 	if err := c.req(ctx, http.MethodPost, "/v1/submit", &request, &resBody, c.submitChallengeClient); err != nil {
 		return nil, fmt.Errorf("submitting challenge: %w", err)
 	}
-	roundEnd := time.Time{}
+	var roundEnd time.Time
 	if resBody.RoundEnd != nil {
 		roundEnd = time.Now().Add(resBody.RoundEnd.AsDuration())
 	}
@@ -507,7 +515,12 @@ func (c *poetService) authorize(
 	cert, err := c.Certify(ctx, nodeID)
 	switch {
 	case err == nil:
-		return &PoetAuth{PoetCert: cert}, nil
+		info, err := c.getInfo(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		return &PoetAuth{PoetCert: cert, CertPubKey: info.Certifier.Pubkey}, nil
 	case errors.Is(err, ErrCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:
