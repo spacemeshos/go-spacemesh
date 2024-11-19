@@ -91,6 +91,30 @@ jobs:
       - name: Configure kubectl
         run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --region ${{ secrets.CI_REGION_NAME }} --project ${{ secrets.CI_GCP_PROJECT_ID }}
 
+      - name: Create Node Pool
+        run: |
+
+          NODE_POOL_NAME="systemtest-${{ github.run_id }}"
+
+          gcloud container node-pools create $NODE_POOL_NAME \
+            --cluster ${{ secrets.CI_CLUSTER_NAME }} \
+            --num-nodes 2 \
+            --preemptible \
+            --location ${{ secrets.CI_REGION_NAME }} \
+            --machine-type ${{ secrets.CI_NODE_MACHINE_TYPE }} \
+            --disk-type pd-ssd \
+            --disk-size 300GB \
+            --image-type COS_CONTAINERD \
+            --enable-autorepair \
+            --no-enable-autoupgrade \
+            --node-labels env=dev,cluster=${{ secrets.CI_CLUSTER_NAME }},pipeline-id=${{ github.run_id }} \
+            --metadata disable-legacy-endpoints=true \
+            --service-account ${{ secrets.CI_GKE_NODEPOOL_SA }} \
+            --project ${{ secrets.CI_GCP_PROJECT_ID }} \
+            --quiet
+
+          echo "Node pool created: $NODE_POOL_NAME"
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -138,7 +162,7 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
           storage: premium-rwo=10Gi
-          node_selector: cloud.google.com/gke-nodepool=systemtest
+          node_selector: pipeline-id=${{ github.run_id }}
           size: 20
           bootstrap: 4m
           level: ${{ inputs.log_level }}
@@ -151,6 +175,17 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
+      
+      - name: Delete Node Pool
+        if: always()
+        run: |
+          NODE_POOL_NAME="systemtest-${{ github.run_id }}"
+          gcloud container node-pools delete $NODE_POOL_NAME \
+            --cluster ${{ secrets.CI_CLUSTER_NAME }} \
+            --location ${{ secrets.CI_REGION_NAME }} \
+            --project ${{ secrets.CI_GCP_PROJECT_ID }} \
+            --quiet
+          echo "Node pool deleted: $NODE_POOL_NAME"
 
   systest-status:
     if: always()
