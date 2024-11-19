@@ -771,13 +771,10 @@ func TestEvictedTransaction(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	tx := newTx(0, types.Address{}, signer)
-	require.NoError(t, db.WithTxImmediate(context.Background(), func(dtx sql.Transaction) error {
-		require.NoError(t, transactions.Add(dtx, &types.Transaction{
-			RawTx:    tx.RawTx,
-			TxHeader: nil,
-		}, time.Time{}))
-		return nil
-	}))
+	require.NoError(t, transactions.Add(db, &types.Transaction{
+		RawTx:    tx.RawTx,
+		TxHeader: nil,
+	}, time.Now()))
 
 	svc := NewTransactionService(db, conState, syncer, txHandler, publisher)
 	cfg, cleanup := launchServer(t, svc)
