@@ -103,7 +103,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
-	@$(ULIMIT) ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -timeout 8m $(UNIT_TESTS)
+	@$(ULIMIT) ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -p 1 -timeout 8m $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
