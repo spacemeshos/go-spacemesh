@@ -9,10 +9,8 @@ on:
       log_level:
         description: "Log level"
         default: "debug"
-  push:
-    branches:
-      - staging
-      - trying
+  merge_group:
+
 env:
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
