@@ -26,7 +26,6 @@ temp.js
 /cover-all.out
 /trace
 cover.out
-test-report.json
 junit.xml
 coverage.html
 gcloud.json
