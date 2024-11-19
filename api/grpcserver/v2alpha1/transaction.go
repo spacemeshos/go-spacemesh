@@ -357,7 +357,9 @@ func (s *TransactionService) toTx(ctx context.Context, tx *types.MeshTransaction
 	return rst
 }
 
-func (s *TransactionService) convertTxResult(result *types.TransactionResult) spacemeshv2alpha1.TransactionResult_Status {
+func (s *TransactionService) convertTxResult(
+	result *types.TransactionResult,
+) spacemeshv2alpha1.TransactionResult_Status {
 	switch result.Status {
 	case types.TransactionSuccess:
 		return spacemeshv2alpha1.TransactionResult_TRANSACTION_STATUS_SUCCESS
@@ -368,7 +370,9 @@ func (s *TransactionService) convertTxResult(result *types.TransactionResult) sp
 	}
 }
 
-func (s *TransactionService) convertTxState(ctx context.Context, tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionState {
+func (s *TransactionService) convertTxState(
+	ctx context.Context, tx *types.MeshTransaction,
+) *spacemeshv2alpha1.TransactionState {
 	switch tx.State {
 	case types.MEMPOOL:
 		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_MEMPOOL
