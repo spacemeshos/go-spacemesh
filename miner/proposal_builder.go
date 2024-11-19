@@ -500,7 +500,7 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 }
 
 func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession, lid types.LayerID) error {
-	if err := pb.initSignerSessionData(ctx, &ss.session, lid, ss.signer.NodeID()); err != nil {
+	if err := pb.initSignerSessionData(&ss.session, lid, ss.signer.NodeID()); err != nil {
 		return fmt.Errorf("init signer session data: %w", err)
 	}
 	if ss.session.eligibilities.proofs == nil {
@@ -525,7 +525,7 @@ func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession
 	return nil
 }
 
-func (pb *ProposalBuilder) initSignerSessionData(ctx context.Context,
+func (pb *ProposalBuilder) initSignerSessionData(
 	s *session,
 	lid types.LayerID,
 	nodeID types.NodeID,
@@ -587,7 +587,7 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 
 	signer := &signerSession{}
 
-	if err := pb.initSignerSessionData(ctx, &signer.session, lid, nodeID); err != nil {
+	if err := pb.initSignerSessionData(&signer.session, lid, nodeID); err != nil {
 		if errors.Is(err, errAtxNotAvailable) {
 			pb.logger.Debug("smesher doesn't have atx that targets this epoch",
 				log.ZContext(ctx),

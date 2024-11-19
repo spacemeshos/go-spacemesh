@@ -2,6 +2,7 @@ package miner
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"sync"
 
@@ -149,6 +150,16 @@ func (pb *RemoteProposalBuilder) build(
 	pb.signers.mu.Lock()
 	signers := maps.Values(pb.signers.signers)
 	pb.signers.mu.Unlock()
+	var err error
+	bcn, ok := beacons[epoch]
+	if !ok {
+		bcn, err = pb.beaconSvc.Beacon(ctx, epoch)
+		if err != nil {
+			return fmt.Errorf("beacon: %w", err)
+		}
+		beacons[epoch] = bcn
+	}
+
 	for _, signer := range signers {
 		nodeId := signer.signer.NodeID()
 		proposal, nonce, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
@@ -160,16 +171,6 @@ func (pb *RemoteProposalBuilder) build(
 			// this node signer isn't eligible this epoch, continue
 			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
-		}
-
-		bcn, ok := beacons[epoch]
-		if !ok {
-			bcn, err = pb.beaconSvc.Beacon(ctx, epoch)
-			if err != nil {
-				pb.logger.Error("get beacon", zap.Error(err))
-				continue
-			}
-			beacons[epoch] = bcn
 		}
 
 		var proofs map[types.LayerID][]types.VotingEligibility
