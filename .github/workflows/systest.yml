@@ -10,6 +10,7 @@ on:
         description: "Log level"
         default: "debug"
   merge_group:
+  pull_request:
 
 env:
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
@@ -52,7 +53,7 @@ jobs:
 
   systest:
     runs-on: ubuntu-22.04
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name != 'pull_request' }}
     needs:
       - filter-changes
     timeout-minutes: 70
@@ -157,8 +158,9 @@ jobs:
       - systest
     runs-on: ubuntu-22.04
     env:
-      # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
+      # On pull_request: always success
+      # On merge_group: success if no non-doc changes or if systest passed
+      status: ${{ github.event_name == 'pull_request' && 'success' || (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v2
