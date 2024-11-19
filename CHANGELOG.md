@@ -2,7 +2,7 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## Unreleased
+## v1.7.7
 
 ### Improvements
 
@@ -14,6 +14,7 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6422](https://github.com/spacemeshos/go-spacemesh/pull/6422) Further improved performance of the proposal building
   process to avoid late proposals.
+
 * [#6443](https://github.com/spacemeshos/go-spacemesh/pull/6443) Improve eviction of ineffectual transactions in the database
   which will now show up as ineffectual when querying them from the API.
 
