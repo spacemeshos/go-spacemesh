@@ -7,6 +7,7 @@ GOTESTSUM_VERSION := v1.12.0
 GOVULNCHECK_VERSION := v1.1.3
 GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.5.0
+GO2JUNIT_VERSION := de22d90
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
@@ -70,6 +71,7 @@ install:
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
 	go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
+	go install github.com/fasmat/go2junit/cmd/go2junit@$(GO2JUNIT_VERSION)
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service
@@ -145,7 +147,9 @@ lint-fix: get-libs
 .PHONY: lint-fix
 
 cover: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -json -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS) > test-report.json
+	sed -i.bak '/"Action":"output"/d' test-report.json
+	go2junit parse -i test-report.json > junit.xml
 .PHONY: cover
 
 vulncheck: get-libs
