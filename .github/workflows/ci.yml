@@ -22,10 +22,7 @@ on:
   workflow_dispatch:
   # run for all pull requests and pushes to certain branches
   pull_request:
-  push:
-    branches:
-      - staging
-      - trying
+  merge_group:
 
 concurrency:
   group: ${{ github.base_ref == 'staging' && 'smci-staging' || format('smci-{0}-{1}', github.workflow, github.ref) }}
