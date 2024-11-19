@@ -182,6 +182,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 			return fmt.Errorf("inserting genesis account: %w", err)
 		}
 	}
+
 	return tx.Commit()
 }
 
@@ -575,6 +576,8 @@ func parse(
 		ctx.SpawnTx = true
 		ctx.Header.MaxGas = core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
 	}
+
+	logger.Error("wallet template address is", zap.Stringer("addr", wallet.TemplateAddress))
 
 	// now that we have a template handler, go ahead and parse the tx
 	output, err := ctx.PrincipalHandler.Parse(decoder)

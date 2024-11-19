@@ -31,7 +31,6 @@ import (
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
-	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func init() {
@@ -92,10 +91,14 @@ func athena() config.Config {
 			GenesisTime: "2024-10-31T18:00:00Z",
 			ExtraData:   "000000000000000000001549a7b3a17a81b805488cd0439f16993c5a021638bc",
 			Accounts: map[string]uint64{
-				walletTemplate.TemplateAddress.StringWithHRP("atest"): 1000000000000000000,
+				"atest1qqqqqqzm9w8yaav5kgwwzqqdqvaxj0ml4nq65zckgclkp": 1000000000000000000,
+				// This should be - fix it for the next devnet:
+				// walletTemplate.TemplateAddress.StringWithHRP("atest"): 1000000000000000000,
 			},
 			Templates: map[string][]byte{
-				walletTemplate.TemplateAddress.StringWithHRP("atest"): wallet.PROGRAM,
+				"atest1qqqqqqzm9w8yaav5kgwwzqqdqvaxj0ml4nq65zckgclkp": wallet.PROGRAM,
+				// This should be - fix it for the next devnet:
+				// walletTemplate.TemplateAddress.StringWithHRP("atest"): wallet.PROGRAM,
 			},
 		},
 		Tortoise: tortoise.Config{
