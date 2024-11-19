@@ -390,7 +390,8 @@ func (s *TransactionService) convertTxState(
 				zap.String("tx_id", tx.ID.String()),
 				zap.Error(err),
 			)
-			return nil
+			state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+			return &state
 		}
 		if evicted {
 			state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_INEFFECTUAL
