@@ -35,10 +35,10 @@ import (
 
 // Errors.
 var (
-	ErrSyntax        = errors.New("invalid hex string")
-	ErrMissingPrefix = errors.New("hex string without 0x prefix")
-	ErrOddLength     = errors.New("hex string of odd length")
-	ErrUint64Range   = errors.New("hex number > 64 bits")
+	errSyntax        = errors.New("invalid hex string")
+	errMissingPrefix = errors.New("hex string without 0x prefix")
+	errOddLength     = errors.New("hex string of odd length")
+	errUint64Range   = errors.New("hex number > 64 bits")
 )
 
 // Encode encodes b as a hex string with 0x prefix.

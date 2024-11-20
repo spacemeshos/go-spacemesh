@@ -271,7 +271,7 @@ func (p InvalidPostProof) Valid(
 		p.NumUnits,
 		int(p.ValidPostIndex),
 	); err != nil {
-		return errors.New("Commitment ATX is not valid")
+		return errors.New("commitment ATX is not valid")
 	}
 
 	if err := malValidator.PostIndex(
