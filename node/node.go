@@ -60,6 +60,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/malfeasance2"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
@@ -136,6 +137,7 @@ const (
 	ConStateLogger         = "conState"
 	ExecutorLogger         = "executor"
 	MalfeasanceLogger      = "malfeasance"
+	Malfeasance2Logger     = "malfeasance2"
 	BootstrapLogger        = "bootstrap"
 )
 
@@ -377,50 +379,52 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock           *flock.Flock
-	signers            []*signing.EdSigner
-	Config             *config.Config
-	db                 sql.StateDatabase
-	apiDB              sql.StateDatabase
-	cachedDB           *datastore.CachedDB
-	dbMetrics          *dbmetrics.DBMetricsCollector
-	localDB            sql.LocalDatabase
-	grpcPublicServer   *grpcserver.Server
-	grpcPrivateServer  *grpcserver.Server
-	grpcPostServer     *grpcserver.Server
-	grpcTLSServer      *grpcserver.Server
-	jsonAPIServer      *grpcserver.JSONHTTPServer
-	grpcServices       map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService       *http.Server
-	profilerService    *pyroscope.Profiler
-	syncer             *syncer.Syncer
-	proposalBuilder    *miner.ProposalBuilder
-	mesh               *mesh.Mesh
-	atxsdata           *atxsdata.Data
-	clock              *timesync.NodeClock
-	hare3              *hare3.Hare
-	hare4              *hare4.Hare
-	hareResultsChan    chan hare4.ConsensusOutput
-	hOracle            *eligibility.Oracle
-	blockGen           *blocks.Generator
-	certifier          *blocks.Certifier
-	atxBuilder         *activation.Builder
-	atxHandler         *activation.Handler
-	txHandler          *txs.TxHandler
-	validator          *activation.Validator
-	edVerifier         *signing.EdVerifier
-	beaconProtocol     *beacon.ProtocolDriver
-	log                log.Log
-	syncLogger         log.Log
-	conState           *txs.ConservativeState
-	fetcher            *fetch.Fetch
-	ptimesync          *peersync.Sync
-	updater            *bootstrap.Updater
-	poetDb             *activation.PoetDb
-	postVerifier       activation.PostVerifier
-	postSupervisor     *activation.PostSupervisor
-	malfeasanceHandler *malfeasance.Handler
-	errCh              chan error
+	fileLock              *flock.Flock
+	signers               []*signing.EdSigner
+	Config                *config.Config
+	db                    sql.StateDatabase
+	apiDB                 sql.StateDatabase
+	cachedDB              *datastore.CachedDB
+	dbMetrics             *dbmetrics.DBMetricsCollector
+	localDB               sql.LocalDatabase
+	grpcPublicServer      *grpcserver.Server
+	grpcPrivateServer     *grpcserver.Server
+	grpcPostServer        *grpcserver.Server
+	grpcTLSServer         *grpcserver.Server
+	jsonAPIServer         *grpcserver.JSONHTTPServer
+	grpcServices          map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService          *http.Server
+	profilerService       *pyroscope.Profiler
+	syncer                *syncer.Syncer
+	proposalBuilder       *miner.ProposalBuilder
+	mesh                  *mesh.Mesh
+	atxsdata              *atxsdata.Data
+	clock                 *timesync.NodeClock
+	hare3                 *hare3.Hare
+	hare4                 *hare4.Hare
+	hareResultsChan       chan hare4.ConsensusOutput
+	hOracle               *eligibility.Oracle
+	blockGen              *blocks.Generator
+	certifier             *blocks.Certifier
+	atxBuilder            *activation.Builder
+	atxHandler            *activation.Handler
+	txHandler             *txs.TxHandler
+	validator             *activation.Validator
+	edVerifier            *signing.EdVerifier
+	beaconProtocol        *beacon.ProtocolDriver
+	log                   log.Log
+	syncLogger            log.Log
+	conState              *txs.ConservativeState
+	fetcher               *fetch.Fetch
+	ptimesync             *peersync.Sync
+	updater               *bootstrap.Updater
+	poetDb                *activation.PoetDb
+	postVerifier          activation.PostVerifier
+	postSupervisor        *activation.PostSupervisor
+	malfeasanceHandler    *malfeasance.Handler
+	malfeasance2Handler   *malfeasance2.Handler
+	malfeasance2Publisher *malfeasance2.Publisher
+	errCh                 chan error
 
 	host *p2p.Host
 
@@ -754,26 +758,19 @@ func (app *App) initServices(ctx context.Context) error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
 	})
 
-	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
-	// malfeasancePublisher := malfeasance.NewPublisher(
-	// 	malfeasanceLogger,
-	// 	app.cachedDB,
-	// 	trtl,
-	// 	app.host,
-	// )
+	malfeasanceLogger2 := app.addLogger(MalfeasanceLogger, lg).Zap()
+	app.malfeasance2Publisher = malfeasance2.NewPublisher(
+		malfeasanceLogger2,
+		app.cachedDB,
+		trtl,
+		app.host,
+	)
 
-	// malfeasancePublisher2 := malfeasance2.NewPublisher(
-	// 	malfeasanceLogger,
-	// 	app.cachedDB,
-	// 	trtl,
-	// 	app.host,
-	// )
-
-	// atxMalPublisher := activation.NewATXMalfeasancePublisher(
-	// 	malfeasancePublisher,
-	//  malfeasancePublisher2,
-	// )
-
+	atxMalPublisher := activation.NewMalfeasanceHandlerV2(
+		app.malfeasance2Publisher,
+		app.edVerifier,
+		validator,
+	)
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -784,8 +781,8 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcher,
 		goldenATXID,
 		validator,
+		atxMalPublisher,
 		beaconProtocol,
-		// atxMalPublisher,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
@@ -1142,6 +1139,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
+	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
 		malfeasanceLogger,

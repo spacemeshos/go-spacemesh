@@ -994,8 +994,9 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			merged.SmesherID,
 			gomock.AssignableToTypeOf(&wire.ProofDoubleMerge{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMerge)
 			nId, err := malProof.Valid(context.Background(), verifier)
 			require.NoError(t, err)
@@ -1618,8 +1619,9 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			sig.NodeID(),
 			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)
@@ -1712,8 +1714,9 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			sig.NodeID(),
 			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)
@@ -1833,8 +1836,9 @@ func TestHandlerV2_SyntacticallyValidateDeps(t *testing.T) {
 
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			sig.NodeID(),
 			gomock.AssignableToTypeOf(&wire.ProofInvalidPost{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPost)
 			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)
@@ -1964,8 +1968,9 @@ func Test_Marriages(t *testing.T) {
 
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			sig.NodeID(),
 			gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofDoubleMarry)
 			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)
@@ -2170,8 +2175,9 @@ func TestContextual_PreviousATX(t *testing.T) {
 
 		atxHdlr.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			signers[1].NodeID(),
 			gomock.AssignableToTypeOf(&wire.ProofInvalidPrevAtxV2{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPrevAtxV2)
 			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)
@@ -2250,8 +2256,9 @@ func TestContextual_PreviousATX(t *testing.T) {
 
 		atxHdlr.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			sig1.NodeID(),
 			gomock.AssignableToTypeOf(&wire.ProofInvalidPrevAtxV1{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPrevAtxV1)
 			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)
@@ -2325,8 +2332,9 @@ func TestContextual_PreviousATX(t *testing.T) {
 
 		atxHdlr.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
+			otherSig.NodeID(),
 			gomock.AssignableToTypeOf(&wire.ProofInvalidPrevAtxV2{}),
-		).DoAndReturn(func(ctx context.Context, proof wire.Proof) error {
+		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 			malProof := proof.(*wire.ProofInvalidPrevAtxV2)
 			nId, err := malProof.Valid(ctx, verifier)
 			require.NoError(t, err)

@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance2"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
@@ -41,10 +42,14 @@ func newTestHandler(tb testing.TB) *testHandler {
 	ctrl := gomock.NewController(tb)
 	mockTrt := malfeasance2.NewMocktortoise(ctrl)
 
+	edVerifier := signing.NewEdVerifier()
+
 	h := malfeasance2.NewHandler(
 		db,
 		logger,
 		"self",
+		[]types.NodeID{types.RandomNodeID()},
+		edVerifier,
 		mockTrt,
 	)
 	return &testHandler{
@@ -99,7 +104,8 @@ func TestHandler_HandleSync(t *testing.T) {
 		invalidProof := []byte("invalid")
 		handlerError := errors.New("invalid proof")
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
-		mockHandler.EXPECT().Validate(gomock.Any(), invalidProof).Return(nil, handlerError)
+		mockHandler.EXPECT().Validate(gomock.Any(), invalidProof).Return(types.EmptyNodeID, handlerError)
+		mockHandler.EXPECT().ReportInvalidProof(gomock.Any())
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -117,8 +123,10 @@ func TestHandler_HandleSync(t *testing.T) {
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
-		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return([]types.NodeID{nodeID}, nil)
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		mockHandler.EXPECT().ReportProof(gomock.Any())
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
@@ -135,7 +143,8 @@ func TestHandler_HandleSync(t *testing.T) {
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
-		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return([]types.NodeID{nodeID}, nil)
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		mockHandler.EXPECT().ReportInvalidProof(gomock.Any())
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -193,7 +202,8 @@ func TestHandler_HandleGossip(t *testing.T) {
 		invalidProof := []byte("invalid")
 		handlerError := errors.New("invalid proof")
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
-		mockHandler.EXPECT().Validate(gomock.Any(), invalidProof).Return(nil, handlerError)
+		mockHandler.EXPECT().Validate(gomock.Any(), invalidProof).Return(types.EmptyNodeID, handlerError)
+		mockHandler.EXPECT().ReportInvalidProof(gomock.Any())
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -211,8 +221,10 @@ func TestHandler_HandleGossip(t *testing.T) {
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
-		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return([]types.NodeID{nodeID}, nil)
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		mockHandler.EXPECT().ReportProof(gomock.Any())
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,

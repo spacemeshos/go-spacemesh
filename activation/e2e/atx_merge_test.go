@@ -277,6 +277,7 @@ func Test_MarryAndMerge(t *testing.T) {
 
 	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
+	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
 	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
@@ -291,6 +292,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		mFetch,
 		goldenATX,
 		validator,
+		mMalPublish,
 		mBeacon,
 		mTortoise,
 		logger,

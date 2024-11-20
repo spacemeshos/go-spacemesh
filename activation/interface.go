@@ -97,7 +97,7 @@ type syncer interface {
 // It encapsulates a specific malfeasance proof into a generic ATX malfeasance proof and publishes it by calling
 // the underlying malfeasancePublisher.
 type atxMalfeasancePublisher interface {
-	Publish(ctx context.Context, proof wire.Proof) error
+	Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error
 }
 
 // malfeasancePublisher is an interface for publishing malfeasance proofs.
@@ -108,7 +108,7 @@ type atxMalfeasancePublisher interface {
 // Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them
 // and mark the associated identity as malfeasant.
 type malfeasancePublisher interface {
-	PublishATXProof(ctx context.Context, proof []byte) error
+	PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error
 }
 
 type atxProvider interface {

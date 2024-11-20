@@ -721,7 +721,7 @@ func (h *HandlerV2) validatePost(
 	if err != nil {
 		return fmt.Errorf("creating invalid post proof: %w", err)
 	}
-	if err := h.malPublisher.Publish(ctx, proof); err != nil {
+	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
 		return fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 	}
 	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalid)
@@ -802,7 +802,7 @@ func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx sql.Transaction, at
 		if err != nil {
 			return true, fmt.Errorf("creating double marry proof: %w", err)
 		}
-		return true, h.malPublisher.Publish(ctx, proof)
+		return true, h.malPublisher.Publish(ctx, m.id, proof)
 	}
 	return false, nil
 }
@@ -847,7 +847,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 	if err != nil {
 		return true, fmt.Errorf("creating double merge proof: %w", err)
 	}
-	return true, h.malPublisher.Publish(ctx, proof)
+	return true, h.malPublisher.Publish(ctx, atx.ActivationTxV2.SmesherID, proof)
 }
 
 func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
@@ -905,7 +905,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 				if err != nil {
 					return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
 				}
-				return true, h.malPublisher.Publish(ctx, proof)
+				return true, h.malPublisher.Publish(ctx, id, proof)
 			default:
 				h.logger.Fatal("Failed to create invalid previous ATX proof: unknown ATX version",
 					zap.Stringer("atx_id", collision),
@@ -923,7 +923,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 		if err != nil {
 			return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
 		}
-		return true, h.malPublisher.Publish(ctx, proof)
+		return true, h.malPublisher.Publish(ctx, id, proof)
 	}
 	return false, nil
 }

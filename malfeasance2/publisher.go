@@ -36,31 +36,28 @@ func NewPublisher(
 	}
 }
 
-func (p *Publisher) PublishV2ATXProof(
+func (p *Publisher) PublishATXProof(
 	ctx context.Context,
-	smesherIDs []types.NodeID,
-	domain ProofDomain,
+	nodeID types.NodeID,
 	proof []byte,
 ) error {
 	// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
 	allMalicious := make(map[types.NodeID]struct{})
 
-	for _, id := range smesherIDs {
-		marriageID, err := marriage.FindIDByNodeID(p.cdb, id)
-		if err != nil {
-			return fmt.Errorf("getting equivocation set: %w", err)
-		}
-		set, err := marriage.NodeIDsByID(p.cdb, marriageID)
-		for _, id := range set {
-			allMalicious[id] = struct{}{}
-		}
-		for _, id := range smesherIDs {
-			allMalicious[id] = struct{}{}
-		}
+	marriageID, err := marriage.FindIDByNodeID(p.cdb, nodeID)
+	if err != nil {
+		return fmt.Errorf("getting equivocation set: %w", err)
+	}
+	set, err := marriage.NodeIDsByID(p.cdb, marriageID)
+	if err != nil {
+		return fmt.Errorf("getting equivocation set: %w", err)
+	}
+	for _, id := range set {
+		allMalicious[id] = struct{}{}
 	}
 
 	for id := range allMalicious {
-		if err := malfeasance.AddProof(p.cdb, id, nil, proof, byte(domain), time.Now()); err != nil {
+		if err := malfeasance.AddProof(p.cdb, id, nil, proof, byte(InvalidActivation), time.Now()); err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
 		// TODO(mafa): cache proof
@@ -72,7 +69,7 @@ func (p *Publisher) PublishV2ATXProof(
 
 	malfeasanceProof := &MalfeasanceProof{
 		Version: 0,
-		Domain:  domain,
+		Domain:  InvalidActivation,
 		Proof:   proof,
 	}
 	if err := p.publisher.Publish(ctx, pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof)); err != nil {

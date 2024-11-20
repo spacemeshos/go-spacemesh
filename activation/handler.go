@@ -106,6 +106,7 @@ func NewHandler(
 	fetcher system.Fetcher,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
+	malPublisher atxMalfeasancePublisher,
 	beacon atxReceiver,
 	tortoise system.Tortoise,
 	lg *zap.Logger,
@@ -146,7 +147,7 @@ func NewHandler(
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
-			malPublisher:    &ATXMalfeasancePublisher{}, // TODO(mafa): pass real publisher when available
+			malPublisher:    malPublisher,
 		},
 	}
 

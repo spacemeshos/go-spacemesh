@@ -7,39 +7,37 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 type MalfeasanceHandlerV2 struct {
-	syncer     syncer
-	clock      layerClock
-	publisher  malfeasancePublisher
-	cdb        *datastore.CachedDB
-	tortoise   system.Tortoise
-	edVerifier *signing.EdVerifier
-	validator  nipostValidatorV2
+	malPublisher malfeasancePublisher
+	edVerifier   *signing.EdVerifier
+	validator    nipostValidatorV2
 }
 
 func NewMalfeasanceHandlerV2(
-	syncer syncer,
-	layerClock layerClock,
 	malPublisher malfeasancePublisher,
-	cdb *datastore.CachedDB,
-	tortoise system.Tortoise,
 	edVerifier *signing.EdVerifier,
 	validator nipostValidatorV2,
 ) *MalfeasanceHandlerV2 {
 	return &MalfeasanceHandlerV2{
-		syncer:     syncer,
-		clock:      layerClock,
-		publisher:  malPublisher, // TODO(mafa): implement malfeasancePublisher in `malfeasance` package
-		cdb:        cdb,
-		tortoise:   tortoise,
-		edVerifier: edVerifier,
-		validator:  validator,
+		malPublisher: malPublisher,
+		edVerifier:   edVerifier,
+		validator:    validator,
 	}
+}
+
+// Publish publishes an ATX proof by encoding it and sending it to the malfeasance publisher.
+func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error {
+	atxProof := &wire.ATXProof{
+		Version:   0x01, // for now we only have one version
+		ProofType: proof.Type(),
+
+		Proof: codec.MustEncode(proof),
+	}
+
+	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof))
 }
 
 func (mh *MalfeasanceHandlerV2) PostIndex(
@@ -58,41 +56,26 @@ func (mh *MalfeasanceHandlerV2) Signature(d signing.Domain, nodeID types.NodeID,
 	return mh.edVerifier.Verify(d, nodeID, m, sig)
 }
 
-// TODO(mafa): call this validate in the handler for publish/gossip.
-// TODO(mafa): extend this validate to return nil if `peer` == self.
-func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) ([]types.NodeID, error) {
+// TODO(mafa): call this validate in the malfeasance handler in `malfeasance` package for publish/gossip:
+//   - do not publishing proofs for identities managed by node
+//   - validate and persist before publishing
+//   - do not handle incoming proofs from peer == `self`
+func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) (types.NodeID, error) {
 	var atxProof wire.ATXProof
 	if err := codec.Decode(data, &atxProof); err != nil {
-		return nil, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
+		return types.EmptyNodeID, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
 	}
 
 	proof, err := atxProof.Decode()
 	if err != nil {
-		return nil, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
+		return types.EmptyNodeID, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
 	}
 
 	id, err := proof.Valid(ctx, mh)
 	if err != nil {
-		return nil, fmt.Errorf("validating ATX malfeasance proof: %w", err)
+		return types.EmptyNodeID, fmt.Errorf("validating ATX malfeasance proof: %w", err)
 	}
-
-	// TODO(mafa): do this in the general handler
-	// validIDs := make([]types.NodeID, 0, len(decoded.Certificates)+1)
-	// validIDs = append(validIDs, id) // id has already been proven to be malfeasant
-
-	// // check certificates provided with the proof
-	// // TODO(mafa): only works if the main identity becomes malfeasant - try different approach with merkle proofs
-	// for _, cert := range decoded.Certificates {
-	// 	if id != cert.Target {
-	// 		continue
-	// 	}
-	// 	if !mh.edVerifier.Verify(signing.MARRIAGE, cert.Target, cert.ID.Bytes(), cert.Signature) {
-	// 		continue
-	// 	}
-	// 	validIDs = append(validIDs, cert.ID)
-	// }
-	// return validIDs, nil
-	return []types.NodeID{id}, nil
+	return id, nil
 }
 
 // TODO(mafa): this roughly how the general publisher looks like

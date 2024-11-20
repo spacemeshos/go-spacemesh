@@ -108,6 +108,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 
 	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
+	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
 	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
@@ -121,6 +122,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		mFetch,
 		goldenATX,
 		validator,
+		mMalPublish,
 		mBeacon,
 		mTortoise,
 		logger,
@@ -300,6 +302,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		mFetch,
 		goldenATX,
 		validator,
+		mMalPublish,
 		mBeacon,
 		mTortoise,
 		logger,
