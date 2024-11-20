@@ -166,3 +166,11 @@ func (dadj *deadlineAdjuster) Write(p []byte) (n int, err error) {
 	}
 	return n, nil
 }
+
+// ReadByte implements io.ByteReader, which is needed for varint.ReadUvarint, which is
+// used to read request length.
+func (dadj *deadlineAdjuster) ReadByte() (byte, error) {
+	var b [1]byte
+	_, err := io.ReadFull(dadj, b[:])
+	return b[0], err
+}

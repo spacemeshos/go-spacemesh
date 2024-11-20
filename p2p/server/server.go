@@ -303,8 +303,7 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.Stream) bool {
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer dadj.Close()
-	rd := bufio.NewReader(dadj)
-	size, err := varint.ReadUvarint(rd)
+	size, err := varint.ReadUvarint(dadj)
 	if err != nil {
 		s.logger.Debug("initial read failed",
 			zap.String("protocol", s.protocol),
@@ -326,7 +325,7 @@ func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.
 		return false
 	}
 	buf := make([]byte, size)
-	_, err = io.ReadFull(rd, buf)
+	_, err = io.ReadFull(dadj, buf)
 	if err != nil {
 		s.logger.Debug("error reading request",
 			zap.String("protocol", s.protocol),
