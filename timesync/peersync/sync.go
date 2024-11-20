@@ -145,7 +145,7 @@ type Sync struct {
 
 func (s *Sync) streamHandler(stream network.Stream) {
 	defer stream.Close()
-	_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
+	stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
 	defer stream.SetDeadline(time.Time{})
 	var request Request
 	if _, err := codec.DecodeFrom(stream, &request); err != nil {
@@ -267,7 +267,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.D
 				return
 			}
 			defer stream.Close()
-			_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
+			stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
 			defer stream.SetDeadline(time.Time{})
 			if _, err := stream.Write(buf); err != nil {
 				s.log.Debug("failed to send a request", zap.Error(err), zap.Stringer("pid", pid))

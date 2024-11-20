@@ -450,7 +450,7 @@ func (f *Fetch) Stop() {
 	}
 	f.mu.Unlock()
 
-	_ = f.eg.Wait()
+	f.eg.Wait()
 	f.logger.Debug("stopped fetch")
 }
 
