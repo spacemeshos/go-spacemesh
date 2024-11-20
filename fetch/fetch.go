@@ -116,7 +116,7 @@ type ServerConfig struct {
 	Interval time.Duration `mapstructure:"interval"`
 }
 
-func (s ServerConfig) toOpts() []server.Opt {
+func (s ServerConfig) ToOpts() []server.Opt {
 	opts := []server.Opt{}
 	if s.Queue != 0 {
 		opts = append(opts, server.WithQueueSize(s.Queue))
@@ -366,7 +366,7 @@ func (f *Fetch) registerServer(
 	if f.cfg.EnableServerMetrics {
 		opts = append(opts, server.WithMetrics())
 	}
-	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)
+	opts = append(opts, f.cfg.getServerConfig(protocol).ToOpts()...)
 	f.servers[protocol] = server.New(host, protocol, handler, opts...)
 }
 

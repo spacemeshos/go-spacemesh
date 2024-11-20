@@ -295,9 +295,9 @@ func NewATXSyncer(
 		cfg, enableActiveSync)
 }
 
-func NewDispatcher(logger *zap.Logger, f Fetcher) *rangesync.Dispatcher {
+func NewDispatcher(logger *zap.Logger, f Fetcher, opts []server.Opt) *rangesync.Dispatcher {
 	d := rangesync.NewDispatcher(logger)
-	d.SetupServer(f.Host(), proto, server.WithHardTimeout(20*time.Minute))
+	d.SetupServer(f.Host(), proto, opts...)
 	return d
 }
 
