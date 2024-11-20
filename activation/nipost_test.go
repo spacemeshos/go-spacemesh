@@ -762,7 +762,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 			challenge,
 			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2},
 		)
-		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorIs(t, err, errATXChallengeExpired)
 		require.Nil(t, nipst)
 	})
 	t.Run("GetProof fails", func(t *testing.T) {
@@ -786,7 +786,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 
 		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
 			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
-		require.ErrorIs(t, err, ErrPoetProofNotReceived)
+		require.ErrorIs(t, err, errPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
 	t.Run("Challenge is not included in proof members", func(t *testing.T) {
@@ -812,7 +812,7 @@ func TestNIPSTBuilder_PoetUnstable(t *testing.T) {
 
 		nipst, err := nb.BuildNIPost(context.Background(), sig, challenge,
 			&types.NIPostChallenge{PublishEpoch: postGenesisEpoch + 2})
-		require.ErrorIs(t, err, ErrPoetProofNotReceived)
+		require.ErrorIs(t, err, errPoetProofNotReceived)
 		require.Nil(t, nipst)
 	})
 }
@@ -1152,7 +1152,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 
 		nipost, err := nb.BuildNIPost(context.Background(), sig, types.RandomHash(),
 			&types.NIPostChallenge{PublishEpoch: currLayer.GetEpoch()})
-		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorIs(t, err, errATXChallengeExpired)
 		require.ErrorContains(t, err, "poet round has already started")
 		require.Nil(t, nipost)
 	})
@@ -1194,7 +1194,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		nipost, err := nb.BuildNIPost(context.Background(), sig, challengeHash, challenge)
-		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorIs(t, err, errATXChallengeExpired)
 		require.ErrorContains(t, err, "poet proof for pub epoch")
 		require.Nil(t, nipost)
 	})
@@ -1240,7 +1240,7 @@ func TestNIPoSTBuilder_StaleChallenge(t *testing.T) {
 		require.NoError(t, err)
 
 		nipost, err := nb.BuildNIPost(context.Background(), sig, challengeHash, challenge)
-		require.ErrorIs(t, err, ErrATXChallengeExpired)
+		require.ErrorIs(t, err, errATXChallengeExpired)
 		require.ErrorContains(t, err, "deadline to publish ATX for pub epoch")
 		require.Nil(t, nipost)
 	})

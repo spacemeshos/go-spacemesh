@@ -790,7 +790,7 @@ func ensuresDatabaseConsistent(tb testing.TB, db sql.Executor, results []result.
 			if !rst.Data {
 				continue
 			}
-			_ = blocks.Add(db, types.NewExistingBlock(rst.Header.ID, types.InnerBlock{
+			blocks.Add(db, types.NewExistingBlock(rst.Header.ID, types.InnerBlock{
 				LayerIndex: layer.Layer,
 			}))
 		}

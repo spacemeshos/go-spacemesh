@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	ErrNotFound    = errors.New("not found")
+	errNotFound    = errors.New("not found")
 	errNilVrfNonce = errors.New("nil VRF nonce")
 )
 
@@ -429,7 +429,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 		eg.Go(func() error {
 			_, err := poet.Certify(ctx, sig.NodeID())
 			switch {
-			case errors.Is(err, ErrCertificatesNotSupported):
+			case errors.Is(err, errCertificatesNotSupported):
 				b.logger.Debug("not certifying (not supported in poet)",
 					log.ZShortStringer("smesherID", sig.NodeID()),
 					zap.String("poet", poet.Address()),
@@ -454,7 +454,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		poetErr := &PoetSvcUnstableError{}
 		switch {
-		case errors.Is(err, ErrATXChallengeExpired):
+		case errors.Is(err, errATXChallengeExpired):
 			b.logger.Debug("retrying with new challenge after waiting for a layer")
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.logger.Error("failed to reset nipost builder state", zap.Error(err))
@@ -829,7 +829,7 @@ func (b *Builder) createAtx(
 			// initial NIPoST challenge is not discarded; don't return ErrATXChallengeExpired
 			return nil, errors.New("atx publish epoch has passed during nipost construction")
 		}
-		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
+		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", errATXChallengeExpired)
 	}
 
 	switch version {
@@ -1086,7 +1086,7 @@ func findFullyValidHighTickAtx(
 	}
 
 	if found == nil {
-		return types.ATXID{}, ErrNotFound
+		return types.ATXID{}, errNotFound
 	}
 
 	return *found, nil

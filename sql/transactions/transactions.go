@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
@@ -37,7 +36,10 @@ func Add(db sql.Executor, tx *types.Transaction, received time.Time) error {
 			if header != nil {
 				stmt.BindBytes(3, header)
 				stmt.BindBytes(4, tx.Principal[:])
-				stmt.BindBytes(5, util.Uint64ToBytesBigEndian(tx.Nonce))
+
+				nonceBytes := make([]byte, 8)
+				binary.BigEndian.PutUint64(nonceBytes, tx.Nonce)
+				stmt.BindBytes(5, nonceBytes)
 			}
 			stmt.BindInt64(6, received.UnixNano())
 		}, nil); err != nil {
@@ -302,7 +304,10 @@ func GetAcctPendingFromNonce(db sql.Executor, address types.Address, from uint64
 		order by nonce asc, timestamp asc`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
-			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(from))
+
+			fromBytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(fromBytes, from)
+			stmt.BindBytes(2, fromBytes)
 		}, "get acct pending from nonce")
 }
 
@@ -314,7 +319,10 @@ func GetAcctPendingToNonce(db sql.Executor, address types.Address, to uint64) ([
 		order by nonce asc, timestamp asc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
-			stmt.BindBytes(2, util.Uint64ToBytesBigEndian(to))
+
+			toBytes := make([]byte, 8)
+			binary.BigEndian.PutUint64(toBytes, to)
+			stmt.BindBytes(2, toBytes)
 		}, func(stmt *sql.Statement) bool {
 			id := types.TransactionID{}
 			stmt.ColumnBytes(0, id[:])

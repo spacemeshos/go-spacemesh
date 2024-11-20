@@ -272,7 +272,7 @@ func ShuffleWithNonceOrder(
 	}
 	logger.Debug("packed txs", zap.Array("ranges", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
 		for addr, nonces := range packed {
-			_ = encoder.AppendObject(zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
+			encoder.AppendObject(zapcore.ObjectMarshalerFunc(func(encoder zapcore.ObjectEncoder) error {
 				encoder.AddString("addr", addr.String())
 				encoder.AddUint64("from", nonces[0])
 				encoder.AddUint64("to", nonces[1])

@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	// ErrATXChallengeExpired is returned when atx missed its publication window and needs to be regenerated.
-	ErrATXChallengeExpired = errors.New("builder: atx expired")
-	// ErrPoetProofNotReceived is returned when no poet proof was received.
-	ErrPoetProofNotReceived = errors.New("builder: didn't receive any poet proof")
+	// errATXChallengeExpired is returned when atx missed its publication window and needs to be regenerated.
+	errATXChallengeExpired = errors.New("builder: atx expired")
+	// errPoetProofNotReceived is returned when no poet proof was received.
+	errPoetProofNotReceived = errors.New("builder: didn't receive any poet proof")
 )
 
 // PoetSvcUnstableError means there was a problem communicating

@@ -424,7 +424,7 @@ func (mgr *PostSetupManager) findCommitmentAtx(ctx context.Context) (types.ATXID
 		VerifyChainOpts.WithLogger(mgr.logger),
 	)
 	switch {
-	case errors.Is(err, ErrNotFound):
+	case errors.Is(err, errNotFound):
 		mgr.logger.Info("using golden atx as commitment atx")
 		return mgr.goldenATXID, nil
 	case err != nil:

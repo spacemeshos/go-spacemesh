@@ -102,7 +102,7 @@ func RandomTransactionID() TransactionID {
 // RandomBallot generates a Ballot with random content for testing.
 func RandomBallot() *Ballot {
 	var vrf VrfSignature
-	_, _ = rand.Read(vrf[:])
+	rand.Read(vrf[:])
 
 	return &Ballot{
 		InnerBallot: InnerBallot{

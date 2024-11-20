@@ -312,7 +312,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		).Return(errors.New("invalid post"))
 
 		id, err := proof.Valid(context.Background(), verifier)
-		require.EqualError(t, err, "invalid invalid post proof: Commitment ATX is not valid")
+		require.EqualError(t, err, "invalid invalid post proof: commitment ATX is not valid")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
 
