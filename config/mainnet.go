@@ -225,6 +225,12 @@ func MainnetConfig() Config {
 				OldAtxSyncCfg:     oldAtxSyncCfg,
 				NewAtxSyncCfg:     newAtxSyncCfg,
 				ParallelLoadLimit: 10,
+				HardTimeout:       10 * time.Minute,
+				ServerConfig: fetch.ServerConfig{
+					Queue:    200,
+					Requests: 100,
+					Interval: time.Second,
+				},
 			},
 		},
 		Recovery: checkpoint.DefaultConfig(),
