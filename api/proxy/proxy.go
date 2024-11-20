@@ -2,24 +2,24 @@ package proxy
 
 import (
 	"context"
-	"go.uber.org/zap"
-	"golang.org/x/sync/errgroup"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"time"
+
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 type Server struct {
 	logger     *zap.Logger
 	listener   string
-	apiAddress string
 	httpServer *http.Server
 	errGroup   errgroup.Group
 }
 
-func NewServer(proxyListener string, apiAddress string, logger *zap.Logger) (*Server, error) {
+func NewServer(proxyListener, apiAddress string, logger *zap.Logger) (*Server, error) {
 	// Validate the API server URL
 	targetURL, err := url.Parse(apiAddress)
 	if err != nil {
@@ -47,7 +47,6 @@ func NewServer(proxyListener string, apiAddress string, logger *zap.Logger) (*Se
 	return &Server{
 		logger:     logger,
 		listener:   proxyListener,
-		apiAddress: apiAddress,
 		httpServer: server,
 	}, nil
 }
