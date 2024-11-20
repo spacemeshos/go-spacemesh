@@ -28,7 +28,7 @@ type BlockFetcher interface {
 
 type GetAtxOpts struct {
 	LimitingOff bool
-	RecvChannel chan<- types.ATXID
+	Callback    func(types.ATXID, error)
 }
 
 type GetAtxOpt func(*GetAtxOpts)
@@ -40,11 +40,15 @@ func WithoutLimiting() GetAtxOpt {
 	}
 }
 
-// WithRecvChannel sets the channel to receive successfully downloaded and validated ATXs
-// IDs on.
-func WithRecvChannel(ch chan<- types.ATXID) GetAtxOpt {
+// WithATXCallback sets a callback function to be called after each ATX is downloaded,
+// found locally or failed to download.
+// The callback is guaranteed to be called exactly once for each ATX ID passed to GetAtxs.
+// The callback is guaranteed not to be invoked after GetAtxs returns.
+// The callback may be called concurrently from multiple goroutines.
+// A non-nil error is passed in case the ATX cannot be found locally and failed to download.
+func WithATXCallback(callback func(types.ATXID, error)) GetAtxOpt {
 	return func(opts *GetAtxOpts) {
-		opts.RecvChannel = ch
+		opts.Callback = callback
 	}
 }
 

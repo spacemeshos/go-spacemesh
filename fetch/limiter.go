@@ -2,6 +2,8 @@ package fetch
 
 import (
 	"context"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type limiter interface {
@@ -10,7 +12,8 @@ type limiter interface {
 }
 
 type getHashesOpts struct {
-	limiter limiter
+	limiter  limiter
+	callback func(types.Hash32, error)
 }
 
 type noLimit struct{}

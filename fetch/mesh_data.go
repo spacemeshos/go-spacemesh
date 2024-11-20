@@ -42,19 +42,16 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 	)
 	hashes := types.ATXIDsToHashes(ids)
 	handler := f.validators.atx.HandleMessage
-	if options.RecvChannel != nil {
-		handler = func(ctx context.Context, id types.Hash32, p p2p.Peer, data []byte) error {
-			if err := f.validators.atx.HandleMessage(ctx, id, p, data); err != nil {
-				return err
-			}
-			options.RecvChannel <- types.ATXID(id)
-			return nil
-		}
+	var ghOpts []getHashesOpt
+	if !options.LimitingOff {
+		ghOpts = append(ghOpts, withLimiter(f.getAtxsLimiter))
 	}
-	if options.LimitingOff {
-		return f.getHashes(ctx, hashes, datastore.ATXDB, handler)
+	if options.Callback != nil {
+		ghOpts = append(ghOpts, withHashCallback(func(hash types.Hash32, err error) {
+			options.Callback(types.ATXID(hash), err)
+		}))
 	}
-	return f.getHashes(ctx, hashes, datastore.ATXDB, handler, withLimiter(f.getAtxsLimiter))
+	return f.getHashes(ctx, hashes, datastore.ATXDB, handler, ghOpts...)
 }
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
@@ -67,6 +64,12 @@ func withLimiter(l limiter) getHashesOpt {
 	}
 }
 
+func withHashCallback(callback func(types.Hash32, error)) getHashesOpt {
+	return func(o *getHashesOpts) {
+		o.callback = callback
+	}
+}
+
 func (f *Fetch) getHashes(
 	ctx context.Context,
 	hashes []types.Hash32,
@@ -75,7 +78,8 @@ func (f *Fetch) getHashes(
 	opts ...getHashesOpt,
 ) error {
 	options := getHashesOpts{
-		limiter: noLimit{},
+		limiter:  noLimit{},
+		callback: func(types.Hash32, error) {},
 	}
 	for _, opt := range opts {
 		opt(&options)
@@ -92,18 +96,26 @@ func (f *Fetch) getHashes(
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			pendingMetric.Add(float64(i - len(hashes)))
-			return fmt.Errorf("acquiring slot to get hash: %w", err)
+			err = fmt.Errorf("acquiring slot to get hash: %w", err)
+			for _, h := range hashes[i:] {
+				options.callback(h, err)
+			}
+			return err
 		}
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
 			options.limiter.Release(1)
 			pendingMetric.Add(float64(i - len(hashes)))
+			for _, h := range hashes[i:] {
+				options.callback(h, err)
+			}
 			return err
 		}
 		if p == nil {
 			// data is available locally
 			options.limiter.Release(1)
 			pendingMetric.Add(-1)
+			options.callback(hash, nil)
 			continue
 		}
 
@@ -112,6 +124,7 @@ func (f *Fetch) getHashes(
 			case <-ctx.Done():
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
+				options.callback(hash, ctx.Err())
 				return ctx.Err()
 			case <-p.completed:
 				options.limiter.Release(1)
@@ -127,6 +140,7 @@ func (f *Fetch) getHashes(
 					bfailure.Add(hash, p.err)
 					mu.Unlock()
 				}
+				options.callback(hash, p.err)
 				return nil
 			}
 		})

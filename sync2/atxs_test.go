@@ -38,7 +38,8 @@ func TestAtxHandler_Success(t *testing.T) {
 		allAtxs[i] = types.RandomATXID()
 	}
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, nil)
+	clock := clockwork.NewFakeClock()
+	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
@@ -60,15 +61,11 @@ func TestAtxHandler_Success(t *testing.T) {
 			for _, opt := range opts {
 				opt(&atxOpts)
 			}
-			require.NotNil(t, atxOpts.RecvChannel)
+			require.NotNil(t, atxOpts.Callback)
 			for _, id := range atxs {
 				require.True(t, toFetch[id], "already fetched or bad ID")
 				delete(toFetch, id)
-				select {
-				case <-time.After(100 * time.Millisecond):
-					t.Error("timeout sending recvd id")
-				case atxOpts.RecvChannel <- id:
-				}
+				atxOpts.Callback(id, nil)
 			}
 			return nil
 		}).Times(3)
@@ -106,7 +103,8 @@ func TestAtxHandler_Retry(t *testing.T) {
 		allAtxs[i] = types.RandomATXID()
 	}
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, nil)
+	clock := clockwork.NewFakeClock()
+	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
@@ -126,23 +124,21 @@ func TestAtxHandler_Retry(t *testing.T) {
 			for _, opt := range opts {
 				opt(&atxOpts)
 			}
-			require.NotNil(t, atxOpts.RecvChannel)
+			require.NotNil(t, atxOpts.Callback)
 			for _, id := range atxs {
 				switch {
 				case id == allAtxs[0]:
 					require.False(t, validationFailed, "retried after validation error")
 					errs[id.Hash32()] = pubsub.ErrValidationReject
+					atxOpts.Callback(id, errs[id.Hash32()])
 					validationFailed = true
 				case id == allAtxs[1] && failCount < 2:
 					errs[id.Hash32()] = errors.New("fetch failed")
+					atxOpts.Callback(id, errs[id.Hash32()])
 					failCount++
 				default:
 					fetched = append(fetched, id)
-					select {
-					case <-time.After(100 * time.Millisecond):
-						t.Error("timeout sending recvd id")
-					case atxOpts.RecvChannel <- id:
-					}
+					atxOpts.Callback(id, nil)
 				}
 			}
 			if len(errs) > 0 {
@@ -164,6 +160,31 @@ func TestAtxHandler_Retry(t *testing.T) {
 		},
 		Error: rangesync.NoSeqError,
 	})
+
+	// If it so happens that a full batch fails, we need to advance the clock to
+	// trigger the retry.
+	ctx, cancel := context.WithCancel(context.Background())
+	var eg errgroup.Group
+	eg.Go(func() error {
+		for {
+			// FIXME: BlockUntilContext is not included in FakeClock interface.
+			// This will be fixed in a post-0.4.0 clockwork release, but with a breaking change that
+			// makes FakeClock a struct instead of an interface.
+			// See: https://github.com/jonboulle/clockwork/pull/71
+			clock.(interface {
+				BlockUntilContext(ctx context.Context, n int) error
+			}).BlockUntilContext(ctx, 1)
+			if ctx.Err() != nil {
+				return nil
+			}
+			clock.Advance(batchRetryDelay)
+		}
+	})
+	defer func() {
+		cancel()
+		eg.Wait()
+	}()
+
 	require.NoError(t, h.Commit(context.Background(), peer, baseSet, newSet))
 	require.ElementsMatch(t, allAtxs[1:], fetched)
 }
@@ -180,7 +201,8 @@ func TestAtxHandler_Cancel(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	peer := p2p.Peer("foobar")
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, nil)
+	clock := clockwork.NewFakeClock()
+	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	newSet := mocks.NewMockOrderedSet(ctrl)
 	baseSet.EXPECT().Has(rangesync.KeyBytes(atxID[:])).Return(false, nil)
@@ -257,15 +279,11 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 			for _, opt := range opts {
 				opt(&atxOpts)
 			}
-			require.NotNil(t, atxOpts.RecvChannel)
+			require.NotNil(t, atxOpts.Callback)
 			for _, id := range atxs {
 				require.True(t, toFetch[id], "already fetched or bad ID")
 				delete(toFetch, id)
-				select {
-				case <-time.After(100 * time.Millisecond):
-					t.Error("timeout sending recvd id")
-				case atxOpts.RecvChannel <- id:
-				}
+				atxOpts.Callback(id, nil)
 			}
 			return nil
 		}).Times(3)

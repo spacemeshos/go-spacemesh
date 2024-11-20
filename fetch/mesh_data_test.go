@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	p2phost "github.com/libp2p/go-libp2p/core/host"
@@ -605,17 +606,16 @@ func TestGetATXs(t *testing.T) {
 	atxIDs1 := types.ToATXIDs(atxs[:2])
 	require.NoError(t, f.GetAtxs(context.Background(), atxIDs1))
 
-	recvCh := make(chan types.ATXID)
 	atxIDs2 := types.ToATXIDs(atxs[2:])
 	var recvIDs []types.ATXID
-	eg.Go(func() error {
-		for id := range recvCh {
+	var mtx sync.Mutex
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs2,
+		system.WithATXCallback(func(id types.ATXID, err error) {
+			mtx.Lock()
+			defer mtx.Unlock()
+			require.NoError(t, err)
 			recvIDs = append(recvIDs, id)
-		}
-		return nil
-	})
-	require.NoError(t, f.GetAtxs(context.Background(), atxIDs2, system.WithRecvChannel(recvCh)))
-	close(recvCh)
+		})))
 	close(stop)
 	require.NoError(t, eg.Wait())
 	require.ElementsMatch(t, atxIDs2, recvIDs)
