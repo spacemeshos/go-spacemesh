@@ -430,7 +430,7 @@ type App struct {
 	postSupervisor        *activation.PostSupervisor
 	malfeasanceHandler    *malfeasance.Handler
 	idStates              *activation.IdentityStateStorage
-  apiProxy              *proxy.Server
+	apiProxy              *proxy.Server
 
 	errCh chan error
 
