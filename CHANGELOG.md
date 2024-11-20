@@ -2,6 +2,16 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
 ## v1.7.7
 
 ### Improvements
