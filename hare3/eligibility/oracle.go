@@ -92,7 +92,7 @@ type Oracle struct {
 	// until graded oracle is implemented
 	synced bool
 
-	beacons       system.BeaconGetter
+	beacons       BeaconProvider
 	atxsdata      *atxsdata.Data
 	db            sql.Executor
 	vrfVerifier   vrfVerifier
@@ -130,7 +130,7 @@ func WithLogger(logger *zap.Logger) Opt {
 
 // New returns a new eligibility oracle instance.
 func New(
-	beacons system.BeaconGetter,
+	beacons BeaconProvider,
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
@@ -192,7 +192,7 @@ func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
 
 // buildVRFMessage builds the VRF message used as input for hare eligibility validation.
 func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
-	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
+	beacon, err := o.beacons.Beacon(ctx, layer.GetEpoch())
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
@@ -398,7 +398,7 @@ func (o *Oracle) Proof(
 	layer types.LayerID,
 	round uint32,
 ) (types.VrfSignature, error) {
-	beacon, err := o.beacons.GetBeacon(layer.GetEpoch())
+	beacon, err := o.beacons.Beacon(ctx, layer.GetEpoch())
 	if err != nil {
 		return types.EmptyVrfSignature, fmt.Errorf("get beacon: %w", err)
 	}
@@ -488,7 +488,7 @@ func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID
 		return nil, err
 	}
 	if len(activeSet) == 0 {
-		return o.activeSetFromRefBallots(targetEpoch)
+		return o.activeSetFromRefBallots(ctx, targetEpoch)
 	}
 	return activeSet, nil
 }
@@ -508,8 +508,8 @@ func (o *Oracle) computeActiveWeights(
 	return identities, nil
 }
 
-func (o *Oracle) activeSetFromRefBallots(epoch types.EpochID) ([]types.ATXID, error) {
-	beacon, err := o.beacons.GetBeacon(epoch)
+func (o *Oracle) activeSetFromRefBallots(ctx context.Context, epoch types.EpochID) ([]types.ATXID, error) {
+	beacon, err := o.beacons.Beacon(ctx, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}

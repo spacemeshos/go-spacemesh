@@ -223,4 +223,32 @@ paths:
                 format: binary
         "204":
           description: did not find a message to retrieve
+  /proposal/{layer}/{node}:
+    get:
+      summary: Get a partial proposal for a given node in a layer
+      tags:
+        - "proposals"
+      parameters:
+        - in: path
+          name: layer
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/LayerID"
+        - in: path
+          name: node
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/NodeID"
+      responses:
+        "200":
+          description: successfully created a partial proposal
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "204":
+          description: no eligibilities for this node in this epoch
+        "500":
+          description: could not generate proposal
 

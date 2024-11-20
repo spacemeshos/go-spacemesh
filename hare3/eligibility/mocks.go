@@ -321,3 +321,66 @@ func (c *MockRolacleValidateCall) DoAndReturn(f func(context.Context, types.Laye
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockBeaconProvider is a mock of BeaconProvider interface.
+type MockBeaconProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockBeaconProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockBeaconProviderMockRecorder is the mock recorder for MockBeaconProvider.
+type MockBeaconProviderMockRecorder struct {
+	mock *MockBeaconProvider
+}
+
+// NewMockBeaconProvider creates a new mock instance.
+func NewMockBeaconProvider(ctrl *gomock.Controller) *MockBeaconProvider {
+	mock := &MockBeaconProvider{ctrl: ctrl}
+	mock.recorder = &MockBeaconProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBeaconProvider) EXPECT() *MockBeaconProviderMockRecorder {
+	return m.recorder
+}
+
+// Beacon mocks base method.
+func (m *MockBeaconProvider) Beacon(arg0 context.Context, arg1 types.EpochID) (types.Beacon, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Beacon", arg0, arg1)
+	ret0, _ := ret[0].(types.Beacon)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Beacon indicates an expected call of Beacon.
+func (mr *MockBeaconProviderMockRecorder) Beacon(arg0, arg1 any) *MockBeaconProviderBeaconCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Beacon", reflect.TypeOf((*MockBeaconProvider)(nil).Beacon), arg0, arg1)
+	return &MockBeaconProviderBeaconCall{Call: call}
+}
+
+// MockBeaconProviderBeaconCall wrap *gomock.Call
+type MockBeaconProviderBeaconCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockBeaconProviderBeaconCall) Return(arg0 types.Beacon, arg1 error) *MockBeaconProviderBeaconCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockBeaconProviderBeaconCall) Do(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockBeaconProviderBeaconCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockBeaconProviderBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockBeaconProviderBeaconCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

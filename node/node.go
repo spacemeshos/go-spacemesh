@@ -106,41 +106,42 @@ const (
 
 // Logger names.
 const (
-	ClockLogger            = "clock"
-	P2PLogger              = "p2p"
-	PostLogger             = "post"
-	PostServiceLogger      = "postService"
-	PostInfoServiceLogger  = "postInfoService"
-	StateDbLogger          = "stateDb"
-	ApiStateDBLogger       = "apiStateDB"
-	BeaconLogger           = "beacon"
-	CachedDBLogger         = "cachedDB"
-	PoetDbLogger           = "poetDb"
-	TrtlLogger             = "trtl"
-	ATXHandlerLogger       = "atxHandler"
-	ATXBuilderLogger       = "atxBuilder"
-	MeshLogger             = "mesh"
-	SyncLogger             = "sync"
-	HareOracleLogger       = "hareOracle"
-	HareLogger             = "hare"
-	BlockCertLogger        = "blockCert"
-	BlockGenLogger         = "blockGenerator"
-	BlockHandlerLogger     = "blockHandler"
-	TxHandlerLogger        = "txHandler"
-	ProposalStoreLogger    = "proposalStore"
-	ProposalBuilderLogger  = "proposalBuilder"
-	ProposalListenerLogger = "proposalListener"
-	NipostBuilderLogger    = "nipostBuilder"
-	NipostValidatorLogger  = "nipostValidator"
-	Fetcher                = "fetcher"
-	TimeSyncLogger         = "timesync"
-	VMLogger               = "vm"
-	GRPCLogger             = "grpc"
-	ConStateLogger         = "conState"
-	ExecutorLogger         = "executor"
-	MalfeasanceLogger      = "malfeasance"
-	BootstrapLogger        = "bootstrap"
-	NodeServiceLogger      = "nodeService"
+	ClockLogger             = "clock"
+	P2PLogger               = "p2p"
+	PostLogger              = "post"
+	PostServiceLogger       = "postService"
+	PostInfoServiceLogger   = "postInfoService"
+	StateDbLogger           = "stateDb"
+	ApiStateDBLogger        = "apiStateDB"
+	BeaconLogger            = "beacon"
+	CachedDBLogger          = "cachedDB"
+	PoetDbLogger            = "poetDb"
+	TrtlLogger              = "trtl"
+	ATXHandlerLogger        = "atxHandler"
+	ATXBuilderLogger        = "atxBuilder"
+	MeshLogger              = "mesh"
+	SyncLogger              = "sync"
+	HareOracleLogger        = "hareOracle"
+	HareLogger              = "hare"
+	BlockCertLogger         = "blockCert"
+	BlockGenLogger          = "blockGenerator"
+	BlockHandlerLogger      = "blockHandler"
+	TxHandlerLogger         = "txHandler"
+	ProposalStoreLogger     = "proposalStore"
+	ProposalBuilderLogger   = "proposalBuilder"
+	ProposalListenerLogger  = "proposalListener"
+	NipostBuilderLogger     = "nipostBuilder"
+	NipostValidatorLogger   = "nipostValidator"
+	Fetcher                 = "fetcher"
+	TimeSyncLogger          = "timesync"
+	VMLogger                = "vm"
+	GRPCLogger              = "grpc"
+	ConStateLogger          = "conState"
+	ExecutorLogger          = "executor"
+	MalfeasanceLogger       = "malfeasance"
+	BootstrapLogger         = "bootstrap"
+	NodeServiceLogger       = "nodeService"
+	NodeServiceClientLogger = "nodeServiceClient"
 )
 
 func GetCommand() *cobra.Command {
@@ -381,52 +382,53 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock           *flock.Flock
-	signers            []*signing.EdSigner
-	Config             *config.Config
-	db                 sql.StateDatabase
-	apiDB              sql.StateDatabase
-	cachedDB           *datastore.CachedDB
-	dbMetrics          *dbmetrics.DBMetricsCollector
-	localDB            sql.LocalDatabase
-	grpcPublicServer   *grpcserver.Server
-	grpcPrivateServer  *grpcserver.Server
-	grpcPostServer     *grpcserver.Server
-	grpcTLSServer      *grpcserver.Server
-	jsonAPIServer      *grpcserver.JSONHTTPServer
-	nodeServiceServer  *http.Server
-	grpcServices       map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService       *http.Server
-	profilerService    *pyroscope.Profiler
-	syncer             *syncer.Syncer
-	proposalBuilder    *miner.ProposalBuilder
-	mesh               *mesh.Mesh
-	atxsdata           *atxsdata.Data
-	clock              *timesync.NodeClock
-	hare3              *hare3.Hare
-	hare4              *hare4.Hare
-	remoteHare         *hare3.RemoteHare
-	hareResultsChan    chan hare4.ConsensusOutput
-	hOracle            *eligibility.Oracle
-	blockGen           *blocks.Generator
-	certifier          *blocks.Certifier
-	atxBuilder         *activation.Builder
-	atxHandler         *activation.Handler
-	txHandler          *txs.TxHandler
-	validator          *activation.Validator
-	edVerifier         *signing.EdVerifier
-	beaconProtocol     *beacon.ProtocolDriver
-	log                log.Log
-	syncLogger         log.Log
-	conState           *txs.ConservativeState
-	fetcher            *fetch.Fetch
-	ptimesync          *peersync.Sync
-	updater            *bootstrap.Updater
-	poetDb             *activation.PoetDb
-	postVerifier       activation.PostVerifier
-	postSupervisor     *activation.PostSupervisor
-	malfeasanceHandler *malfeasance.Handler
-	idStates           *activation.IdentityStateStorage
+	fileLock              *flock.Flock
+	signers               []*signing.EdSigner
+	Config                *config.Config
+	db                    sql.StateDatabase
+	apiDB                 sql.StateDatabase
+	cachedDB              *datastore.CachedDB
+	dbMetrics             *dbmetrics.DBMetricsCollector
+	localDB               sql.LocalDatabase
+	grpcPublicServer      *grpcserver.Server
+	grpcPrivateServer     *grpcserver.Server
+	grpcPostServer        *grpcserver.Server
+	grpcTLSServer         *grpcserver.Server
+	jsonAPIServer         *grpcserver.JSONHTTPServer
+	nodeServiceServer     *http.Server
+	grpcServices          map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService          *http.Server
+	profilerService       *pyroscope.Profiler
+	syncer                *syncer.Syncer
+	remoteProposalBuilder *miner.RemoteProposalBuilder
+	proposalBuilder       *miner.ProposalBuilder
+	mesh                  *mesh.Mesh
+	atxsdata              *atxsdata.Data
+	clock                 *timesync.NodeClock
+	hare3                 *hare3.Hare
+	hare4                 *hare4.Hare
+	remoteHare            *hare3.RemoteHare
+	hareResultsChan       chan hare4.ConsensusOutput
+	hOracle               *eligibility.Oracle
+	blockGen              *blocks.Generator
+	certifier             *blocks.Certifier
+	atxBuilder            *activation.Builder
+	atxHandler            *activation.Handler
+	txHandler             *txs.TxHandler
+	validator             *activation.Validator
+	edVerifier            *signing.EdVerifier
+	beaconProtocol        *beacon.ProtocolDriver
+	log                   log.Log
+	syncLogger            log.Log
+	conState              *txs.ConservativeState
+	fetcher               *fetch.Fetch
+	ptimesync             *peersync.Sync
+	updater               *bootstrap.Updater
+	poetDb                *activation.PoetDb
+	postVerifier          activation.PostVerifier
+	postSupervisor        *activation.PostSupervisor
+	malfeasanceHandler    *malfeasance.Handler
+	idStates              *activation.IdentityStateStorage
 
 	errCh chan error
 
@@ -595,7 +597,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	var nodeServiceClient *client.NodeService
 	if server := app.Config.BaseConfig.NodeServiceAddress; server != "" {
-		logger := app.log.Zap().Named("node-svc-client")
+		logger := app.addLogger(NodeServiceClientLogger, lg).Zap()
 		cfg := &nodeclient.Config{
 			RetryWaitMin: time.Millisecond * 500,
 			RetryWaitMax: time.Second,
@@ -812,12 +814,16 @@ func (app *App) initServices(ctx context.Context) error {
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	}
+	var bcnGetter eligibility.BeaconProvider
 	if nodeServiceClient != nil {
+		bcnGetter = nodeServiceClient
 		extraOpts = append(extraOpts, eligibility.WithTotalWeightFunc(nodeServiceClient.TotalWeight))
 		extraOpts = append(extraOpts, eligibility.WithMinerWeightFunc(nodeServiceClient.MinerWeight))
+	} else {
+		bcnGetter = &beaconGetter{beaconProtocol}
 	}
 	app.hOracle = eligibility.New(
-		beaconProtocol,
+		bcnGetter,
 		app.db,
 		app.atxsdata,
 		vrfVerifier,
@@ -1044,26 +1050,46 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
-	proposalBuilder := miner.New(
-		app.clock,
-		app.db,
-		app.localDB,
-		app.atxsdata,
-		app.host,
-		trtl,
-		newSyncer,
-		app.conState,
-		miner.WithLayerSize(layerSize),
-		miner.WithLayerPerEpoch(layersPerEpoch),
-		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
-		miner.WithHdist(app.Config.Tortoise.Hdist),
-		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
-		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
-		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg).Zap()),
-		miner.WithActivesetPreparation(app.Config.ActiveSet),
-	)
-	for _, sig := range app.signers {
-		proposalBuilder.Register(sig)
+	var proposalBuilder *miner.ProposalBuilder
+	var remoteProposalBuilder *miner.RemoteProposalBuilder
+	if nodeServiceClient != nil {
+		remoteProposalBuilder = miner.NewRemoteBuilder(
+			app.clock,
+			nodeServiceClient,
+			nodeServiceClient,
+			nodeServiceClient,
+			layerSize,
+			layersPerEpoch,
+			app.addLogger(ProposalBuilderLogger, lg).Zap(),
+		)
+		for _, sig := range app.signers {
+			remoteProposalBuilder.Register(sig)
+		}
+
+		app.remoteProposalBuilder = remoteProposalBuilder
+	} else {
+		proposalBuilder = miner.New(
+			app.clock,
+			app.db,
+			app.localDB,
+			app.atxsdata,
+			app.host,
+			trtl,
+			newSyncer,
+			app.conState,
+			miner.WithLayerSize(layerSize),
+			miner.WithLayerPerEpoch(layersPerEpoch),
+			miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
+			miner.WithHdist(app.Config.Tortoise.Hdist),
+			miner.WithNetworkDelay(app.Config.ATXGradeDelay),
+			miner.WithMinGoodAtxPercent(minerGoodAtxPct),
+			miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg).Zap()),
+			miner.WithActivesetPreparation(app.Config.ActiveSet),
+		)
+		for _, sig := range app.signers {
+			proposalBuilder.Register(sig)
+		}
+		app.proposalBuilder = proposalBuilder
 	}
 
 	postSetupMgr, err := activation.NewPostSetupManager(
@@ -1464,7 +1490,10 @@ func (app *App) listenToUpdates(ctx context.Context) {
 					}
 
 					app.hOracle.UpdateActiveSet(epoch, set)
-					app.proposalBuilder.UpdateActiveSet(epoch, set)
+
+					if app.proposalBuilder != nil {
+						app.proposalBuilder.UpdateActiveSet(epoch, set)
+					}
 
 					app.eg.Go(func() error {
 						select {
@@ -1500,8 +1529,16 @@ func (app *App) startServices(ctx context.Context) error {
 	app.blockGen.Start(ctx)
 	app.certifier.Start(ctx)
 	app.eg.Go(func() error {
-		return app.proposalBuilder.Run(ctx)
+		if app.proposalBuilder != nil {
+			return app.proposalBuilder.Run(ctx)
+		}
+		return nil
 	})
+	if app.remoteProposalBuilder != nil {
+		app.eg.Go(func() error {
+			return app.remoteProposalBuilder.Run(ctx)
+		})
+	}
 
 	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
@@ -1922,7 +1959,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		golden := types.ATXID(app.Config.Genesis.GoldenATX())
 		logger := app.addLogger(NodeServiceLogger, app.log).Zap()
 		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
-		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, app.hare3, logger)
+		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, app.hare3, app.proposalBuilder, logger)
 
 		app.nodeServiceServer = &http.Server{
 			Handler: server.IntoHandler(http.NewServeMux()),
@@ -2442,4 +2479,12 @@ func (p *proposalConsumerHare) OnProposal(proposal *types.Proposal) error {
 		return p.hare3.OnProposal(proposal)
 	}
 	return p.hare4.OnProposal(proposal)
+}
+
+type beaconGetter struct {
+	provider *beacon.ProtocolDriver
+}
+
+func (b *beaconGetter) Beacon(_ context.Context, e types.EpochID) (types.Beacon, error) {
+	return b.provider.GetBeacon(e)
 }

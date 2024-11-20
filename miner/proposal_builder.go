@@ -499,50 +499,9 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	})
 }
 
-func (pb *ProposalBuilder) initSignerData(ss *signerSession, lid types.LayerID) error {
-	if ss.session.epoch != lid.GetEpoch() {
-		ss.session = session{epoch: lid.GetEpoch()}
-	}
-	if ss.session.atx == types.EmptyATXID {
-		id, atx := pb.atxsdata.GetByEpochAndNodeID(ss.session.epoch, ss.signer.NodeID())
-		if id == types.EmptyATXID {
-			return errAtxNotAvailable
-		}
-		ss.session.atx = id
-		ss.session.atxWeight = atx.Weight
-		ss.session.nonce = atx.Nonce
-	}
-	if ss.session.prev == 0 {
-		prev, err := ballots.LastInEpoch(pb.db, ss.session.atx, ss.session.epoch)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return err
-		}
-		if err == nil {
-			ss.session.prev = prev.Layer
-		}
-	}
-	if ss.session.ref == types.EmptyBallotID {
-		ballot, err := ballots.FirstInEpoch(pb.db, ss.session.atx, ss.session.epoch)
-		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return fmt.Errorf("get refballot %w", err)
-		}
-		if errors.Is(err, sql.ErrNotFound) {
-			ss.session.beacon = pb.shared.beacon
-			ss.session.eligibilities.slots = proposals.MustGetNumEligibleSlots(
-				ss.session.atxWeight,
-				minweight.Select(lid.GetEpoch(), pb.cfg.minActiveSetWeight),
-				pb.shared.active.weight,
-				pb.cfg.layerSize,
-				pb.cfg.layersPerEpoch,
-			)
-		} else {
-			if ballot.EpochData == nil {
-				return fmt.Errorf("atx %d created invalid first ballot", ss.session.atx)
-			}
-			ss.session.ref = ballot.ID()
-			ss.session.beacon = ballot.EpochData.Beacon
-			ss.session.eligibilities.slots = ballot.EpochData.EligibilityCount
-		}
+func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession, lid types.LayerID) error {
+	if err := pb.initSignerSessionData(&ss.session, lid, ss.signer.NodeID()); err != nil {
+		return fmt.Errorf("init signer session data: %w", err)
 	}
 	if ss.session.eligibilities.proofs == nil {
 		ss.session.eligibilities.proofs = calcEligibilityProofs(
@@ -564,6 +523,138 @@ func (pb *ProposalBuilder) initSignerData(ss *signerSession, lid types.LayerID) 
 		)
 	}
 	return nil
+}
+
+func (pb *ProposalBuilder) initSignerSessionData(
+	s *session,
+	lid types.LayerID,
+	nodeID types.NodeID,
+) error {
+	if s.epoch != lid.GetEpoch() {
+		*s = session{epoch: lid.GetEpoch()}
+	}
+	if s.atx == types.EmptyATXID {
+		id, atx := pb.atxsdata.GetByEpochAndNodeID(s.epoch, nodeID)
+		if id == types.EmptyATXID {
+			return errAtxNotAvailable
+		}
+		s.atx = id
+		s.atxWeight = atx.Weight
+		s.nonce = atx.Nonce
+	}
+	if s.prev == 0 {
+		prev, err := ballots.LastInEpoch(pb.db, s.atx, s.epoch)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return err
+		}
+		if err == nil {
+			s.prev = prev.Layer
+		}
+	}
+	if s.ref == types.EmptyBallotID {
+		ballot, err := ballots.FirstInEpoch(pb.db, s.atx, s.epoch)
+		if err != nil && !errors.Is(err, sql.ErrNotFound) {
+			return fmt.Errorf("get refballot %w", err)
+		}
+		if errors.Is(err, sql.ErrNotFound) {
+			s.beacon = pb.shared.beacon
+			s.eligibilities.slots = proposals.MustGetNumEligibleSlots(
+				s.atxWeight,
+				minweight.Select(lid.GetEpoch(), pb.cfg.minActiveSetWeight),
+				pb.shared.active.weight,
+				pb.cfg.layerSize,
+				pb.cfg.layersPerEpoch,
+			)
+		} else {
+			if ballot.EpochData == nil {
+				return fmt.Errorf("atx %d created invalid first ballot", s.atx)
+			}
+			s.ref = ballot.ID()
+			s.beacon = ballot.EpochData.Beacon
+			s.eligibilities.slots = ballot.EpochData.EligibilityCount
+		}
+	}
+	return nil
+}
+
+func (pb *ProposalBuilder) BuildFor(ctx context.Context,
+	lid types.LayerID,
+	nodeID types.NodeID,
+) (*types.Proposal, types.VRFPostIndex, error) {
+	if err := pb.initSharedData(ctx, lid); err != nil {
+		return nil, 0, err
+	}
+
+	signer := &signerSession{}
+
+	if err := pb.initSignerSessionData(&signer.session, lid, nodeID); err != nil {
+		if errors.Is(err, errAtxNotAvailable) {
+			pb.logger.Debug("smesher doesn't have atx that targets this epoch",
+				log.ZContext(ctx),
+				zap.Uint32("epoch_id", signer.session.epoch.Uint32()),
+			)
+			return nil, 0, errors.New("no atx in epoch")
+		} else {
+			return nil, 0, err
+		}
+	}
+	if lid <= signer.session.prev {
+		return nil, 0, fmt.Errorf("layer %d was already built by signer %s", lid, nodeID.ShortString())
+	}
+	signer.session.prev = lid
+	proofs := signer.session.eligibilities.slots
+	if proofs == 0 {
+		pb.logger.Debug("not eligible for proposal in layer",
+			log.ZContext(ctx),
+			zap.Uint32("layer_id", lid.Uint32()),
+			zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+		)
+		return nil, 0, nil
+	}
+	pb.logger.Debug("eligible for proposals in layer",
+		log.ZContext(ctx),
+		zap.Uint32("layer_id", lid.Uint32()),
+		zap.Uint32("epoch_id", lid.GetEpoch().Uint32()),
+		zap.Int("num proposals", int(proofs)),
+	)
+
+	pb.tortoise.TallyVotes(lid)
+	opinion, err := pb.tortoise.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(lid))
+	if err != nil {
+		return nil, 0, fmt.Errorf("encoding votes: %w", err)
+	}
+
+	meshHash := pb.decideMeshHash(ctx, lid)
+
+	if signer.session.ref == types.EmptyBallotID {
+		err := activesets.Add(pb.db, pb.shared.active.id, &types.EpochActiveSet{
+			Epoch: pb.shared.epoch,
+			Set:   pb.shared.active.set,
+		})
+		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
+			return nil, 0, fmt.Errorf("persist activeset: %w", err)
+		}
+	}
+	slots := signer.session.eligibilities.slots
+
+	txs := pb.conState.SelectProposalTXs(lid, int(slots))
+
+	prop := createPartialProposal(
+		&signer.session,
+		pb.shared.beacon,
+		pb.shared.active.set,
+		nodeID,
+		lid,
+		txs,
+		opinion,
+		meshHash,
+	)
+	pb.logger.Info("proposal created",
+		log.ZContext(ctx),
+		zap.Inline(prop),
+		zap.Object("latency", &signer.latency),
+	)
+	return prop, signer.session.nonce, nil
 }
 
 func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
@@ -620,7 +711,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 			start := time.Now()
 			ss.latency.start = buildStartTime
-			if err := pb.initSignerData(ss, lid); err != nil {
+			if err := pb.initSignerData(ctx, ss, lid); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					ss.log.Debug("smesher doesn't have atx that targets this epoch",
 						log.ZContext(ctx),
@@ -717,6 +808,45 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 	stage1Err := eg.Wait()
 	close(eligible)
 	return errors.Join(stage1Err, eg2.Wait())
+}
+
+func createPartialProposal(
+	session *session,
+	beacon types.Beacon,
+	activeset types.ATXIDList,
+	smesher types.NodeID,
+	lid types.LayerID,
+	txs []types.TransactionID,
+	opinion *types.Opinion,
+	meshHash types.Hash32,
+) *types.Proposal {
+	p := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					Layer:       lid,
+					AtxID:       session.atx,
+					OpinionHash: opinion.Hash,
+				},
+				Votes: opinion.Votes,
+			},
+			TxIDs:    txs,
+			MeshHash: meshHash,
+		},
+	}
+	if session.ref == types.EmptyBallotID {
+		p.Ballot.RefBallot = types.EmptyBallotID
+		p.Ballot.EpochData = &types.EpochData{
+			ActiveSetHash:    activeset.Hash(),
+			Beacon:           beacon,
+			EligibilityCount: session.eligibilities.slots,
+		}
+	} else {
+		p.Ballot.RefBallot = session.ref
+	}
+	p.SmesherID = smesher
+
+	return p
 }
 
 func createProposal(
