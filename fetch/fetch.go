@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -297,7 +298,16 @@ func NewFetch(
 	// there is one test that covers this part.
 	if host != nil {
 		connectedf := func(peer p2p.Peer) {
-			if f.peers.Add(peer) {
+			protocols := func() []protocol.ID {
+				ps, err := host.Peerstore().GetProtocols(peer)
+				if err != nil {
+					f.logger.Debug("failed to get protocols for peer",
+						zap.Stringer("id", peer), zap.Error(err))
+					return nil
+				}
+				return ps
+			}
+			if f.peers.Add(peer, protocols) {
 				f.logger.Debug("adding peer", zap.Stringer("id", peer))
 			}
 		}
@@ -703,7 +713,9 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][]*batc
 	rng := rand.New(rand.NewChaCha8(seed))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 
-	best := f.peers.SelectBest(RedundantPeers)
+	// When selecting peers, provide protocol IDs so that peers that aren't yet fully
+	// initialized are not picked for the request, avoiding unnecessary errors.
+	best := f.peers.SelectBestWithProtocols(RedundantPeers, []protocol.ID{hashProtocol, activeSetProtocol})
 	if len(best) == 0 {
 		f.logger.Warn("cannot send batch: no peers found")
 		f.mu.Lock()
