@@ -61,10 +61,7 @@ func (s *Server) Start() error {
 	}
 
 	s.errGroup.Go(func() error {
-		if err := s.httpServer.Serve(lis); err != nil {
-			return err
-		}
-		return nil
+		return s.httpServer.Serve(lis)
 	})
 
 	return nil
@@ -73,10 +70,7 @@ func (s *Server) Start() error {
 func (s *Server) Stop() error {
 	s.logger.Info("stopping proxy server")
 	s.errGroup.Go(func() error {
-		if err := s.httpServer.Shutdown(context.Background()); err != nil {
-			return err
-		}
-		return nil
+		return s.httpServer.Shutdown(context.Background())
 	})
 	return s.errGroup.Wait()
 }
