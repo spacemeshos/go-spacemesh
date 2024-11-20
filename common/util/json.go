@@ -25,10 +25,6 @@ import (
 	"reflect"
 )
 
-// Bytes marshals/unmarshals as a JSON string with 0x prefix.
-// The empty slice marshals as "0x".
-type Bytes []byte
-
 // UnmarshalFixedJSON decodes the input as a string with 0x prefix. The length of out
 // determines the required input length. This function is commonly used to implement the
 // UnmarshalJSON method for fixed-size types.
