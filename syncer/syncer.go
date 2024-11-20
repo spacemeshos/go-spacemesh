@@ -37,15 +37,15 @@ type Config struct {
 	TallyVotesFrequency      float64
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
-	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
-	DisableMeshAgreement     bool           `mapstructure:"disable-mesh-agreement"`
-	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
-	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
-	MalSync                  malsync.Config `mapstructure:"malfeasance-sync"`
-	V2                       SyncV2Config   `mapstructure:"v2"`
+	GossipDuration           time.Duration    `mapstructure:"gossipduration"`
+	DisableMeshAgreement     bool             `mapstructure:"disable-mesh-agreement"`
+	OutOfSyncThresholdLayers uint32           `mapstructure:"out-of-sync-threshold"`
+	AtxSync                  atxsync.Config   `mapstructure:"atx-sync"`
+	MalSync                  malsync.Config   `mapstructure:"malfeasance-sync"`
+	ReconcSync               ReconcSyncConfig `mapstructure:"reconc-sync"`
 }
 
-type SyncV2Config struct {
+type ReconcSyncConfig struct {
 	Enable            bool         `mapstructure:"enable"`
 	EnableActiveSync  bool         `mapstructure:"enable-active-sync"`
 	OldAtxSyncCfg     sync2.Config `mapstructure:"old-atx-sync"`
@@ -72,7 +72,7 @@ func DefaultConfig() Config {
 		OutOfSyncThresholdLayers: 3,
 		AtxSync:                  atxsync.DefaultConfig(),
 		MalSync:                  malsync.DefaultConfig(),
-		V2: SyncV2Config{
+		ReconcSync: ReconcSyncConfig{
 			Enable:            false,
 			EnableActiveSync:  false,
 			OldAtxSyncCfg:     oldAtxSyncCfg,
@@ -238,14 +238,14 @@ func NewSyncer(
 	s.isBusy.Store(false)
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
-	if s.cfg.V2.Enable && s.asv2 == nil {
+	if s.cfg.ReconcSync.Enable && s.asv2 == nil {
 		s.dispatcher = sync2.NewDispatcher(s.logger, fetcher.(sync2.Fetcher))
 		hss := sync2.NewATXSyncSource(
 			s.logger, s.dispatcher, cdb.Database.(sql.StateDatabase),
-			fetcher.(sync2.Fetcher), s.cfg.V2.EnableActiveSync)
+			fetcher.(sync2.Fetcher), s.cfg.ReconcSync.EnableActiveSync)
 		s.asv2 = sync2.NewMultiEpochATXSyncer(
-			s.logger, hss, s.cfg.V2.OldAtxSyncCfg, s.cfg.V2.NewAtxSyncCfg,
-			s.cfg.V2.ParallelLoadLimit)
+			s.logger, hss, s.cfg.ReconcSync.OldAtxSyncCfg, s.cfg.ReconcSync.NewAtxSyncCfg,
+			s.cfg.ReconcSync.ParallelLoadLimit)
 	}
 	return s
 }
@@ -588,7 +588,7 @@ func (s *Syncer) ensureATXsInSyncV2(ctx context.Context) error {
 		publish--
 	}
 
-	if !s.ListenToATXGossip() && s.cfg.V2.EnableActiveSync {
+	if !s.ListenToATXGossip() && s.cfg.ReconcSync.EnableActiveSync {
 		// ATXs are not in sync yet, to we need to sync them synchronously
 		lastWaitEpoch := types.EpochID(0)
 		if currentEpoch > 1 {
@@ -660,12 +660,12 @@ func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
 }
 
 func (s *Syncer) syncAtxAndMalfeasance(ctx context.Context) error {
-	if s.cfg.V2.Enable {
+	if s.cfg.ReconcSync.Enable {
 		if err := s.ensureATXsInSyncV2(ctx); err != nil {
 			return err
 		}
 	}
-	if !s.cfg.V2.Enable || !s.cfg.V2.EnableActiveSync {
+	if !s.cfg.ReconcSync.Enable || !s.cfg.ReconcSync.EnableActiveSync {
 		// If syncv2 is being used in server-only mode, we still need to run
 		// active syncv1.
 		if err := s.ensureATXsInSync(ctx); err != nil {

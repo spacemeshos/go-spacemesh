@@ -171,7 +171,7 @@ func testnet() config.Config {
 			OutOfSyncThresholdLayers: 10,
 			AtxSync:                  atxsync.DefaultConfig(),
 			MalSync:                  malsync.DefaultConfig(),
-			V2: syncer.SyncV2Config{
+			ReconcSync: syncer.ReconcSyncConfig{
 				OldAtxSyncCfg:     oldAtxSyncCfg,
 				NewAtxSyncCfg:     newAtxSyncCfg,
 				ParallelLoadLimit: 10,

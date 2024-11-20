@@ -505,8 +505,8 @@ func TestSyncAtxs_Genesis(t *testing.T) {
 
 func TestSyncAtxs_Genesis_SyncV2(t *testing.T) {
 	cfg := defaultTestConfig(never)
-	cfg.V2.Enable = true
-	cfg.V2.EnableActiveSync = true
+	cfg.ReconcSync.Enable = true
+	cfg.ReconcSync.EnableActiveSync = true
 
 	t.Run("no atx expected", func(t *testing.T) {
 		ts := newSyncerWithoutPeriodicRunsWithConfig(t, cfg)
@@ -594,8 +594,8 @@ func startWithSyncedState_SyncV2(tb testing.TB, ts *testSyncer) types.LayerID {
 
 func TestSyncAtxs_SyncV2(t *testing.T) {
 	cfg := defaultTestConfig(never)
-	cfg.V2.Enable = true
-	cfg.V2.EnableActiveSync = true
+	cfg.ReconcSync.Enable = true
+	cfg.ReconcSync.EnableActiveSync = true
 	tcs := []struct {
 		desc       string
 		current    types.LayerID
