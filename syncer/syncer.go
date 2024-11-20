@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
@@ -46,11 +47,13 @@ type Config struct {
 }
 
 type ReconcSyncConfig struct {
-	Enable            bool         `mapstructure:"enable"`
-	EnableActiveSync  bool         `mapstructure:"enable-active-sync"`
-	OldAtxSyncCfg     sync2.Config `mapstructure:"old-atx-sync"`
-	NewAtxSyncCfg     sync2.Config `mapstructure:"new-atx-sync"`
-	ParallelLoadLimit int          `mapstructure:"parallel-load-limit"`
+	Enable            bool               `mapstructure:"enable"`
+	EnableActiveSync  bool               `mapstructure:"enable-active-sync"`
+	OldAtxSyncCfg     sync2.Config       `mapstructure:"old-atx-sync"`
+	NewAtxSyncCfg     sync2.Config       `mapstructure:"new-atx-sync"`
+	ParallelLoadLimit int                `mapstructure:"parallel-load-limit"`
+	HardTimeout       time.Duration      `mapstructure:"hard-timeout"`
+	ServerConfig      fetch.ServerConfig `mapstructure:"server-config"`
 }
 
 // DefaultConfig for the syncer.
@@ -78,6 +81,12 @@ func DefaultConfig() Config {
 			OldAtxSyncCfg:     oldAtxSyncCfg,
 			NewAtxSyncCfg:     newAtxSyncCfg,
 			ParallelLoadLimit: 10,
+			HardTimeout:       10 * time.Minute,
+			ServerConfig: fetch.ServerConfig{
+				Queue:    200,
+				Requests: 100,
+				Interval: time.Second,
+			},
 		},
 	}
 }
@@ -239,7 +248,10 @@ func NewSyncer(
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
 	if s.cfg.ReconcSync.Enable && s.asv2 == nil {
-		s.dispatcher = sync2.NewDispatcher(s.logger, fetcher.(sync2.Fetcher))
+		serverOpts := append(
+			s.cfg.ReconcSync.ServerConfig.ToOpts(),
+			server.WithHardTimeout(s.cfg.ReconcSync.HardTimeout))
+		s.dispatcher = sync2.NewDispatcher(s.logger, fetcher.(sync2.Fetcher), serverOpts)
 		hss := sync2.NewATXSyncSource(
 			s.logger, s.dispatcher, cdb.Database.(sql.StateDatabase),
 			fetcher.(sync2.Fetcher), s.cfg.ReconcSync.EnableActiveSync)
