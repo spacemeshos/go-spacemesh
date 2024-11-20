@@ -33,7 +33,6 @@ type RemoteHare struct {
 	oracle    *legacyOracle
 	sessions  map[types.LayerID]*protocol
 	eg        errgroup.Group
-	ctx       context.Context
 	svc       NodeService
 
 	log *zap.Logger
@@ -175,17 +174,19 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 		h.log.Debug("active in preround. waiting for preround delay", zap.Uint32("lid", session.lid.Uint32()))
 		select {
 		case <-h.wallClock.After(walltime.Sub(h.wallClock.Now())):
-		case <-h.ctx.Done():
-			return h.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 	msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
 	if err != nil && active {
 		h.log.Error("get hare message on preround", zap.Error(err))
+	} else if msgBytes == nil && err == nil {
+		// do nothing, there's no message to process
 	} else {
 		msg := &Message{}
 		if err := codec.Decode(msgBytes, msg); err != nil {
-			h.log.Error("decode remote hare message", zap.Error(err))
+			h.log.Error("preround decode remote hare message", zap.Error(err))
 		} else {
 			h.signPub(ctx, session, msg)
 		}
@@ -222,6 +223,12 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 				)
 
 				msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
+				if msgBytes == nil && err == nil {
+					// special case - no message to process, we're either too early or hare terminated.
+					// do the onRound and then continue
+					onRound(session.proto) // advance the protocol state before continuing
+					continue
+				}
 				if err != nil {
 					h.log.Error("get hare message", zap.Error(err))
 					onRound(session.proto) // advance the protocol state before continuing
@@ -235,7 +242,7 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 			}
 
 			onRound(session.proto) // advance the protocol state before continuing
-		case <-h.ctx.Done():
+		case <-ctx.Done():
 			return nil
 		}
 	}
@@ -251,6 +258,8 @@ func (h *RemoteHare) signPub(ctx context.Context, session *session, message *Mes
 		msg.Eligibility = *vrf
 		msg.Sender = session.signers[i].NodeID()
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
+		h.log.Info("publishing hare message", zap.Uint32("layer", session.lid.Uint32()),
+			zap.Stringer("beacon", session.beacon))
 		if err := h.svc.Publish(ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
 			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}

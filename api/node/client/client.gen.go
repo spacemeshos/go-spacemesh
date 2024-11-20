@@ -130,6 +130,9 @@ type ClientInterface interface {
 	// PostPoetWithBody request with any body
 	PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetProposalLayerNode request
+	GetProposalLayerNode(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostPublishProtocolWithBody request with any body
 	PostPublishProtocolWithBody(ctx context.Context, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
@@ -220,6 +223,18 @@ func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRe
 
 func (c *Client) PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostPoetRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetProposalLayerNode(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProposalLayerNodeRequest(c.Server, layer, node)
 	if err != nil {
 		return nil, err
 	}
@@ -530,6 +545,47 @@ func NewPostPoetRequestWithBody(server string, contentType string, body io.Reade
 	return req, nil
 }
 
+// NewGetProposalLayerNodeRequest generates requests for GetProposalLayerNode
+func NewGetProposalLayerNodeRequest(server string, layer externalRef0.LayerID, node externalRef0.NodeID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "layer", runtime.ParamLocationPath, layer)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "node", runtime.ParamLocationPath, node)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/proposal/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPostPublishProtocolRequestWithBody generates requests for PostPublishProtocol with any type of body
 func NewPostPublishProtocolRequestWithBody(server string, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
@@ -632,6 +688,9 @@ type ClientWithResponsesInterface interface {
 
 	// PostPoetWithBodyWithResponse request with any body
 	PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error)
+
+	// GetProposalLayerNodeWithResponse request
+	GetProposalLayerNodeWithResponse(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*GetProposalLayerNodeResponse, error)
 
 	// PostPublishProtocolWithBodyWithResponse request with any body
 	PostPublishProtocolWithBodyWithResponse(ctx context.Context, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPublishProtocolResponse, error)
@@ -810,6 +869,27 @@ func (r PostPoetResponse) StatusCode() int {
 	return 0
 }
 
+type GetProposalLayerNodeResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProposalLayerNodeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProposalLayerNodeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostPublishProtocolResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -901,6 +981,15 @@ func (c *ClientWithResponses) PostPoetWithBodyWithResponse(ctx context.Context, 
 		return nil, err
 	}
 	return ParsePostPoetResponse(rsp)
+}
+
+// GetProposalLayerNodeWithResponse request returning *GetProposalLayerNodeResponse
+func (c *ClientWithResponses) GetProposalLayerNodeWithResponse(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*GetProposalLayerNodeResponse, error) {
+	rsp, err := c.GetProposalLayerNode(ctx, layer, node, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProposalLayerNodeResponse(rsp)
 }
 
 // PostPublishProtocolWithBodyWithResponse request with arbitrary body returning *PostPublishProtocolResponse
@@ -1065,6 +1154,22 @@ func ParsePostPoetResponse(rsp *http.Response) (*PostPoetResponse, error) {
 	}
 
 	response := &PostPoetResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	return response, nil
+}
+
+// ParseGetProposalLayerNodeResponse parses an HTTP response from a GetProposalLayerNodeWithResponse call
+func ParseGetProposalLayerNodeResponse(rsp *http.Response) (*GetProposalLayerNodeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProposalLayerNodeResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

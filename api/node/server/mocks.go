@@ -258,3 +258,67 @@ func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.Laye
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockproposalBuilder is a mock of proposalBuilder interface.
+type MockproposalBuilder struct {
+	ctrl     *gomock.Controller
+	recorder *MockproposalBuilderMockRecorder
+	isgomock struct{}
+}
+
+// MockproposalBuilderMockRecorder is the mock recorder for MockproposalBuilder.
+type MockproposalBuilderMockRecorder struct {
+	mock *MockproposalBuilder
+}
+
+// NewMockproposalBuilder creates a new mock instance.
+func NewMockproposalBuilder(ctrl *gomock.Controller) *MockproposalBuilder {
+	mock := &MockproposalBuilder{ctrl: ctrl}
+	mock.recorder = &MockproposalBuilderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockproposalBuilder) EXPECT() *MockproposalBuilderMockRecorder {
+	return m.recorder
+}
+
+// BuildFor mocks base method.
+func (m *MockproposalBuilder) BuildFor(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "BuildFor", ctx, layer, node)
+	ret0, _ := ret[0].(*types.Proposal)
+	ret1, _ := ret[1].(types.VRFPostIndex)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// BuildFor indicates an expected call of BuildFor.
+func (mr *MockproposalBuilderMockRecorder) BuildFor(ctx, layer, node any) *MockproposalBuilderBuildForCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BuildFor", reflect.TypeOf((*MockproposalBuilder)(nil).BuildFor), ctx, layer, node)
+	return &MockproposalBuilderBuildForCall{Call: call}
+}
+
+// MockproposalBuilderBuildForCall wrap *gomock.Call
+type MockproposalBuilderBuildForCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockproposalBuilderBuildForCall) Return(arg0 *types.Proposal, arg1 types.VRFPostIndex, arg2 error) *MockproposalBuilderBuildForCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockproposalBuilderBuildForCall) Do(f func(context.Context, types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockproposalBuilderBuildForCall) DoAndReturn(f func(context.Context, types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

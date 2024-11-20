@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -133,22 +134,30 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 		externalRef0.HareIter(round.Iter),
 		externalRef0.HareRound(round.Round))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get hare message: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
+	switch resp.StatusCode {
+	case http.StatusOK:
+		bytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("read all: %w", err)
+		}
+		return bytes, nil
+
+	case http.StatusNoContent:
+		// no message to return, special case, return nil,nil
+		// and the caller should assume there's no message to process,
+		// therefore hare probably terminated.
+		return nil, nil
+	default:
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("read all: %w", err)
-	}
-	return bytes, nil
 }
 
 func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
 	resp, err := s.client.GetHareTotalWeightLayer(ctx, uint32(layer))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get total weight: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -163,7 +172,7 @@ func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uin
 func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
 	resp, err := s.client.GetHareWeightNodeIdLayer(ctx, node.String(), uint32(layer))
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -179,7 +188,7 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 	v := types.Beacon{}
 	resp, err := s.client.GetHareBeaconEpoch(ctx, externalRef0.EpochID(epoch))
 	if err != nil {
-		return v, err
+		return v, fmt.Errorf("get hare beacon: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
 		return v, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -190,4 +199,42 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 	}
 	copy(v[:], bytes)
 	return v, nil
+}
+
+func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
+	*types.Proposal, uint64, error,
+) {
+	resp, err := s.client.GetProposalLayerNode(ctx, externalRef0.LayerID(layer), node.String())
+	if err != nil {
+		return nil, 0, fmt.Errorf("get proposal layer: %w", err)
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNoContent:
+		// special case - no error but also no proposal, means
+		// we're no eligibile this epoch with this node ID
+		return nil, 0, nil
+	default:
+		return nil, 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read all: %w", err)
+	}
+
+	prop := types.Proposal{}
+	err = codec.Decode(bytes, &prop)
+	if err != nil {
+		return nil, 0, fmt.Errorf("decode proposal: %w", err)
+	}
+	atxNonce := resp.Header.Get("X-Spacemesh-Atx-Nonce")
+	if atxNonce == "" {
+		return nil, 0, errors.New("missing atx nonce")
+	}
+	nonce, err := strconv.ParseUint(atxNonce, 10, 64)
+	if err != nil {
+		return nil, 0, fmt.Errorf("nonce parse: %w", err)
+	}
+	return &prop, nonce, nil
 }

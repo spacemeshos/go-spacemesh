@@ -188,10 +188,11 @@ func (n *node) withSyncer() *node {
 }
 
 func (n *node) withOracle() *node {
-	beaconget := smocks.NewMockBeaconGetter(n.ctrl)
-	beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
-		return beacons.Get(n.db, epoch)
-	}).AnyTimes()
+	beaconget := eligibility.NewMockBeaconProvider(n.ctrl)
+	beaconget.EXPECT().Beacon(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, epoch types.EpochID) (types.Beacon, error) {
+			return beacons.Get(n.db, epoch)
+		}).AnyTimes()
 	n.oracle = eligibility.New(
 		beaconget,
 		n.db,
