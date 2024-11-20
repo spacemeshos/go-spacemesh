@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/api/proxy"
 	"io"
 	"io/fs"
 	"net"
@@ -427,6 +428,7 @@ type App struct {
 	postSupervisor     *activation.PostSupervisor
 	malfeasanceHandler *malfeasance.Handler
 	idStates           *activation.IdentityStateStorage
+	apiProxy           *proxy.Server
 
 	errCh chan error
 
@@ -1930,6 +1932,20 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		app.eg.Go(func() error { return app.nodeServiceServer.Serve(lis) })
 	}
 
+	if len(app.Config.NodeServiceAddress) > 0 &&
+		len(app.Config.API.ProxyListener) > 0 &&
+		len(app.Config.API.ProxyApiV2Address) > 0 {
+		p, err := proxy.NewServer(app.Config.API.ProxyListener, app.Config.API.ProxyApiV2Address, app.log.Zap())
+		if err != nil {
+			return nil
+		}
+		app.apiProxy = p
+
+		if err = p.Start(); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -2049,6 +2065,11 @@ func (app *App) stopServices(ctx context.Context) {
 	if app.profilerService != nil {
 		if err := app.profilerService.Stop(); err != nil {
 			app.log.With().Warning("profiler service exited with error", log.Err(err))
+		}
+	}
+	if app.apiProxy != nil {
+		if err := app.apiProxy.Stop(); err != nil {
+			app.log.With().Warning("proxy server exited with error", log.Err(err))
 		}
 	}
 

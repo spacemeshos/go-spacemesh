@@ -3,7 +3,16 @@ version: '3'
 services:
   activation-service:
     image: ${IMAGE}
-    command: ["-c", "/config.json", "--node-service-address", "http://node-service:9099"]
+    command: [
+      "-c", "/config.json",
+      "--node-service-address", "http://node-service:9099",
+      "--grpc-json-listener", "0.0.0.0:9071",
+      "--proxy-api-v2-address", "http://node-service:9070",
+      "--proxy-listener", "0.0.0.0:9072"
+    ]
+#    ports:
+#        - "9071:9071"
+#        - "9072:9072"
     volumes:
       - /tmp/spacemesh-client:/tmp/spacemesh-client
       - ./config.standalone.client.json:/config.json
@@ -12,7 +21,8 @@ services:
 
   node-service:
     image: ${IMAGE}
-    command: ["-c", "/config.json", "--smeshing-opts-datadir", "/tmp/spacemesh-node-post"]
+    command: ["-c", "/config.json", "--smeshing-opts-datadir", "/tmp/spacemesh-node-post",
+              "--grpc-json-listener", "0.0.0.0:9070"]
     volumes:
       - /tmp/spacemesh-node-service:/tmp/spacemesh-node-service
       - ./config.standalone.node-service.json:/config.json
