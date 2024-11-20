@@ -1,6 +1,7 @@
 package types_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/spacemeshos/go-scale/tester"
@@ -9,8 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	types.SetNetworkHRP("stest")
+	res := m.Run()
+	os.Exit(res)
 }
 
 func TestAddress_NewAddress(t *testing.T) {

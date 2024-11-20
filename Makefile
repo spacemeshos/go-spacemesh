@@ -145,7 +145,7 @@ lint-fix: get-libs
 .PHONY: lint-fix
 
 cover: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)
+	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum --junitfile junit.xml -- -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
 
 vulncheck: get-libs

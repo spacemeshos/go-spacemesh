@@ -23,57 +23,14 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strconv"
 )
-
-var bytesT = reflect.TypeOf(Bytes(nil))
-
-// Bytes marshals/unmarshals as a JSON string with 0x prefix.
-// The empty slice marshals as "0x".
-type Bytes []byte
-
-// MarshalText implements encoding.TextMarshaler.
-func (b Bytes) MarshalText() ([]byte, error) {
-	result := make([]byte, len(b)*2+2)
-	copy(result, `0x`)
-	hex.Encode(result[2:], b)
-	return result, nil
-}
-
-// UnmarshalJSON implements json.Unmarshaler.
-func (b *Bytes) UnmarshalJSON(input []byte) error {
-	if !isString(input) {
-		return errNonString(bytesT)
-	}
-	return wrapTypeError(b.UnmarshalText(input[1:len(input)-1]), bytesT)
-}
-
-// UnmarshalText implements encoding.TextUnmarshaler.
-func (b *Bytes) UnmarshalText(input []byte) error {
-	raw, err := checkText(input, true)
-	if err != nil {
-		return err
-	}
-	dec := make([]byte, len(raw)/2)
-	if _, err = hex.Decode(dec, raw); err != nil {
-		err = mapError(err)
-	} else {
-		*b = dec
-	}
-	return err
-}
-
-// String returns the hex encoding of b.
-func (b Bytes) String() string {
-	return Encode(b)
-}
 
 // UnmarshalFixedJSON decodes the input as a string with 0x prefix. The length of out
 // determines the required input length. This function is commonly used to implement the
 // UnmarshalJSON method for fixed-size types.
 func UnmarshalFixedJSON(typ reflect.Type, input, out []byte) error {
-	if !isString(input) {
-		return errNonString(typ)
+	if len(input) < 2 || input[0] != '"' || input[len(input)-1] != '"' { // check for quoted string
+		return &json.UnmarshalTypeError{Value: "non-string", Type: typ}
 	}
 	return wrapTypeError(UnmarshalFixedText(typ.String(), input[1:len(input)-1], out), typ)
 }
@@ -92,15 +49,11 @@ func UnmarshalFixedText(typename string, input, out []byte) error {
 	// Pre-verify syntax before modifying out.
 	for _, b := range raw {
 		if decodeNibble(b) == badNibble {
-			return ErrSyntax
+			return errSyntax
 		}
 	}
 	hex.Decode(out, raw)
 	return nil
-}
-
-func isString(input []byte) bool {
-	return len(input) >= 2 && input[0] == '"' && input[len(input)-1] == '"'
 }
 
 func bytesHave0xPrefix(input []byte) bool {
@@ -114,31 +67,27 @@ func checkText(input []byte, wantPrefix bool) ([]byte, error) {
 	if bytesHave0xPrefix(input) {
 		input = input[2:]
 	} else if wantPrefix {
-		return nil, ErrMissingPrefix
+		return nil, errMissingPrefix
 	}
 	if len(input)%2 != 0 {
-		return nil, ErrOddLength
+		return nil, errOddLength
 	}
 	return input, nil
 }
 
 func wrapTypeError(err error, typ reflect.Type) error {
 	switch {
-	case errors.Is(err, ErrSyntax):
+	case errors.Is(err, errSyntax):
 		return &json.UnmarshalTypeError{Value: err.Error(), Type: typ}
-	case errors.Is(err, ErrMissingPrefix):
+	case errors.Is(err, errMissingPrefix):
 		return &json.UnmarshalTypeError{Value: err.Error(), Type: typ}
-	case errors.Is(err, ErrOddLength):
+	case errors.Is(err, errOddLength):
 		return &json.UnmarshalTypeError{Value: err.Error(), Type: typ}
-	case errors.Is(err, ErrUint64Range):
+	case errors.Is(err, errUint64Range):
 		return &json.UnmarshalTypeError{Value: err.Error(), Type: typ}
 	default:
 		return err
 	}
-}
-
-func errNonString(typ reflect.Type) error {
-	return &json.UnmarshalTypeError{Value: "non-string", Type: typ}
 }
 
 const badNibble = ^uint64(0)
@@ -154,26 +103,6 @@ func decodeNibble(in byte) uint64 {
 	default:
 		return badNibble
 	}
-}
-
-func mapError(err error) error {
-	var numErr *strconv.NumError
-	if errors.As(err, &numErr) {
-		switch numErr.Err {
-		case strconv.ErrRange:
-			return ErrUint64Range
-		case strconv.ErrSyntax:
-			return ErrSyntax
-		}
-	}
-	var syntaxErr hex.InvalidByteError
-	if errors.As(err, &syntaxErr) {
-		return ErrSyntax
-	}
-	if errors.Is(err, hex.ErrLength) {
-		return ErrOddLength
-	}
-	return err
 }
 
 func Base64Encode(src []byte) []byte {
