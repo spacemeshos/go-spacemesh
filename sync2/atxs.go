@@ -25,10 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-const (
-	proto = "sync/2"
-)
-
 type ATXHandler struct {
 	logger           *zap.Logger
 	f                Fetcher
@@ -297,7 +293,7 @@ func NewATXSyncer(
 
 func NewDispatcher(logger *zap.Logger, f Fetcher, opts []server.Opt) *rangesync.Dispatcher {
 	d := rangesync.NewDispatcher(logger)
-	d.SetupServer(f.Host(), proto, opts...)
+	d.SetupServer(f.Host(), multipeer.Protocol, opts...)
 	return d
 }
 
