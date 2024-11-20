@@ -231,7 +231,7 @@ func (v *VM) Apply(
 
 	for _, reward := range rewardsResult {
 		if err := rewards.Add(tx, &reward); err != nil {
-			return nil, nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
+			return nil, nil, fmt.Errorf("add reward %w: %w", core.ErrInternal, err)
 		}
 	}
 
@@ -247,17 +247,17 @@ func (v *VM) Apply(
 		return true
 	})
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
+		return nil, nil, fmt.Errorf("iterate changed %w: %w", core.ErrInternal, err)
 	}
 	writesPerBlock.Observe(float64(total))
 
 	var hashSum types.Hash32
 	hasher.Sum(hashSum[:0])
 	if err := layers.UpdateStateHash(tx, layer, hashSum); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("update state hash: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
+		return nil, nil, fmt.Errorf("commit %w: %w", core.ErrInternal, err)
 	}
 	ss.IterateChanged(func(account *core.Account) bool {
 		if err := events.ReportAccountUpdate(account.Address); err != nil {

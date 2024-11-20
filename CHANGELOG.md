@@ -2,11 +2,20 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## Unreleased
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
 
 ### Improvements
 
-* [#6431](https://github.com/spacemeshos/go-spacemesh/pull/6431) Fix db-allow-schema-drift handling
+## v1.7.7
+
+### Improvements
+
 * [#6408](https://github.com/spacemeshos/go-spacemesh/pull/6408) Prevent empty DB connection pool by freeing connections
   upon errors during DB operations. This mostly fixes issues when a node is under heavy load from the API.
 
@@ -15,6 +24,15 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6422](https://github.com/spacemeshos/go-spacemesh/pull/6422) Further improved performance of the proposal building
   process to avoid late proposals.
+
+* [#6443](https://github.com/spacemeshos/go-spacemesh/pull/6443) Improve eviction of ineffectual transactions in the database
+  which will now show up as ineffectual when querying them from the API.
+
+* [#6431](https://github.com/spacemeshos/go-spacemesh/pull/6431) Fix db-allow-schema-drift handling
+
+* [#6451](https://github.com/spacemeshos/go-spacemesh/pull/6451) Fix a possible deadloop in the beacon protocol.
+
+* [#6470](https://github.com/spacemeshos/go-spacemesh/pull/6470) Fix I/O buffering issue which could be affecting QUIC connections.
 
 ## v1.7.6
 

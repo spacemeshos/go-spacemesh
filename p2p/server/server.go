@@ -32,12 +32,8 @@ type DecayingTagSpec struct {
 	Cap      int           `mapstructure:"cap"`
 }
 
-var (
-	// ErrNotConnected is returned when peer is not connected.
-	ErrNotConnected = errors.New("peer is not connected")
-	// ErrPeerResponseFailed raised if peer responded with an error.
-	ErrPeerResponseFailed = errors.New("peer response failed")
-)
+// ErrNotConnected is returned when peer is not connected.
+var ErrNotConnected = errors.New("peer is not connected")
 
 // Opt is a type to configure a server.
 type Opt func(s *Server)
@@ -303,8 +299,7 @@ func (s *Server) Run(ctx context.Context) error {
 func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.Stream) bool {
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer dadj.Close()
-	rd := bufio.NewReader(dadj)
-	size, err := varint.ReadUvarint(rd)
+	size, err := varint.ReadUvarint(dadj)
 	if err != nil {
 		s.logger.Debug("initial read failed",
 			zap.String("protocol", s.protocol),
@@ -326,7 +321,7 @@ func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.
 		return false
 	}
 	buf := make([]byte, size)
-	_, err = io.ReadFull(rd, buf)
+	_, err = io.ReadFull(dadj, buf)
 	if err != nil {
 		s.logger.Debug("error reading request",
 			zap.String("protocol", s.protocol),
@@ -391,7 +386,7 @@ func (s *Server) StreamRequest(
 		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
 	}
 	if s.h.Network().Connectedness(pid) != network.Connected {
-		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
+		return ErrNotConnected
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)

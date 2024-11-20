@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"testing"
 	"testing/quick"
@@ -128,7 +129,7 @@ type handlerMocks struct {
 	mValidator  *MocknipostValidator
 	mbeacon     *MockAtxReceiver
 	mtortoise   *mocks.MockTortoise
-	mMalPublish *MockmalfeasancePublisher
+	mMalPublish *MockatxMalfeasancePublisher
 }
 
 type testHandler struct {
@@ -159,6 +160,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	}
 	h.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	h.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.BytesToHash(atx.NIPost.PostMetadata.Challenge))
+	deps := []types.ATXID{atx.PrevATXID, atx.PositioningATXID}
 	if atx.PrevATXID == types.EmptyATXID {
 		h.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), h.goldenATXID)
 		h.mValidator.EXPECT().
@@ -170,8 +172,16 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 				time.Sleep(settings.postVerificationDuration)
 				return nil
 			})
+		deps = append(deps, *atx.CommitmentATXID)
 	} else {
 		h.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), nodeId)
+	}
+	deps = slices.Compact(deps)
+	deps = slices.DeleteFunc(deps, func(dep types.ATXID) bool {
+		return dep == types.EmptyATXID || dep == h.goldenATXID
+	})
+	if len(deps) > 0 {
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), deps, gomock.Any())
 	}
 	h.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), h.goldenATXID, atx.PublishEpoch)
 	h.mValidator.EXPECT().
@@ -194,7 +204,7 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		mValidator:  NewMocknipostValidator(ctrl),
 		mbeacon:     NewMockAtxReceiver(ctrl),
 		mtortoise:   mocks.NewMockTortoise(ctrl),
-		mMalPublish: NewMockmalfeasancePublisher(ctrl),
+		mMalPublish: NewMockatxMalfeasancePublisher(ctrl),
 	}
 }
 
@@ -205,6 +215,8 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
+	// TODO(mafa): make mandatory parameter when real publisher is available
+	opts = append(opts, func(h *Handler) { h.v2.malPublisher = mocks.mMalPublish })
 	atxHdlr := NewHandler(
 		"localID",
 		cdb,
@@ -341,7 +353,6 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx2.VRFNonce = (*uint64)(&nonce2)
 	atx2.Sign(sig)
 	atxHdlr.expectAtxV1(atx2, sig.NodeID())
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx2)))
 
 	got, err = atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx2.PublishEpoch+1)
@@ -391,7 +402,6 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 
 	// second is now valid (deps are in)
 	atxHdlr.expectAtxV1(second, sig.NodeID())
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second)))
 }
 
@@ -695,7 +705,6 @@ func TestHandler_AtxWeight(t *testing.T) {
 	buf = codec.MustEncode(atx2)
 
 	atxHdlr.expectAtxV1(atx2, sig.NodeID(), func(o *atxHandleOpts) { o.poetLeaves = leaves })
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx1.ID()}, gomock.Any())
 	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
 
 	stored2, err := atxHdlr.cdb.GetAtx(atx2.ID())

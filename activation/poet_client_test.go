@@ -336,7 +336,7 @@ func TestPoetClient_Certify(t *testing.T) {
 		poet := NewPoetServiceWithClient(
 			nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 		_, err = poet.Certify(context.Background(), sig.NodeID())
-		require.ErrorIs(t, err, ErrCertificatesNotSupported)
+		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
 }
 
