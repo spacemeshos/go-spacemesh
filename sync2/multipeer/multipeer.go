@@ -7,12 +7,17 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
+)
+
+const (
+	Protocol = "sync/2"
 )
 
 type syncability struct {
@@ -283,7 +288,7 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context, lastWasSplit bool) (full bool, err error) {
 	var s syncability
 	for {
-		syncPeers := mpr.peers.SelectBest(mpr.cfg.SyncPeerCount)
+		syncPeers := mpr.peers.SelectBestWithProtocols(mpr.cfg.SyncPeerCount, []protocol.ID{Protocol})
 		mpr.logger.Debug("selected best peers for sync",
 			zap.Int("syncPeerCount", mpr.cfg.SyncPeerCount),
 			zap.Int("totalPeers", mpr.peers.Total()),
