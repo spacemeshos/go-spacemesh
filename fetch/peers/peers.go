@@ -1,6 +1,7 @@
 package peers
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
