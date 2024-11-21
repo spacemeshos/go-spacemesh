@@ -390,6 +390,10 @@ func (ft *FPTree) All() rangesync.SeqResult {
 func (ft *FPTree) From(from rangesync.KeyBytes, sizeHint int) rangesync.SeqResult {
 	ft.np.lockRead()
 	defer ft.np.unlockRead()
+	return ft.from(from, sizeHint)
+}
+
+func (ft *FPTree) from(from rangesync.KeyBytes, sizeHint int) rangesync.SeqResult {
 	switch {
 	case ft.root == noIndex:
 		return rangesync.EmptySeqResult()
@@ -690,7 +694,7 @@ func (ft *FPTree) aggregateEdge(
 	case ac.limit > 0:
 		sizeHint = min(ac.limit, sizeHint)
 	}
-	sr := ft.From(startFrom, sizeHint)
+	sr := ft.from(startFrom, sizeHint)
 	if ac.limit == 0 {
 		next, err := sr.First()
 		if err != nil {
@@ -1060,7 +1064,7 @@ func (ft *FPTree) startFromPrefix(ac *aggContext, p prefix) rangesync.SeqResult 
 	k := make(rangesync.KeyBytes, ft.keyLen)
 	p.idAfter(k)
 	ft.log("startFromPrefix: p: %s idAfter: %s", p, k)
-	return ft.From(k, 1)
+	return ft.from(k, 1)
 }
 
 // nextFromPrefix return the first item that has the prefix p.
@@ -1106,7 +1110,7 @@ func (ft *FPTree) fingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr F
 		ft.log("fingerprintInterval: items %v", ac.items)
 		fpr.Items = ac.items
 	} else {
-		fpr.Items = ft.From(x, 1)
+		fpr.Items = ft.from(x, 1)
 		ft.log("fingerprintInterval: start from x: %v", fpr.Items)
 	}
 
@@ -1126,7 +1130,7 @@ func (ft *FPTree) fingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr F
 		fpr.Next, err = ft.nextFromPrefix(&ac, *ac.lastPrefix)
 		ft.log("fingerprintInterval: next at lastPrefix %s -> %s", *ac.lastPrefix, fpr.Next)
 	} else {
-		next, err := ft.From(y, 1).First()
+		next, err := ft.from(y, 1).First()
 		if err != nil {
 			return FPResult{}, err
 		}
@@ -1178,7 +1182,7 @@ func (ft *FPTree) easySplit(x, y rangesync.KeyBytes, limit int) (sr SplitResult,
 	middle := make(rangesync.KeyBytes, ft.keyLen)
 	ac.lastPrefix0.idAfter(middle)
 	ft.log("easySplit: lastPrefix0 %s middle %s", ac.lastPrefix0, middle)
-	items := ft.From(x, 1)
+	items := ft.from(x, 1)
 	part0 := FPResult{
 		FP:    ac.fp0,
 		Count: ac.count0,

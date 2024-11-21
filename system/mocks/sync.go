@@ -13,7 +13,6 @@ import (
 	context "context"
 	reflect "reflect"
 
-	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -39,44 +38,6 @@ func NewMockSyncStateProvider(ctrl *gomock.Controller) *MockSyncStateProvider {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockSyncStateProvider) EXPECT() *MockSyncStateProviderMockRecorder {
 	return m.recorder
-}
-
-// IsBeaconSynced mocks base method.
-func (m *MockSyncStateProvider) IsBeaconSynced(arg0 types.EpochID) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsBeaconSynced", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsBeaconSynced indicates an expected call of IsBeaconSynced.
-func (mr *MockSyncStateProviderMockRecorder) IsBeaconSynced(arg0 any) *MockSyncStateProviderIsBeaconSyncedCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsBeaconSynced", reflect.TypeOf((*MockSyncStateProvider)(nil).IsBeaconSynced), arg0)
-	return &MockSyncStateProviderIsBeaconSyncedCall{Call: call}
-}
-
-// MockSyncStateProviderIsBeaconSyncedCall wrap *gomock.Call
-type MockSyncStateProviderIsBeaconSyncedCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSyncStateProviderIsBeaconSyncedCall) Return(arg0 bool) *MockSyncStateProviderIsBeaconSyncedCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSyncStateProviderIsBeaconSyncedCall) Do(f func(types.EpochID) bool) *MockSyncStateProviderIsBeaconSyncedCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncStateProviderIsBeaconSyncedCall) DoAndReturn(f func(types.EpochID) bool) *MockSyncStateProviderIsBeaconSyncedCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
 }
 
 // IsSynced mocks base method.

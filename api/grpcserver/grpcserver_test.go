@@ -315,6 +315,10 @@ func (t *ConStateAPIMock) GetStateRoot() (types.Hash32, error) {
 	return stateRoot, nil
 }
 
+func (t *ConStateAPIMock) HasEvicted(id types.TransactionID) (bool, error) {
+	panic("not implemented")
+}
+
 func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if ok {

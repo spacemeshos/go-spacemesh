@@ -8,6 +8,7 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -47,7 +48,7 @@ func TestSyncGetOffset(t *testing.T) {
 		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
 		for _, h := range mesh.Hosts()[1:] {
 			peers = append(peers, h.ID())
-			_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
+			require.NotNil(t, New(h, nil, WithTime(adjustedTime(peerResponse))))
 		}
 		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
@@ -106,7 +107,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	peers := []p2p.Peer{}
 	for _, h := range mesh.Hosts()[1:] {
 		peers = append(peers, h.ID())
-		_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
+		require.NotNil(t, New(h, nil, WithTime(adjustedTime(peerResponse))))
 	}
 	getter.EXPECT().GetPeers().Return(peers)
 
@@ -139,7 +140,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	for _, h := range mesh.Hosts() {
 		fh, err := p2p.Upgrade(h)
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = fh.Stop() })
+		t.Cleanup(func() { assert.NoError(t, fh.Stop()) })
 		hosts = append(hosts, fh)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())

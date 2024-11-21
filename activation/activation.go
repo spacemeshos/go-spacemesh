@@ -32,7 +32,7 @@ import (
 )
 
 var (
-	ErrNotFound    = errors.New("not found")
+	errNotFound    = errors.New("not found")
 	errNilVrfNonce = errors.New("nil VRF nonce")
 )
 
@@ -104,7 +104,7 @@ type Builder struct {
 
 	posAtxFinder positioningAtxFinder
 
-	// states of each known identity
+	// post states of each known identity
 	postStates PostStates
 
 	// smeshingMutex protects methods like `StartSmeshing` and `StopSmeshing` from concurrent execution
@@ -239,7 +239,7 @@ func (b *Builder) Smeshing() bool {
 	return b.stop != nil
 }
 
-// PostState returns the current state of the post service for each registered smesher.
+// PostStates returns the current state of the post service for each registered smesher.
 func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 	states := b.postStates.Get()
 	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
@@ -340,7 +340,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 }
 
-// SmesherID returns the ID of the smesher that created this activation.
+// SmesherIDs returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherIDs() []types.NodeID {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -429,7 +429,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 		eg.Go(func() error {
 			_, err := poet.Certify(ctx, sig.NodeID())
 			switch {
-			case errors.Is(err, ErrCertificatesNotSupported):
+			case errors.Is(err, errCertificatesNotSupported):
 				b.logger.Debug("not certifying (not supported in poet)",
 					log.ZShortStringer("smesherID", sig.NodeID()),
 					zap.String("poet", poet.Address()),
@@ -454,7 +454,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		poetErr := &PoetSvcUnstableError{}
 		switch {
-		case errors.Is(err, ErrATXChallengeExpired):
+		case errors.Is(err, errATXChallengeExpired):
 			b.logger.Debug("retrying with new challenge after waiting for a layer")
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.logger.Error("failed to reset nipost builder state", zap.Error(err))
@@ -829,7 +829,7 @@ func (b *Builder) createAtx(
 			// initial NIPoST challenge is not discarded; don't return ErrATXChallengeExpired
 			return nil, errors.New("atx publish epoch has passed during nipost construction")
 		}
-		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
+		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", errATXChallengeExpired)
 	}
 
 	switch version {
@@ -1086,7 +1086,7 @@ func findFullyValidHighTickAtx(
 	}
 
 	if found == nil {
-		return types.ATXID{}, ErrNotFound
+		return types.ATXID{}, errNotFound
 	}
 
 	return *found, nil

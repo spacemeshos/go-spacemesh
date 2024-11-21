@@ -33,9 +33,9 @@ import (
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
-	ErrCertificatesNotSupported = errors.New("poet doesn't support certificates")
-	ErrIncompatiblePhaseShift   = errors.New("fetched poet phase_shift is incompatible with configured phase_shift")
-	ErrCertifierNotConfigured   = errors.New("certifier service not configured")
+	errCertificatesNotSupported = errors.New("poet doesn't support certificates")
+	errIncompatiblePhaseShift   = errors.New("fetched poet phase_shift is incompatible with configured phase_shift")
+	errCertifierNotConfigured   = errors.New("certifier service not configured")
 )
 
 type PoetPowParams struct {
@@ -464,7 +464,7 @@ func NewPoetServiceWithClient(
 
 	err := service.verifyPhaseShiftConfiguration(context.Background())
 	switch {
-	case errors.Is(err, ErrIncompatiblePhaseShift):
+	case errors.Is(err, errIncompatiblePhaseShift):
 		logger.Fatal("failed to create poet service", zap.String("poet", client.Address()))
 		return nil
 	case err != nil:
@@ -487,7 +487,7 @@ func (c *poetService) verifyPhaseShiftConfiguration(ctx context.Context) error {
 	}
 
 	if info.PhaseShift != c.expectedPhaseShift {
-		return ErrIncompatiblePhaseShift
+		return errIncompatiblePhaseShift
 	}
 
 	return nil
@@ -508,7 +508,7 @@ func (c *poetService) authorize(
 	switch {
 	case err == nil:
 		return &PoetAuth{PoetCert: cert}, nil
-	case errors.Is(err, ErrCertificatesNotSupported):
+	case errors.Is(err, errCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:
 		logger.Warn("failed to certify", zap.Error(err))
@@ -574,7 +574,7 @@ func (c *poetService) Submit(
 
 	err := c.verifyPhaseShiftConfiguration(ctx)
 	switch {
-	case errors.Is(err, ErrIncompatiblePhaseShift):
+	case errors.Is(err, errIncompatiblePhaseShift):
 		logger.Fatal("failed to submit challenge", zap.String("poet", c.client.Address()))
 		return nil, err
 	case err != nil:
@@ -639,7 +639,7 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 
 func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
 	if c.certifier == nil {
-		return nil, ErrCertifierNotConfigured
+		return nil, errCertifierNotConfigured
 	}
 
 	info, err := c.getInfo(ctx)
@@ -648,7 +648,7 @@ func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.
 	}
 
 	if info.Certifier == nil {
-		return nil, ErrCertificatesNotSupported
+		return nil, errCertificatesNotSupported
 	}
 	return c.certifier.Certificate(ctx, id, info.Certifier.Url, info.Certifier.Pubkey)
 }

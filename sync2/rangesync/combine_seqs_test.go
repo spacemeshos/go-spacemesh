@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var seqTestErr = errors.New("test error")
+var errSeqTest = errors.New("test error")
 
 type fakeSeqItem struct {
 	k    string
@@ -19,7 +19,7 @@ type fakeSeqItem struct {
 func mkFakeSeqItem(s string) fakeSeqItem {
 	switch s {
 	case "!":
-		return fakeSeqItem{err: seqTestErr}
+		return fakeSeqItem{err: errSeqTest}
 	case "$":
 		return fakeSeqItem{stop: true}
 	default:
@@ -98,7 +98,7 @@ func seqToStr(t *testing.T, sr SeqResult) string {
 		sb.Write(k)
 	}
 	if err := sr.Error(); err != nil {
-		require.Equal(t, seqTestErr, err)
+		require.Equal(t, errSeqTest, err)
 		sb.WriteString("!") // error
 		return sb.String()
 	}

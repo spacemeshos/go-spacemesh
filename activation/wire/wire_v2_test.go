@@ -120,7 +120,6 @@ func newActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
 func Benchmark_ATXv2ID(b *testing.B) {
 	f := fuzz.New()
 	b.ResetTimer()
-
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		atx := &ActivationTxV2{}
@@ -131,49 +130,59 @@ func Benchmark_ATXv2ID(b *testing.B) {
 }
 
 func Benchmark_ATXv2ID_WorstScenario(b *testing.B) {
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		atx := &ActivationTxV2{
-			PublishEpoch:   0,
-			PositioningATX: types.RandomATXID(),
-			PreviousATXs:   make([]types.ATXID, 256),
-			NIPosts: []NIPostV2{
-				{
-					Membership: MerkleProofV2{
-						Nodes: make([]types.Hash32, 32),
-					},
-					Challenge: types.RandomHash(),
-					Posts:     make([]SubPostV2, 256),
+	atx := &ActivationTxV2{
+		PublishEpoch:   0,
+		PositioningATX: types.RandomATXID(),
+		PreviousATXs:   make([]types.ATXID, 256),
+		NIPosts: []NIPostV2{
+			{
+				Membership: MerkleProofV2{
+					Nodes: make([]types.Hash32, 32),
 				},
-				{
-					Membership: MerkleProofV2{
-						Nodes: make([]types.Hash32, 32),
-					},
-					Challenge: types.RandomHash(),
-					Posts:     make([]SubPostV2, 256), // actually the sum of all posts in `NiPosts` should be 256
-				},
+				Challenge: types.RandomHash(),
+				Posts:     make([]SubPostV2, 256),
 			},
-		}
-		for i := range atx.NIPosts[0].Posts {
-			atx.NIPosts[0].Posts[i].Post = PostV1{
-				Nonce:   0,
-				Indices: make([]byte, 800),
-				Pow:     0,
-			}
-		}
-		for i := range atx.NIPosts[1].Posts {
-			atx.NIPosts[1].Posts[i].Post = PostV1{
-				Nonce:   0,
-				Indices: make([]byte, 800),
-				Pow:     0,
-			}
-		}
-		atx.MarriageATX = new(types.ATXID)
-		b.StartTimer()
-		atx.ID()
+			{
+				Membership: MerkleProofV2{
+					Nodes: make([]types.Hash32, 32),
+				},
+				Challenge: types.RandomHash(),
+				Posts:     make([]SubPostV2, 256), // actually the sum of all posts in `NiPosts` should be 256
+			},
+			{
+				Membership: MerkleProofV2{
+					Nodes: make([]types.Hash32, 32),
+				},
+				Challenge: types.RandomHash(),
+				Posts:     make([]SubPostV2, 256), // actually the sum of all posts in `NiPosts` should be 256
+			},
+			{
+				Membership: MerkleProofV2{
+					Nodes: make([]types.Hash32, 32),
+				},
+				Challenge: types.RandomHash(),
+				Posts:     make([]SubPostV2, 256), // actually the sum of all posts in `NiPosts` should be 256
+			},
+		},
 	}
+	for j := range atx.NIPosts {
+		for i := range atx.NIPosts[j].Posts {
+			atx.NIPosts[j].Posts[i].Post = PostV1{
+				Nonce:   0,
+				Indices: make([]byte, 800),
+				Pow:     0,
+			}
+		}
+	}
+	atx.MarriageATX = new(types.ATXID)
+
+	var id types.ATXID
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		atx.id = types.EmptyATXID
+		id = atx.ID()
+	}
+	require.Equal(b, id, atx.ID())
 }
 
 func Test_NoATXv2IDCollisions(t *testing.T) {
@@ -187,6 +196,26 @@ func Test_NoATXv2IDCollisions(t *testing.T) {
 		require.NotContains(t, atxIDs, id, "ATX ID collision")
 		atxIDs = append(atxIDs, id)
 	}
+}
+
+func Fuzz_ATXv2IDConsistency(f *testing.F) {
+	f.Fuzz(func(t *testing.T, data []byte) {
+		fuzzer := fuzz.NewFromGoFuzz(data).
+			// Ensure that `NIPosts` is at most 4 elements long
+			Funcs(func(niposts *NIPosts, c fuzz.Continue) {
+				*niposts = make([]NIPostV2, c.Intn(5))
+				for i := range *niposts {
+					c.Fuzz(&(*niposts)[i])
+				}
+			})
+		atx := &ActivationTxV2{}
+		fuzzer.Fuzz(atx)
+		id := atx.ID()
+		encoded := codec.MustEncode(atx)
+		decoded := &ActivationTxV2{}
+		codec.MustDecode(encoded, decoded)
+		require.Equal(t, id, atx.ID(), "ID should be consistent")
+	})
 }
 
 func Test_ATXv2_SupportUpTo4Niposts(t *testing.T) {

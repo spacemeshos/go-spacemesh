@@ -75,7 +75,6 @@ type testSyncer struct {
 	mDataFetcher *mocks.MockfetchLogic
 	mAtxSyncer   *mocks.MockatxSyncer
 	mMalSyncer   *mocks.MockmalSyncer
-	mBeacon      *smocks.MockBeaconGetter
 	mLyrPatrol   *mocks.MocklayerPatrol
 	mVm          *mmocks.MockvmState
 	mConState    *mmocks.MockconservativeState
@@ -120,7 +119,6 @@ func newTestSyncer(tb testing.TB, interval time.Duration) *testSyncer {
 		mDataFetcher: mocks.NewMockfetchLogic(ctrl),
 		mAtxSyncer:   mocks.NewMockatxSyncer(ctrl),
 		mMalSyncer:   mocks.NewMockmalSyncer(ctrl),
-		mBeacon:      smocks.NewMockBeaconGetter(ctrl),
 		mLyrPatrol:   mocks.NewMocklayerPatrol(ctrl),
 		mVm:          mmocks.NewMockvmState(ctrl),
 		mConState:    mmocks.NewMockconservativeState(ctrl),
@@ -148,7 +146,6 @@ func newTestSyncer(tb testing.TB, interval time.Duration) *testSyncer {
 	ts.syncer = NewSyncer(
 		ts.cdb,
 		ts.mTicker,
-		ts.mBeacon,
 		ts.msh,
 		ts.mTortoise,
 		nil,
@@ -755,15 +752,6 @@ func TestSyncer_setATXSyncedTwice_NoError(t *testing.T) {
 	require.NotPanics(t, func() { ts.syncer.setATXSynced() })
 }
 
-func TestSyncer_IsBeaconSynced(t *testing.T) {
-	ts := newSyncerWithoutPeriodicRuns(t)
-	epoch := types.EpochID(11)
-	ts.mBeacon.EXPECT().GetBeacon(epoch).Return(types.EmptyBeacon, errors.New("unknown"))
-	require.False(t, ts.syncer.IsBeaconSynced(epoch))
-	ts.mBeacon.EXPECT().GetBeacon(epoch).Return(types.RandomBeacon(), nil)
-	require.True(t, ts.syncer.IsBeaconSynced(epoch))
-}
-
 func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 	ts.expectDownloadLoop()
@@ -774,7 +762,6 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts.syncer = NewSyncer(
 		ts.cdb,
 		ts.mTicker,
-		ts.mBeacon,
 		ts.msh,
 		ts.mTortoise,
 		nil,

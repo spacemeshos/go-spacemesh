@@ -1071,7 +1071,7 @@ func TestProposal_ProposalGossip_Concurrent(t *testing.T) {
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), &p.Ballot, gomock.Any()).Return(nil).MinTimes(1).MaxTimes(2)
 	th.mm.EXPECT().AddBallot(context.Background(), &p.Ballot).DoAndReturn(
 		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
-			_ = ballots.Add(th.db, got)
+			ballots.Add(th.db, got)
 			return nil, nil
 		}).MinTimes(1).MaxTimes(2)
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), p.TxIDs).Return(nil).MinTimes(1).MaxTimes(2)
@@ -1142,7 +1142,7 @@ func TestProposal_BroadcastMaliciousGossip(t *testing.T) {
 	th.mm.EXPECT().AddBallot(context.Background(), &pMal.Ballot).DoAndReturn(
 		func(_ context.Context, got *types.Ballot) (*wire.MalfeasanceProof, error) {
 			got.SetMalicious()
-			_ = ballots.Add(th.db, got)
+			ballots.Add(th.db, got)
 			return proof, nil
 		})
 	th.mf.EXPECT().GetProposalTxs(gomock.Any(), pMal.TxIDs).Return(nil)

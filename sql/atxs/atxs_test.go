@@ -1070,15 +1070,15 @@ func Test_PrevATXCollision(t *testing.T) {
 		require.NoError(t, atxs.SetPost(db, atx2.ID(), prevATXID, 0, atx2.SmesherID, 10, atx2.PublishEpoch))
 	}
 
-	collision1, collision2, err := atxs.PrevATXCollision(db, prevATXID, sig.NodeID())
+	collisions, err := atxs.PrevATXCollisions(db, prevATXID, sig.NodeID())
 	require.NoError(t, err)
-	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, []types.ATXID{collision1, collision2})
+	require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID()}, collisions)
 
-	_, _, err = atxs.PrevATXCollision(db, types.RandomATXID(), sig.NodeID())
+	_, err = atxs.PrevATXCollisions(db, types.RandomATXID(), sig.NodeID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	for _, id := range append(otherIds, types.RandomNodeID()) {
-		_, _, err := atxs.PrevATXCollision(db, prevATXID, id)
+		_, err := atxs.PrevATXCollisions(db, prevATXID, id)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	}
 }
@@ -1392,12 +1392,16 @@ func TestPrevIDByNodeID(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx2, types.AtxBlob{}))
 		require.NoError(t, atxs.SetPost(db, atx2.ID(), types.EmptyATXID, 0, sig.NodeID(), 4, atx2.PublishEpoch))
 
-		_, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 1)
+		_, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 0)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 
-		prevID, err := atxs.PrevIDByNodeID(db, sig.NodeID(), 2)
+		prevID, err := atxs.PrevIDByNodeID(db, sig.NodeID(), 1)
 		require.NoError(t, err)
 		require.Equal(t, atx1.ID(), prevID)
+
+		prevID, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 2)
+		require.NoError(t, err)
+		require.Equal(t, atx2.ID(), prevID)
 
 		prevID, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 3)
 		require.NoError(t, err)

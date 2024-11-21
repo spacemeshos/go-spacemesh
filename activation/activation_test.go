@@ -404,7 +404,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, ErrATXChallengeExpired)
+		Return(nil, errATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -803,7 +803,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		}).AnyTimes()
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, ErrATXChallengeExpired)
+		Return(nil, errATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
