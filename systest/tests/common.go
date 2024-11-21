@@ -59,7 +59,8 @@ func sendTransactions(
 			time.Sleep(200 * time.Millisecond)
 			if nonce == 0 {
 				logger.Infow("address needs to be spawned", "account", i)
-				if err := submitSpawn(ctx, cl, i, client); err != nil {
+				if err := submitSpawn(ctx, cl, i, client, logger); err != nil {
+					logger.Errorw("failed to spawn", "i", i, "client", client.Name)
 					return false, fmt.Errorf("failed to spawn %w", err)
 				}
 				nonce++
@@ -77,7 +78,7 @@ func sendTransactions(
 				retries := 3
 				spendClient := client
 				for k := 0; k < retries; k++ {
-					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), spendClient)
+					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), spendClient, logger)
 					if err == nil {
 						break
 					}
@@ -105,11 +106,17 @@ func sendTransactions(
 	return nil
 }
 
-func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
+func submitTransaction(
+	ctx context.Context,
+	tx []byte,
+	node *cluster.NodeClient,
+	logger *zap.SugaredLogger,
+) ([]byte, error) {
 	txclient := pb.NewTransactionServiceClient(node.PubConn())
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	response, err := txclient.SubmitTransaction(ctx, &pb.SubmitTransactionRequest{Transaction: tx})
+	logger.Debugw("submitted transaction", "tx", tx, "response", response, "err", err)
 	if err != nil {
 		return nil, err
 	}
@@ -296,6 +303,68 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	}
 }
 
+func waitTransaction(ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	id []byte,
+) {
+	eg.Go(func() error {
+		api := pb.NewTransactionServiceClient(client.PubConn())
+		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
+		if err != nil {
+			return err
+		}
+		_, err = rsts.Recv()
+		if err != nil {
+			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+		}
+		return nil
+	})
+}
+
+func watchTransactionResults(ctx context.Context,
+	eg *errgroup.Group,
+	client *cluster.NodeClient,
+	log *zap.Logger,
+	collector func(*pb.TransactionResult) (bool, error),
+) {
+	eg.Go(func() error {
+		retries := 0
+	BACKOFF:
+
+		api := pb.NewTransactionServiceClient(client.PubConn())
+		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
+		if err != nil {
+			return err
+		}
+		for {
+			rst, err := rsts.Recv()
+			s, ok := status.FromError(err)
+			if ok && s.Code() != codes.OK {
+				log.Warn("transactions stream error",
+					zap.String("client", client.Name),
+					zap.Error(err),
+					zap.Any("status", s),
+				)
+				if s.Code() == codes.Unavailable {
+					if retries == attempts {
+						return errors.New("transaction results unavailable")
+					}
+					retries++
+					time.Sleep(retryBackoff)
+					goto BACKOFF
+				}
+			}
+			if err != nil {
+				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+			}
+			if cont, err := collector(rst); !cont {
+				return err
+			}
+		}
+	})
+}
+
 func watchProposals(
 	ctx context.Context,
 	eg *errgroup.Group,
@@ -403,7 +472,22 @@ func getNonce(ctx context.Context, client *cluster.NodeClient, address types.Add
 	return resp.AccountWrapper.StateProjected.Counter, nil
 }
 
-func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
+func currentBalance(ctx context.Context, client *cluster.NodeClient, address types.Address) (uint64, error) {
+	gstate := pb.NewGlobalStateServiceClient(client.PubConn())
+	resp, err := gstate.Account(ctx, &pb.AccountRequest{AccountId: &pb.AccountId{Address: address.String()}})
+	if err != nil {
+		return 0, err
+	}
+	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
+}
+
+func submitSpawn(
+	ctx context.Context,
+	cluster *cluster.Cluster,
+	account int,
+	client *cluster.NodeClient,
+	logger *zap.SugaredLogger,
+) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	tx, err := wallet.Spawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID()))
@@ -411,7 +495,7 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 		return err
 	}
 
-	_, err = submitTransaction(ctx, tx, client)
+	_, err = submitTransaction(ctx, tx, client, logger)
 	return err
 }
 
@@ -422,6 +506,7 @@ func submitSpend(
 	receiver types.Address,
 	amount, nonce uint64,
 	client *cluster.NodeClient,
+	logger *zap.SugaredLogger,
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -429,7 +514,7 @@ func submitSpend(
 	if err != nil {
 		return err
 	}
-	_, err = submitTransaction(ctx, tx, client)
+	_, err = submitTransaction(ctx, tx, client, logger)
 	return err
 }
 
@@ -490,13 +575,13 @@ func (c *txClient) nonce(ctx context.Context) (uint64, error) {
 	return getNonce(ctx, c.node, c.account.Address)
 }
 
-func (c *txClient) submit(ctx context.Context, tx []byte) (*txRequest, error) {
+func (c *txClient) submit(ctx context.Context, tx []byte, logger *zap.SugaredLogger) (*txRequest, error) {
 	var (
 		txid []byte
 		err  error
 	)
 	for i := 0; i < attempts; i++ {
-		if txid, err = submitTransaction(ctx, tx, c.node); err == nil {
+		if txid, err = submitTransaction(ctx, tx, c.node, logger); err == nil {
 			return &txRequest{
 				node: c.node,
 				txid: txid,

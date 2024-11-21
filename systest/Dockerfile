@@ -40,7 +40,9 @@ COPY --from=build /src/build/test2json /bin/
 COPY --from=build /bin/gotestsum /bin/
 COPY --from=build /src/build/libpost.so /bin/
 COPY --from=build /src/build/post-service /bin/
+COPY --from=build /src/build/libathenavmwrapper.so /bin/
 ENV LD_LIBRARY_PATH="/bin/"
+ENV ATHENA_LIB_PATH="/bin/libathenavmwrapper.so"
 
 ENV GOVERSION=1.23
 ENV GOTESTSUM_FORMAT=standard-quiet

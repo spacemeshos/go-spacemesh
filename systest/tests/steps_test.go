@@ -130,7 +130,7 @@ func TestStepTransactions(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				req, err := client.submit(ctx, tx)
+				req, err := client.submit(ctx, tx, tctx.Log)
 				if err != nil {
 					return err
 				}
@@ -166,7 +166,7 @@ func TestStepTransactions(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				_, err = client.submit(tctx, raw)
+				_, err = client.submit(tctx, raw, tctx.Log)
 				if err != nil {
 					return fmt.Errorf("failed to submit 0x%x from %s with nonce %d: %w",
 						hash.Sum(raw), client.account, nonce, err,
