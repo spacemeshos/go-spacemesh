@@ -431,6 +431,7 @@ type App struct {
 	malfeasanceHandler    *malfeasance.Handler
 	idStates              *activation.IdentityStateStorage
 	apiProxy              *proxy.Server
+	poetClients           []activation.PoetService
 
 	errCh chan error
 
@@ -1137,6 +1138,7 @@ func (app *App) initServices(ctx context.Context) error {
 		}
 		poetClients = append(poetClients, client)
 	}
+	app.poetClients = poetClients
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		app.localDB,
@@ -1713,7 +1715,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.SmeshingIdentities:
-		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates)
+		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates, app.poetClients)
 		app.grpcServices[svc] = service
 		return service, nil
 	}

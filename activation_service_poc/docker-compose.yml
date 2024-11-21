@@ -13,6 +13,8 @@ services:
     volumes:
       - /tmp/spacemesh-client:/tmp/spacemesh-client
       - ./config.standalone.client.json:/config.json
+    ports:
+      - 9071:9071
     networks:
       - spacemesh-net
 

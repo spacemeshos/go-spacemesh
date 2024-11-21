@@ -170,6 +170,9 @@ type PoetService interface {
 
 	// TickSize returns tickSize configured for particular PoET service
 	TickSize() uint64
+
+	// Info returns the PoET service info.
+	Info(ctx context.Context) (*types.PoetInfo, error)
 }
 
 // A certifier client that the certifierService uses to obtain certificates

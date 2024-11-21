@@ -6,6 +6,7 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -14,14 +15,17 @@ import (
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
 
 type SmeshingIdentitiesService struct {
-	states identityState
+	states      identityState
+	poetClients []activation.PoetService
 }
 
 func NewSmeshingIdentitiesService(
 	states identityState,
+	poetClients []activation.PoetService,
 ) *SmeshingIdentitiesService {
 	return &SmeshingIdentitiesService{
-		states: states,
+		states:      states,
+		poetClients: poetClients,
 	}
 }
 
@@ -81,4 +85,25 @@ func (s *SmeshingIdentitiesService) States(
 	}
 
 	return &pb.IdentityStatesResponse{Identities: pbIdentities}, nil
+}
+
+func (s *SmeshingIdentitiesService) PoetInfo(
+	ctx context.Context,
+	_ *pb.PoetInfoRequest,
+) (*pb.PoetInfoResponse, error) {
+	poets := make(map[string]*pb.PoetInfo)
+	for _, poet := range s.poetClients {
+		info, err := poet.Info(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		poets[poet.Address()] = &pb.PoetInfo{
+			PhaseShift: durationpb.New(info.PhaseShift),
+			CycleGap:   durationpb.New(info.CycleGap),
+		}
+	}
+	return &pb.PoetInfoResponse{
+		Poets: poets,
+	}, nil
 }
