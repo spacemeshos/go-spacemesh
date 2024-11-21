@@ -174,10 +174,10 @@ func (p *Peers) selectBest(n int, protocols []protocol.ID) []peer.ID {
 	}
 	best := make([]*data, 0, lth)
 	for _, peer := range p.peers {
-		if protoMap != nil {
+		if len(protocols) > 0 {
 			found := false
 			for _, proto := range peer.protocols() {
-				if _, exist := protoMap[proto]; exist {
+				if slices.Contains(protocols, proto) {
 					found = true
 					break
 				}
