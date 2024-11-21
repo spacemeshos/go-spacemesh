@@ -638,8 +638,13 @@ func (app *App) initServices(ctx context.Context) error {
 			TemplateAddress: &wallet.TemplateAddress,
 			State:           walletProgram.PROGRAM,
 		}
-		app.log.Warning("fixing wallet template account", zap.Inline(&walletAccount))
-		if err := accounts.Update(app.db, &walletAccount); err != nil {
+		err := accounts.Update(app.db, &walletAccount)
+		switch {
+		case err == nil:
+			app.log.Zap().Info("fixed wallet template account", zap.Inline(&walletAccount))
+		case errors.Is(err, sql.ErrObjectExists):
+			app.log.Zap().Info("wallet template account already fixed", zap.Inline(&walletAccount))
+		case err != nil:
 			return fmt.Errorf("inserting fixed wallet account: %w", err)
 		}
 	}
