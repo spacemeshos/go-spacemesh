@@ -168,7 +168,7 @@ func (p *Peers) SelectBestWithProtocols(n int, protocols []protocol.ID) []peer.I
 
 func (p *Peers) selectBest(n int, protocols []protocol.ID) []peer.ID {
 	slices.Sort(protocols)
-	slices.Compact(protocols)
+	protocols = slices.Compact(protocols)
 	lth := min(len(p.peers), n)
 	if lth == 0 {
 		return nil
