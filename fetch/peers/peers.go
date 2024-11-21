@@ -166,13 +166,8 @@ func (p *Peers) SelectBestWithProtocols(n int, protocols []protocol.ID) []peer.I
 }
 
 func (p *Peers) selectBest(n int, protocols []protocol.ID) []peer.ID {
-	var protoMap map[protocol.ID]struct{}
-	if len(protocols) > 0 {
-		protoMap = make(map[protocol.ID]struct{}, len(protocols))
-		for _, proto := range protocols {
-			protoMap[proto] = struct{}{}
-		}
-	}
+	slices.Sort(protocols)
+	slices.Compact(protocols)
 	lth := min(len(p.peers), n)
 	if lth == 0 {
 		return nil
