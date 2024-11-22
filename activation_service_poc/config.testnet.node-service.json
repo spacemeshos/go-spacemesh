@@ -1,0 +1,14 @@
+{
+    "api": {
+        "grpc-public-listener": "0.0.0.0:9092",
+        "grpc-private-listener": "0.0.0.0:9093",
+        "node-service-listener": "0.0.0.0:9099"
+    },
+    "smeshing": {
+        "smeshing-start": false
+    },
+    "main": {
+        "data-folder": "/tmp/spacemesh-node-service",
+        "filelock": "/tmp/spacemesh-node-service/node.lock"
+    }
+}

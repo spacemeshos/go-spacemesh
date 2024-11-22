@@ -1,0 +1,7 @@
+{
+    "main": {
+        "node-service-address": "http://0.0.0.0:9099",
+        "data-folder": "/tmp/spacemesh-client",
+        "filelock": "/tmp/spacemesh-client/node.lock"
+    }
+}
