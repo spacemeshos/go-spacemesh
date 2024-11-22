@@ -33,7 +33,7 @@ var retryBackoff = 10 * time.Second
 func sendTransactions(
 	ctx context.Context,
 	eg *errgroup.Group,
-	logger *zap.SugaredLogger,
+	logger *zap.Logger,
 	cl *cluster.Cluster,
 	first, stop uint32,
 	receiver types.Address,
@@ -43,54 +43,44 @@ func sendTransactions(
 		client := cl.Client(i % cl.Total())
 		nonce, err := getNonce(ctx, client, cl.Address(i))
 		if err != nil {
-			return fmt.Errorf("get nonce failed (%s:%s): %w", client.Name, cl.Address(i), err)
+			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
 		}
-		watchLayers(ctx, eg, client, logger.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number == stop {
 				return false, nil
 			}
-			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED ||
-				layer.Layer.Number.Number < first {
+			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED || layer.Layer.Number.Number < first {
 				return true, nil
 			}
-			// give some time for a previous layer to be applied
-			// TODO(dshulyak) introduce api that simply subscribes to internal clock
-			// and outputs events when the tick for the layer is available
-			time.Sleep(200 * time.Millisecond)
 			if nonce == 0 {
-				logger.Infow("address needs to be spawned", "account", i)
+				logger.Info("address needs to be spawned", zap.Stringer("address", cl.Address(i)))
 				if err := submitSpawn(ctx, cl, i, client); err != nil {
 					return false, fmt.Errorf("failed to spawn %w", err)
 				}
 				nonce++
 				return true, nil
 			}
-			logger.Debugw("submitting transactions",
-				"layer", layer.Layer.Number.Number,
-				"client", client.Name,
-				"account", i,
-				"nonce", nonce,
-				"batch", batch,
+			logger.Debug("submitting transactions",
+				zap.Uint32("layer", layer.Layer.Number.Number),
+				zap.String("client", client.Name),
+				zap.Stringer("address", cl.Address(i)),
+				zap.Uint64("nonce", nonce),
+				zap.Int("batch", batch),
 			)
-			for j := 0; j < batch; j++ {
+			for j := range batch {
 				// in case spawn isn't executed on this particular client
 				retries := 3
 				spendClient := client
-				for k := 0; k < retries; k++ {
+				for k := range retries {
 					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), spendClient)
 					if err == nil {
 						break
 					}
-					logger.Warnw(
-						"failed to spend",
-						"client",
-						spendClient.Name,
-						"account",
-						i,
-						"nonce",
-						nonce+uint64(j),
-						"err",
-						err.Error(),
+					logger.Warn("failed to spend",
+						zap.String("client", spendClient.Name),
+						zap.Stringer("address", cl.Address(i)),
+						zap.Uint64("nonce", nonce+uint64(j)),
+						zap.Error(err),
 					)
 					spendClient = cl.Client((i + k + 1) % cl.Total())
 				}
@@ -522,13 +512,8 @@ func submitSpend(
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransaction(ctx,
-		wallet.Spend(
-			cluster.Private(account), receiver, amount,
-			nonce,
-			sdk.WithGenesisID(cluster.GenesisID()),
-		),
-		client)
+	tx := wallet.Spend(cluster.Private(account), receiver, amount, nonce, sdk.WithGenesisID(cluster.GenesisID()))
+	_, err := submitTransaction(ctx, tx, client)
 	return err
 }
 

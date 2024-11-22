@@ -250,7 +250,8 @@ func updateContext(ctx *Context) error {
 	keep, err := strconv.ParseBool(keepval)
 	if err != nil {
 		ctx.Log.Panicw("invalid state. keep label should be parsable as a boolean",
-			"keepval", keepval)
+			"keepval", keepval,
+		)
 	}
 	ctx.Keep = ctx.Keep || keep
 
@@ -261,7 +262,8 @@ func updateContext(ctx *Context) error {
 	psize, err := strconv.Atoi(psizeval)
 	if err != nil {
 		ctx.Log.Panicw("invalid state. poet size label should be parsable as an integer",
-			"psizeval", psizeval)
+			"psizeval", psizeval,
+		)
 	}
 	ctx.PoetSize = psize
 	return nil

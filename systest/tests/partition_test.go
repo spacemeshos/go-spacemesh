@@ -62,7 +62,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	tctx.Log.Debug("sending transactions...")
 	eg2, ctx2 := errgroup.WithContext(tctx)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	require.NoError(t, sendTransactions(ctx2, eg2, tctx.Log, cl, first, stop, receiver, 10, 100))
+	require.NoError(t, sendTransactions(ctx2, eg2, tctx.Log.Desugar(), cl, first, stop, receiver, 10, 100))
 
 	type stateUpdate struct {
 		layer  uint32
@@ -92,7 +92,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 					tctx.Log.Debugw("state hash collected",
 						"client", node.Name,
 						"layer", layer,
-						"state", stateHash.ShortString())
+						"state", stateHash.ShortString(),
+					)
 					stateCh <- &stateUpdate{
 						layer:  layer,
 						hash:   stateHash,
@@ -154,7 +155,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 					"ref_client", cl.Client(0).Name,
 					"layer", layer,
 					"client_hash", clientState[layer],
-					"ref_hash", refState[layer])
+					"ref_hash", refState[layer],
+				)
 				agree = false
 				break
 			}
@@ -176,9 +178,9 @@ func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
-	if tctx.ClusterSize > 30 {
-		tctx.Log.Info("cluster size changed to 30")
-		tctx.ClusterSize = 30
+	if tctx.ClusterSize > 20 {
+		tctx.Log.Info("cluster size changed to 20")
+		tctx.ClusterSize = 20
 	}
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
@@ -191,9 +193,9 @@ func TestPartition_50_50(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
-	if tctx.ClusterSize > 30 {
-		tctx.Log.Info("cluster size changed to 30")
-		tctx.ClusterSize = 30
+	if tctx.ClusterSize > 20 {
+		tctx.Log.Info("cluster size changed to 20")
+		tctx.ClusterSize = 20
 	}
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
