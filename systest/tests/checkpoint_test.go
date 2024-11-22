@@ -39,7 +39,7 @@ func TestCheckpoint(t *testing.T) {
 
 	tctx := testcontext.New(t)
 	addedLater := 2
-	size := min(tctx.ClusterSize, 30)
+	size := min(tctx.ClusterSize, 20)
 	oldSize := size - addedLater
 	if tctx.ClusterSize > oldSize {
 		tctx.Log.Info("cluster size changed to ", oldSize)

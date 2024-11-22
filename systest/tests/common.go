@@ -47,6 +47,10 @@ func sendTransactions(
 			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
 		}
 		deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
+		minimum := time.Now().Add(2 * layerDuration)
+		if deadline.Before(minimum) { // make sure we have at least two layers to submit transactions
+			deadline = minimum
+		}
 		ctx, cancel := context.WithDeadline(ctx, deadline)
 		defer cancel()
 		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
