@@ -653,6 +653,10 @@ func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.
 	return c.certifier.Certificate(ctx, id, info.Certifier.Url, info.Certifier.Pubkey)
 }
 
+func (c *poetService) Info(ctx context.Context) (*types.PoetInfo, error) {
+	return c.getInfo(ctx)
+}
+
 func (c *poetService) getInfo(ctx context.Context) (*types.PoetInfo, error) {
 	info, err := c.infoCache.get(func() (*types.PoetInfo, error) {
 		info, err := c.client.Info(ctx)

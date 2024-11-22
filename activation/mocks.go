@@ -1885,6 +1885,45 @@ func (c *MockPoetServiceCertifyCall) DoAndReturn(f func(context.Context, types.N
 	return c
 }
 
+// Info mocks base method.
+func (m *MockPoetService) Info(ctx context.Context) (*types.PoetInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", ctx)
+	ret0, _ := ret[0].(*types.PoetInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockPoetServiceMockRecorder) Info(ctx any) *MockPoetServiceInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockPoetService)(nil).Info), ctx)
+	return &MockPoetServiceInfoCall{Call: call}
+}
+
+// MockPoetServiceInfoCall wrap *gomock.Call
+type MockPoetServiceInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPoetServiceInfoCall) Return(arg0 *types.PoetInfo, arg1 error) *MockPoetServiceInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPoetServiceInfoCall) Do(f func(context.Context) (*types.PoetInfo, error)) *MockPoetServiceInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPoetServiceInfoCall) DoAndReturn(f func(context.Context) (*types.PoetInfo, error)) *MockPoetServiceInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Proof mocks base method.
 func (m *MockPoetService) Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error) {
 	m.ctrl.T.Helper()
