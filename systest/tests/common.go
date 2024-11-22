@@ -36,6 +36,7 @@ func sendTransactions(
 	logger *zap.Logger,
 	cl *cluster.Cluster,
 	first, stop uint32,
+	layerDuration time.Duration,
 	receiver types.Address,
 	batch, amount int,
 ) error {
@@ -45,6 +46,9 @@ func sendTransactions(
 		if err != nil {
 			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
 		}
+		deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
+		ctx, cancel := context.WithDeadline(ctx, deadline)
+		defer cancel()
 		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number == stop {
 				return false, nil

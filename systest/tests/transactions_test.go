@@ -21,10 +21,10 @@ func testTransactions(
 ) {
 	var (
 		// start sending transactions after two layers or after genesis
-		first       = max(currentLayer(tctx, tb, cl.Client(0))+2, 8)
-		stopSending = first + sendFor
-		batch       = 10
-		amount      = 100
+		first  = max(currentLayer(tctx, tb, cl.Client(0))+2, 8)
+		stop   = first + sendFor
+		batch  = 10
+		amount = 100
 
 		// each account creates spawn transaction in the first layer
 		// plus batch number of spend transactions in every layer after that
@@ -32,7 +32,7 @@ func testTransactions(
 	)
 	tctx.Log.Debugw("running transactions test",
 		"from", first,
-		"stop sending", stopSending,
+		"stop sending", stop,
 		"expected transactions", expectedCount,
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
@@ -45,7 +45,10 @@ func testTransactions(
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
-	require.NoError(tb, sendTransactions(ctx, eg, tctx.Log.Desugar(), cl, first, stopSending, receiver, batch, amount))
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	require.NoError(tb,
+		sendTransactions(ctx, eg, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, batch, amount),
+	)
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := range cl.Total() {

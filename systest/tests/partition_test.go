@@ -62,7 +62,11 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	tctx.Log.Debug("sending transactions...")
 	eg2, ctx2 := errgroup.WithContext(tctx)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	require.NoError(t, sendTransactions(ctx2, eg2, tctx.Log.Desugar(), cl, first, stop, receiver, 10, 100))
+
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	require.NoError(t,
+		sendTransactions(ctx2, eg2, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 10, 100),
+	)
 
 	type stateUpdate struct {
 		layer  uint32
@@ -164,7 +168,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		if agree {
 			tctx.Log.Debugw("client agreed with ref client on all layers",
 				"client", cl.Client(i).Name,
-				"ref_client", cl.Client(0).Name)
+				"ref_client", cl.Client(0).Name,
+			)
 		}
 		pass = pass && agree
 	}
