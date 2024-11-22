@@ -407,11 +407,8 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// TODO(lane): we don't currently parse tx amount for athena txs
-		require.Equal(t, uint64(0), resp.Tx.Contents.GetSend().Amount)
-		require.Equal(t, "", resp.Tx.Contents.GetSend().Destination)
-		// require.Equal(t, amount, resp.Tx.Contents.GetSend().Amount)
-		// require.Equal(t, addr.String(), resp.Tx.Contents.GetSend().Destination)
+		require.Equal(t, amount, resp.Tx.Contents.GetSend().Amount)
+		require.Equal(t, addr.String(), resp.Tx.Contents.GetSend().Destination)
 	})
 
 	t.Run("transaction contents for spawn tx", func(t *testing.T) {
