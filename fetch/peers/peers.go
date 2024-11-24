@@ -1,11 +1,13 @@
 package peers
 
 import (
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -16,6 +18,7 @@ type data struct {
 	success, failures int
 	failRate          float64
 	averageLatency    float64
+	protocols         func() []protocol.ID
 }
 
 func (d *data) latency(global float64) float64 {
@@ -61,14 +64,14 @@ func (p *Peers) Contains(id peer.ID) bool {
 	return exist
 }
 
-func (p *Peers) Add(id peer.ID) bool {
+func (p *Peers) Add(id peer.ID, protocols func() []protocol.ID) bool {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	_, exist := p.peers[id]
 	if exist {
 		return false
 	}
-	p.peers[id] = &data{id: id}
+	p.peers[id] = &data{id: id, protocols: protocols}
 	return true
 }
 
@@ -151,12 +154,39 @@ func (p *Peers) SelectBestFrom(peers []peer.ID) peer.ID {
 func (p *Peers) SelectBest(n int) []peer.ID {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.selectBest(n, nil)
+}
+
+// SelectBestWithProtocols is similar to SelectBest but filters peers by supported protocols.
+// If protocols is empty, it returns the best peers regardless of the protocol.
+// If protocols is not empty, it returns the best peers that support at least one of the protocols.
+func (p *Peers) SelectBestWithProtocols(n int, protocols []protocol.ID) []peer.ID {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.selectBest(n, protocols)
+}
+
+func (p *Peers) selectBest(n int, protocols []protocol.ID) []peer.ID {
+	slices.Sort(protocols)
+	protocols = slices.Compact(protocols)
 	lth := min(len(p.peers), n)
 	if lth == 0 {
 		return nil
 	}
 	best := make([]*data, 0, lth)
 	for _, peer := range p.peers {
+		if len(protocols) > 0 {
+			found := false
+			for _, proto := range peer.protocols() {
+				if slices.Contains(protocols, proto) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+		}
 		for i := range best {
 			if peer.less(best[i], p.globalLatency) {
 				best[i], peer = peer, best[i]
