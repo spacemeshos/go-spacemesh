@@ -175,6 +175,12 @@ func testnet() config.Config {
 				OldAtxSyncCfg:     oldAtxSyncCfg,
 				NewAtxSyncCfg:     newAtxSyncCfg,
 				ParallelLoadLimit: 10,
+				HardTimeout:       time.Minute,
+				ServerConfig: fetch.ServerConfig{
+					Queue:    200,
+					Requests: 100,
+					Interval: time.Second,
+				},
 			},
 		},
 		Recovery: checkpoint.DefaultConfig(),
