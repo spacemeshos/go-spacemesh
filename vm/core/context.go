@@ -247,6 +247,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	c.change(account)
 	c.Logger.Debug(
 		"transfer",
+		zap.Uint64("transfered", c.transferred),
 		zap.Uint64("amount", amount),
 		zap.Stringer("from", from.Address),
 		zap.Stringer("to", to),
@@ -378,6 +379,9 @@ func (c *Context) change(account *Account) {
 	_, exist := c.changed[account.Address]
 	if !exist {
 		c.touched = append(c.touched, account.Address)
+	}
+	if c.changed == nil {
+		c.changed = make(map[types.Address]*types.Account)
 	}
 	c.changed[account.Address] = account
 }
