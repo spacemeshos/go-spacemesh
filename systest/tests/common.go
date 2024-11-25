@@ -52,8 +52,15 @@ func sendTransactions(
 			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED || layer.Layer.Number.Number < first {
 				return true, nil
 			}
+			// TODO(mafa) it looks like a layer returning status "APPLIED" doesn't mean that the transactions are
+			// actually applied
+			// give some time for a previous layer to be applied
+			time.Sleep(200 * time.Millisecond)
 			if nonce == 0 {
-				logger.Info("address needs to be spawned", zap.Stringer("address", cl.Address(i)))
+				logger.Info("address needs to be spawned",
+					zap.String("client", client.Name),
+					zap.Stringer("address", cl.Address(i)),
+				)
 				if err := submitSpawn(ctx, cl, i, client); err != nil {
 					return false, fmt.Errorf("failed to spawn %w", err)
 				}
