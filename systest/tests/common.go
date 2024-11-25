@@ -40,21 +40,27 @@ func sendTransactions(
 	receiver types.Address,
 	batch, amount int,
 ) error {
+	deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
+	minimum := time.Now().Add(2 * layerDuration)
+	if deadline.Before(minimum) { // make sure we have at least two layers to submit transactions
+		deadline = minimum
+	}
+	ctx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+
 	for i := range cl.Accounts() {
 		client := cl.Client(i % cl.Total())
 		nonce, err := getNonce(ctx, client, cl.Address(i))
 		if err != nil {
 			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
 		}
-		deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
-		minimum := time.Now().Add(2 * layerDuration)
-		if deadline.Before(minimum) { // make sure we have at least two layers to submit transactions
-			deadline = minimum
-		}
-		ctx, cancel := context.WithDeadline(ctx, deadline)
-		defer cancel()
 		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Number.Number == stop {
+			if layer.Layer.Number.Number >= stop {
+				logger.Debug("stopping transactions",
+					zap.Uint32("layer", layer.Layer.Number.Number),
+					zap.String("client", client.Name),
+					zap.Stringer("address", cl.Address(i)),
+				)
 				return false, nil
 			}
 			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED || layer.Layer.Number.Number < first {

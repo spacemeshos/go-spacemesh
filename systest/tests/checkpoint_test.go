@@ -68,6 +68,10 @@ func TestCheckpoint(t *testing.T) {
 	stop := first + 2
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	tctx.Log.Infow("sending transactions", "from", first, "to", stop-1)
+	tctx.Log.Debugw("info",
+		"time", cl.Genesis(),
+		"current layer", (time.Since(cl.Genesis()) / layerDuration),
+	)
 	require.NoError(t, sendTransactions(ctx, eg, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 1, 100))
 	require.NoError(t, eg.Wait())
 
