@@ -3,6 +3,7 @@ package sqlstore
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/expr"
@@ -24,10 +25,13 @@ type SyncedTable struct {
 	Filter expr.Expr
 	// The binder function for the bind parameters appearing in the filter expression.
 	Binder  Binder
+	mtx     sync.Mutex
 	queries map[string]string
 }
 
 func (st *SyncedTable) cacheQuery(name string, gen func() expr.Statement) string {
+	st.mtx.Lock()
+	defer st.mtx.Unlock()
 	s, ok := st.queries[name]
 	if ok {
 		return s
