@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"maps"
 	"math"
 
 	"github.com/spacemeshos/go-scale"
@@ -62,10 +63,7 @@ type Context struct {
 // Clone returns a shallow copy of the context.
 func (c *Context) Clone() Host {
 	clone := *c
-	clone.changed = make(map[Address]*Account, len(c.changed))
-	for k, v := range c.changed {
-		clone.changed[k] = v
-	}
+	clone.changed = maps.Clone(c.changed)
 	return &clone
 }
 
