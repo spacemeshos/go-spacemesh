@@ -17,6 +17,7 @@ import (
 
 	wire "github.com/spacemeshos/go-spacemesh/activation/wire"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	wire0 "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	certifier "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -1088,6 +1089,68 @@ func (c *MocksyncerRegisterForATXSyncedCall) Do(f func() <-chan struct{}) *Mocks
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocksyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{}) *MocksyncerRegisterForATXSyncedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MocklegacyMalfeasancePublisher is a mock of legacyMalfeasancePublisher interface.
+type MocklegacyMalfeasancePublisher struct {
+	ctrl     *gomock.Controller
+	recorder *MocklegacyMalfeasancePublisherMockRecorder
+	isgomock struct{}
+}
+
+// MocklegacyMalfeasancePublisherMockRecorder is the mock recorder for MocklegacyMalfeasancePublisher.
+type MocklegacyMalfeasancePublisherMockRecorder struct {
+	mock *MocklegacyMalfeasancePublisher
+}
+
+// NewMocklegacyMalfeasancePublisher creates a new mock instance.
+func NewMocklegacyMalfeasancePublisher(ctrl *gomock.Controller) *MocklegacyMalfeasancePublisher {
+	mock := &MocklegacyMalfeasancePublisher{ctrl: ctrl}
+	mock.recorder = &MocklegacyMalfeasancePublisherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklegacyMalfeasancePublisher) EXPECT() *MocklegacyMalfeasancePublisherMockRecorder {
+	return m.recorder
+}
+
+// PublishProof mocks base method.
+func (m *MocklegacyMalfeasancePublisher) PublishProof(ctx context.Context, smesherID types.NodeID, proof *wire0.MalfeasanceProof) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishProof", ctx, smesherID, proof)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PublishProof indicates an expected call of PublishProof.
+func (mr *MocklegacyMalfeasancePublisherMockRecorder) PublishProof(ctx, smesherID, proof any) *MocklegacyMalfeasancePublisherPublishProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishProof", reflect.TypeOf((*MocklegacyMalfeasancePublisher)(nil).PublishProof), ctx, smesherID, proof)
+	return &MocklegacyMalfeasancePublisherPublishProofCall{Call: call}
+}
+
+// MocklegacyMalfeasancePublisherPublishProofCall wrap *gomock.Call
+type MocklegacyMalfeasancePublisherPublishProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocklegacyMalfeasancePublisherPublishProofCall) Return(arg0 error) *MocklegacyMalfeasancePublisherPublishProofCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocklegacyMalfeasancePublisherPublishProofCall) Do(f func(context.Context, types.NodeID, *wire0.MalfeasanceProof) error) *MocklegacyMalfeasancePublisherPublishProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocklegacyMalfeasancePublisherPublishProofCall) DoAndReturn(f func(context.Context, types.NodeID, *wire0.MalfeasanceProof) error) *MocklegacyMalfeasancePublisherPublishProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

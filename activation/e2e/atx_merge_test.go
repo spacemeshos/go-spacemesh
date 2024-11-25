@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -275,9 +274,9 @@ func Test_MarryAndMerge(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
 	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
 	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
@@ -288,11 +287,11 @@ func Test_MarryAndMerge(t *testing.T) {
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
 		mMalPublish,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,

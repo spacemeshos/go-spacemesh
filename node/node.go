@@ -379,52 +379,50 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock              *flock.Flock
-	signers               []*signing.EdSigner
-	Config                *config.Config
-	db                    sql.StateDatabase
-	apiDB                 sql.StateDatabase
-	cachedDB              *datastore.CachedDB
-	dbMetrics             *dbmetrics.DBMetricsCollector
-	localDB               sql.LocalDatabase
-	grpcPublicServer      *grpcserver.Server
-	grpcPrivateServer     *grpcserver.Server
-	grpcPostServer        *grpcserver.Server
-	grpcTLSServer         *grpcserver.Server
-	jsonAPIServer         *grpcserver.JSONHTTPServer
-	grpcServices          map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService          *http.Server
-	profilerService       *pyroscope.Profiler
-	syncer                *syncer.Syncer
-	proposalBuilder       *miner.ProposalBuilder
-	mesh                  *mesh.Mesh
-	atxsdata              *atxsdata.Data
-	clock                 *timesync.NodeClock
-	hare3                 *hare3.Hare
-	hare4                 *hare4.Hare
-	hareResultsChan       chan hare4.ConsensusOutput
-	hOracle               *eligibility.Oracle
-	blockGen              *blocks.Generator
-	certifier             *blocks.Certifier
-	atxBuilder            *activation.Builder
-	atxHandler            *activation.Handler
-	txHandler             *txs.TxHandler
-	validator             *activation.Validator
-	edVerifier            *signing.EdVerifier
-	beaconProtocol        *beacon.ProtocolDriver
-	log                   log.Log
-	syncLogger            log.Log
-	conState              *txs.ConservativeState
-	fetcher               *fetch.Fetch
-	ptimesync             *peersync.Sync
-	updater               *bootstrap.Updater
-	poetDb                *activation.PoetDb
-	postVerifier          activation.PostVerifier
-	postSupervisor        *activation.PostSupervisor
-	malfeasanceHandler    *malfeasance.Handler
-	malfeasance2Handler   *malfeasance2.Handler
-	malfeasance2Publisher *malfeasance2.Publisher
-	errCh                 chan error
+	fileLock           *flock.Flock
+	signers            []*signing.EdSigner
+	Config             *config.Config
+	db                 sql.StateDatabase
+	apiDB              sql.StateDatabase
+	cachedDB           *datastore.CachedDB
+	dbMetrics          *dbmetrics.DBMetricsCollector
+	localDB            sql.LocalDatabase
+	grpcPublicServer   *grpcserver.Server
+	grpcPrivateServer  *grpcserver.Server
+	grpcPostServer     *grpcserver.Server
+	grpcTLSServer      *grpcserver.Server
+	jsonAPIServer      *grpcserver.JSONHTTPServer
+	grpcServices       map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService       *http.Server
+	profilerService    *pyroscope.Profiler
+	syncer             *syncer.Syncer
+	proposalBuilder    *miner.ProposalBuilder
+	mesh               *mesh.Mesh
+	atxsdata           *atxsdata.Data
+	clock              *timesync.NodeClock
+	hare3              *hare3.Hare
+	hare4              *hare4.Hare
+	hareResultsChan    chan hare4.ConsensusOutput
+	hOracle            *eligibility.Oracle
+	blockGen           *blocks.Generator
+	certifier          *blocks.Certifier
+	atxBuilder         *activation.Builder
+	atxHandler         *activation.Handler
+	txHandler          *txs.TxHandler
+	validator          *activation.Validator
+	edVerifier         *signing.EdVerifier
+	beaconProtocol     *beacon.ProtocolDriver
+	log                log.Log
+	syncLogger         log.Log
+	conState           *txs.ConservativeState
+	fetcher            *fetch.Fetch
+	ptimesync          *peersync.Sync
+	updater            *bootstrap.Updater
+	poetDb             *activation.PoetDb
+	postVerifier       activation.PostVerifier
+	postSupervisor     *activation.PostSupervisor
+	malfeasanceHandler *malfeasance.Handler
+	errCh              chan error
 
 	host *p2p.Host
 
@@ -758,16 +756,55 @@ func (app *App) initServices(ctx context.Context) error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
 	})
 
-	malfeasanceLogger2 := app.addLogger(MalfeasanceLogger, lg).Zap()
-	app.malfeasance2Publisher = malfeasance2.NewPublisher(
-		malfeasanceLogger2,
+	patrol := layerpatrol.New()
+	syncerConf := app.Config.Sync
+	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
+	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
+	syncerConf.Standalone = app.Config.Standalone
+
+	app.syncLogger = app.addLogger(SyncLogger, lg)
+	newSyncer := syncer.NewSyncer(
+		app.cachedDB,
+		app.clock,
+		msh,
+		trtl,
+		fetcher,
+		patrol,
+		app.certifier,
+		atxsync.New(fetcher, app.db, app.localDB,
+			atxsync.WithConfig(app.Config.Sync.AtxSync),
+			atxsync.WithLogger(app.syncLogger.Zap()),
+		),
+		malsync.New(fetcher, app.db, app.localDB,
+			malsync.WithConfig(app.Config.Sync.MalSync),
+			malsync.WithLogger(app.syncLogger.Zap()),
+			malsync.WithPeerErrMetric(syncer.MalPeerError),
+		),
+		syncer.WithConfig(syncerConf),
+		syncer.WithLogger(app.syncLogger.Zap()),
+	)
+	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	beaconProtocol.SetSyncState(newSyncer)
+	app.hOracle.SetSync(newSyncer)
+
+	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	legacyMalPublisher := malfeasance.NewPublisher(
+		malfeasanceLogger,
+		app.cachedDB,
+		trtl,
+		newSyncer,
+		app.host,
+	)
+
+	malfeasance2Publisher := malfeasance2.NewPublisher(
+		app.addLogger(Malfeasance2Logger, lg).Zap(),
 		app.cachedDB,
 		trtl,
 		app.host,
 	)
 
 	atxMalPublisher := activation.NewMalfeasanceHandlerV2(
-		app.malfeasance2Publisher,
+		malfeasance2Publisher,
 		app.edVerifier,
 		validator,
 	)
@@ -777,11 +814,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.atxsdata,
 		app.edVerifier,
 		app.clock,
-		app.host,
 		fetcher,
 		goldenATXID,
 		validator,
 		atxMalPublisher,
+		legacyMalPublisher,
 		beaconProtocol,
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg).Zap(),
@@ -858,39 +895,9 @@ func (app *App) initServices(ctx context.Context) error {
 		app.certifier.Register(sig)
 	}
 
-	patrol := layerpatrol.New()
-	syncerConf := app.Config.Sync
-	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
-	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
-	syncerConf.Standalone = app.Config.Standalone
-
 	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
 		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
 	}
-	app.syncLogger = app.addLogger(SyncLogger, lg)
-	newSyncer := syncer.NewSyncer(
-		app.cachedDB,
-		app.clock,
-		msh,
-		trtl,
-		fetcher,
-		patrol,
-		app.certifier,
-		atxsync.New(fetcher, app.db, app.localDB,
-			atxsync.WithConfig(app.Config.Sync.AtxSync),
-			atxsync.WithLogger(app.syncLogger.Zap()),
-		),
-		malsync.New(fetcher, app.db, app.localDB,
-			malsync.WithConfig(app.Config.Sync.MalSync),
-			malsync.WithLogger(app.syncLogger.Zap()),
-			malsync.WithPeerErrMetric(syncer.MalPeerError),
-		),
-		syncer.WithConfig(syncerConf),
-		syncer.WithLogger(app.syncLogger.Zap()),
-	)
-	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	beaconProtocol.SetSyncState(newSyncer)
-	app.hOracle.SetSync(newSyncer)
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
@@ -1139,7 +1146,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
-	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
 		malfeasanceLogger,

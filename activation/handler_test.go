@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
+	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,7 +28,6 @@ import (
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -123,13 +123,13 @@ type handlerMocks struct {
 	ctrl        *gomock.Controller
 	goldenATXID types.ATXID
 
-	mclock      *MocklayerClock
-	mpub        *pubsubmocks.MockPublisher
-	mockFetch   *mocks.MockFetcher
-	mValidator  *MocknipostValidator
-	mbeacon     *MockatxReceiver
-	mtortoise   *mocks.MockTortoise
-	mMalPublish *MockatxMalfeasancePublisher
+	mclock            *MocklayerClock
+	mockFetch         *mocks.MockFetcher
+	mValidator        *MocknipostValidator
+	mbeacon           *MockatxReceiver
+	mtortoise         *mocks.MockTortoise
+	mLegacyMalPublish *MocklegacyMalfeasancePublisher
+	mMalPublish       *MockatxMalfeasancePublisher
 }
 
 type testHandler struct {
@@ -197,14 +197,14 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	return handlerMocks{
 		ctrl: ctrl,
 
-		goldenATXID: golden,
-		mclock:      NewMocklayerClock(ctrl),
-		mpub:        pubsubmocks.NewMockPublisher(ctrl),
-		mockFetch:   mocks.NewMockFetcher(ctrl),
-		mValidator:  NewMocknipostValidator(ctrl),
-		mbeacon:     NewMockatxReceiver(ctrl),
-		mtortoise:   mocks.NewMockTortoise(ctrl),
-		mMalPublish: NewMockatxMalfeasancePublisher(ctrl),
+		goldenATXID:       golden,
+		mclock:            NewMocklayerClock(ctrl),
+		mockFetch:         mocks.NewMockFetcher(ctrl),
+		mValidator:        NewMocknipostValidator(ctrl),
+		mbeacon:           NewMockatxReceiver(ctrl),
+		mtortoise:         mocks.NewMockTortoise(ctrl),
+		mLegacyMalPublish: NewMocklegacyMalfeasancePublisher(ctrl),
+		mMalPublish:       NewMockatxMalfeasancePublisher(ctrl),
 	}
 }
 
@@ -221,11 +221,11 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 		atxsdata.New(),
 		edVerifier,
 		mocks.mclock,
-		mocks.mpub,
 		mocks.mockFetch,
 		goldenATXID,
 		mocks.mValidator,
 		mocks.mMalPublish,
+		mocks.mLegacyMalPublish,
 		mocks.mbeacon,
 		mocks.mtortoise,
 		lg,
@@ -266,15 +266,26 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPost(gomock.Any(), atx.SmesherID, goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(0, &verifying.ErrInvalidIndex{Index: 2})
-		atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
+
+		atxHdlr.mLegacyMalPublish.EXPECT().PublishProof(context.Background(), atx.SmesherID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
+				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
+
+				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
+				postVerifier.EXPECT().
+					Verify(context.Background(), (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).
+					Return(&verifying.ErrInvalidIndex{Index: 2})
+
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
+				require.NoError(t, err)
+				require.Equal(t, sig.NodeID(), nodeID)
+				return nil
+			},
+		)
 
 		msg := codec.MustEncode(atx)
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
-
-		// identity is still marked as malicious
-		malicious, err = identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.True(t, malicious)
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
@@ -302,32 +313,25 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		atxHdlr.mValidator.EXPECT().
 			NIPost(gomock.Any(), atx.SmesherID, goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(0, &verifying.ErrInvalidIndex{Index: 2})
-		atxHdlr.mtortoise.EXPECT().OnMalfeasance(gomock.Any())
-		msg := codec.MustEncode(atx)
 
-		postVerifier := NewMockPostVerifier(gomock.NewController(t))
-		mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
-		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).
-			DoAndReturn(func(_ context.Context, _ string, data []byte) error {
-				var got mwire.MalfeasanceGossip
-				require.NoError(t, codec.Decode(data, &got))
-				require.Equal(t, mwire.InvalidPostIndex, got.Proof.Type)
+		atxHdlr.mLegacyMalPublish.EXPECT().PublishProof(context.Background(), atx.SmesherID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
+				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
+
+				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
 				postVerifier.EXPECT().
-					Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(errors.New("invalid"))
-				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
+					Verify(context.Background(), (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).
+					Return(&verifying.ErrInvalidIndex{Index: 2})
+
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
-				p, ok := got.Proof.Data.(*mwire.InvalidPostIndexProof)
-				require.True(t, ok)
-				require.EqualValues(t, 2, p.InvalidIdx)
 				return nil
 			})
-		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg), errMaliciousATX)
 
-		malicious, err = identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.True(t, malicious)
+		msg := codec.MustEncode(atx)
+		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg))
 	})
 }
 
@@ -452,14 +456,20 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		atx2.Sign(sig)
 		atxHdlr.expectAtxV1(atx2, sig.NodeID())
 
-		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
+		atxHdlr.mLegacyMalPublish.EXPECT().PublishProof(context.Background(), atx2.SmesherID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
+				require.Equal(t, mwire.MultipleATXs, mp.Proof.Type)
+
+				mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
+				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
+				require.NoError(t, err)
+				require.Equal(t, sig.NodeID(), nodeID)
+				return nil
+			},
+		)
+
 		msg := codec.MustEncode(atx2)
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, "", msg))
-
-		// identity is still marked as malicious
-		malicious, err = identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.True(t, malicious)
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
@@ -483,25 +493,21 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		})
 		atx2.Sign(sig)
 		atxHdlr.expectAtxV1(atx2, sig.NodeID())
-		atxHdlr.mtortoise.EXPECT().OnMalfeasance(sig.NodeID())
-		msg := codec.MustEncode(atx2)
 
-		mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
-		atxHdlr.mpub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof, gomock.Any()).
-			DoAndReturn(func(_ context.Context, _ string, data []byte) error {
-				var got mwire.MalfeasanceGossip
-				require.NoError(t, codec.Decode(data, &got))
-				require.Equal(t, mwire.MultipleATXs, got.Proof.Type)
-				nodeID, err := mh.Validate(context.Background(), got.Proof.Data)
+		atxHdlr.mLegacyMalPublish.EXPECT().PublishProof(context.Background(), atx2.SmesherID, gomock.Any()).DoAndReturn(
+			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
+				require.Equal(t, mwire.MultipleATXs, mp.Proof.Type)
+
+				mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
+				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
 				return nil
-			})
-		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg), errMaliciousATX)
+			},
+		)
 
-		malicious, err = identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.True(t, malicious)
+		msg := codec.MustEncode(atx2)
+		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, msg))
 	})
 }
 

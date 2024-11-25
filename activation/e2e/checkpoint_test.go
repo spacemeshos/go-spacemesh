@@ -105,6 +105,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
 	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
 	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
@@ -114,11 +115,11 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		atxdata,
 		edVerifier,
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
 		mMalPublish,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,
@@ -204,11 +205,11 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		atxdata,
 		edVerifier,
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
 		mMalPublish,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,

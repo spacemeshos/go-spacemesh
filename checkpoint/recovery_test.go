@@ -252,6 +252,7 @@ func validateAndPreserveData(
 	mFetch := smocks.NewMockFetcher(ctrl)
 	mValidator := activation.NewMocknipostValidator(ctrl)
 	mMalPublisher := activation.NewMockatxMalfeasancePublisher(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
 	mReceiver := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
@@ -262,11 +263,11 @@ func validateAndPreserveData(
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		mclock,
-		nil,
 		mFetch,
 		goldenAtx,
 		mValidator,
 		mMalPublisher,
+		mLegacyPublish,
 		mReceiver,
 		mTortoise,
 		lg,

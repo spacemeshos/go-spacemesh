@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -90,6 +91,14 @@ type nipostBuilder interface {
 
 type syncer interface {
 	RegisterForATXSynced() <-chan struct{}
+}
+
+// legacyMalfeasancePublisher is an interface for publishing legacy malfeasance proofs.
+//
+// It is used int he ATXv1 handler and will be replaced in the future by the atxMalfeasancePublisher, which will
+// wrap legacy proofs into the new encoding structure.
+type legacyMalfeasancePublisher interface {
+	PublishProof(ctx context.Context, smesherID types.NodeID, proof *mwire.MalfeasanceProof) error
 }
 
 // atxMalfeasancePublisher is an interface for publishing atx malfeasance proofs.
