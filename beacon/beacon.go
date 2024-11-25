@@ -85,6 +85,7 @@ func New(
 	vrfVerifier vrfVerifier,
 	cdb *datastore.CachedDB,
 	clock layerClock,
+	syncer system.SyncStateProvider,
 	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
@@ -96,6 +97,7 @@ func New(
 		nonceFetcher:   cdb,
 		cdb:            cdb,
 		clock:          clock,
+		sync:           syncer,
 		signers:        make(map[types.NodeID]*signing.EdSigner),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
@@ -205,14 +207,6 @@ type ProtocolDriver struct {
 
 	// metrics
 	metricsCollector *metrics.BeaconMetricsCollector
-}
-
-// SetSyncState updates sync state provider. Must be executed only once.
-func (pd *ProtocolDriver) SetSyncState(sync system.SyncStateProvider) {
-	if pd.sync != nil {
-		pd.logger.Fatal("sync state provider can be updated only once")
-	}
-	pd.sync = sync
 }
 
 // Start starts listening for layers and outputs.

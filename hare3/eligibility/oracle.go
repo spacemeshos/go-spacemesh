@@ -120,6 +120,7 @@ func New(
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
+	syncer system.SyncStateProvider,
 	layersPerEpoch uint32,
 	opts ...Opt,
 ) *Oracle {
@@ -132,6 +133,7 @@ func New(
 		db:           db,
 		atxsdata:     atxsdata,
 		vrfVerifier:  vrfVerifier,
+		sync:         syncer,
 		activesCache: activesCache,
 		fallback:     map[types.EpochID][]types.ATXID{},
 		cfg:          DefaultConfig(),
@@ -152,12 +154,6 @@ type VrfMessage struct {
 	Beacon types.Beacon
 	Round  uint32
 	Layer  types.LayerID
-}
-
-func (o *Oracle) SetSync(sync system.SyncStateProvider) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.sync = sync
 }
 
 func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
