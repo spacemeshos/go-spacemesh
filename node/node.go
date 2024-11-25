@@ -787,8 +787,8 @@ func (app *App) initServices(ctx context.Context) error {
 	legacyMalPublisher := malfeasance.NewPublisher(
 		malfeasanceLogger,
 		app.cachedDB,
-		trtl,
 		syncer,
+		trtl,
 		app.host,
 	)
 

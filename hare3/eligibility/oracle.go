@@ -157,9 +157,6 @@ type VrfMessage struct {
 }
 
 func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
-	if o.sync == nil {
-		return
-	}
 	synced := o.synced
 	o.synced = o.sync.IsSynced(ctx)
 	if !synced && o.synced {
