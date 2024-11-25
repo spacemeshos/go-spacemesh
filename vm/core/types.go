@@ -157,27 +157,15 @@ func (t Payload) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func (t *Payload) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteSlice(enc, *t)
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-
-	return total, nil
+func (t *Payload) EncodeScale(enc *scale.Encoder) (int, error) {
+	return scale.EncodeByteSlice(enc, *t)
 }
 
-func (t *Payload) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		field, n, err := scale.DecodeByteSlice(dec)
-		if err != nil {
-			return total, err
-		}
-		total += n
-		*t = field
+func (t *Payload) DecodeScale(dec *scale.Decoder) (int, error) {
+	field, n, err := scale.DecodeByteSlice(dec)
+	if err != nil {
+		return 0, err
 	}
-
-	return total, nil
+	*t = field
+	return n, nil
 }
