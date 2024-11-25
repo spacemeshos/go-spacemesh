@@ -78,7 +78,7 @@ func (s *TransactionService) ParseTransaction(
 	}
 	raw := types.NewRawTx(in.Transaction)
 	req := s.conState.Validation(raw)
-	header, err := req.Parse(req.Cache())
+	header, err := req.Parse()
 	if errors.Is(err, core.ErrNotSpawned) {
 		return nil, status.Error(codes.NotFound, "account is not spawned")
 	} else if errors.Is(err, core.ErrMalformed) {

@@ -7,8 +7,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"path/filepath"
-	"runtime"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -75,13 +73,11 @@ func main() {
 }
 
 func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.PrivateKey, t1, t2 table.Writer) {
-	// point to the library path
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		log.Fatal("failed to get current file path")
+	libPath, err := host.AthenaLibPath()
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
-	os.Setenv("ATHENA_LIB_PATH", fmt.Sprintf("%s/../../../build", filepath.Dir(filename)))
-	vmlib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	vmlib, err := athcon.LoadLibrary(libPath)
 	if err != nil {
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
@@ -92,10 +88,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 
 	// first print the keys and addresses
 	for i, pubkey := range pubkeys {
-		addr, err := walletSdk.Address(*signing.NewPublicKey(pubkey))
-		if err != nil {
-			log.Fatalf("failed to generate address: %s", err)
-		}
+		addr := walletSdk.Address(*signing.NewPublicKey(pubkey))
 		addrs = append(addrs, addr)
 		t1.AppendRow(table.Row{
 			hex.EncodeToString(pubkey),

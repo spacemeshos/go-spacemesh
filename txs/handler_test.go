@@ -37,10 +37,9 @@ func Test_WrongHash(t *testing.T) {
 	require.ErrorIs(t, err, errWrongHash)
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(nil, nil)
-	req := smocks.NewMockValidationRequestNew(ctrl)
-	req.EXPECT().Cache().Times(1).Return(nil)
-	req.EXPECT().Parse(gomock.Any()).Times(1).Return(tx.TxHeader, nil)
-	cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
+	req := smocks.NewMockValidationRequest(ctrl)
+	req.EXPECT().Parse().Return(tx.TxHeader, nil)
+	cstate.EXPECT().Validation(tx.RawTx).Return(req)
 	err = th.HandleProposalTransaction(context.Background(), types.RandomHash(), p2p.NoPeer, tx.Raw)
 	require.ErrorIs(t, err, errWrongHash)
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
@@ -98,12 +97,11 @@ func Test_HandleBlock(t *testing.T) {
 			tx := newTx(t, 3, 10, tc.fee, signer)
 			cstate.EXPECT().HasTx(tx.ID).Return(tc.has, tc.hasErr).Times(1)
 			if tc.hasErr == nil && !tc.has {
-				req := smocks.NewMockValidationRequestNew(ctrl)
-				req.EXPECT().Cache().Times(1).Return(nil)
-				req.EXPECT().Parse(gomock.Any()).Times(1).Return(tx.TxHeader, tc.parseErr)
-				cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
+				req := smocks.NewMockValidationRequest(ctrl)
+				req.EXPECT().Parse().Return(tx.TxHeader, tc.parseErr)
+				cstate.EXPECT().Validation(tx.RawTx).Return(req)
 				if tc.parseErr == nil {
-					req.EXPECT().Verify().Times(1).Return(true)
+					req.EXPECT().Verify().Return(true)
 					cstate.EXPECT().
 						AddToDB(&types.Transaction{RawTx: tx.RawTx, TxHeader: tx.TxHeader}).
 						Return(tc.addErr)
@@ -147,12 +145,11 @@ func gossipExpectations(
 	}
 	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(rst, hasErr).Times(1)
 	if hasErr == nil && !has {
-		req := smocks.NewMockValidationRequestNew(ctrl)
-		req.EXPECT().Parse(gomock.Any()).Times(1).Return(tx.TxHeader, parseErr)
-		req.EXPECT().Cache().Times(1).Return(nil)
-		cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
+		req := smocks.NewMockValidationRequest(ctrl)
+		req.EXPECT().Parse().Return(tx.TxHeader, parseErr)
+		cstate.EXPECT().Validation(tx.RawTx).Return(req)
 		if parseErr == nil && fee != 0 {
-			req.EXPECT().Verify().Times(1).Return(verify)
+			req.EXPECT().Verify().Return(verify)
 			if verify {
 				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got *types.Transaction, _ time.Time) error {

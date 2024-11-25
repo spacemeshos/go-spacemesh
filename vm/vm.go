@@ -82,7 +82,7 @@ type VM struct {
 }
 
 // Validation initializes validation request.
-func (v *VM) Validation(raw types.RawTx) system.ValidationRequestNew {
+func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	return &Request{
 		vm:      v,
 		cache:   core.NewStagedCache(core.DBLoader{Executor: v.db}),
@@ -182,6 +182,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 			return fmt.Errorf("inserting genesis account: %w", err)
 		}
 	}
+
 	return tx.Commit()
 }
 
@@ -313,7 +314,7 @@ func (v *VM) execute(
 			decoder: decoder,
 		}
 
-		header, err := req.Parse(ss)
+		header, err := req.Parse()
 		if err != nil {
 			logger.Warn("ineffective transaction. failed to parse",
 				log.ZShortStringer("tx", tx.GetRaw().ID),
@@ -466,17 +467,13 @@ type Request struct {
 	ctx *core.Context
 }
 
-func (r *Request) Cache() *core.StagedCache {
-	return r.cache
-}
-
 // Parse header from the raw transaction.
-func (r *Request) Parse(loader core.AccountLoader) (*core.Header, error) {
+func (r *Request) Parse() (*core.Header, error) {
 	start := time.Now()
 	if len(r.raw.Raw) > core.TxSizeLimit {
 		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
 	}
-	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, loader, r.vm.cfg, r.raw.Raw, r.decoder)
+	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -617,13 +614,10 @@ func parse(
 		return nil, nil, fmt.Errorf("%w: non-spawn tx with unspawned principal", core.ErrNotSpawned)
 	}
 
-	computedPrincipal, err := core.ComputePrincipalFromPubkey(
+	computedPrincipal := core.ComputePrincipalFromPubkey(
 		ctx.Header.TemplateAddress,
 		unmarshaled.PublicKey,
 	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: computing spawn principal: %w", core.ErrInternal, err)
-	}
 
 	if ctx.IsSpawn() && computedPrincipal != principal {
 		return nil, nil, fmt.Errorf(

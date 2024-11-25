@@ -3,7 +3,6 @@ package wallet
 import (
 	"bytes"
 	"encoding/hex"
-	"os"
 	"testing"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -48,8 +47,9 @@ func TestMaxSpend(t *testing.T) {
 	require.NoError(t, err)
 	testWallet.walletState = walletState
 
-	os.Setenv("ATHENA_LIB_PATH", "../../../build")
-	vmlib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	libPath, err := host.AthenaLibPath()
+	require.NoError(t, err)
+	vmlib, err := athcon.LoadLibrary(libPath)
 	require.NoError(t, err)
 
 	// construct spawn and spend payloads
@@ -103,8 +103,9 @@ func TestSpawn(t *testing.T) {
 	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(expectedPrincipalAddress, nil).Times(1)
 
 	// point to the library path
-	os.Setenv("ATHENA_LIB_PATH", "../../../build")
-	vmLib, err := athcon.LoadLibrary(host.AthenaLibPath())
+	libPath, err := host.AthenaLibPath()
+	require.NoError(t, err)
+	vmLib, err := athcon.LoadLibrary(libPath)
 	require.NoError(t, err)
 
 	athenaPayload := vmLib.EncodeTxSpawn(athcon.Bytes32(pubkey))
@@ -155,9 +156,6 @@ func TestVerify(t *testing.T) {
 	// for now, don't include GenesisID
 	// empty := types.Hash20{}
 	// mockHost.EXPECT().GetGenesisID().Return(empty).Times(3)
-
-	// point to the library path
-	os.Setenv("ATHENA_LIB_PATH", "../../../build")
 
 	wallet, err := New(mockHost)
 	require.NoError(t, err)

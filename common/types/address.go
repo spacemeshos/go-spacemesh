@@ -100,12 +100,16 @@ func (a Address) IsEmpty() bool {
 
 // String implements fmt.Stringer.
 func (a Address) String() string {
+	return a.StringWithHRP(NetworkHRP())
+}
+
+func (a Address) StringWithHRP(hrp string) string {
 	dataConverted, err := bech32.ConvertBits(a[:], 8, 5, true)
 	if err != nil {
 		log.Panic("error converting bech32 bits: ", err.Error())
 	}
 
-	result, err := bech32.Encode(NetworkHRP(), dataConverted)
+	result, err := bech32.Encode(hrp, dataConverted)
 	if err != nil {
 		log.Panic("error encoding to bech32: ", err.Error())
 	}

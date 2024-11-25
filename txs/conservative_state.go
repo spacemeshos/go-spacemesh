@@ -114,7 +114,7 @@ func getProposalTXs(
 }
 
 // Validation initializes validation request.
-func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationRequestNew {
+func (cs *ConservativeState) Validation(raw types.RawTx) system.ValidationRequest {
 	return cs.vmState.Validation(raw)
 }
 

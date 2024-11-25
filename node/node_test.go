@@ -480,8 +480,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	app.signers = []*signing.EdSigner{signer}
-	address, err := wallet.Address(*signing.NewPublicKey(signer.PublicKey().Bytes()))
-	require.NoError(t, err)
+	address := wallet.Address(*signing.NewPublicKey(signer.PublicKey().Bytes()))
 
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()

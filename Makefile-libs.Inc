@@ -119,8 +119,8 @@ $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 
 # rename athena VM library
 ATHENA_LIB_RENAMED := libathenavmwrapper$(suffix $(ATHENA_LIB))
-
-$(BIN_DIR)$(ATHENA_LIB_RENAMED): $(BIN_DIR)$(ATHENA_LIB)
+ATHENA_LIB_PATH := $(BIN_DIR)$(ATHENA_LIB_RENAMED)
+$(ATHENA_LIB_PATH): $(BIN_DIR)$(ATHENA_LIB)
 	mv $(BIN_DIR)$(ATHENA_LIB) $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
@@ -160,17 +160,19 @@ get-athena-lib: $(BINDIR_ATHENA_SETUP_LIBS) $(BIN_DIR)$(ATHENA_LIB_RENAMED)
 go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
 	go env -w CGO_LDFLAGS="$(CGO_LDFLAGS)"
+	go env -w ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)"
 .PHONY: go-env
 
 go-env-test: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
 	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
+	go env -w ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)"
 .PHONY: go-env-test
 
 print-env: get-postrs-lib
-	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_LDFLAGS)\""
+	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_LDFLAGS)\"" ATHENA_LIB_PATH="\"$(ATHENA_LIB_PATH)\""
 .PHONY: print-env
 
 print-test-env: get-postrs-lib
-	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_TEST_LDFLAGS)\""
+	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_TEST_LDFLAGS)\"" ATHENA_LIB_PATH="\"$(ATHENA_LIB_PATH)\""
 .PHONY: print-test-env

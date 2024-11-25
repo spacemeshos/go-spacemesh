@@ -852,11 +852,7 @@ type signer struct {
 }
 
 func (s *signer) Address() types.Address {
-	addr, err := wallet.Address(*signing.NewPublicKey(s.Pub))
-	if err != nil {
-		panic(err)
-	}
-	return addr
+	return wallet.Address(*signing.NewPublicKey(s.Pub))
 }
 
 func genSigners(n int) (rst []*signer) {

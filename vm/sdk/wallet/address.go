@@ -8,6 +8,6 @@ import (
 )
 
 // Address computes wallet address from the public key.
-func Address(pub signing.PublicKey) (types.Address, error) {
+func Address(pub signing.PublicKey) types.Address {
 	return core.ComputePrincipalFromPubkey(wallet.TemplateAddress, pub)
 }

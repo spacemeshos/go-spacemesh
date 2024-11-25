@@ -86,6 +86,7 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("loading Athena VM: %w", err)
 	}
+	defer vmhost.Destroy()
 
 	output, _, err := vmhost.Execute(
 		s.host.Layer(),
@@ -143,6 +144,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 	if err != nil {
 		return false
 	}
+	defer vmhost.Destroy()
 
 	// If this is a spawn transaction, the wallet state is currently empty. So we need to
 	// provisionally spawn the wallet program instance so we can call the verify method.

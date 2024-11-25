@@ -142,8 +142,7 @@ func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		address, err := sdkwallet.Address(*signing.NewPublicKey(pub))
-		require.NoError(t, err)
+		address := sdkwallet.Address(*signing.NewPublicKey(pub))
 		t.addAccount(&singlesigAccount{pk, address}, 1_000_000_000)
 	}
 	return t
@@ -1352,7 +1351,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			req := tt.Validation(tc.tx)
-			header, err := req.Parse(req.Cache())
+			header, err := req.Parse()
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
@@ -1456,7 +1455,7 @@ func BenchmarkValidation(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			req := tt.Validation(raw)
-			_, err := req.Parse(req.Cache())
+			_, err := req.Parse()
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -1545,7 +1544,7 @@ func benchmarkWallet(b *testing.B, accounts, n int) {
 		parsed := make([]types.Transaction, 0, len(raw))
 		for _, tx := range raw {
 			val := tt.Validation(tx)
-			header, err := val.Parse(val.Cache())
+			header, err := val.Parse()
 			require.NoError(b, err)
 			parsed = append(parsed, types.Transaction{
 				RawTx:    tx,

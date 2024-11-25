@@ -68,6 +68,7 @@ func (*handler) Exec(host core.Host, payload core.Payload) ([]byte, int64, error
 	if err != nil {
 		return []byte{}, 0, fmt.Errorf("failed to instantiate VM: %w", err)
 	}
+	defer vmhost.Destroy()
 
 	// Augment the payload with the account state snapshot
 	// Note: for a spawn, this will be empty, which is fine.
