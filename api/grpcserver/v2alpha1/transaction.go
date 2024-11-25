@@ -377,29 +377,6 @@ func convertTxState(tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionSta
 	}
 }
 
-type spawnTx struct {
-	Pubkey [32]byte
-}
-
-type spendTx struct {
-	To     types.Address
-	Amount uint64
-}
-
-var spawnSelector, spendSelector athcon.MethodSelector
-
-func init() {
-	var err error
-	spawnSelector, err = athcon.FromString("athexp_spawn")
-	if err != nil {
-		panic(err.Error())
-	}
-	spendSelector, err = athcon.FromString("athexp_spend")
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
 func decodeTxArgs(decoder *scale.Decoder) (any, *core.Address, error) {
 	reg := registry.New()
 	wallet.Register(reg)
@@ -429,26 +406,13 @@ func decodeTxArgs(decoder *scale.Decoder) (any, *core.Address, error) {
 	var payload athcon.Payload
 	err = gossamerScale.Unmarshal(output.Payload, &payload)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: tx payload", core.ErrMalformed)
-	}
-	if payload.Selector == nil {
-		return nil, nil, fmt.Errorf("%w: nil method selector", core.ErrMalformed)
+		return nil, nil, fmt.Errorf("%w: tx payload: %w", core.ErrMalformed, err)
 	}
 
-	var txArgs any
-	switch *payload.Selector {
-	case spawnSelector:
-		txArgs = new(spawnTx)
-	case spendSelector:
-		txArgs = new(spendTx)
-	default:
-		return nil, nil, fmt.Errorf("%w: unknown method selector %s", core.ErrMalformed, payload.Selector.String())
-	}
-	err = gossamerScale.Unmarshal(payload.Input, txArgs)
+	txArgs, err := wallet.ParseArgs(payload)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: malformed tx arguments payload", core.ErrMalformed)
+		return nil, nil, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
 	}
-
 	return txArgs, &wallet.TemplateAddress, nil
 }
 
@@ -465,14 +429,14 @@ func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
 	}
 
 	switch args := txArgs.(type) {
-	case *spawnTx:
+	case *wallet.SpawnArgs:
 		res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
 			SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
 				Pubkey: signing.NewPublicKey(args.Pubkey[:]).String(),
 			},
 		}
 		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SPAWN
-	case *spendTx:
+	case *wallet.SpendArgs:
 		res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
 			Send: &spacemeshv2alpha1.ContentsSend{
 				Destination: args.To.String(),

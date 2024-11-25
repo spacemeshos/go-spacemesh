@@ -235,7 +235,7 @@ func TestParseTransactions(t *testing.T) {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		addr := wallet.Address(*signing.NewPublicKey(pub))
+		addr := wallet.Address(pub)
 		accounts[i] = types.Account{Address: addr, Balance: 1e12}
 	}
 	// add the wallet template account

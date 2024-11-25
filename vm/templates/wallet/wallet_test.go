@@ -90,17 +90,17 @@ func TestSpawn(t *testing.T) {
 	mockTemplate := types.Account{
 		State: walletTemplate.PROGRAM,
 	}
-	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
+	mockHost.EXPECT().Layer().Return(core.LayerID(1))
 	mockHost.EXPECT().Principal().Return(principalAddress).Times(6)
-	mockHost.EXPECT().MaxGas().Return(100000).Times(1)
-	mockHost.EXPECT().SpendGas(uint64(5036)).Times(1)
+	mockHost.EXPECT().MaxGas().Return(100000)
+	mockHost.EXPECT().SpendGas(uint64(5036))
 	mockHost.EXPECT().TemplateAddress().Return(templateAddress).Times(2)
-	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(1)
-	mockHost.EXPECT().IsSpawn().Return(true).Times(1)
-	mockHost.EXPECT().GasSpent().Return(uint64(0)).Times(1)
-	mockHost.EXPECT().Get(templateAddress).Return(mockTemplate, nil).Times(1)
-	mockHost.EXPECT().Get(principalAddress).Return(types.Account{}, nil).Times(1)
-	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(expectedPrincipalAddress, nil).Times(1)
+	mockHost.EXPECT().Nonce().Return(uint64(0))
+	mockHost.EXPECT().IsSpawn().Return(true)
+	mockHost.EXPECT().GasSpent().Return(uint64(0))
+	mockHost.EXPECT().Get(templateAddress).Return(&mockTemplate, nil)
+	mockHost.EXPECT().Get(principalAddress).Return(&types.Account{}, nil)
+	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(expectedPrincipalAddress, nil)
 
 	// point to the library path
 	libPath, err := host.AthenaLibPath()
@@ -145,8 +145,8 @@ func TestVerify(t *testing.T) {
 	mockHost.EXPECT().Principal().Return(types.Address{2}).Times(11)
 	mockHost.EXPECT().MaxGas().Return(100000000).Times(2)
 	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).Times(3)
-	mockHost.EXPECT().Get(types.Address{1}).Return(mockTemplate, nil).Times(1)
-	mockHost.EXPECT().Get(types.Address{2}).Return(mockWallet, nil).Times(1)
+	mockHost.EXPECT().Get(types.Address{1}).Return(&mockTemplate, nil).Times(1)
+	mockHost.EXPECT().Get(types.Address{2}).Return(&mockWallet, nil).Times(1)
 	mockHost.EXPECT().IsSpawn().Return(false).Times(3)
 	mockHost.EXPECT().Clone().Return(mockHost).Times(2)
 	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(2)

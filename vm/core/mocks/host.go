@@ -41,12 +41,11 @@ func (m *MockHost) EXPECT() *MockHostMockRecorder {
 }
 
 // Balance mocks base method.
-func (m *MockHost) Balance() (uint64, error) {
+func (m *MockHost) Balance() uint64 {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Balance")
 	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	return ret0
 }
 
 // Balance indicates an expected call of Balance.
@@ -62,19 +61,19 @@ type MockHostBalanceCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHostBalanceCall) Return(arg0 uint64, arg1 error) *MockHostBalanceCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *MockHostBalanceCall) Return(arg0 uint64) *MockHostBalanceCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHostBalanceCall) Do(f func() (uint64, error)) *MockHostBalanceCall {
+func (c *MockHostBalanceCall) Do(f func() uint64) *MockHostBalanceCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostBalanceCall) DoAndReturn(f func() (uint64, error)) *MockHostBalanceCall {
+func (c *MockHostBalanceCall) DoAndReturn(f func() uint64) *MockHostBalanceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -194,10 +193,10 @@ func (c *MockHostGasSpentCall) DoAndReturn(f func() uint64) *MockHostGasSpentCal
 }
 
 // Get mocks base method.
-func (m *MockHost) Get(arg0 types.Address) (types.Account, error) {
+func (m *MockHost) Get(arg0 types.Address) (*types.Account, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Get", arg0)
-	ret0, _ := ret[0].(types.Account)
+	ret0, _ := ret[0].(*types.Account)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -215,19 +214,19 @@ type MockHostGetCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHostGetCall) Return(arg0 types.Account, arg1 error) *MockHostGetCall {
+func (c *MockHostGetCall) Return(arg0 *types.Account, arg1 error) *MockHostGetCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHostGetCall) Do(f func(types.Address) (types.Account, error)) *MockHostGetCall {
+func (c *MockHostGetCall) Do(f func(types.Address) (*types.Account, error)) *MockHostGetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostGetCall) DoAndReturn(f func(types.Address) (types.Account, error)) *MockHostGetCall {
+func (c *MockHostGetCall) DoAndReturn(f func(types.Address) (*types.Account, error)) *MockHostGetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

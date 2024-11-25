@@ -23,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
@@ -852,7 +851,7 @@ type signer struct {
 }
 
 func (s *signer) Address() types.Address {
-	return wallet.Address(*signing.NewPublicKey(s.Pub))
+	return wallet.Address(s.Pub)
 }
 
 func genSigners(n int) (rst []*signer) {

@@ -112,11 +112,11 @@ type Host interface {
 	Spawn(Address, []byte) (Address, error)
 	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)
 	Has(Address) (bool, error)
-	Get(Address) (Account, error)
+	Get(Address) (*Account, error)
 	Template() Template
 	Layer() LayerID
 	GetGenesisID() Hash20
-	Balance() (uint64, error)
+	Balance() uint64
 	IsSpawn() bool
 }
 
