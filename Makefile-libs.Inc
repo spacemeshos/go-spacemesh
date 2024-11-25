@@ -160,13 +160,11 @@ get-athena-lib: $(BINDIR_ATHENA_SETUP_LIBS) $(BIN_DIR)$(ATHENA_LIB_RENAMED)
 go-env: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
 	go env -w CGO_LDFLAGS="$(CGO_LDFLAGS)"
-	go env -w ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)"
 .PHONY: go-env
 
 go-env-test: get-postrs-lib
 	go env -w CGO_CFLAGS="$(CGO_CFLAGS)"
 	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
-	go env -w ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)"
 .PHONY: go-env-test
 
 print-env: get-postrs-lib
