@@ -64,15 +64,15 @@ type ProofType byte
 
 const (
 	// TODO(mafa): legacy types for future migration to new malfeasance proofs.
-	LegacyDoublePublish  ProofType = 0x00
-	LegacyInvalidPost    ProofType = 0x01
-	LegacyInvalidPrevATX ProofType = 0x02
+	LegacyDoublePublish  ProofType = 0x01
+	LegacyInvalidPost    ProofType = 0x02
+	LegacyInvalidPrevATX ProofType = 0x03
 
-	DoubleMarry       ProofType = 0x10
-	DoubleMerge       ProofType = 0x11
-	InvalidPost       ProofType = 0x12
-	InvalidPreviousV1 ProofType = 0x13
-	InvalidPreviousV2 ProofType = 0x14
+	DoubleMarry       ProofType = 0x11
+	DoubleMerge       ProofType = 0x12
+	InvalidPost       ProofType = 0x13
+	InvalidPreviousV1 ProofType = 0x14
+	InvalidPreviousV2 ProofType = 0x15
 )
 
 var proofTypes = map[ProofType]Proof{
