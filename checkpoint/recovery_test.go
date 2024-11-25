@@ -251,7 +251,6 @@ func validateAndPreserveData(
 	mclock := activation.NewMocklayerClock(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
 	mValidator := activation.NewMocknipostValidator(ctrl)
-	mMalPublisher := activation.NewMockatxMalfeasancePublisher(ctrl)
 	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
 	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
@@ -266,7 +265,6 @@ func validateAndPreserveData(
 		mFetch,
 		goldenAtx,
 		mValidator,
-		mMalPublisher,
 		mLegacyPublish,
 		mBeacon,
 		mTortoise,

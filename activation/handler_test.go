@@ -215,6 +215,8 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
+	// TODO(mafa): make mandatory parameter when real publisher is available
+	opts = append(opts, func(h *Handler) { h.v2.malPublisher = mocks.mMalPublish })
 	atxHdlr := NewHandler(
 		"localID",
 		cdb,
@@ -224,7 +226,6 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 		mocks.mockFetch,
 		goldenATXID,
 		mocks.mValidator,
-		mocks.mMalPublish,
 		mocks.mLegacyMalPublish,
 		mocks.mBeacon,
 		mocks.mTortoise,

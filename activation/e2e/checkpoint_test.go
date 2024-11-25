@@ -103,7 +103,6 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	atxVersions := activation.AtxVersions{0: types.AtxV2}
 	edVerifier := signing.NewEdVerifier()
 	mFetch := smocks.NewMockFetcher(ctrl)
-	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
 	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
 	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
@@ -117,7 +116,6 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		mFetch,
 		goldenATX,
 		validator,
-		mMalPublish,
 		mLegacyPublish,
 		mBeacon,
 		mTortoise,
@@ -208,7 +206,6 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		mFetch,
 		goldenATX,
 		validator,
-		mMalPublish,
 		mLegacyPublish,
 		mBeacon,
 		mTortoise,
