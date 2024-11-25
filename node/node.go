@@ -785,7 +785,6 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
-	app.hOracle.SetSync(newSyncer)
 
 	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
@@ -853,7 +852,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
-	app.hOracle = eligibility.New(
+	hOracle := eligibility.New(
 		beaconProtocol,
 		app.db,
 		app.atxsdata,
@@ -862,7 +861,7 @@ func (app *App) initServices(ctx context.Context) error {
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	)
-	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
+	hOracle.SetSync(newSyncer)
 
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
@@ -1304,6 +1303,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
+	app.hOracle = hOracle
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,
