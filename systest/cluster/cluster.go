@@ -22,10 +22,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 var errNotInitialized = errors.New("cluster: not initialized")
@@ -851,7 +852,7 @@ type signer struct {
 }
 
 func (s *signer) Address() types.Address {
-	return wallet.Address(s.Pub)
+	return wallet.Address(*signing.NewPublicKey(s.Pub))
 }
 
 func genSigners(n int) (rst []*signer) {

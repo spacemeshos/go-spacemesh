@@ -40,50 +40,14 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 	return m.recorder
 }
 
-// Args mocks base method.
-func (m *MockHandler) Args() scale.Type {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Args")
-	ret0, _ := ret[0].(scale.Type)
-	return ret0
-}
-
-// Args indicates an expected call of Args.
-func (mr *MockHandlerMockRecorder) Args() *MockHandlerArgsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Args", reflect.TypeOf((*MockHandler)(nil).Args))
-	return &MockHandlerArgsCall{Call: call}
-}
-
-// MockHandlerArgsCall wrap *gomock.Call
-type MockHandlerArgsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockHandlerArgsCall) Return(arg0 scale.Type) *MockHandlerArgsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockHandlerArgsCall) Do(f func() scale.Type) *MockHandlerArgsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerArgsCall) DoAndReturn(f func() scale.Type) *MockHandlerArgsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Exec mocks base method.
-func (m *MockHandler) Exec(arg0 core.Host, arg1 scale.Encodable) error {
+func (m *MockHandler) Exec(arg0 core.Host, arg1 core.Payload) ([]byte, int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Exec", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(int64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
 }
 
 // Exec indicates an expected call of Exec.
@@ -99,64 +63,25 @@ type MockHandlerExecCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHandlerExecCall) Return(arg0 error) *MockHandlerExecCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockHandlerExecCall) Return(arg0 []byte, arg1 int64, arg2 error) *MockHandlerExecCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerExecCall) Do(f func(core.Host, scale.Encodable) error) *MockHandlerExecCall {
+func (c *MockHandlerExecCall) Do(f func(core.Host, core.Payload) ([]byte, int64, error)) *MockHandlerExecCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, scale.Encodable) error) *MockHandlerExecCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Load mocks base method.
-func (m *MockHandler) Load(arg0 []byte) (core.Template, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Load", arg0)
-	ret0, _ := ret[0].(core.Template)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Load indicates an expected call of Load.
-func (mr *MockHandlerMockRecorder) Load(arg0 any) *MockHandlerLoadCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Load", reflect.TypeOf((*MockHandler)(nil).Load), arg0)
-	return &MockHandlerLoadCall{Call: call}
-}
-
-// MockHandlerLoadCall wrap *gomock.Call
-type MockHandlerLoadCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockHandlerLoadCall) Return(arg0 core.Template, arg1 error) *MockHandlerLoadCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockHandlerLoadCall) Do(f func([]byte) (core.Template, error)) *MockHandlerLoadCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerLoadCall) DoAndReturn(f func([]byte) (core.Template, error)) *MockHandlerLoadCall {
+func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, core.Payload) ([]byte, int64, error)) *MockHandlerExecCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // New mocks base method.
-func (m *MockHandler) New(arg0 any) (core.Template, error) {
+func (m *MockHandler) New(arg0 core.Host) (core.Template, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "New", arg0)
 	ret0, _ := ret[0].(core.Template)
@@ -183,13 +108,13 @@ func (c *MockHandlerNewCall) Return(arg0 core.Template, arg1 error) *MockHandler
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerNewCall) Do(f func(any) (core.Template, error)) *MockHandlerNewCall {
+func (c *MockHandlerNewCall) Do(f func(core.Host) (core.Template, error)) *MockHandlerNewCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerNewCall) DoAndReturn(f func(any) (core.Template, error)) *MockHandlerNewCall {
+func (c *MockHandlerNewCall) DoAndReturn(f func(core.Host) (core.Template, error)) *MockHandlerNewCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

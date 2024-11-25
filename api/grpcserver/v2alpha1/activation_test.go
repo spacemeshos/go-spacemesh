@@ -28,7 +28,7 @@ func TestActivationService_List(t *testing.T) {
 		gen := fixture.NewAtxsGenerator()
 		activations := make([]types.ActivationTx, 100)
 		for i := range activations {
-			atx := gen.Next()
+			atx := gen.Next(t)
 			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			activations[i] = *atx
 		}
@@ -116,7 +116,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		gen := fixture.NewAtxsGenerator()
 		activations := make([]types.ActivationTx, 100)
 		for i := range activations {
-			atx := gen.Next()
+			atx := gen.Next(t)
 			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			activations[i] = *atx
 		}
@@ -164,7 +164,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 		gen := fixture.NewAtxsGenerator().WithEpochs(start, 10)
 		var streamed []*events.ActivationTx
 		for i := 0; i < n; i++ {
-			atx := gen.Next()
+			atx := gen.Next(t)
 			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 			streamed = append(streamed, &events.ActivationTx{ActivationTx: atx})
 		}
@@ -230,7 +230,7 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)
 	epoch3ATXs := make([]types.ActivationTx, 30)
 	for i := range epoch3ATXs {
-		atx := genEpoch3.Next()
+		atx := genEpoch3.Next(t)
 		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 		epoch3ATXs[i] = *atx
 	}
@@ -239,7 +239,7 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 		WithEpochs(5, 1)
 	epoch5ATXs := make([]types.ActivationTx, 10) // ensure the number here is different from above
 	for i := range epoch5ATXs {
-		atx := genEpoch5.Next()
+		atx := genEpoch5.Next(t)
 		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 		epoch5ATXs[i] = *atx
 	}

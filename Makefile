@@ -37,7 +37,7 @@ else
 	ULIMIT := ulimit -n 4096;
 endif
 
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v genvm/cmd)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v vm/cmd)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1
@@ -103,7 +103,7 @@ clear-test-cache:
 .PHONY: clear-test-cache
 
 test: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -p 1 -timeout 8m $(UNIT_TESTS)
+	@$(ULIMIT) ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum -- -race -p 1 -timeout 8m $(UNIT_TESTS)
 .PHONY: test
 
 generate: get-libs
@@ -143,7 +143,7 @@ lint-fix: get-libs
 .PHONY: lint-fix
 
 cover: get-libs
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)
+	@$(ULIMIT) ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
 
 list-versions:
@@ -192,5 +192,5 @@ endif
 .PHONY: dockerpush-bs-only
 
 fuzz:
-	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" ./scripts/fuzz.sh $(FUZZTIME)
+	@$(ULIMIT) ATHENA_LIB_PATH="$(ATHENA_LIB_PATH)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" ./scripts/fuzz.sh $(FUZZTIME)
 .PHONY: fuzz

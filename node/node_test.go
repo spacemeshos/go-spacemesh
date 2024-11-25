@@ -44,13 +44,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 const layersPerEpoch = 3
@@ -478,7 +480,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	app.signers = []*signing.EdSigner{signer}
-	address := wallet.Address(signer.PublicKey().Bytes())
+	address := wallet.Address(*signing.NewPublicKey(signer.PublicKey().Bytes()))
 
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
@@ -507,7 +509,11 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.Genesis = config.GenesisConfig{
 			GenesisTime: time.Now().Add(20 * time.Second).Format(time.RFC3339),
 			Accounts: map[string]uint64{
-				address.String(): 100_000_000,
+				address.String():                        100_000_000,
+				walletTemplate.TemplateAddress.String(): 0,
+			},
+			Templates: map[string][]byte{
+				walletTemplate.TemplateAddress.String(): walletProgram.PROGRAM,
 			},
 		}
 
@@ -550,9 +556,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, conn.Close()) })
 	c := pb.NewTransactionServiceClient(conn)
 
-	tx1 := types.NewRawTx(
-		wallet.SelfSpawn(signer.PrivateKey(), 0, sdk.WithGenesisID(cfg.Genesis.GenesisID())),
-	)
+	tx, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGenesisID(cfg.Genesis.GenesisID()))
+	require.NoError(t, err)
+	tx1 := types.NewRawTx(tx)
 
 	stream, err := c.TransactionsStateStream(ctx, &pb.TransactionsStateStreamRequest{
 		TransactionId:       []*pb.TransactionId{{Id: tx1.ID.Bytes()}},

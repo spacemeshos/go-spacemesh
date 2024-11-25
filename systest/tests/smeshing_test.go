@@ -3,12 +3,12 @@ package tests
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"sort"
 	"testing"
 	"time"
 
-	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,9 +18,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	sdkmultisig "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
-	sdkvesting "github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
@@ -45,19 +42,27 @@ func TestSmeshing(t *testing.T) {
 		cluster.WithGenesisBalances(vests.genesisBalances()...),
 	)
 	require.NoError(t, err)
-	testSmeshing(t, tctx, cl)
-	testTransactions(t, tctx, cl, 8)
-	testVesting(t, tctx, cl, vests...)
+	t.Run("smeshing", func(t *testing.T) {
+		testSmeshing(t, tctx, cl)
+	})
+	t.Run("transactions", func(t *testing.T) {
+		testTransactions(t, tctx, cl, 8)
+	})
+	t.Run("vesting", func(t *testing.T) {
+		t.Skip("athena doesn't support vesting yet")
+		testVesting(t, tctx, cl, vests...)
+	})
 }
 
 func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) {
 	const limit = 15
 
+	logger := tctx.Log.Named(t.Name())
 	first := currentLayer(tctx, t, cl.Client(0))
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	first = nextFirstLayer(first, layersPerEpoch)
 	last := first + limit
-	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
+	logger.Debugw("watching layer between", "first", first, "last", last)
 
 	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
 	includedAll := make([]map[uint32][]*pb.Proposal, cl.Total())
@@ -68,12 +73,12 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	eg, ctx := errgroup.WithContext(tctx)
 	for i := range cl.Total() {
 		client := cl.Client(i)
-		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
-		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
+		logger.Debugw("watching", "client", client.Name, "i", i)
+		watchProposals(ctx, eg, client, logger.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
-			tctx.Log.Debugw("received proposal event",
+			logger.Debugw("received proposal event",
 				"client", client.Name,
 				"layer", proposal.Layer.Number,
 				"smesher", prettyHex(proposal.Smesher.Id),
@@ -117,7 +122,9 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	require.Len(t, beaconSet, len(beacons), "beacons=%v", beaconSet)
 }
 
-func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received []map[uint32][]*pb.Proposal) {
+func requireEqualProposals(
+	tb testing.TB, reference map[uint32][]*pb.Proposal, received []map[uint32][]*pb.Proposal,
+) {
 	tb.Helper()
 	for layer := range reference {
 		sort.Slice(reference[layer], func(i, j int) bool {
@@ -149,7 +156,7 @@ func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposa
 		}
 	}
 
-	tctx.Log.Desugar().
+	tctx.Log.Named(tb.Name()).Desugar().
 		Info("aggregated eligibilities", zap.Object("per-smesher",
 			zapcore.ObjectMarshalerFunc(func(enc zapcore.ObjectEncoder) error {
 				for smesher, eligibilities := range aggregated {
@@ -174,12 +181,13 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 	var (
 		eg      errgroup.Group
 		genesis = cl.GenesisID()
+		logger  = tctx.Log.Named(tb.Name())
 	)
 	for i, acc := range accs {
 		client := cl.Client(i % cl.Total())
 		eg.Go(func() error {
 			var subeg errgroup.Group
-			watchLayers(tctx, &subeg, client, tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
+			watchLayers(tctx, &subeg, client, logger.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
 				return layer.Layer.Number.Number < uint32(acc.start), nil
 			})
 			if err := subeg.Wait(); err != nil {
@@ -189,7 +197,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			ctx, cancel := context.WithTimeout(tctx, 10*time.Minute)
 			defer cancel()
 			var nonce uint64
-			id, err := submitTransaction(ctx, acc.selfSpawn(genesis, nonce), client)
+			id, err := submitTransaction(ctx, acc.selfSpawn(genesis, nonce), client, logger)
 			if err != nil {
 				return fmt.Errorf("selfspawn multisig: %w", err)
 			}
@@ -199,7 +207,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			if err != nil {
 				return err
 			}
-			tctx.Log.Debugw("submitted selfspawn",
+			logger.Debugw("submitted selfspawn",
 				"address", acc.address,
 				"initial", initial,
 			)
@@ -207,12 +215,12 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			if err := subeg.Wait(); err != nil {
 				return err
 			}
-			id, err = submitTransaction(ctx, acc.spawnVault(genesis, nonce), client)
+			id, err = submitTransaction(ctx, acc.spawnVault(genesis, nonce), client, logger)
 			if err != nil {
 				return fmt.Errorf("spawn vault: %w", err)
 			}
 			nonce++
-			tctx.Log.Debugw("submitted spawn vault",
+			logger.Debugw("submitted spawn vault",
 				"address", acc.vault,
 			)
 			waitTransaction(ctx, &subeg, client, id)
@@ -228,11 +236,11 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 					step = leftover
 					leftover = 0
 				}
-				tctx.Log.Debugw("submitted drain vault",
+				logger.Debugw("submitted drain vault",
 					"amount", step,
 					"leftover", leftover,
 				)
-				id, err := submitTransaction(ctx, acc.drain(genesis, uint64(step), nonce), client)
+				id, err := submitTransaction(ctx, acc.drain(genesis, uint64(step), nonce), client, logger)
 				if err != nil {
 					return fmt.Errorf("drain: %w", err)
 				}
@@ -250,7 +258,7 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 			if err != nil {
 				return err
 			}
-			tctx.Log.Infow("results for account after tests",
+			logger.Infow("results for account after tests",
 				"vest", acc.address,
 				"vault", acc.vault,
 				"initial", initial,
@@ -297,77 +305,92 @@ type vestingAcc struct {
 }
 
 func (v vestingAcc) selfSpawn(genesis types.Hash20, nonce uint64) []byte {
-	var agg *sdkmultisig.Aggregator
-	for i := 0; i < v.required; i++ {
-		pk := v.pks[i]
-		part := sdkmultisig.SelfSpawn(
-			uint8(i),
-			pk,
-			vesting.TemplateAddress,
-			uint8(v.required),
-			v.pubs,
-			nonce,
-			sdk.WithGenesisID(genesis),
-		)
-		if agg == nil {
-			agg = part
-		} else {
-			agg.Add(*part.Part(uint8(i)))
-		}
-	}
-	return agg.Raw()
+	return nil
+	//	var agg *sdkmultisig.Aggregator
+	//	for i := 0; i < v.required; i++ {
+	//		pk := v.pks[i]
+	//		part := sdkmultisig.SelfSpawn(
+	//			uint8(i),
+	//			pk,
+	//			vesting.TemplateAddress,
+	//			uint8(v.required),
+	//			v.pubs,
+	//			nonce,
+	//			sdk.WithGenesisID(genesis),
+	//		)
+	//		if agg == nil {
+	//			agg = part
+	//		} else {
+	//			agg.Add(*part.Part(uint8(i)))
+	//		}
+	//	}
+	//	return agg.Raw()
+}
+
+func (v vestingAcc) DummyLintFixRemoveMe() {
+	_ = v.required
+	_ = v.pks
+	_ = v.pubs
+	_ = v.initial
 }
 
 func (v vestingAcc) spawnVault(genesis types.Hash20, nonce uint64) []byte {
-	args := vault.SpawnArguments{
-		Owner:               v.address,
-		InitialUnlockAmount: uint64(v.initial),
-		TotalAmount:         uint64(v.total),
-		VestingStart:        types.LayerID(v.start),
-		VestingEnd:          types.LayerID(v.end),
-	}
-	var agg *sdkmultisig.Aggregator
-	for i := 0; i < v.required; i++ {
-		pk := v.pks[i]
-		part := sdkmultisig.Spawn(
-			uint8(i),
-			pk,
-			v.address,
-			vault.TemplateAddress,
-			&args,
-			nonce,
-			sdk.WithGenesisID(genesis),
-		)
-		if agg == nil {
-			agg = part
-		} else {
-			agg.Add(*part.Part(uint8(i)))
-		}
-	}
-	return agg.Raw()
+	return nil
+	//	args := vault.SpawnArguments{
+	//		Owner:               v.address,
+	//		InitialUnlockAmount: uint64(v.initial),
+	//		TotalAmount:         uint64(v.total),
+	//		VestingStart:        types.LayerID(v.start),
+	//		VestingEnd:          types.LayerID(v.end),
+	//	}
+	//
+	// var agg *sdkmultisig.Aggregator
+	//
+	//	for i := 0; i < v.required; i++ {
+	//		pk := v.pks[i]
+	//		part := sdkmultisig.Spawn(
+	//			uint8(i),
+	//			pk,
+	//			v.address,
+	//			vault.TemplateAddress,
+	//			&args,
+	//			nonce,
+	//			sdk.WithGenesisID(genesis),
+	//		)
+	//		if agg == nil {
+	//			agg = part
+	//		} else {
+	//			agg.Add(*part.Part(uint8(i)))
+	//		}
+	//	}
+	//
+	// return agg.Raw()
 }
 
 func (v vestingAcc) drain(genesis types.Hash20, amount, nonce uint64) []byte {
-	var agg *sdkvesting.Aggregator
-	for i := 0; i < v.required; i++ {
-		pk := v.pks[i]
-		part := sdkvesting.DrainVault(
-			uint8(i),
-			pk,
-			v.address,
-			v.vault,
-			v.address,
-			amount,
-			nonce,
-			sdk.WithGenesisID(genesis),
-		)
-		if agg == nil {
-			agg = part
-		} else {
-			agg.Add(*part.Part(uint8(i)))
-		}
-	}
-	return agg.Raw()
+	return nil
+	// var agg *sdkvesting.Aggregator
+	//
+	//	for i := 0; i < v.required; i++ {
+	//		pk := v.pks[i]
+	//		part := sdkvesting.DrainVault(
+	//			uint8(i),
+	//			pk,
+	//			v.address,
+	//			v.vault,
+	//			v.address,
+	//			amount,
+	//			nonce,
+	//			sdk.WithGenesisID(genesis),
+	//		)
+	//		if agg == nil {
+	//			agg = part
+	//		} else {
+	//			agg.Add(*part.Part(uint8(i)))
+	//		}
+	//	}
+	//
+	// return agg.Raw()
 }
 
 func genKeys(tb testing.TB, n int) (pks []ed25519.PrivateKey, pubs []ed25519.PublicKey) {

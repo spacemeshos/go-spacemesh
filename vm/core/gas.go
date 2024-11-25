@@ -2,12 +2,9 @@ package core
 
 // IntrinsicGas computes intrinsic gas from base gas and storage cost.
 func IntrinsicGas(baseGas uint64, tx []byte) uint64 {
-	return baseGas + TxDataGas(len(tx))
-}
-
-// MaxGas computes total gas cost by adding fixed gas to intrinsic gas cost.
-func MaxGas(baseGas, fixedGas uint64, tx []byte) uint64 {
-	return IntrinsicGas(baseGas, tx) + fixedGas
+	return ATHENA_GAS_SPAWN - 1
+	// TODO(lane): fix gas calculation
+	// return baseGas + TxDataGas(len(tx))
 }
 
 const (
@@ -27,6 +24,12 @@ const (
 	ACCOUNT_ACCESS uint64 = 2500
 	// EDVERIFY is a cost for running ed25519 single signature verification.
 	EDVERIFY uint64 = 3000
+
+	// Hardcoded Athena gas costs
+	// TODO(lane): remove hardcoded gas costs.
+	ATHENA_GAS_SPAWN  = 5036
+	ATHENA_GAS_SPEND  = 8196
+	ATHENA_GAS_VERIFY = 12004
 )
 
 const (

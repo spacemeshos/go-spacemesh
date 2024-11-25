@@ -22,6 +22,7 @@ type GenesisConfig struct {
 	GenesisTime string            `mapstructure:"genesis-time"`
 	ExtraData   string            `mapstructure:"genesis-extra-data"`
 	Accounts    map[string]uint64 `mapstructure:"accounts"`
+	Templates   map[string][]byte `mapstructure:"templates"`
 }
 
 // GenesisID computes genesis id from GenesisTime and ExtraData.
@@ -90,10 +91,15 @@ func (g *GenesisConfig) ToAccounts() []types.Account {
 		if err != nil {
 			log.Panic("could not create address from genesis config `%s`: %s", addr, err.Error())
 		}
-		rst = append(rst, types.Account{
+		acct := types.Account{
 			Address: genesisAddr,
 			Balance: balance,
-		})
+		}
+		if g.Templates[addr] != nil {
+			acct.State = g.Templates[addr]
+			acct.TemplateAddress = &genesisAddr
+		}
+		rst = append(rst, acct)
 	}
 	return rst
 }

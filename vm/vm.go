@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"time"
 
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -179,6 +182,7 @@ func (v *VM) ApplyGenesis(genesis []types.Account) error {
 			return fmt.Errorf("inserting genesis account: %w", err)
 		}
 	}
+
 	return tx.Commit()
 }
 
@@ -233,8 +237,7 @@ func (v *VM) Apply(
 		total++
 		account.Layer = layer
 		v.logger.Debug("update account state", zap.Inline(account))
-		err = accounts.Update(tx, account)
-		if err != nil {
+		if err = accounts.Update(tx, account); err != nil {
 			return false
 		}
 		account.EncodeScale(encoder)
@@ -297,7 +300,7 @@ func (v *VM) execute(
 		limit       = v.cfg.GasLimit
 	)
 	for i, tx := range txs {
-		logger := v.logger.With(zap.Int("ith", i))
+		logger := v.logger.With(zap.Int("txnum", i))
 		txCount.Inc()
 
 		t1 := time.Now()
@@ -322,21 +325,24 @@ func (v *VM) execute(
 			continue
 		}
 		ctx := req.ctx
-		args := req.args
 
 		if header.GasPrice == 0 {
 			logger.Warn("ineffective transaction. zero gas price",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
-		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); ctx.PrincipalAccount.Balance < intrinsic {
+		balance, err := ctx.Balance()
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("%w: error getting balance: %w", core.ErrInternal, err)
+		}
+		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); balance < intrinsic {
 			logger.Warn("ineffective transaction. intrinsic gas not covered",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 				zap.Uint64("intrinsic gas", intrinsic),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
@@ -348,7 +354,7 @@ func (v *VM) execute(
 				zap.Uint64("block gas limit", v.cfg.GasLimit),
 				zap.Uint64("current limit", limit),
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
@@ -359,18 +365,20 @@ func (v *VM) execute(
 		// when saved into database by txs module
 		if !tx.Verified() && !req.Verify() {
 			logger.Warn("ineffective transaction. failed verify",
+				zap.String("txid", tx.GetRaw().ID.String()),
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
+				zap.Object("payload", ctx.Payload()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
 			invalidTxCount.Inc()
 			continue
 		}
 
-		if ctx.PrincipalAccount.NextNonce > ctx.Header.Nonce {
+		if ctx.NextNonce() > ctx.Header.Nonce {
 			logger.Warn("ineffective transaction. nonce too low",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 			)
 			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw(), TxHeader: header})
 			invalidTxCount.Inc()
@@ -379,21 +387,39 @@ func (v *VM) execute(
 
 		t2 := time.Now()
 		logger.Debug("applying transaction",
+			zap.String("txid", tx.GetRaw().ID.String()),
 			zap.Object("header", header),
-			zap.Object("account", &ctx.PrincipalAccount),
+			zap.String("account", ctx.PrincipalAddress.String()),
+			zap.Object("payload", ctx.Payload()),
 		)
 
 		rst := types.TransactionWithResult{}
 		rst.Layer = layer
 
 		err = ctx.Consume(ctx.Header.MaxGas)
+		logger.Debug("consumed max gas from principal",
+			zap.String("principal", ctx.PrincipalAddress.String()),
+			zap.Uint64("maxgas", ctx.Header.MaxGas),
+		)
 		if err == nil {
-			err = ctx.PrincipalHandler.Exec(ctx, args)
+			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
+		}
+		if err == nil {
+			// If tx succeeded, refund remaining gas
+			// (We consume all remaining gas if the tx failed)
+			if err2 := ctx.Refund(); err2 != nil {
+				return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err2)
+			}
+			logger.Debug("refunded gas left to principal",
+				zap.String("principal", ctx.PrincipalAddress.String()),
+			)
+		} else {
+			logger.Debug("skipping gas refund for failed tx")
 		}
 		if err != nil {
 			logger.Debug("transaction failed",
 				zap.Object("header", header),
-				zap.Object("account", &ctx.PrincipalAccount),
+				zap.String("account", ctx.PrincipalAddress.String()),
 				zap.Error(err),
 			)
 			if errors.Is(err, core.ErrInternal) {
@@ -437,9 +463,8 @@ type Request struct {
 	raw     types.RawTx
 	decoder *scale.Decoder
 
-	// both ctx and args are set after successful Parse
-	ctx  *core.Context
-	args scale.Encodable
+	// ctx set after successful Parse
+	ctx *core.Context
 }
 
 // Parse header from the raw transaction.
@@ -448,17 +473,16 @@ func (r *Request) Parse() (*core.Header, error) {
 	if len(r.raw.Raw) > core.TxSizeLimit {
 		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
 	}
-	header, ctx, args, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
+	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
 	r.ctx = ctx
-	r.args = args
 	transactionDurationParse.Observe(float64(time.Since(start)))
 	return header, nil
 }
 
-// Verify transaction. Will panic if called without Parse completing successfully.
+// Verify transaction. Will panic if called before Parse completes succcessfully.
 func (r *Request) Verify() bool {
 	if r.ctx == nil {
 		panic("Verify should be called after successful Parse")
@@ -477,133 +501,151 @@ func parse(
 	cfg Config,
 	raw []byte,
 	decoder *scale.Decoder,
-) (*core.Header, *core.Context, scale.Encodable, error) {
+) (*core.Header, *core.Context, error) {
 	version, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
-	// v1 is an Athena-compatible transaction
+	// v1 is athena compatible tx
 	if version != 1 {
-		return nil, nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
+		return nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
-	account, err := loader.Get(principal)
+	principalAccount, err := loader.Get(principal)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"%w: failed load state for principal %s - %w",
 			core.ErrInternal,
 			principal,
 			err,
 		)
 	}
-	logger.Debug("loaded account state", zap.Inline(&account))
+	logger.Debug("loaded principal account state", zap.Inline(&principalAccount))
 
 	ctx := &core.Context{
-		GenesisID:        cfg.GenesisID,
-		Registry:         reg,
-		Loader:           loader,
-		PrincipalAccount: account,
-		LayerID:          lid,
+		GenesisID:          cfg.GenesisID,
+		Registry:           reg,
+		Loader:             loader,
+		PrincipalAddress:   principal,
+		PrincipalNextNonce: principalAccount.NextNonce,
+		LayerID:            lid,
+		Logger:             logger,
 	}
 
-	if account.TemplateAddress != nil {
-		ctx.PrincipalHandler = reg.Get(*account.TemplateAddress)
+	// There are three cases to consider:
+	// 1. Principal account does not exist at all (and has no balance). In this case, we can fail
+	// the tx immediately.
+	// 2. Principal account exists, and is spawned. In this case, we use the principal account
+	// template.
+	// 3. Principal account exists as a stub with a nonzero balance, but has not been spawned. In
+	// this case, we assume the tx is a self-spawn for the principal, and check that the calculated
+	// principal matches.
+
+	// NOTE: Athena currently does not allow a tx with principal A to directly call a method on
+	// template B where A != B. That will be handled by "proxied calls", where the target template
+	// is passed not explicitly as part of the tx, but implicitly in the args. This simplifies the
+	// logic here considerably.
+
+	ctx.Header.MaxGas = core.ATHENA_GAS_SPEND + core.ATHENA_GAS_VERIFY
+	if principalAccount.Address == (types.Address{}) {
+		// case 1: principal account does not exist at all
+		return nil, nil, fmt.Errorf("%w: principal account %s does not exist", core.ErrMalformed, principal)
+	} else if principalAccount.TemplateAddress != nil {
+		// case 2: principal account exists and is spawned
+		// attempt to load its template handler
+		// Note: the Wallet template is currently the only supported template, so we could skip this
+		// step and hardcode it here. But this is written in a more future-proof fashion, since we
+		// intend to add support for multiple templates soon.
+		ctx.PrincipalHandler = reg.Get(*principalAccount.TemplateAddress)
 		if ctx.PrincipalHandler == nil {
-			return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *account.TemplateAddress)
+			return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, principalAccount.TemplateAddress)
 		}
-		ctx.PrincipalTemplate, err = ctx.PrincipalHandler.Load(account.State)
-		if err != nil {
-			return nil, nil, nil, err
+		ctx.Header.TemplateAddress = *principalAccount.TemplateAddress
+	} else {
+		// case 3: principal account exists but is not spawned
+		// go ahead and assume it's a self-spawn for a Wallet template
+		ctx.PrincipalHandler = reg.Get(wallet.TemplateAddress)
+		if ctx.PrincipalHandler == nil {
+			return nil, nil, fmt.Errorf("%w: wallet template missing", core.ErrInternal)
 		}
+		ctx.Header.TemplateAddress = wallet.TemplateAddress
+		ctx.SpawnTx = true
+		ctx.Header.MaxGas = core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
 	}
 
-	var (
-		templateAddress *core.Address
-		handler         core.Handler
-	)
-	// TODO(lane): rewrite to use VM
-	// if method == core.MethodSpawn {
-	// 	// the transaction is either spawn or self-spawn
-	// 	templateAddress = &core.Address{}
-	// 	if _, err := templateAddress.DecodeScale(decoder); err != nil {
-	// 		return nil, nil, nil, fmt.Errorf("%w failed to decode template address %w", core.ErrMalformed, err)
-	// 	}
-	// 	handler = reg.Get(*templateAddress)
-	// 	if handler == nil {
-	// 		return nil, nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, *templateAddress)
-	// 	}
-	// 	if ctx.PrincipalHandler == nil {
-	// 		// spawn is not possible if principal is not spawned
-	// 		// so this must be self-spawn, but we can't tell before decoding arguments
-	// 		ctx.PrincipalHandler = handler
-	// 	}
-	// } else {
-	// this is any other call transaction
-	if account.TemplateAddress == nil {
-		return nil, nil, nil, core.ErrNotSpawned
-	}
-	templateAddress = account.TemplateAddress
-	handler = ctx.PrincipalHandler
-	// }
+	// now that we have a template handler, go ahead and parse the tx
 	output, err := ctx.PrincipalHandler.Parse(decoder)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	args := handler.Args()
-	if args == nil {
-		return nil, nil, nil, fmt.Errorf("%w: unknown method %s", core.ErrMalformed, *templateAddress)
-	}
-	if _, err := args.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
-	}
-	// TODO(lane): rewrite to use VM
-	// if method == core.MethodSpawn {
-	// 	if core.ComputePrincipal(*templateAddress, args) == principal {
-	// 		// this is a self spawn. if it fails validation - discard it immediately
-	// 		panic("self-spawn not implemented")
-	// 		// ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(args)
-	// 		// if err != nil {
-	// 		// 	return nil, nil, nil, err
-	// 		// }
-	// 		// ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
-	// 	} else if account.TemplateAddress == nil {
-	// 		return nil, nil, nil, fmt.Errorf("%w: account can't spawn until it is spawned itself",
-	//			core.ErrNotSpawned)
-	// 	} else {
-	// 		target, err := handler.New(args)
-	// 		if err != nil {
-	// 			return nil, nil, nil, err
-	// 		}
-	// 		ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-	// 		ctx.Gas.FixedGas += target.ExecGas()
-	// 	}
-	// } else {
-	ctx.Gas.FixedGas += ctx.PrincipalTemplate.LoadGas()
-	ctx.Gas.FixedGas += ctx.PrincipalTemplate.ExecGas()
-	// }
-	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
-
 	ctx.ParseOutput = output
 
+	// in case of a self-spawn, we need to check that the calculated principal matches.
+	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
+
+	// note: this check isn't strictly necessary. this tx will fail verify later, since the
+	// account will be spawned to the wrong location, but it's much cheaper to perform this check
+	// now and fail fast.
+
+	// in order to calculate the principal, we need to extract the pubkey from the spawn tx
+	var unmarshaled struct {
+		*athcon.MethodSelector
+		signing.PublicKey
+	}
+	err = gossamerScale.Unmarshal(output.Payload, &unmarshaled)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
+	}
+
+	// now that the tx has been parsed, we can perform some more sanity checks.
+	// if this is a spawn for an account that was already spawned, we may
+	// have assumed above that it was not a spawn. now we can make sure.
+	// that this will also catch a non-spawn tx with an unspawned principal, which we
+	// provisionally assumed was a spawn tx.
+	if spawnSelector, err := athcon.FromString("athexp_spawn"); err != nil {
+		return nil, nil, fmt.Errorf("%w: failed to create spawn selector: %w", core.ErrInternal, err)
+	} else if principalAccount.TemplateAddress != nil && *unmarshaled.MethodSelector == spawnSelector {
+		return nil, nil, fmt.Errorf("%w: principal account already spawned", core.ErrMalformed)
+	} else if ctx.IsSpawn() && *unmarshaled.MethodSelector != spawnSelector {
+		return nil, nil, fmt.Errorf("%w: non-spawn tx with unspawned principal", core.ErrNotSpawned)
+	}
+
+	computedPrincipal := core.ComputePrincipalFromPubkey(
+		ctx.Header.TemplateAddress,
+		unmarshaled.PublicKey,
+	)
+
+	if ctx.IsSpawn() && computedPrincipal != principal {
+		return nil, nil, fmt.Errorf(
+			"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
+	}
+
+	// At this point we've established that the transaction is correctly formed, but we haven't
+	// yet attempted to validate the signature. That happens later in Verify().
+	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
+	}
+
+	ctx.Gas.FixedGas = ctx.PrincipalTemplate.LoadGas()
+	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
+
 	ctx.Header.Principal = principal
-	ctx.Header.TemplateAddress = *templateAddress
-	ctx.Header.MaxGas = core.MaxGas(ctx.Gas.BaseGas, ctx.Gas.FixedGas, raw)
 	ctx.Header.GasPrice = output.GasPrice
 	ctx.Header.Nonce = output.Nonce
-	ctx.Args = args
 
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(args)
+	maxspend, err := ctx.PrincipalTemplate.MaxSpend(output.Payload)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
 	ctx.Header.MaxSpend = maxspend
-	return &ctx.Header, ctx, args, nil
+	return &ctx.Header, ctx, nil
 }
 
 func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
-	return ctx.PrincipalTemplate.Verify(ctx, raw, dec)
+	return ctx.PrincipalTemplate.Verify(raw, dec)
 }

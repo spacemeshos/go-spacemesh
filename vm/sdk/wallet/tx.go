@@ -2,13 +2,16 @@ package wallet
 
 import (
 	"bytes"
+	"fmt"
 
+	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
@@ -25,61 +28,78 @@ func encode(fields ...scale.Encodable) []byte {
 	return buf.Bytes()
 }
 
-// SelfSpawn creates a self-spawn transaction.
-func SelfSpawn(pk signing.PrivateKey, nonce core.Nonce, opts ...sdk.Opt) []byte {
-	// self-spawn has not yet been implemented for Athena
-	panic("self-spawn not yet implemented")
-}
-
 // Spawn creates a spawn transaction.
 func Spawn(
 	pk signing.PrivateKey,
-	template core.Address,
-	args scale.Encodable,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
-) []byte {
+) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	payload := core.Payload{}
-	payload.Nonce = nonce
-	payload.GasPrice = options.GasPrice
+	// Encode using the VM
+	libPath, err := host.AthenaLibPath()
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	vmlib, err := athcon.LoadLibrary(libPath)
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
 
-	public := &core.PublicKey{}
-	copy(public[:], signing.Public(pk))
+	meta := core.Metadata{}
+	meta.Nonce = nonce
+	meta.GasPrice = options.GasPrice
+
 	// note that principal is computed from pk
-	principal := core.ComputePrincipal(wallet.TemplateAddress, public)
+	athenaPayload := vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk)))
+	principal := core.ComputePrincipalFromPubkey(wallet.TemplateAddress, *signing.NewPublicKey(signing.Public(pk)))
+	payload := core.Payload(athenaPayload)
 
-	// TODO(lane): fix encoding
-	tx := encode(&sdk.TxVersion, &principal, &template, &payload, args)
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	return append(tx, sig...)
+	// The payload is already encoded. Why, might you ask, are we encoding it again?
+	// Short answer: because, when decoding txs, go-spacemesh can only decode SCALE-encoded data.
+	// Fixing this, and allowing a tx to be partially SCALE-encoded, partially raw bytes,
+	// is a lot of work for a tiny bit of gain.
+	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
+	// tx := encode(&sdk.TxVersion, &principal, &meta)
+	// tx = append(tx, payload...)
+
+	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
+	return append(tx, sig...), nil
 }
 
 // Spend creates a spend transaction.
-func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) []byte {
+func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	spawnargs := wallet.SpawnArguments{}
-	copy(spawnargs.PublicKey[:], signing.Public(pk))
-	principal := core.ComputePrincipal(wallet.TemplateAddress, &spawnargs)
+	// Encode using the VM
+	libPath, err := host.AthenaLibPath()
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	vmlib, err := athcon.LoadLibrary(libPath)
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
 
-	payload := core.Payload{}
-	payload.GasPrice = options.GasPrice
-	payload.Nonce = nonce
+	principal := core.ComputePrincipalFromPubkey(wallet.TemplateAddress, *signing.NewPublicKey(signing.Public(pk)))
+	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), amount))
 
-	args := wallet.SpendArguments{}
-	args.Destination = to
-	args.Amount = amount
+	meta := core.Metadata{}
+	meta.GasPrice = options.GasPrice
+	meta.Nonce = nonce
 
-	// TODO(lane): fix encoding
-	tx := encode(&sdk.TxVersion, &principal, &payload, &args)
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	return append(tx, sig...)
+	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
+	// tx := encode(&sdk.TxVersion, &principal, &meta)
+	// tx = append(tx, payload...)
+
+	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
+	return append(tx, sig...), nil
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -31,6 +30,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 const (
@@ -94,7 +94,8 @@ func createTestGenerator(t *testing.T) *testGenerator {
 
 func genTx(t testing.TB, signer *signing.EdSigner, dest types.Address, amount, nonce, price uint64) types.Transaction {
 	t.Helper()
-	raw := wallet.Spend(signer.PrivateKey(), dest, amount, nonce)
+	raw, err := wallet.Spend(signer.PrivateKey(), dest, amount, nonce)
+	require.NoError(t, err)
 	tx := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
 		TxHeader: &types.TxHeader{},

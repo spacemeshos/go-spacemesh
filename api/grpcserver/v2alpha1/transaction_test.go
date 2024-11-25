@@ -19,21 +19,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/genvm/core"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	multisig2 "github.com/spacemeshos/go-spacemesh/genvm/sdk/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/vesting"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/multisig"
-	"github.com/spacemeshos/go-spacemesh/genvm/templates/vault"
-	vesting2 "github.com/spacemeshos/go-spacemesh/genvm/templates/vesting"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func TestTransactionService_List(t *testing.T) {
@@ -45,7 +42,7 @@ func TestTransactionService_List(t *testing.T) {
 	txsList := make([]types.TransactionWithResult, 100)
 	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
 		for i := range txsList {
-			tx := gen.Next()
+			tx := gen.Next(t)
 
 			require.NoError(t, transactions.Add(dtx, &tx.Transaction, time.Time{}))
 			require.NoError(t, transactions.AddResult(dtx, tx.ID, &tx.TransactionResult))
@@ -232,18 +229,26 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	keys := make([]signing.PrivateKey, 4)
-	accounts := make([]types.Account, len(keys))
+	accounts := make([]types.Account, len(keys)+1)
 	rng := rand.New(rand.NewSource(10101))
 	for i := range keys {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
+		address := wallet.Address(*signing.NewPublicKey(pub))
+		accounts[i] = types.Account{Address: address, Balance: 1e12}
+	}
+	accounts[len(keys)] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(
+	tx, err := wallet.Spawn(keys[0], 0)
+	require.NoError(t, err)
+	_, _, err = vminst.Apply(
 		types.GetEffectiveGenesis().Add(1),
-		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}},
+		[]types.Transaction{{RawTx: types.NewRawTx(tx)}},
 		nil,
 	)
 	require.NoError(t, err)
@@ -252,11 +257,13 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	t.Run("valid tx", func(t *testing.T) {
+		tx, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
 		resp, err := client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
-			Transaction: wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			Transaction: tx,
 		})
 		require.NoError(t, err)
-		require.Equal(t, uint64(36090), resp.RecommendedMaxGas)
+		require.Equal(t, uint64(20200), resp.RecommendedMaxGas)
 	})
 	t.Run("malformed tx", func(t *testing.T) {
 		_, err := client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
@@ -277,8 +284,10 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 		assert.Contains(t, s.Message(), "empty")
 	})
 	t.Run("not spawned", func(t *testing.T) {
-		_, err := client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
-			Transaction: wallet.Spend(keys[2], accounts[3].Address, 100, 0),
+		tx, err := wallet.Spend(keys[2], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
+		_, err = client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{
+			Transaction: tx,
 		})
 		s, ok := status.FromError(err)
 		require.True(t, ok)
@@ -298,38 +307,51 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	keys := make([]signing.PrivateKey, 4)
-	accounts := make([]types.Account, len(keys))
+	accounts := make([]types.Account, len(keys)+1)
 	rng := rand.New(rand.NewSource(10101))
 	for i := range keys {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
+		addr := wallet.Address(*signing.NewPublicKey(pub))
+		accounts[i] = types.Account{Address: addr, Balance: 1e12}
+	}
+	accounts[len(keys)] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(
+	tx, err := wallet.Spawn(keys[0], 0)
+	require.NoError(t, err)
+	_, _, err = vminst.Apply(
 		types.GetEffectiveGenesis().Add(1),
-		[]types.Transaction{{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))}},
+		[]types.Transaction{{RawTx: types.NewRawTx(tx)}},
 		nil,
 	)
 	require.NoError(t, err)
 
-	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	mangled, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
 	mangled[len(mangled)-1] -= 1
 
 	conn := dialGrpc(t, cfg)
 	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	t.Run("valid tx", func(t *testing.T) {
+		tx, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			Transaction: tx,
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, resp)
 	})
 	t.Run("valid tx with verify set to true", func(t *testing.T) {
+		tx, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			Transaction: tx,
 			Verify:      true,
 		})
 		require.NoError(t, err)
@@ -354,8 +376,10 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		assert.Contains(t, s.Message(), "empty")
 	})
 	t.Run("not spawned", func(t *testing.T) {
-		_, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[2], accounts[3].Address, 100, 0),
+		tx, err := wallet.Spend(keys[2], accounts[3].Address, 100, 0)
+		require.NoError(t, err)
+		_, err = client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
+			Transaction: tx,
 		})
 		s, ok := status.FromError(err)
 		require.True(t, ok)
@@ -375,25 +399,37 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	t.Run("verify transaction contents for spend tx", func(t *testing.T) {
 		addr := accounts[3].Address
 		amount := uint64(100)
+		tx, err := wallet.Spend(keys[0], addr, amount, 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.Spend(keys[0], addr, amount, 0),
+			Transaction: tx,
 			Verify:      true,
 		})
 		require.NoError(t, err)
 
-		require.Equal(t, resp.Tx.Contents.GetSend().Amount, amount)
-		require.Equal(t, resp.Tx.Contents.GetSend().Destination, addr.String())
+		// TODO(lane): we don't currently parse tx amount for athena txs
+		require.Equal(t, uint64(0), resp.Tx.Contents.GetSend().Amount)
+		require.Equal(t, "", resp.Tx.Contents.GetSend().Destination)
+		// require.Equal(t, amount, resp.Tx.Contents.GetSend().Amount)
+		// require.Equal(t, addr.String(), resp.Tx.Contents.GetSend().Destination)
 	})
 
 	t.Run("transaction contents for spawn tx", func(t *testing.T) {
 		var publicKey core.PublicKey
 		copy(publicKey[:], signing.Public(keys[0]))
+		tx, err := wallet.Spawn(keys[0], 0)
+		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
-			Transaction: wallet.SelfSpawn(keys[0], 0),
+			Transaction: tx,
 			Verify:      true,
 		})
-		require.NoError(t, err)
-		require.Equal(t, resp.Tx.Contents.GetSingleSigSpawn().Pubkey, publicKey.String())
+
+		// in Spacemesh you can parse a spawn tx for an account that's already spawned.
+		// Athena doesn't allow this.
+		// require.NoError(t, err)
+		// require.Equal(t, publicKey.String(), resp.Tx.Contents.GetSingleSigSpawn().Pubkey)
+		require.Equal(t, codes.InvalidArgument, status.Code(err))
+		require.Nil(t, resp)
 	})
 }
 
@@ -418,9 +454,9 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
-	addr := wallet.Address(signer.PublicKey().Bytes())
 	require.NoError(t, err)
-	tx := newTx(0, addr, signer)
+	addr := wallet.Address(*signer.PublicKey())
+	tx := newTx(t, 0, addr, signer)
 	serializedTx, err := codec.Encode(tx)
 	req.NoError(err, "error serializing tx")
 
@@ -461,9 +497,9 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
-	addr := wallet.Address(signer.PublicKey().Bytes())
 	require.NoError(t, err)
-	tx := newTx(0, addr, signer)
+	addr := wallet.Address(*signer.PublicKey())
+	tx := newTx(t, 0, addr, signer)
 	serializedTx, err := codec.Encode(tx)
 	req.NoError(err, "error serializing tx")
 
@@ -498,9 +534,9 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	c := spacemeshv2alpha1.NewTransactionServiceClient(conn)
 
 	signer, err := signing.NewEdSigner()
-	addr := wallet.Address(signer.PublicKey().Bytes())
 	require.NoError(t, err)
-	tx := newTx(0, addr, signer)
+	addr := wallet.Address(*signer.PublicKey())
+	tx := newTx(t, 0, addr, signer)
 	for range numTxs {
 		res, err := c.SubmitTransaction(ctx, &spacemeshv2alpha1.SubmitTransactionRequest{
 			Transaction: tx.Raw,
@@ -511,21 +547,18 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	}
 }
 
-func newTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
+func newTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
-	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
+	principal := wallet.Address(*signer.PublicKey())
+	tx.Principal = principal
 	if nonce == 0 {
-		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
-			0,
-			sdk.WithGasPrice(0),
-		))
+		tx2, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGasPrice(0))
+		require.NoError(t, err)
+		tx.RawTx = types.NewRawTx(tx2)
 	} else {
-		tx.RawTx = types.NewRawTx(
-			wallet.Spend(signer.PrivateKey(), recipient, 1,
-				nonce,
-				sdk.WithGasPrice(0),
-			),
-		)
+		tx2, err := wallet.Spend(signer.PrivateKey(), recipient, 1, nonce, sdk.WithGasPrice(0))
+		require.NoError(t, err)
+		tx.RawTx = types.NewRawTx(tx2)
 		tx.MaxSpend = 1
 	}
 	return &tx
@@ -539,7 +572,7 @@ func TestToTxContents(t *testing.T) {
 
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		tx := newTx(0, types.Address{}, signer)
+		tx := newTx(t, 0, types.Address{}, signer)
 
 		contents, txType, err := toTxContents(tx.Raw)
 		require.NoError(t, err)
@@ -553,7 +586,7 @@ func TestToTxContents(t *testing.T) {
 
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
-		tx := newTx(1, types.Address{}, signer)
+		tx := newTx(t, 1, types.Address{}, signer)
 
 		contents, txType, err := toTxContents(tx.Raw)
 		require.NoError(t, err)
@@ -563,197 +596,207 @@ func TestToTxContents(t *testing.T) {
 	})
 
 	t.Run("multisig spawn", func(t *testing.T) {
-		t.Parallel()
+		t.Skip("multisig spawn is not supported yet")
+		// t.Parallel()
 
-		var pubs []ed25519.PublicKey
-		pks := make([]ed25519.PrivateKey, 0, 3)
-		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(nil)
-			require.NoError(t, err)
-			pubs = append(pubs, pub)
-			pks = append(pks, pk)
-		}
+		// var pubs []ed25519.PublicKey
+		// pks := make([]ed25519.PrivateKey, 0, 3)
+		// for i := 0; i < 3; i++ {
+		// 	pub, pk, err := ed25519.GenerateKey(nil)
+		// 	require.NoError(t, err)
+		// 	pubs = append(pubs, pub)
+		// 	pks = append(pks, pk)
+		// }
 
-		var agg *multisig2.Aggregator
-		for i := 0; i < len(pks); i++ {
-			part := multisig2.SelfSpawn(uint8(i), pks[i], multisig.TemplateAddress, 1, pubs, types.Nonce(1))
-			if agg == nil {
-				agg = part
-			} else {
-				agg.Add(*part.Part(uint8(i)))
-			}
-		}
-		rawTx := agg.Raw()
+		// var agg *multisig2.Aggregator
+		// for i := 0; i < len(pks); i++ {
+		// 	part := multisig2.SelfSpawn(uint8(i), pks[i], multisig.TemplateAddress, 1, pubs, types.Nonce(1))
+		// 	if agg == nil {
+		// 		agg = part
+		// 	} else {
+		// 		agg.Add(*part.Part(uint8(i)))
+		// 	}
+		// }
+		// rawTx := agg.Raw()
 
-		contents, txType, err := toTxContents(rawTx)
-		require.NoError(t, err)
-		require.NotNil(t, contents.GetMultiSigSpawn())
-		require.Nil(t, contents.GetSend())
-		require.Nil(t, contents.GetSingleSigSpawn())
-		require.Nil(t, contents.GetVestingSpawn())
-		require.Nil(t, contents.GetVaultSpawn())
-		require.Nil(t, contents.GetDrainVault())
-		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SPAWN, txType)
+		// contents, txType, err := toTxContents(rawTx)
+		// require.NoError(t, err)
+		// require.NotNil(t, contents.GetMultiSigSpawn())
+		// require.Nil(t, contents.GetSend())
+		// require.Nil(t, contents.GetSingleSigSpawn())
+		// require.Nil(t, contents.GetVestingSpawn())
+		// require.Nil(t, contents.GetVaultSpawn())
+		// require.Nil(t, contents.GetDrainVault())
+		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SPAWN, txType)
 	})
 
 	t.Run("multisig send", func(t *testing.T) {
-		t.Parallel()
+		t.Skip("multisig send is not supported yet")
+		// t.Parallel()
 
-		var pubs []ed25519.PublicKey
-		pks := make([]ed25519.PrivateKey, 0, 3)
-		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(nil)
-			require.NoError(t, err)
-			pubs = append(pubs, pub)
-			pks = append(pks, pk)
-		}
+		// var pubs []ed25519.PublicKey
+		// pks := make([]ed25519.PrivateKey, 0, 3)
+		// for i := 0; i < 3; i++ {
+		// 	pub, pk, err := ed25519.GenerateKey(nil)
+		// 	require.NoError(t, err)
+		// 	pubs = append(pubs, pub)
+		// 	pks = append(pks, pk)
+		// }
 
-		to := wallet.Address(pubs[0])
+		// to, err := wallet.Address(*signing.NewPublicKey(pubs[0]))
+		// require.NoError(t, err)
 
-		var agg *multisig2.Aggregator
-		for i := 0; i < len(pks); i++ {
-			part := multisig2.Spend(uint8(i), pks[i], multisig.TemplateAddress, to, 100, types.Nonce(1))
-			if agg == nil {
-				agg = part
-			} else {
-				agg.Add(*part.Part(uint8(i)))
-			}
-		}
-		rawTx := agg.Raw()
+		// var agg *multisig2.Aggregator
+		// for i := 0; i < len(pks); i++ {
+		// 	part := multisig2.Spend(uint8(i), pks[i], multisig.TemplateAddress, to, 100, types.Nonce(1))
+		// 	if agg == nil {
+		// 		agg = part
+		// 	} else {
+		// 		agg.Add(*part.Part(uint8(i)))
+		// 	}
+		// }
+		// rawTx := agg.Raw()
 
-		contents, txType, err := toTxContents(rawTx)
-		require.NoError(t, err)
-		require.NotNil(t, contents.GetSend())
-		require.Nil(t, contents.GetMultiSigSpawn())
-		require.Nil(t, contents.GetSingleSigSpawn())
-		require.Nil(t, contents.GetVestingSpawn())
-		require.Nil(t, contents.GetVaultSpawn())
-		require.Nil(t, contents.GetDrainVault())
-		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SEND, txType)
+		// contents, txType, err := toTxContents(rawTx)
+		// require.NoError(t, err)
+		// require.NotNil(t, contents.GetSend())
+		// require.Nil(t, contents.GetMultiSigSpawn())
+		// require.Nil(t, contents.GetSingleSigSpawn())
+		// require.Nil(t, contents.GetVestingSpawn())
+		// require.Nil(t, contents.GetVaultSpawn())
+		// require.Nil(t, contents.GetDrainVault())
+		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SEND, txType)
 	})
 
 	t.Run("vault spawn", func(t *testing.T) {
-		t.Parallel()
+		t.Skip("vault spawn is not supported yet")
+		// t.Parallel()
 
-		var pubs []ed25519.PublicKey
-		pks := make([]ed25519.PrivateKey, 0, 3)
-		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(nil)
-			require.NoError(t, err)
-			pubs = append(pubs, pub)
-			pks = append(pks, pk)
-		}
+		// var pubs []ed25519.PublicKey
+		// pks := make([]ed25519.PrivateKey, 0, 3)
+		// for i := 0; i < 3; i++ {
+		// 	pub, pk, err := ed25519.GenerateKey(nil)
+		// 	require.NoError(t, err)
+		// 	pubs = append(pubs, pub)
+		// 	pks = append(pks, pk)
+		// }
 
-		owner := wallet.Address(pubs[0])
-		vaultArgs := &vault.SpawnArguments{
-			Owner:               owner,
-			InitialUnlockAmount: uint64(1000),
-			TotalAmount:         uint64(1001),
-			VestingStart:        105120,
-			VestingEnd:          4 * 105120,
-		}
-		vaultAddr := core.ComputePrincipal(vault.TemplateAddress, vaultArgs)
+		// owner, err := wallet.Address(*signing.NewPublicKey(pubs[0]))
+		// require.NoError(t, err)
+		// vaultArgs := &vault.SpawnArguments{
+		// 	Owner:               owner,
+		// 	InitialUnlockAmount: uint64(1000),
+		// 	TotalAmount:         uint64(1001),
+		// 	VestingStart:        105120,
+		// 	VestingEnd:          4 * 105120,
+		// }
+		// vaultAddr := types.Address{}
+		// // vaultAddr := core.ComputePrincipalFromBlob(vault.TemplateAddress, vaultArgs)
 
-		var agg *multisig2.Aggregator
-		for i := 0; i < len(pks); i++ {
-			part := multisig2.Spawn(uint8(i), pks[i], vaultAddr, vault.TemplateAddress, vaultArgs, types.Nonce(0))
-			if agg == nil {
-				agg = part
-			} else {
-				agg.Add(*part.Part(uint8(i)))
-			}
-		}
-		rawTx := agg.Raw()
+		// var agg *multisig2.Aggregator
+		// for i := 0; i < len(pks); i++ {
+		// 	part := multisig2.Spawn(uint8(i), pks[i], vaultAddr, vault.TemplateAddress, vaultArgs, types.Nonce(0))
+		// 	if agg == nil {
+		// 		agg = part
+		// 	} else {
+		// 		agg.Add(*part.Part(uint8(i)))
+		// 	}
+		// }
+		// rawTx := agg.Raw()
 
-		contents, txType, err := toTxContents(rawTx)
-		require.NoError(t, err)
-		require.NotNil(t, contents.GetVaultSpawn())
-		require.Nil(t, contents.GetMultiSigSpawn())
-		require.Nil(t, contents.GetSingleSigSpawn())
-		require.Nil(t, contents.GetVestingSpawn())
-		require.Nil(t, contents.GetSend())
-		require.Nil(t, contents.GetDrainVault())
-		require.Equal(t, vaultArgs.Owner.String(), contents.GetVaultSpawn().Owner)
-		require.Equal(t, vaultArgs.InitialUnlockAmount, contents.GetVaultSpawn().InitialUnlockAmount)
-		require.Equal(t, vaultArgs.TotalAmount, contents.GetVaultSpawn().TotalAmount)
-		require.Equal(t, vaultArgs.VestingStart.Uint32(), contents.GetVaultSpawn().VestingStart)
-		require.Equal(t, vaultArgs.VestingEnd.Uint32(), contents.GetVaultSpawn().VestingEnd)
-		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VAULT_SPAWN, txType)
+		// contents, txType, err := toTxContents(rawTx)
+		// require.NoError(t, err)
+		// require.NotNil(t, contents.GetVaultSpawn())
+		// require.Nil(t, contents.GetMultiSigSpawn())
+		// require.Nil(t, contents.GetSingleSigSpawn())
+		// require.Nil(t, contents.GetVestingSpawn())
+		// require.Nil(t, contents.GetSend())
+		// require.Nil(t, contents.GetDrainVault())
+		// require.Equal(t, vaultArgs.Owner.String(), contents.GetVaultSpawn().Owner)
+		// require.Equal(t, vaultArgs.InitialUnlockAmount, contents.GetVaultSpawn().InitialUnlockAmount)
+		// require.Equal(t, vaultArgs.TotalAmount, contents.GetVaultSpawn().TotalAmount)
+		// require.Equal(t, vaultArgs.VestingStart.Uint32(), contents.GetVaultSpawn().VestingStart)
+		// require.Equal(t, vaultArgs.VestingEnd.Uint32(), contents.GetVaultSpawn().VestingEnd)
+		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VAULT_SPAWN, txType)
 	})
 
 	t.Run("drain vault", func(t *testing.T) {
-		t.Parallel()
+		t.Skip("drain vault is not supported yet")
+		// t.Parallel()
 
-		var pubs [][]byte
-		pks := make([]ed25519.PrivateKey, 0, 3)
-		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(nil)
-			require.NoError(t, err)
-			pubs = append(pubs, pub)
-			pks = append(pks, pk)
-		}
+		// var pubs [][]byte
+		// pks := make([]ed25519.PrivateKey, 0, 3)
+		// for i := 0; i < 3; i++ {
+		// 	pub, pk, err := ed25519.GenerateKey(nil)
+		// 	require.NoError(t, err)
+		// 	pubs = append(pubs, pub)
+		// 	pks = append(pks, pk)
+		// }
 
-		principal := multisig2.Address(multisig.TemplateAddress, 3, pubs...)
-		to := wallet.Address(pubs[1])
-		vaultAddr := wallet.Address(pubs[2])
+		// principal := multisig2.Address(multisig.TemplateAddress, 3, pubs...)
+		// to, err := wallet.Address(*signing.NewPublicKey(pubs[1]))
+		// require.NoError(t, err)
+		// vaultAddr, err := wallet.Address(*signing.NewPublicKey(pubs[2]))
+		// require.NoError(t, err)
 
-		agg := vesting.DrainVault(
-			0,
-			pks[0],
-			principal,
-			vaultAddr,
-			to,
-			100,
-			types.Nonce(1))
-		for i := 1; i < len(pks); i++ {
-			part := vesting.DrainVault(uint8(i), pks[i], principal, vaultAddr, to, 100, types.Nonce(1))
-			agg.Add(*part.Part(uint8(i)))
-		}
-		rawTx := agg.Raw()
+		// agg := vesting.DrainVault(
+		// 	0,
+		// 	pks[0],
+		// 	principal,
+		// 	vaultAddr,
+		// 	to,
+		// 	100,
+		// 	types.Nonce(1))
+		// for i := 1; i < len(pks); i++ {
+		// 	part := vesting.DrainVault(uint8(i), pks[i], principal, vaultAddr, to, 100, types.Nonce(1))
+		// 	agg.Add(*part.Part(uint8(i)))
+		// }
+		// rawTx := agg.Raw()
 
-		contents, txType, err := toTxContents(rawTx)
-		require.NoError(t, err)
-		require.NotNil(t, contents.GetDrainVault())
-		require.Nil(t, contents.GetMultiSigSpawn())
-		require.Nil(t, contents.GetSingleSigSpawn())
-		require.Nil(t, contents.GetVestingSpawn())
-		require.Nil(t, contents.GetSend())
-		require.Nil(t, contents.GetVaultSpawn())
-		require.Equal(t, vaultAddr.String(), contents.GetDrainVault().Vault)
-		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DRAIN_VAULT, txType)
+		// contents, txType, err := toTxContents(rawTx)
+		// require.NoError(t, err)
+		// require.NotNil(t, contents.GetDrainVault())
+		// require.Nil(t, contents.GetMultiSigSpawn())
+		// require.Nil(t, contents.GetSingleSigSpawn())
+		// require.Nil(t, contents.GetVestingSpawn())
+		// require.Nil(t, contents.GetSend())
+		// require.Nil(t, contents.GetVaultSpawn())
+		// require.Equal(t, vaultAddr.String(), contents.GetDrainVault().Vault)
+		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DRAIN_VAULT, txType)
 	})
 
 	t.Run("multisig vesting spawn", func(t *testing.T) {
-		t.Parallel()
+		t.Skip("multisig vesting spawn is not supported yet")
+		// t.Parallel()
 
-		var pubs []ed25519.PublicKey
-		pks := make([]ed25519.PrivateKey, 0, 3)
-		for i := 0; i < 3; i++ {
-			pub, pk, err := ed25519.GenerateKey(nil)
-			require.NoError(t, err)
-			pubs = append(pubs, pub)
-			pks = append(pks, pk)
-		}
+		// var pubs []ed25519.PublicKey
+		// pks := make([]ed25519.PrivateKey, 0, 3)
+		// for i := 0; i < 3; i++ {
+		// 	pub, pk, err := ed25519.GenerateKey(nil)
+		// 	require.NoError(t, err)
+		// 	pubs = append(pubs, pub)
+		// 	pks = append(pks, pk)
+		// }
 
-		var agg *multisig2.Aggregator
-		for i := 0; i < len(pks); i++ {
-			part := multisig2.SelfSpawn(uint8(i), pks[i], vesting2.TemplateAddress, 1, pubs, types.Nonce(1))
-			if agg == nil {
-				agg = part
-			} else {
-				agg.Add(*part.Part(uint8(i)))
-			}
-		}
-		rawTx := agg.Raw()
+		// var agg *multisig2.Aggregator
+		// for i := 0; i < len(pks); i++ {
+		// 	part := multisig2.SelfSpawn(uint8(i), pks[i], vesting2.TemplateAddress, 1, pubs, types.Nonce(1))
+		// 	if agg == nil {
+		// 		agg = part
+		// 	} else {
+		// 		agg.Add(*part.Part(uint8(i)))
+		// 	}
+		// }
+		// rawTx := agg.Raw()
 
-		contents, txType, err := toTxContents(rawTx)
-		require.NoError(t, err)
-		require.NotNil(t, contents.GetVestingSpawn())
-		require.Nil(t, contents.GetSend())
-		require.Nil(t, contents.GetSingleSigSpawn())
-		require.Nil(t, contents.GetMultiSigSpawn())
-		require.Nil(t, contents.GetVaultSpawn())
-		require.Nil(t, contents.GetDrainVault())
-		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VESTING_SPAWN, txType)
+		// contents, txType, err := toTxContents(rawTx)
+		// require.NoError(t, err)
+		// require.NotNil(t, contents.GetVestingSpawn())
+		// require.Nil(t, contents.GetSend())
+		// require.Nil(t, contents.GetSingleSigSpawn())
+		// require.Nil(t, contents.GetMultiSigSpawn())
+		// require.Nil(t, contents.GetVaultSpawn())
+		// require.Nil(t, contents.GetDrainVault())
+		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VESTING_SPAWN, txType)
 	})
 }

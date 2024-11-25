@@ -1,7 +1,10 @@
 package core
 
 import (
+	"encoding/hex"
+
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -35,46 +38,38 @@ type (
 
 // Handler provides set of static templates method that are not directly attached to the state.
 type Handler interface {
-	// Parse header and arguments from the payload.
+	// Parse header from the payload.
 	Parse(*scale.Decoder) (ParseOutput, error)
-	// TODO(lane): update to use the VM
-	// Args returns method arguments for the method.
-	Args() scale.Type
 
-	// TODO(lane): update to use the VM
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, scale.Encodable) error
+	Exec(Host, Payload) ([]byte, int64, error)
 
-	// New instantiates Template from spawn arguments.
-	New(any) (Template, error)
-	// Load template with stored immutable state.
-	Load([]byte) (Template, error)
+	// New instantiates Template from host context.
+	New(Host) (Template, error)
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
 
 // Template is a concrete Template type initialized with mutable and immutable state.
 type Template interface {
-	// Template needs to implement scale.Encodable as mutable and immutable state will be stored as a blob of bytes.
-	scale.Encodable
 	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
 	// if it spends more than that.
-	MaxSpend(any) (uint64, error)
+	MaxSpend([]byte) (uint64, error)
 	// TODO(lane): update to use the VM
 	// BaseGas is an intrinsic cost for executing a transaction. If this cost is not covered
 	// transaction will be ineffective.
 	BaseGas() uint64
 	// LoadGas is a cost to load account from disk.
 	LoadGas() uint64
-	// TODO(lane): update to use the VM
-	// ExecGas is a cost to execution a method.
-	ExecGas() uint64
 	// Verify security of the transaction.
-	Verify(Host, []byte, *scale.Decoder) bool
+	Verify([]byte, *scale.Decoder) bool
 }
+
+//go:generate mockgen -typed -package=mocks -destination=./mocks/loader.go github.com/spacemeshos/go-spacemesh/vm/core AccountLoader
 
 // AccountLoader is an interface for loading accounts.
 type AccountLoader interface {
+	Has(Address) (bool, error)
 	Get(Address) (Account, error)
 }
 
@@ -89,6 +84,7 @@ type AccountUpdater interface {
 type ParseOutput struct {
 	Nonce    Nonce
 	GasPrice uint64
+	Payload  Payload
 }
 
 // HandlerRegistry stores handlers for templates.
@@ -96,25 +92,80 @@ type HandlerRegistry interface {
 	Get(Address) Handler
 }
 
+//go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host
+
 // Host API with methods and data that are required by templates.
 type Host interface {
+	Clone() Host
+
 	Consume(uint64) error
-	Spawn(scale.Encodable) error
 	Transfer(Address, uint64) error
-	Relay(expectedTemplate, address Address, call func(Host) error) error
 
 	Principal() Address
+	Nonce() uint64
+	Payload() Payload
+	TemplateAddress() Address
+	MaxGas() uint64
+	SpendGas(uint64)
+	GasSpent() uint64
 	Handler() Handler
+	Spawn(Address, []byte) (Address, error)
+	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)
+	Has(Address) (bool, error)
+	Get(Address) (Account, error)
 	Template() Template
 	Layer() LayerID
 	GetGenesisID() Hash20
-	Balance() uint64
+	Balance() (uint64, error)
+	IsSpawn() bool
 }
 
-//go:generate scalegen -types Payload
+// static context is fixed for the lifetime of one transaction.
+type StaticContext struct {
+	Principal   types.Address
+	Destination types.Address
+	Nonce       uint64
+}
 
-// Payload is a generic payload for all transactions.
-type Payload struct {
+// dynamic context may change with each call frame.
+type DynamicContext struct {
+	Template types.Address
+	Callee   types.Address
+}
+
+//go:generate mockgen -typed -package=mocks -destination=./mocks/vmhost.go github.com/spacemeshos/go-spacemesh/vm/core VMHost
+
+// VM Host API.
+type VMHost interface {
+	Execute(types.LayerID, int64, types.Address, types.Address, []byte, uint64, []byte) ([]byte, int64, error)
+}
+
+//go:generate scalegen -types Metadata
+
+// Metadata contains generic metadata for all transactions.
+type Metadata struct {
 	Nonce    Nonce
 	GasPrice uint64
+}
+
+// Payload contains the opaque, Athena-encoded transaction payload including the method selector
+// and method args.
+type Payload []byte
+
+func (t Payload) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	encoder.AddString("payload", hex.EncodeToString(t))
+	return nil
+}
+
+func (t *Payload) EncodeScale(enc *scale.Encoder) (int, error) {
+	return scale.EncodeByteSlice(enc, *t)
+}
+
+func (t *Payload) DecodeScale(dec *scale.Decoder) (int, error) {
+	field, n, err := scale.DecodeByteSlice(dec)
+	if err != nil {
+		return 0, err
+	}
+	*t = field
+	return n, nil
 }

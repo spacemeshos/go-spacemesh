@@ -19,13 +19,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
@@ -39,7 +41,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	txs := make([]types.TransactionWithResult, 100)
 	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
 		for i := range txs {
-			tx := gen.Next()
+			tx := gen.Next(t)
 
 			require.NoError(t, transactions.Add(dtx, &tx.Transaction, time.Time{}))
 			require.NoError(t, transactions.AddResult(dtx, tx.ID, &tx.TransactionResult))
@@ -80,7 +82,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 			WithAddresses(2).WithLayers(start, 10)
 		var streamed []*types.TransactionWithResult
 		for range n {
-			streamed = append(streamed, gen.Next())
+			streamed = append(streamed, gen.Next(t))
 		}
 
 		for _, tc := range []struct {
@@ -150,7 +152,7 @@ func BenchmarkStreamResults(b *testing.B) {
 	tx, err := db.Tx(ctx)
 	require.NoError(b, err)
 	for range 1_000 {
-		rst := gen.Next()
+		rst := gen.Next(b)
 		for _, addr := range rst.Addresses {
 			count[addr]++
 			if count[addr] > maxcount {
@@ -226,25 +228,40 @@ func TestParseTransactions(t *testing.T) {
 		conn     = dialGrpc(t, cfg)
 		client   = pb.NewTransactionServiceClient(conn)
 		keys     = make([]signing.PrivateKey, 4)
-		accounts = make([]types.Account, len(keys))
+		accounts = make([]types.Account, len(keys)+1)
 		rng      = rand.New(rand.NewSource(10101))
 	)
 	for i := range keys {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		accounts[i] = types.Account{Address: wallet.Address(pub), Balance: 1e12}
+		addr := wallet.Address(*signing.NewPublicKey(pub))
+		accounts[i] = types.Account{Address: addr, Balance: 1e12}
+	}
+	// add the wallet template account
+	accounts[len(accounts)-1] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
-	_, _, err := vminst.Apply(
+	tx, err := wallet.Spawn(keys[0], 0)
+	require.NoError(t, err)
+	_, _, err = vminst.Apply(
 		types.GetEffectiveGenesis().Add(1),
 		[]types.Transaction{
-			{RawTx: types.NewRawTx(wallet.SelfSpawn(keys[0], 0))},
+			{RawTx: types.NewRawTx(tx)},
 		},
 		nil)
 	require.NoError(t, err)
-	mangled := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	mangled, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
 	mangled[len(mangled)-1] -= 1
+
+	tx1, err := wallet.Spend(keys[2], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
+	tx2, err := wallet.Spend(keys[0], accounts[3].Address, 100, 0)
+	require.NoError(t, err)
 
 	for _, tc := range []struct {
 		desc   string
@@ -266,19 +283,19 @@ func TestParseTransactions(t *testing.T) {
 		},
 		{
 			"not spawned",
-			wallet.Spend(keys[2], accounts[3].Address, 100, 0),
+			tx1,
 			false,
 			expectParseError(codes.NotFound, "not spawned"),
 		},
 		{
 			"all good",
-			wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			tx2,
 			false,
 			parseOk(),
 		},
 		{
 			"all good with verification",
-			wallet.Spend(keys[0], accounts[3].Address, 100, 0),
+			tx2,
 			true,
 			parseOk(),
 		},

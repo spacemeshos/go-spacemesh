@@ -56,9 +56,10 @@ POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/
 POSTRS_SERVICE_ZIP = post-service-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
-ATHENA_SETUP_REV = 0.4.1
-ATHENA_SETUP_ARTIFACT = athena_vmlib_v$(ATHENA_SETUP_REV)_$(GOOS)_$(GOARCH).tar.gz
-ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/v$(ATHENA_SETUP_REV)/$(ATHENA_SETUP_ARTIFACT)
+ATHENA_SETUP_REV = v0.5.3
+ATHENA_SETUP_RELEASE = v0.5.3
+ATHENA_SETUP_ARTIFACT = athena_vmlib_$(ATHENA_SETUP_REV)_$(GOOS)_$(GOARCH).tar.gz
+ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/$(ATHENA_SETUP_RELEASE)/$(ATHENA_SETUP_ARTIFACT)
 
 ifeq ($(platform), windows)
 	POSTRS_SETUP_LIBS = post.h post.dll
@@ -118,8 +119,8 @@ $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 
 # rename athena VM library
 ATHENA_LIB_RENAMED := libathenavmwrapper$(suffix $(ATHENA_LIB))
-
-$(BIN_DIR)$(ATHENA_LIB_RENAMED): $(BIN_DIR)$(ATHENA_LIB)
+ATHENA_LIB_PATH := $(BIN_DIR)$(ATHENA_LIB_RENAMED)
+$(ATHENA_LIB_PATH): $(BIN_DIR)$(ATHENA_LIB)
 	mv $(BIN_DIR)$(ATHENA_LIB) $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
@@ -167,9 +168,9 @@ go-env-test: get-postrs-lib
 .PHONY: go-env-test
 
 print-env: get-postrs-lib
-	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_LDFLAGS)\""
+	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_LDFLAGS)\"" ATHENA_LIB_PATH="\"$(ATHENA_LIB_PATH)\""
 .PHONY: print-env
 
 print-test-env: get-postrs-lib
-	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_TEST_LDFLAGS)\""
+	@echo CGO_CFLAGS="\"$(CGO_CFLAGS)\"" CGO_LDFLAGS="\"$(CGO_TEST_LDFLAGS)\"" ATHENA_LIB_PATH="\"$(ATHENA_LIB_PATH)\""
 .PHONY: print-test-env

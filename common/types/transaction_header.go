@@ -1,6 +1,8 @@
 package types
 
-import "go.uber.org/zap/zapcore"
+import (
+	"go.uber.org/zap/zapcore"
+)
 
 //go:generate scalegen
 
@@ -9,12 +11,15 @@ import "go.uber.org/zap/zapcore"
 type TxHeader struct {
 	Principal       Address
 	TemplateAddress Address
-	Method          uint8
-	Nonce           Nonce
-	LayerLimits     LayerLimits
-	MaxGas          uint64
-	GasPrice        uint64
-	MaxSpend        uint64
+
+	// TODO(lane): Method is unused by the Athena VM, and should be removed.
+	Method uint8
+
+	Nonce       Nonce
+	LayerLimits LayerLimits
+	MaxGas      uint64
+	GasPrice    uint64
+	MaxSpend    uint64
 }
 
 // Fee is a MaxGas multiplied by a GasPrice.

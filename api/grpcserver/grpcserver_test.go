@@ -39,9 +39,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
 	peerinfomocks "github.com/spacemeshos/go-spacemesh/p2p/peerinfo/mocks"
@@ -54,6 +51,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/txs"
+	"github.com/spacemeshos/go-spacemesh/vm"
+	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 const (
@@ -153,8 +155,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	addr1 = wallet.Address(signer1.PublicKey().Bytes())
-	addr2 = wallet.Address(signer2.PublicKey().Bytes())
+	addr1 = wallet.Address(*signer1.PublicKey())
+	addr2 = wallet.Address(*signer2.PublicKey())
 
 	globalAtx = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
@@ -377,19 +379,20 @@ func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequest {
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
-	tx.Principal = wallet.Address(signer.PublicKey().Bytes())
+	principal := wallet.Address(*signer.PublicKey())
+	tx.Principal = principal
 	if nonce == 0 {
-		tx.RawTx = types.NewRawTx(wallet.SelfSpawn(signer.PrivateKey(),
-			0,
-			sdk.WithGasPrice(0),
-		))
+		tx2, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGasPrice(0))
+		if err != nil {
+			panic(err)
+		}
+		tx.RawTx = types.NewRawTx(tx2)
 	} else {
-		tx.RawTx = types.NewRawTx(
-			wallet.Spend(signer.PrivateKey(), recipient, 1,
-				nonce,
-				sdk.WithGasPrice(0),
-			),
-		)
+		tx2, err := wallet.Spend(signer.PrivateKey(), recipient, 1, nonce, sdk.WithGasPrice(0))
+		if err != nil {
+			panic(err)
+		}
+		tx.RawTx = types.NewRawTx(tx2)
 		tx.MaxSpend = 1
 	}
 	return &tx
@@ -2315,7 +2318,7 @@ func TestTransactionsRewards(t *testing.T) {
 	t.Cleanup(cancel)
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 
-	address := wallet.Address(types.RandomNodeID().Bytes())
+	address := wallet.Address(*signing.NewPublicKey(types.RandomNodeID().Bytes()))
 	weight := new(big.Rat).SetFloat64(18.7)
 	rewards := []types.CoinbaseReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
 
@@ -2379,22 +2382,31 @@ func TestVMAccountUpdates(t *testing.T) {
 	t.Cleanup(cleanup)
 
 	keys := make([]*signing.EdSigner, 10)
-	accounts := make([]types.Account, len(keys))
+	accounts := make([]types.Account, len(keys)+1)
 	const initial = 100_000_000
 	for i := range keys {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		keys[i] = signer
+		addr := wallet.Address(*signing.NewPublicKey(signer.NodeID().Bytes()))
 		accounts[i] = types.Account{
-			Address: wallet.Address(signer.NodeID().Bytes()),
+			Address: addr,
 			Balance: initial,
 		}
+	}
+	// add the wallet template account
+	accounts[len(accounts)-1] = types.Account{
+		Address:         walletTemplate.TemplateAddress,
+		State:           walletProgram.PROGRAM,
+		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, svm.ApplyGenesis(accounts))
 	spawns := []types.Transaction{}
 	for _, key := range keys {
+		tx, err := wallet.Spawn(key.PrivateKey(), 0)
+		require.NoError(t, err)
 		spawns = append(spawns, types.Transaction{
-			RawTx: types.NewRawTx(wallet.SelfSpawn(key.PrivateKey(), 0)),
+			RawTx: types.NewRawTx(tx),
 		})
 	}
 	lid := types.GetEffectiveGenesis().Add(1)
@@ -2406,7 +2418,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 	eg, ctx := errgroup.WithContext(ctx)
 	states := make(chan *pb.AccountState, len(accounts))
-	for _, account := range accounts {
+	for _, account := range accounts[:len(accounts)-1] {
 		stream, err := client.AccountDataStream(ctx, &pb.AccountDataStreamRequest{
 			Filter: &pb.AccountDataFilter{
 				AccountId:        &pb.AccountId{Address: account.Address.String()},
@@ -2429,10 +2441,10 @@ func TestVMAccountUpdates(t *testing.T) {
 	spends := []types.Transaction{}
 	const amount = 100_000
 	for _, key := range keys {
+		tx, err := wallet.Spend(key.PrivateKey(), types.Address{1}, amount, 1)
+		require.NoError(t, err)
 		spends = append(spends, types.Transaction{
-			RawTx: types.NewRawTx(wallet.Spend(
-				key.PrivateKey(), types.Address{1}, amount, 1,
-			)),
+			RawTx: types.NewRawTx(tx),
 		})
 	}
 	_, _, err = svm.Apply(lid.Add(1), spends, nil)
@@ -2445,7 +2457,7 @@ func TestVMAccountUpdates(t *testing.T) {
 		require.Equal(t, 2, int(state.Counter))
 		require.Less(t, int(state.Balance.Value), initial-amount)
 	}
-	require.Equal(t, len(accounts), i)
+	require.Equal(t, len(accounts)-1, i)
 }
 
 func createAtxs(tb testing.TB, epoch types.EpochID, atxids []types.ATXID) []*types.ActivationTx {

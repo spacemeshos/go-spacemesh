@@ -66,7 +66,7 @@ func TestIterateResults(t *testing.T) {
 	txs := make([]types.TransactionWithResult, 100)
 	require.NoError(t, db.WithTx(context.TODO(), func(dtx sql.Transaction) error {
 		for i := range txs {
-			tx := gen.Next()
+			tx := gen.Next(t)
 
 			require.NoError(t, Add(dtx, &tx.Transaction, time.Time{}))
 			require.NoError(t, AddResult(dtx, tx.ID, &tx.TransactionResult))
@@ -150,7 +150,7 @@ func TestIterateSnapshot(t *testing.T) {
 	expect := 10
 	require.NoError(t, db.WithTx(context.Background(), func(dtx sql.Transaction) error {
 		for i := 0; i < expect; i++ {
-			tx := gen.Next()
+			tx := gen.Next(t)
 
 			require.NoError(t, Add(dtx, &tx.Transaction, time.Time{}))
 			require.NoError(t, AddResult(dtx, tx.ID, &tx.TransactionResult))
@@ -178,7 +178,7 @@ func TestIterateSnapshot(t *testing.T) {
 
 	require.NoError(t, db.WithTx(context.TODO(), func(dtx sql.Transaction) error {
 		for i := 0; i < 10; i++ {
-			tx := gen.Next()
+			tx := gen.Next(t)
 
 			require.NoError(t, Add(dtx, &tx.Transaction, time.Time{}))
 			require.NoError(t, AddResult(dtx, tx.ID, &tx.TransactionResult))

@@ -25,16 +25,18 @@ func testTransactions(
 		stopSending = first + sendFor
 		batch       = 10
 		amount      = 100
+		logger      = tctx.Log.Named(t.Name())
 
 		// each account creates spawn transaction in the first layer
 		// plus batch number of spend transactions in every layer after that
 		expectedCount = cl.Accounts() * (1 + int(sendFor-1)*batch)
 	)
-	tctx.Log.Debugw("running transactions test",
+	logger.Infow("running transactions test",
 		"from", first,
 		"stop sending", stopSending,
 		"expected transactions", expectedCount,
 	)
+
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	state := pb.NewGlobalStateServiceClient(cl.Client(0).PubConn())
 	response, err := state.Account(
@@ -47,7 +49,7 @@ func testTransactions(
 	eg, ctx := errgroup.WithContext(tctx)
 	require.NoError(
 		t,
-		sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, receiver, batch, amount),
+		sendTransactions(ctx, eg, logger, cl, first, stopSending, receiver, batch, amount),
 	)
 	txs := make([][]*pb.Transaction, cl.Total())
 
@@ -57,11 +59,11 @@ func testTransactions(
 			tctx.Context,
 			eg,
 			client,
-			tctx.Log.Desugar(),
+			logger.Desugar(),
 			func(rst *pb.TransactionResult) (bool, error) {
 				txs[i] = append(txs[i], rst.Tx)
 				count := len(txs[i])
-				tctx.Log.Debugw("received transaction client",
+				logger.Debugw("received transaction",
 					"layer", rst.Layer,
 					"client", client.Name,
 					"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
@@ -91,7 +93,7 @@ func testTransactions(
 		)
 		require.NoError(t, err)
 		after := response.AccountWrapper.StateCurrent.Balance
-		tctx.Log.Debugw("receiver state",
+		logger.Debugw("receiver state",
 			"before", before.Value,
 			"after", after.Value,
 			"expected-diff", diff,

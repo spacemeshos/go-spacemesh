@@ -10,6 +10,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
+	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func init() {
@@ -44,7 +46,12 @@ func fastnet() config.Config {
 
 	conf.Genesis = config.GenesisConfig{
 		ExtraData: "fastnet",
-		Accounts:  map[string]uint64{},
+		Accounts: map[string]uint64{
+			walletTemplate.TemplateAddress.StringWithHRP(conf.NetworkHRP): 10000000000000,
+		},
+		Templates: map[string][]byte{
+			walletTemplate.TemplateAddress.StringWithHRP(conf.NetworkHRP): wallet.PROGRAM,
+		},
 	}
 
 	conf.LayerAvgSize = 50

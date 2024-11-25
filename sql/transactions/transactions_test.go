@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
-	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 )
 
 func createTX(
@@ -27,12 +27,14 @@ func createTX(
 	t.Helper()
 
 	var raw []byte
+	var err error
 	if nonce == 0 {
-		raw = wallet.SelfSpawn(principal.PrivateKey(), 0, sdk.WithGasPrice(fee))
+		raw, err = wallet.Spawn(principal.PrivateKey(), 0, sdk.WithGasPrice(fee))
 	} else {
-		raw = wallet.Spend(principal.PrivateKey(), dest, amount,
+		raw, err = wallet.Spend(principal.PrivateKey(), dest, amount,
 			nonce, sdk.WithGasPrice(fee))
 	}
+	require.NoError(t, err)
 
 	parsed := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
