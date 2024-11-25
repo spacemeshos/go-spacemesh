@@ -32,7 +32,6 @@ var retryBackoff = 10 * time.Second
 
 func sendTransactions(
 	ctx context.Context,
-	eg *errgroup.Group,
 	logger *zap.Logger,
 	cl *cluster.Cluster,
 	first, stop uint32,
@@ -40,14 +39,7 @@ func sendTransactions(
 	receiver types.Address,
 	batch, amount int,
 ) error {
-	deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
-	minimum := time.Now().Add(2 * layerDuration)
-	if deadline.Before(minimum) { // make sure we have at least two layers to submit transactions
-		deadline = minimum
-	}
-	ctx, cancel := context.WithDeadline(ctx, deadline)
-	defer cancel()
-
+	eg, ctx := errgroup.WithContext(ctx)
 	for i := range cl.Accounts() {
 		client := cl.Client(i % cl.Total())
 		nonce, err := getNonce(ctx, client, cl.Address(i))
@@ -106,7 +98,7 @@ func sendTransactions(
 			return true, nil
 		})
 	}
-	return nil
+	return eg.Wait()
 }
 
 func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {

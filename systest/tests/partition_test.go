@@ -16,8 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
-	require.Greater(t, cl.Bootnodes(), 1)
+func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
+	require.Greater(tb, cl.Bootnodes(), 1)
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 
 	var (
@@ -64,9 +64,9 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
-	require.NoError(t,
-		sendTransactions(ctx2, eg2, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 10, 100),
-	)
+	eg2.Go(func() error {
+		return sendTransactions(ctx2, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 10, 100)
+	})
 
 	type stateUpdate struct {
 		layer  uint32
@@ -84,7 +84,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 			return stateHashStream(ctx, node, tctx.Log.Desugar(),
 				func(state *pb.GlobalStateStreamResponse) (bool, error) {
 					data := state.Datum.Datum
-					require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
+					require.IsType(tb, &pb.GlobalStateData_GlobalState{}, data)
 
 					resp := data.(*pb.GlobalStateData_GlobalState)
 					layer := resp.GlobalState.Layer.Number
@@ -173,9 +173,9 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		}
 		pass = pass && agree
 	}
-	require.NoError(t, finalErr)
-	require.True(t, pass)
-	eg2.Wait()
+	require.NoError(tb, finalErr)
+	require.True(tb, pass)
+	require.NoError(tb, eg2.Wait())
 }
 
 // TestPartition_30_70 tests the network partitioning with 30% and 70% of the nodes in each partition.

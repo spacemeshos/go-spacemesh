@@ -46,9 +46,9 @@ func testTransactions(
 
 	eg, ctx := errgroup.WithContext(tctx)
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
-	require.NoError(tb,
-		sendTransactions(ctx, eg, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, batch, amount),
-	)
+	eg.Go(func() error {
+		return sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, batch, amount)
+	})
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := range cl.Total() {

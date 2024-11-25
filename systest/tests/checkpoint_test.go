@@ -63,18 +63,16 @@ func TestCheckpoint(t *testing.T) {
 	require.EqualValues(t, 4, layersPerEpoch, "checkpoint layer require tuning as layersPerEpoch is changed")
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
 
-	eg, ctx := errgroup.WithContext(tctx)
 	first := layersPerEpoch * 2
 	stop := first + 2
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	tctx.Log.Infow("sending transactions", "from", first, "to", stop-1)
-	tctx.Log.Debugw("info",
-		"time", cl.Genesis(),
-		"current layer", (time.Since(cl.Genesis()) / layerDuration),
-	)
-	require.NoError(t, sendTransactions(ctx, eg, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 1, 100))
-	require.NoError(t, eg.Wait())
 
+	deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+
+	require.NoError(t, sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 1, 100))
 	require.NoError(t, waitLayer(tctx, cl.Client(0), snapshotLayer))
 
 	tctx.Log.Debugw("getting account balances")
