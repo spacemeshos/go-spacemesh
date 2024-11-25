@@ -678,17 +678,17 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	mc.EXPECT().Add(layer.GetEpoch()-1, gomock.Any())
 	o.activesCache = mc
 
+	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).Times(102)
 	var wg sync.WaitGroup
 	wg.Add(102)
 	runFn := func() {
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
 		_, err := o.actives(context.Background(), layer)
 		r.NoError(err)
 		wg.Done()
 	}
 
 	// outstanding probability for concurrent access to calc active set size
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		go runFn()
 	}
 
