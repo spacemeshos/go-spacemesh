@@ -62,21 +62,18 @@ func NewATXHandler(
 	}
 }
 
-func (h *ATXHandler) Receive(k rangesync.KeyBytes, peer p2p.Peer) (bool, error) {
-	var id types.ATXID
-	copy(id[:], k)
-	h.f.RegisterPeerHash(peer, id.Hash32())
-	return false, nil
-}
-
-func (h *ATXHandler) Commit(ctx context.Context, peer p2p.Peer, base, new rangesync.OrderedSet) error {
+func (h *ATXHandler) Commit(
+	ctx context.Context,
+	peer p2p.Peer,
+	base rangesync.OrderedSet,
+	received rangesync.SeqResult,
+) error {
 	h.logger.Debug("begin atx commit")
 	defer h.logger.Debug("end atx commit")
-	sr := new.Received()
 	var firstK rangesync.KeyBytes
 	numDownloaded := 0
 	state := make(map[types.ATXID]int)
-	for k := range sr.Seq {
+	for k := range received.Seq {
 		if firstK == nil {
 			firstK = k
 		} else if firstK.Compare(k) == 0 {
@@ -89,9 +86,11 @@ func (h *ATXHandler) Commit(ctx context.Context, peer p2p.Peer, base, new ranges
 		if found {
 			continue
 		}
-		state[types.BytesToATXID(k)] = 0
+		id := types.BytesToATXID(k)
+		h.f.RegisterPeerHash(peer, id.Hash32())
+		state[id] = 0
 	}
-	if err := sr.Error(); err != nil {
+	if err := received.Error(); err != nil {
 		return fmt.Errorf("get item: %w", err)
 	}
 	total := len(state)

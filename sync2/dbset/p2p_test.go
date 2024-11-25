@@ -81,8 +81,9 @@ func (tr *syncTracer) OnRecent(receivedItems, sentItems int) {
 }
 
 func addReceived(t testing.TB, db sql.Executor, to, from *dbset.DBSet) {
-	sr := from.Received()
+	sr, n := from.Received()
 	for k := range sr.Seq {
+		n--
 		has, err := to.Has(k)
 		require.NoError(t, err)
 		if !has {
@@ -91,6 +92,7 @@ func addReceived(t testing.TB, db sql.Executor, to, from *dbset.DBSet) {
 	}
 	require.NoError(t, sr.Error())
 	require.NoError(t, to.Advance())
+	require.Zero(t, n)
 }
 
 type startStopTimer interface {

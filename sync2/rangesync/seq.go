@@ -129,7 +129,7 @@ func (s SeqResult) Collect() ([]KeyBytes, error) {
 func EmptySeqResult() SeqResult {
 	return SeqResult{
 		Seq:   EmptySeq(),
-		Error: func() error { return nil },
+		Error: NoSeqError,
 	}
 }
 
@@ -138,5 +138,22 @@ func ErrorSeqResult(err error) SeqResult {
 	return SeqResult{
 		Seq:   EmptySeq(),
 		Error: SeqError(err),
+	}
+}
+
+// MakeSeqResult makes a SeqResult out of a slice.
+// The sequence is made cyclic, starting over after the last element.
+func MakeSeqResult(items []KeyBytes) SeqResult {
+	return SeqResult{
+		Seq: func(yield func(k KeyBytes) bool) {
+			for {
+				for _, item := range items {
+					if !yield(item) {
+						return
+					}
+				}
+			}
+		},
+		Error: NoSeqError,
 	}
 }

@@ -15,7 +15,6 @@ import (
 	reflect "reflect"
 
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
-	multipeer "github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	rangesync "github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -122,216 +121,78 @@ func (c *MockSyncBaseProbeCall) DoAndReturn(f func(context.Context, p2p.Peer) (r
 	return c
 }
 
-// Wait mocks base method.
-func (m *MockSyncBase) Wait() error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Wait")
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Wait indicates an expected call of Wait.
-func (mr *MockSyncBaseMockRecorder) Wait() *MockSyncBaseWaitCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Wait", reflect.TypeOf((*MockSyncBase)(nil).Wait))
-	return &MockSyncBaseWaitCall{Call: call}
-}
-
-// MockSyncBaseWaitCall wrap *gomock.Call
-type MockSyncBaseWaitCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSyncBaseWaitCall) Return(arg0 error) *MockSyncBaseWaitCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSyncBaseWaitCall) Do(f func() error) *MockSyncBaseWaitCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncBaseWaitCall) DoAndReturn(f func() error) *MockSyncBaseWaitCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// WithPeerSyncer mocks base method.
-func (m *MockSyncBase) WithPeerSyncer(ctx context.Context, p p2p.Peer, toCall func(multipeer.PeerSyncer) error) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithPeerSyncer", ctx, p, toCall)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// WithPeerSyncer indicates an expected call of WithPeerSyncer.
-func (mr *MockSyncBaseMockRecorder) WithPeerSyncer(ctx, p, toCall any) *MockSyncBaseWithPeerSyncerCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithPeerSyncer", reflect.TypeOf((*MockSyncBase)(nil).WithPeerSyncer), ctx, p, toCall)
-	return &MockSyncBaseWithPeerSyncerCall{Call: call}
-}
-
-// MockSyncBaseWithPeerSyncerCall wrap *gomock.Call
-type MockSyncBaseWithPeerSyncerCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSyncBaseWithPeerSyncerCall) Return(arg0 error) *MockSyncBaseWithPeerSyncerCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSyncBaseWithPeerSyncerCall) Do(f func(context.Context, p2p.Peer, func(multipeer.PeerSyncer) error) error) *MockSyncBaseWithPeerSyncerCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncBaseWithPeerSyncerCall) DoAndReturn(f func(context.Context, p2p.Peer, func(multipeer.PeerSyncer) error) error) *MockSyncBaseWithPeerSyncerCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// MockPeerSyncer is a mock of PeerSyncer interface.
-type MockPeerSyncer struct {
-	ctrl     *gomock.Controller
-	recorder *MockPeerSyncerMockRecorder
-	isgomock struct{}
-}
-
-// MockPeerSyncerMockRecorder is the mock recorder for MockPeerSyncer.
-type MockPeerSyncerMockRecorder struct {
-	mock *MockPeerSyncer
-}
-
-// NewMockPeerSyncer creates a new mock instance.
-func NewMockPeerSyncer(ctrl *gomock.Controller) *MockPeerSyncer {
-	mock := &MockPeerSyncer{ctrl: ctrl}
-	mock.recorder = &MockPeerSyncerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPeerSyncer) EXPECT() *MockPeerSyncerMockRecorder {
-	return m.recorder
-}
-
-// Peer mocks base method.
-func (m *MockPeerSyncer) Peer() p2p.Peer {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Peer")
-	ret0, _ := ret[0].(p2p.Peer)
-	return ret0
-}
-
-// Peer indicates an expected call of Peer.
-func (mr *MockPeerSyncerMockRecorder) Peer() *MockPeerSyncerPeerCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Peer", reflect.TypeOf((*MockPeerSyncer)(nil).Peer))
-	return &MockPeerSyncerPeerCall{Call: call}
-}
-
-// MockPeerSyncerPeerCall wrap *gomock.Call
-type MockPeerSyncerPeerCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockPeerSyncerPeerCall) Return(arg0 p2p.Peer) *MockPeerSyncerPeerCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockPeerSyncerPeerCall) Do(f func() p2p.Peer) *MockPeerSyncerPeerCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPeerSyncerPeerCall) DoAndReturn(f func() p2p.Peer) *MockPeerSyncerPeerCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Serve mocks base method.
-func (m *MockPeerSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
+func (m *MockSyncBase) Serve(ctx context.Context, p p2p.Peer, stream io.ReadWriter) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Serve", ctx, stream)
+	ret := m.ctrl.Call(m, "Serve", ctx, p, stream)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Serve indicates an expected call of Serve.
-func (mr *MockPeerSyncerMockRecorder) Serve(ctx, stream any) *MockPeerSyncerServeCall {
+func (mr *MockSyncBaseMockRecorder) Serve(ctx, p, stream any) *MockSyncBaseServeCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serve", reflect.TypeOf((*MockPeerSyncer)(nil).Serve), ctx, stream)
-	return &MockPeerSyncerServeCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serve", reflect.TypeOf((*MockSyncBase)(nil).Serve), ctx, p, stream)
+	return &MockSyncBaseServeCall{Call: call}
 }
 
-// MockPeerSyncerServeCall wrap *gomock.Call
-type MockPeerSyncerServeCall struct {
+// MockSyncBaseServeCall wrap *gomock.Call
+type MockSyncBaseServeCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockPeerSyncerServeCall) Return(arg0 error) *MockPeerSyncerServeCall {
+func (c *MockSyncBaseServeCall) Return(arg0 error) *MockSyncBaseServeCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPeerSyncerServeCall) Do(f func(context.Context, io.ReadWriter) error) *MockPeerSyncerServeCall {
+func (c *MockSyncBaseServeCall) Do(f func(context.Context, p2p.Peer, io.ReadWriter) error) *MockSyncBaseServeCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPeerSyncerServeCall) DoAndReturn(f func(context.Context, io.ReadWriter) error) *MockPeerSyncerServeCall {
+func (c *MockSyncBaseServeCall) DoAndReturn(f func(context.Context, p2p.Peer, io.ReadWriter) error) *MockSyncBaseServeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
 // Sync mocks base method.
-func (m *MockPeerSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
+func (m *MockSyncBase) Sync(ctx context.Context, p p2p.Peer, x, y rangesync.KeyBytes) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Sync", ctx, x, y)
+	ret := m.ctrl.Call(m, "Sync", ctx, p, x, y)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Sync indicates an expected call of Sync.
-func (mr *MockPeerSyncerMockRecorder) Sync(ctx, x, y any) *MockPeerSyncerSyncCall {
+func (mr *MockSyncBaseMockRecorder) Sync(ctx, p, x, y any) *MockSyncBaseSyncCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockPeerSyncer)(nil).Sync), ctx, x, y)
-	return &MockPeerSyncerSyncCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sync", reflect.TypeOf((*MockSyncBase)(nil).Sync), ctx, p, x, y)
+	return &MockSyncBaseSyncCall{Call: call}
 }
 
-// MockPeerSyncerSyncCall wrap *gomock.Call
-type MockPeerSyncerSyncCall struct {
+// MockSyncBaseSyncCall wrap *gomock.Call
+type MockSyncBaseSyncCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockPeerSyncerSyncCall) Return(arg0 error) *MockPeerSyncerSyncCall {
+func (c *MockSyncBaseSyncCall) Return(arg0 error) *MockSyncBaseSyncCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockPeerSyncerSyncCall) Do(f func(context.Context, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockPeerSyncerSyncCall {
+func (c *MockSyncBaseSyncCall) Do(f func(context.Context, p2p.Peer, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockSyncBaseSyncCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPeerSyncerSyncCall) DoAndReturn(f func(context.Context, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockPeerSyncerSyncCall {
+func (c *MockSyncBaseSyncCall) DoAndReturn(f func(context.Context, p2p.Peer, rangesync.KeyBytes, rangesync.KeyBytes) error) *MockSyncBaseSyncCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -361,17 +222,17 @@ func (m *MockSyncKeyHandler) EXPECT() *MockSyncKeyHandlerMockRecorder {
 }
 
 // Commit mocks base method.
-func (m *MockSyncKeyHandler) Commit(ctx context.Context, peer p2p.Peer, base, new rangesync.OrderedSet) error {
+func (m *MockSyncKeyHandler) Commit(ctx context.Context, peer p2p.Peer, base rangesync.OrderedSet, received rangesync.SeqResult) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Commit", ctx, peer, base, new)
+	ret := m.ctrl.Call(m, "Commit", ctx, peer, base, received)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Commit indicates an expected call of Commit.
-func (mr *MockSyncKeyHandlerMockRecorder) Commit(ctx, peer, base, new any) *MockSyncKeyHandlerCommitCall {
+func (mr *MockSyncKeyHandlerMockRecorder) Commit(ctx, peer, base, received any) *MockSyncKeyHandlerCommitCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockSyncKeyHandler)(nil).Commit), ctx, peer, base, new)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockSyncKeyHandler)(nil).Commit), ctx, peer, base, received)
 	return &MockSyncKeyHandlerCommitCall{Call: call}
 }
 
@@ -387,52 +248,13 @@ func (c *MockSyncKeyHandlerCommitCall) Return(arg0 error) *MockSyncKeyHandlerCom
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockSyncKeyHandlerCommitCall) Do(f func(context.Context, p2p.Peer, rangesync.OrderedSet, rangesync.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
+func (c *MockSyncKeyHandlerCommitCall) Do(f func(context.Context, p2p.Peer, rangesync.OrderedSet, rangesync.SeqResult) error) *MockSyncKeyHandlerCommitCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncKeyHandlerCommitCall) DoAndReturn(f func(context.Context, p2p.Peer, rangesync.OrderedSet, rangesync.OrderedSet) error) *MockSyncKeyHandlerCommitCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Receive mocks base method.
-func (m *MockSyncKeyHandler) Receive(k rangesync.KeyBytes, peer p2p.Peer) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Receive", k, peer)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Receive indicates an expected call of Receive.
-func (mr *MockSyncKeyHandlerMockRecorder) Receive(k, peer any) *MockSyncKeyHandlerReceiveCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Receive", reflect.TypeOf((*MockSyncKeyHandler)(nil).Receive), k, peer)
-	return &MockSyncKeyHandlerReceiveCall{Call: call}
-}
-
-// MockSyncKeyHandlerReceiveCall wrap *gomock.Call
-type MockSyncKeyHandlerReceiveCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockSyncKeyHandlerReceiveCall) Return(arg0 bool, arg1 error) *MockSyncKeyHandlerReceiveCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockSyncKeyHandlerReceiveCall) Do(f func(rangesync.KeyBytes, p2p.Peer) (bool, error)) *MockSyncKeyHandlerReceiveCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockSyncKeyHandlerReceiveCall) DoAndReturn(f func(rangesync.KeyBytes, p2p.Peer) (bool, error)) *MockSyncKeyHandlerReceiveCall {
+func (c *MockSyncKeyHandlerCommitCall) DoAndReturn(f func(context.Context, p2p.Peer, rangesync.OrderedSet, rangesync.SeqResult) error) *MockSyncKeyHandlerCommitCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

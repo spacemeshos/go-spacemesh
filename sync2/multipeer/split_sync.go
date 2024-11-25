@@ -3,7 +3,6 @@ package multipeer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"time"
 
@@ -17,8 +16,8 @@ import (
 )
 
 type syncResult struct {
-	ps  PeerSyncer
-	err error
+	peer p2p.Peer
+	err  error
 }
 
 // splitSync is a synchronization implementation that synchronizes the set against
@@ -87,19 +86,14 @@ func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange
 	s.numRunning++
 	doneCh := make(chan struct{})
 	s.eg.Go(func() error {
-		if err := s.syncBase.WithPeerSyncer(ctx, p, func(ps PeerSyncer) error {
-			err := ps.Sync(ctx, sr.X, sr.Y)
-			close(doneCh)
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case s.resCh <- syncResult{ps: ps, err: err}:
-				return nil
-			}
-		}); err != nil {
-			return fmt.Errorf("sync peer %s: %w", p, err)
+		err := s.syncBase.Sync(ctx, p, sr.X, sr.Y)
+		close(doneCh)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case s.resCh <- syncResult{peer: p, err: err}:
+			return nil
 		}
-		return nil
 	})
 	gpTimer := s.clock.After(s.gracePeriod)
 	s.eg.Go(func() error {
@@ -122,18 +116,18 @@ func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange
 }
 
 func (s *splitSync) handleSyncResult(r syncResult) error {
-	sr, found := s.syncMap[r.ps.Peer()]
+	sr, found := s.syncMap[r.peer]
 	if !found {
 		panic("BUG: error in split sync syncMap handling")
 	}
 	s.numRunning--
-	delete(s.syncMap, r.ps.Peer())
+	delete(s.syncMap, r.peer)
 	sr.NumSyncers--
 	if r.err != nil {
 		s.numPeers--
-		s.failedPeers[r.ps.Peer()] = struct{}{}
+		s.failedPeers[r.peer] = struct{}{}
 		s.logger.Debug("remove failed peer",
-			zap.Stringer("peer", r.ps.Peer()),
+			zap.Stringer("peer", r.peer),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
 			zap.Int("numRunning", s.numRunning),
@@ -146,19 +140,20 @@ func (s *splitSync) handleSyncResult(r syncResult) error {
 			// sync with no active syncs remaining
 			s.sq.Update(sr, time.Time{})
 		}
-	} else {
-		sr.Done = true
-		s.syncPeers = append(s.syncPeers, r.ps.Peer())
-		s.numRemaining--
-		s.logger.Debug("peer synced successfully",
-			log.ZShortStringer("x", sr.X),
-			log.ZShortStringer("y", sr.Y),
-			zap.Stringer("peer", r.ps.Peer()),
-			zap.Int("numPeers", s.numPeers),
-			zap.Int("numRemaining", s.numRemaining),
-			zap.Int("numRunning", s.numRunning),
-			zap.Int("availPeers", len(s.syncPeers)))
+		return nil
 	}
+
+	sr.Done = true
+	s.syncPeers = append(s.syncPeers, r.peer)
+	s.numRemaining--
+	s.logger.Debug("peer synced successfully",
+		log.ZShortStringer("x", sr.X),
+		log.ZShortStringer("y", sr.Y),
+		zap.Stringer("peer", r.peer),
+		zap.Int("numPeers", s.numPeers),
+		zap.Int("numRemaining", s.numRemaining),
+		zap.Int("numRunning", s.numRunning),
+		zap.Int("availPeers", len(s.syncPeers)))
 
 	return nil
 }

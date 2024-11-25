@@ -23,6 +23,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+func atxSeqResult(atxs []types.ATXID) rangesync.SeqResult {
+	return rangesync.SeqResult{
+		Seq: func(yield func(k rangesync.KeyBytes) bool) {
+			// Received sequence may be cyclic and the handler should stop
+			// when it sees the first key again.
+			for _, atx := range atxs {
+				if !yield(atx.Bytes()) {
+					return
+				}
+			}
+		},
+		Error: rangesync.NoSeqError,
+	}
+}
+
 func TestAtxHandler_Success(t *testing.T) {
 	const (
 		batchSize       = 4
@@ -41,13 +56,9 @@ func TestAtxHandler_Success(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
-	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
 		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:])).Return(false, nil)
-		add, err := h.Receive(id.Bytes(), peer)
-		require.False(t, add)
-		require.NoError(t, err)
 	}
 	toFetch := make(map[types.ATXID]bool)
 	for _, id := range allAtxs {
@@ -69,21 +80,7 @@ func TestAtxHandler_Success(t *testing.T) {
 			}
 			return nil
 		}).Times(3)
-	newSet.EXPECT().Received().Return(rangesync.SeqResult{
-		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			// Received sequence may be cyclic and the handler should stop
-			// when it sees the first key again.
-			for {
-				for _, atx := range allAtxs {
-					if !yield(atx.Bytes()) {
-						return
-					}
-				}
-			}
-		},
-		Error: rangesync.NoSeqError,
-	})
-	require.NoError(t, h.Commit(context.Background(), peer, baseSet, newSet))
+	require.NoError(t, h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs)))
 	require.Empty(t, toFetch)
 	require.Equal(t, []int{4, 4, 2}, batches)
 }
@@ -106,13 +103,9 @@ func TestAtxHandler_Retry(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
-	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
 		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:])).Return(false, nil)
-		add, err := h.Receive(id.Bytes(), peer)
-		require.False(t, add)
-		require.NoError(t, err)
 	}
 	failCount := 0
 	var fetched []types.ATXID
@@ -150,16 +143,6 @@ func TestAtxHandler_Retry(t *testing.T) {
 			}
 			return nil
 		}).AnyTimes()
-	newSet.EXPECT().Received().Return(rangesync.SeqResult{
-		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			for _, atx := range allAtxs {
-				if !yield(atx.Bytes()) {
-					return
-				}
-			}
-		},
-		Error: rangesync.NoSeqError,
-	})
 
 	// If it so happens that a full batch fails, we need to advance the clock to
 	// trigger the retry.
@@ -185,7 +168,7 @@ func TestAtxHandler_Retry(t *testing.T) {
 		eg.Wait()
 	}()
 
-	require.NoError(t, h.Commit(context.Background(), peer, baseSet, newSet))
+	require.NoError(t, h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs)))
 	require.ElementsMatch(t, allAtxs[1:], fetched)
 }
 
@@ -204,19 +187,19 @@ func TestAtxHandler_Cancel(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
-	newSet := mocks.NewMockOrderedSet(ctrl)
 	baseSet.EXPECT().Has(rangesync.KeyBytes(atxID[:])).Return(false, nil)
+	f.EXPECT().RegisterPeerHash(peer, atxID.Hash32())
 	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
 			return context.Canceled
 		})
-	newSet.EXPECT().Received().Return(rangesync.SeqResult{
+	sr := rangesync.SeqResult{
 		Seq: func(yield func(k rangesync.KeyBytes) bool) {
 			yield(atxID.Bytes())
 		},
 		Error: rangesync.NoSeqError,
-	})
-	require.ErrorIs(t, h.Commit(context.Background(), peer, baseSet, newSet), context.Canceled)
+	}
+	require.ErrorIs(t, h.Commit(context.Background(), peer, baseSet, sr), context.Canceled)
 }
 
 func TestAtxHandler_BatchRetry(t *testing.T) {
@@ -237,35 +220,17 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 	f := NewMockFetcher(ctrl)
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
-	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
 		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:])).Return(false, nil)
-		add, err := h.Receive(id.Bytes(), peer)
-		require.False(t, add)
-		require.NoError(t, err)
 	}
-	newSet.EXPECT().Received().Return(rangesync.SeqResult{
-		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			// Received sequence may be cyclic and the handler should stop
-			// when it sees the first key again.
-			for {
-				for _, atx := range allAtxs {
-					if !yield(atx.Bytes()) {
-						return
-					}
-				}
-			}
-		},
-		Error: rangesync.NoSeqError,
-	})
 	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
 			return errors.New("fetch failed")
 		})
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return h.Commit(context.Background(), peer, baseSet, newSet)
+		return h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs))
 	})
 	// wait for delay after 1st batch failure
 	clock.BlockUntil(1)
@@ -310,15 +275,11 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 	f := NewMockFetcher(ctrl)
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
-	newSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
 		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:])).Return(false, nil)
-		add, err := h.Receive(id.Bytes(), peer)
-		require.False(t, add)
-		require.NoError(t, err)
 	}
-	newSet.EXPECT().Received().Return(rangesync.SeqResult{
+	sr := rangesync.SeqResult{
 		Seq: func(yield func(k rangesync.KeyBytes) bool) {
 			// Received sequence may be cyclic and the handler should stop
 			// when it sees the first key again.
@@ -331,14 +292,14 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 			}
 		},
 		Error: rangesync.NoSeqError,
-	})
+	}
 	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
 			return errors.New("fetch failed")
 		}).Times(3)
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return h.Commit(context.Background(), peer, baseSet, newSet)
+		return h.Commit(context.Background(), peer, baseSet, sr)
 	})
 	for range 2 {
 		clock.BlockUntil(1)

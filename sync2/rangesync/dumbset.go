@@ -141,7 +141,7 @@ func (ds *DumbSet) AddUnchecked(id KeyBytes) {
 
 // AddReceived adds all the received items to the set.
 func (ds *DumbSet) AddReceived() {
-	sr := ds.Received()
+	sr, _ := ds.Received()
 	for k := range sr.Seq {
 		ds.AddUnchecked(KeyBytes(k))
 	}
@@ -187,7 +187,7 @@ func (ds *DumbSet) Receive(id KeyBytes) error {
 }
 
 // Received implements the OrderedSet.
-func (ds *DumbSet) Received() SeqResult {
+func (ds *DumbSet) Received() (SeqResult, int) {
 	return SeqResult{
 		Seq: func(yield func(KeyBytes) bool) {
 			for k := range ds.received {
@@ -197,7 +197,7 @@ func (ds *DumbSet) Received() SeqResult {
 			}
 		},
 		Error: NoSeqError,
-	}
+	}, len(ds.received)
 }
 
 // seq returns an endless sequence as a SeqResult starting from the given index.
