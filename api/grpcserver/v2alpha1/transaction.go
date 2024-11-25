@@ -377,7 +377,30 @@ func convertTxState(tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionSta
 	}
 }
 
-func decodeTxArgs(decoder *scale.Decoder) (*athcon.MethodSelector, *core.Address, *signing.PublicKey, error) {
+type spawnTx struct {
+	Pubkey [32]byte
+}
+
+type spendTx struct {
+	To     types.Address
+	Amount uint64
+}
+
+var spawnSelector, spendSelector athcon.MethodSelector
+
+func init() {
+	var err error
+	spawnSelector, err = athcon.FromString("athexp_spawn")
+	if err != nil {
+		panic(err.Error())
+	}
+	spendSelector, err = athcon.FromString("athexp_spend")
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
+func decodeTxArgs(decoder *scale.Decoder) (any, *core.Address, error) {
 	reg := registry.New()
 	wallet.Register(reg)
 	// multisig.Register(reg)
@@ -386,45 +409,47 @@ func decodeTxArgs(decoder *scale.Decoder) (*athcon.MethodSelector, *core.Address
 
 	_, _, err := scale.DecodeCompact8(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
 	}
 
 	var principal core.Address
 	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
 	}
 
 	handler := reg.Get(wallet.TemplateAddress)
 	if handler == nil {
-		return nil, nil, nil, fmt.Errorf("%w: wallet template not found", core.ErrMalformed)
+		return nil, nil, fmt.Errorf("%w: wallet template not found", core.ErrMalformed)
 	}
 	output, err := handler.Parse(decoder)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: failed to parse transaction %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w: failed to parse transaction %w", core.ErrMalformed, err)
 	}
 
-	var unmarshaled struct {
-		*athcon.MethodSelector
-		signing.PublicKey
-	}
-	err = gossamerScale.Unmarshal(output.Payload, &unmarshaled)
+	var payload athcon.Payload
+	err = gossamerScale.Unmarshal(output.Payload, &payload)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
+		return nil, nil, fmt.Errorf("%w: tx payload", core.ErrMalformed)
 	}
-	// var p core.Payload
-	// if _, err = p.DecodeScale(decoder); err != nil {
-	// 	return 0, nil, nil, fmt.Errorf("%w: %w", core.ErrMalformed, err)
-	// }
+	if payload.Selector == nil {
+		return nil, nil, fmt.Errorf("%w: nil method selector", core.ErrMalformed)
+	}
 
-	// args := handler.Args(method)
-	// if args == nil {
-	// 	return 0, nil, nil, fmt.Errorf("%w: unknown method %s %d", core.ErrMalformed, *templateAddress, method)
-	// }
-	// if _, err := args.DecodeScale(decoder); err != nil {
-	// 	return 0, nil, nil, fmt.Errorf("%w failed to decode method arguments %w", core.ErrMalformed, err)
-	// }
+	var txArgs any
+	switch *payload.Selector {
+	case spawnSelector:
+		txArgs = new(spawnTx)
+	case spendSelector:
+		txArgs = new(spendTx)
+	default:
+		return nil, nil, fmt.Errorf("%w: unknown method selector %s", core.ErrMalformed, payload.Selector.String())
+	}
+	err = gossamerScale.Unmarshal(payload.Input, txArgs)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: malformed tx arguments payload", core.ErrMalformed)
+	}
 
-	return unmarshaled.MethodSelector, &wallet.TemplateAddress, &unmarshaled.PublicKey, nil
+	return txArgs, &wallet.TemplateAddress, nil
 }
 
 func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
@@ -434,31 +459,29 @@ func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
 	txType := spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_UNSPECIFIED
 
 	r := bytes.NewReader(rawTx)
-	method, _, pubkey, err := decodeTxArgs(scale.NewDecoder(r))
+	txArgs, _, err := decodeTxArgs(scale.NewDecoder(r))
 	if err != nil {
 		return res, txType, err
 	}
 
-	if spawnSelector, err := athcon.FromString("athexp_spawn"); err != nil {
-		return res, txType, fmt.Errorf("%w: failed to create spawn selector: %w", core.ErrInternal, err)
-	} else if spendSelector, err := athcon.FromString("athexp_spend"); err != nil {
-		return res, txType, fmt.Errorf("%w: failed to create spend selector: %w", core.ErrInternal, err)
-	} else if *method == spawnSelector {
+	switch args := txArgs.(type) {
+	case *spawnTx:
 		res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
 			SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
-				Pubkey: pubkey.String(),
+				Pubkey: signing.NewPublicKey(args.Pubkey[:]).String(),
 			},
 		}
 		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SPAWN
-	} else if *method == spendSelector {
+	case *spendTx:
 		res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
-			// TODO(lane): we don't currently attempt to parse these from the payload
 			Send: &spacemeshv2alpha1.ContentsSend{
-				// Destination: args.Destination.String(),
-				// Amount:      args.Amount,
+				Destination: args.To.String(),
+				Amount:      args.Amount,
 			},
 		}
 		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SEND
+	default:
+		panic("txArgs is guaranteed to be spawn or spend at this point")
 	}
 
 	return res, txType, nil
