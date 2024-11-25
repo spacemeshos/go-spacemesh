@@ -44,7 +44,6 @@ func testTransactions(
 		&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
 	)
 	require.NoError(t, err)
-	logger.Debugw("requested accounts", "response", response)
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	eg, ctx := errgroup.WithContext(tctx)
