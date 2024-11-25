@@ -59,7 +59,7 @@ type Context struct {
 	changed map[Address]*Account
 }
 
-// Clone returns a copy of the context.
+// Clone returns a shallow copy of the context.
 func (c *Context) Clone() Host {
 	clone := *c
 	clone.changed = make(map[Address]*Account, len(c.changed))
@@ -156,8 +156,8 @@ func (c *Context) Spawn(template Address, blob []byte) (Address, error) {
 	c.change(account)
 	c.Logger.Debug(
 		"spawn",
-		zap.String("address", principalAddress.String()),
-		zap.String("template", template.String()),
+		zap.Stringer("address", principalAddress),
+		zap.Stringer("template", template),
 		zap.Int("state_size", len(blob)),
 	)
 	return principalAddress, nil
@@ -241,8 +241,8 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	c.Logger.Debug(
 		"transfer",
 		zap.Uint64("amount", amount),
-		zap.String("from", from.Address.String()),
-		zap.String("to", to.String()),
+		zap.Stringer("from", from.Address),
+		zap.Stringer("to", to),
 		zap.Uint64("from_new_balance", from.Balance),
 		zap.Uint64("to_new_balance", account.Balance),
 	)

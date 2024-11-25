@@ -133,10 +133,8 @@ type hostContext struct {
 var _ athcon.HostContext = (*hostContext)(nil)
 
 func (h *hostContext) AccountExists(addr athcon.Address) bool {
-	if has, err := h.host.Has(types.Address(addr)); !has || err != nil {
-		return false
-	}
-	return true
+	has, err := h.host.Has(types.Address(addr))
+	return err == nil && has
 }
 
 func (h *hostContext) GetStorage(addr athcon.Address, key athcon.Bytes32) athcon.Bytes32 {
@@ -281,7 +279,7 @@ func (h *hostContext) Call(
 
 	// enrich the message with the method selector and account state, then execute the call.
 	// note: we skip this step if there's no input (i.e., this is a simple balance transfer).
-	input = athcon.EncodedExecutionPayload([]byte{}, input)
+	input = athcon.EncodedExecutionPayload(destinationAccount.State, input)
 
 	// construct and save context
 	oldContext := h.dynamicContext
