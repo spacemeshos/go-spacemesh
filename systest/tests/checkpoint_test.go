@@ -71,8 +71,7 @@ func TestCheckpoint(t *testing.T) {
 	deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
 	ctx, cancel := context.WithDeadline(tctx, deadline)
 	defer cancel()
-
-	require.NoError(t, sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 1, 100))
+	require.NoError(t, sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, receiver, 1, 100))
 	require.NoError(t, waitLayer(tctx, cl.Client(0), snapshotLayer))
 
 	tctx.Log.Debugw("getting account balances")
@@ -102,7 +101,8 @@ func TestCheckpoint(t *testing.T) {
 			diffs = append(diffs, cl.Client(i).Name)
 			tctx.Log.Errorw("diff checkpoint data",
 				fmt.Sprintf("reference %v", cl.Client(0).Name), string(checkpoints[0]),
-				fmt.Sprintf("client %v", cl.Client(i).Name), string(checkpoints[i]))
+				fmt.Sprintf("client %v", cl.Client(i).Name), string(checkpoints[i]),
+			)
 		}
 	}
 	require.Empty(t, diffs)

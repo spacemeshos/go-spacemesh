@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -60,12 +61,15 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 
 	// start sending transactions
 	tctx.Log.Debug("sending transactions...")
-	eg2, ctx2 := errgroup.WithContext(tctx)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	deadline := cl.Genesis().Add(time.Duration(stop) * layerDuration)
+	ctx2, cancel := context.WithDeadline(tctx, deadline)
+	eg2, ctx2 := errgroup.WithContext(ctx2)
+	defer cancel()
 	eg2.Go(func() error {
-		return sendTransactions(ctx2, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, 10, 100)
+		return sendTransactions(ctx2, tctx.Log.Desugar(), cl, first, stop, receiver, 10, 100)
 	})
 
 	type stateUpdate struct {

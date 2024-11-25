@@ -35,7 +35,6 @@ func sendTransactions(
 	logger *zap.Logger,
 	cl *cluster.Cluster,
 	first, stop uint32,
-	layerDuration time.Duration,
 	receiver types.Address,
 	batch, amount int,
 ) error {
@@ -48,11 +47,6 @@ func sendTransactions(
 		}
 		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number >= stop {
-				logger.Debug("stopping transactions",
-					zap.Uint32("layer", layer.Layer.Number.Number),
-					zap.String("client", client.Name),
-					zap.Stringer("address", cl.Address(i)),
-				)
 				return false, nil
 			}
 			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED || layer.Layer.Number.Number < first {

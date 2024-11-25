@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"context"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -44,16 +46,19 @@ func testTransactions(
 	require.NoError(tb, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
-	eg, ctx := errgroup.WithContext(tctx)
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	deadline := cl.Genesis().Add(time.Duration(stop) * layerDuration)
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		return sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, layerDuration, receiver, batch, amount)
+		return sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, receiver, batch, amount)
 	})
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := range cl.Total() {
 		client := cl.Client(i)
-		watchTransactionResults(tctx.Context, eg, client, tctx.Log.Desugar(),
+		watchTransactionResults(tctx, eg, client, tctx.Log.Desugar(),
 			func(rst *pb.TransactionResult) (bool, error) {
 				txs[i] = append(txs[i], rst.Tx)
 				count := len(txs[i])
