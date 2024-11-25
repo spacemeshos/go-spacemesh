@@ -59,7 +59,14 @@ type Context struct {
 	changed map[Address]*Account
 }
 
-func New(genesisID types.Hash20, layer types.LayerID, principal types.Address, loader AccountLoader, registry HandlerRegistry, logger *zap.Logger) (*Context, error) {
+func New(
+	genesisID types.Hash20,
+	layer types.LayerID,
+	principal types.Address,
+	loader AccountLoader,
+	registry HandlerRegistry,
+	logger *zap.Logger,
+) (*Context, error) {
 	principalAccount, err := loader.Get(principal)
 	if err != nil {
 		return nil, fmt.Errorf(

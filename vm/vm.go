@@ -560,6 +560,9 @@ func parse(
 		return nil, nil, fmt.Errorf("%w: malformed TX payload: %w", core.ErrMalformed, err)
 	}
 	args, err := wallet.ParseArgs(payload)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: parsing TX arguments: %w", core.ErrMalformed, err)
+	}
 
 	// now that the tx has been parsed, we can perform some more sanity checks.
 	// if this is a spawn for an account that was already spawned, we may
