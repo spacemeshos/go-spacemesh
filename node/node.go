@@ -1290,7 +1290,7 @@ func (app *App) initServices(ctx context.Context) error {
 		pubsub.ChainGossipHandler(checkAtxSynced, app.malfeasanceHandler.HandleMalfeasanceProof),
 	)
 	app.host.Register(
-		pubsub.MalfeasanceProof2,
+		pubsub.MalfeasanceProof2, // TODO(mafa): pass correct handler
 		pubsub.ChainGossipHandler(checkAtxSynced, app.malfeasanceHandler.HandleMalfeasanceProof),
 	)
 
