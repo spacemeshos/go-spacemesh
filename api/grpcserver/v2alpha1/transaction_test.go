@@ -810,7 +810,7 @@ func TestEvictedTransaction(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	tx := newTx(0, types.Address{}, signer)
+	tx := newTx(t, 0, types.Address{}, signer)
 	require.NoError(t, transactions.Add(db, &types.Transaction{
 		RawTx:    tx.RawTx,
 		TxHeader: nil,

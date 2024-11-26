@@ -40,10 +40,12 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 				account.State = make([]byte, stmt.ColumnLen(4))
 				stmt.ColumnBytes(4, account.State)
 			}
-			var err error
-			account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
-			if err != nil {
-				panic(fmt.Sprintf("decoding account storage: %v", err))
+			if stmt.ColumnLen(5) > 0 {
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			account.Address = address
 			return false
@@ -82,11 +84,11 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 				stmt.ColumnBytes(3, account.TemplateAddress[:])
 				account.State = make([]byte, stmt.ColumnLen(4))
 				stmt.ColumnBytes(4, account.State)
-			}
-			var err error
-			account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
-			if err != nil {
-				panic(fmt.Sprintf("decoding account storage: %v", err))
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
 			}
 			account.Address = address
 			return false

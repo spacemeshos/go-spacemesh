@@ -25,7 +25,7 @@ func testTransactions(
 		stopSending = first + sendFor
 		batch       = 10
 		amount      = 100
-		logger      = tctx.Log.Named(t.Name())
+		logger      = tctx.Log.Named(tb.Name())
 
 		// each account creates spawn transaction in the first layer
 		// plus batch number of spend transactions in every layer after that

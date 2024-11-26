@@ -88,8 +88,7 @@ func athena() config.Config {
 			PprofHTTPServerListener: "localhost:6060",
 		},
 		Genesis: config.GenesisConfig{
-			GenesisTime: "2024-10-31T18:00:00Z",
-			ExtraData:   "000000000000000000001549a7b3a17a81b805488cd0439f16993c5a021638bc",
+			ExtraData: "000000000000000000001549a7b3a17a81b805488cd0439f16993c5a021638bc",
 			Accounts: map[string]uint64{
 				"atest1qqqqqqzm9w8yaav5kgwwzqqdqvaxj0ml4nq65zckgclkp": 1000000000000000000,
 				// This should be - fix it for the next devnet:

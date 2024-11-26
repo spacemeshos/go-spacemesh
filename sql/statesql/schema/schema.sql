@@ -1,4 +1,4 @@
-PRAGMA user_version = 24;
+PRAGMA user_version = 27;
 CREATE TABLE accounts
 (
     address        CHAR(24),
@@ -91,24 +91,24 @@ CREATE TABLE layers
 ) WITHOUT ROWID;
 CREATE TABLE malfeasance
 (
-    pubkey      CHAR(32) PRIMARY KEY,
-    marriage_id INT,
-    received    INT NOT NULL,
-
-
-    domain      INT,
-    proof       BLOB
+    pubkey      CHAR(32) PRIMARY KEY, 
+    marriage_id INT,                  
+    received    INT NOT NULL,         
+    
+    
+    domain      INT,                  
+    proof       BLOB                  
 );
 CREATE TABLE marriages
 (
-    pubkey          CHAR(32) PRIMARY KEY,
-    id              INT NOT NULL,
-    marriage_atx    CHAR(32) NOT NULL,
-    marriage_idx    INT NOT NULL,
-    marriage_target CHAR(32) NOT NULL,
-    marriage_sig    BLOB NOT NULL,
+    pubkey          CHAR(32) PRIMARY KEY,   
+    id              INT NOT NULL,           
+    marriage_atx    CHAR(32) NOT NULL,      
+    marriage_idx    INT NOT NULL,           
+    marriage_target CHAR(32) NOT NULL,      
+    marriage_sig    BLOB NOT NULL,          
 
-    UNIQUE (marriage_atx, marriage_idx)
+    UNIQUE (marriage_atx, marriage_idx) 
 );
 CREATE TABLE poets
 (

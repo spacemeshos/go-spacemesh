@@ -31,10 +31,9 @@ func createTX(
 	if nonce == 0 {
 		raw, err = wallet.Spawn(principal.PrivateKey(), 0, sdk.WithGasPrice(fee))
 	} else {
-		raw, err = wallet.Spend(principal.PrivateKey(), dest, amount,
-			nonce, sdk.WithGasPrice(fee))
+		raw, err = wallet.Spend(principal.PrivateKey(), dest, amount, nonce, sdk.WithGasPrice(fee))
 	}
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	parsed := types.Transaction{
 		RawTx:    types.NewRawTx(raw),
