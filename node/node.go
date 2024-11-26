@@ -662,20 +662,6 @@ func (app *App) initServices(ctx context.Context) error {
 		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 
-	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(
-		app.host,
-		app.edVerifier,
-		vrfVerifier,
-		app.cachedDB,
-		app.clock,
-		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
-	)
-	for _, sig := range app.signers {
-		beaconProtocol.Register(sig)
-	}
-
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
@@ -701,14 +687,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
 	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
-	app.eg.Go(func() error {
-		for rst := range beaconProtocol.Results() {
-			events.EmitBeacon(rst.Epoch, rst.Beacon)
-			trtl.OnBeacon(rst.Epoch, rst.Beacon)
-		}
-		app.log.Debug("beacon results watcher exited")
-		return nil
-	})
 
 	executor := mesh.NewExecutor(
 		app.db,
@@ -763,7 +741,7 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.Standalone = app.Config.Standalone
 
 	app.syncLogger = app.addLogger(SyncLogger, lg)
-	newSyncer := syncer.NewSyncer(
+	syncer := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
 		msh,
@@ -783,15 +761,36 @@ func (app *App) initServices(ctx context.Context) error {
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
 	)
-	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	beaconProtocol.SetSyncState(newSyncer)
+
+	vrfVerifier := signing.NewVRFVerifier()
+	beaconProtocol := beacon.New(
+		app.host,
+		app.edVerifier,
+		vrfVerifier,
+		app.cachedDB,
+		app.clock,
+		syncer,
+		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		beaconProtocol.Register(sig)
+	}
+	app.eg.Go(func() error {
+		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
+			trtl.OnBeacon(rst.Epoch, rst.Beacon)
+		}
+		app.log.Debug("beacon results watcher exited")
+		return nil
+	})
 
 	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
 		malfeasanceLogger,
 		app.cachedDB,
+		syncer,
 		trtl,
-		newSyncer,
 		app.host,
 	)
 
@@ -857,11 +856,11 @@ func (app *App) initServices(ctx context.Context) error {
 		app.db,
 		app.atxsdata,
 		vrfVerifier,
+		syncer,
 		app.Config.LayersPerEpoch,
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	)
-	hOracle.SetSync(newSyncer)
 
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
@@ -881,7 +880,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
 	app.certifier = blocks.NewCertifier(
 		app.db,
-		app.hOracle,
+		hOracle,
 		app.edVerifier,
 		app.host,
 		app.clock,
@@ -914,8 +913,8 @@ func (app *App) initServices(ctx context.Context) error {
 			app.atxsdata,
 			proposalsStore,
 			app.edVerifier,
-			app.hOracle,
-			newSyncer,
+			hOracle,
+			syncer,
 			patrol,
 			hare3.WithLogger(logger),
 			hare3.WithConfig(app.Config.HARE3),
@@ -944,8 +943,8 @@ func (app *App) initServices(ctx context.Context) error {
 			app.atxsdata,
 			proposalsStore,
 			app.edVerifier,
-			app.hOracle,
-			newSyncer,
+			hOracle,
+			syncer,
 			patrol,
 			app.host,
 			hare4.WithLogger(logger),
@@ -1025,7 +1024,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.atxsdata,
 		app.host,
 		trtl,
-		newSyncer,
+		syncer,
 		app.conState,
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
@@ -1046,7 +1045,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.db,
 		app.atxsdata,
 		goldenATXID,
-		newSyncer,
+		syncer,
 		app.validator,
 		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
@@ -1110,7 +1109,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host,
 		nipostBuilder,
 		app.clock,
-		newSyncer,
+		syncer,
 		app.addLogger(ATXBuilderLogger, lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
@@ -1235,13 +1234,13 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 
 	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
-		if newSyncer.ListenToGossip() {
+		if syncer.ListenToGossip() {
 			return nil
 		}
 		return errors.New("not synced for gossip")
 	}
 	checkAtxSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
-		if newSyncer.ListenToATXGossip() {
+		if syncer.ListenToATXGossip() {
 			return nil
 		}
 		return errors.New("not synced for gossip")
@@ -1297,7 +1296,7 @@ func (app *App) initServices(ctx context.Context) error {
 
 	app.proposalBuilder = proposalBuilder
 	app.mesh = msh
-	app.syncer = newSyncer
+	app.syncer = syncer
 	app.atxBuilder = atxBuilder
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb

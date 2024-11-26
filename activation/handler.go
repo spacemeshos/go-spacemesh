@@ -259,12 +259,7 @@ func (h *Handler) decodeATX(msg []byte) (atx opaqueAtx, err error) {
 	return atx, nil
 }
 
-func (h *Handler) handleAtx(
-	ctx context.Context,
-	expHash types.Hash32,
-	peer p2p.Peer,
-	msg []byte,
-) error {
+func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 
 	opaqueAtx, err := h.decodeATX(msg)
@@ -273,7 +268,7 @@ func (h *Handler) handleAtx(
 	}
 	id := opaqueAtx.ID()
 
-	if (expHash != types.Hash32{}) && id.Hash32() != expHash {
+	if expHash != types.EmptyHash32 && id.Hash32() != expHash {
 		return fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), id.ShortString())
 	}
 

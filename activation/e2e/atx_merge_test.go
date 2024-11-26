@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -359,11 +360,11 @@ func Test_MarryAndMerge(t *testing.T) {
 			mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 			mBeacon.EXPECT().OnAtx(gomock.Any())
 			mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-			return atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedIdAtx))
+			return atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedIdAtx))
 		})
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(marriageATX))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(marriageATX))
 	require.NoError(t, err)
 
 	// Verify marriage
@@ -423,7 +424,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedATX))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX))
 	require.NoError(t, err)
 
 	// Step 3. verify the merged ATX
@@ -474,7 +475,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedATX2))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX2))
 	require.NoError(t, err)
 
 	atx, err = atxs.Get(db, mergedATX2.ID())
@@ -512,7 +513,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 		mBeacon.EXPECT().OnAtx(gomock.Any())
 		mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-		err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx))
 		require.NoError(t, err)
 
 		atxFromDb, err := atxs.Get(db, atx.ID())

@@ -123,11 +123,11 @@ type handlerMocks struct {
 	ctrl        *gomock.Controller
 	goldenATXID types.ATXID
 
-	mclock            *MocklayerClock
+	mClock            *MocklayerClock
 	mockFetch         *mocks.MockFetcher
 	mValidator        *MocknipostValidator
-	mbeacon           *MockatxReceiver
-	mtortoise         *mocks.MockTortoise
+	mBeacon           *MockatxReceiver
+	mTortoise         *mocks.MockTortoise
 	mLegacyMalPublish *MocklegacyMalfeasancePublisher
 	mMalPublish       *MockatxMalfeasancePublisher
 }
@@ -152,7 +152,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	for _, opt := range opts {
 		opt(&settings)
 	}
-	h.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+	h.mClock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 
 	if atx.VRFNonce != nil {
 		h.mValidator.EXPECT().
@@ -188,8 +188,8 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 		NIPost(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(settings.poetLeaves, nil)
 	h.mValidator.EXPECT().IsVerifyingFullPost().Return(!settings.distributedPost)
-	h.mbeacon.EXPECT().OnAtx(gomock.Any())
-	h.mtortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+	h.mBeacon.EXPECT().OnAtx(gomock.Any())
+	h.mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 }
 
 func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
@@ -198,11 +198,11 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		ctrl: ctrl,
 
 		goldenATXID:       golden,
-		mclock:            NewMocklayerClock(ctrl),
+		mClock:            NewMocklayerClock(ctrl),
 		mockFetch:         mocks.NewMockFetcher(ctrl),
 		mValidator:        NewMocknipostValidator(ctrl),
-		mbeacon:           NewMockatxReceiver(ctrl),
-		mtortoise:         mocks.NewMockTortoise(ctrl),
+		mBeacon:           NewMockatxReceiver(ctrl),
+		mTortoise:         mocks.NewMockTortoise(ctrl),
 		mLegacyMalPublish: NewMocklegacyMalfeasancePublisher(ctrl),
 		mMalPublish:       NewMockatxMalfeasancePublisher(ctrl),
 	}
@@ -220,14 +220,14 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 		cdb,
 		atxsdata.New(),
 		edVerifier,
-		mocks.mclock,
+		mocks.mClock,
 		mocks.mockFetch,
 		goldenATXID,
 		mocks.mValidator,
 		mocks.mMalPublish,
 		mocks.mLegacyMalPublish,
-		mocks.mbeacon,
-		mocks.mtortoise,
+		mocks.mBeacon,
+		mocks.mTortoise,
 		lg,
 		opts...,
 	)
@@ -255,7 +255,7 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
-		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		atxHdlr.mClock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		atxHdlr.mValidator.EXPECT().VRFNonce(atx.SmesherID, goldenATXID, *atx.VRFNonce, gomock.Any(), atx.NumUnits)
 		atxHdlr.mValidator.EXPECT().
 			Post(gomock.Any(), gomock.Any(), *atx.CommitmentATXID, gomock.Any(), gomock.Any(), atx.NumUnits)
@@ -285,7 +285,7 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		)
 
 		msg := codec.MustEncode(atx)
-		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, p2p.NoPeer, msg))
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.EmptyHash32, p2p.NoPeer, msg))
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
@@ -302,7 +302,7 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
-		atxHdlr.mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
+		atxHdlr.mClock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 		atxHdlr.mValidator.EXPECT().VRFNonce(atx.SmesherID, goldenATXID, *atx.VRFNonce, gomock.Any(), atx.NumUnits)
 		atxHdlr.mValidator.EXPECT().
 			Post(gomock.Any(), gomock.Any(), *atx.CommitmentATXID, gomock.Any(), gomock.Any(), atx.NumUnits)
@@ -345,7 +345,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx1 := newInitialATXv1(t, goldenATXID)
 	atx1.Sign(sig)
 	atxHdlr.expectAtxV1(atx1, sig.NodeID())
-	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1)))
+	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx1)))
 
 	got, err := atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx1.PublishEpoch+1)
 	require.NoError(t, err)
@@ -356,7 +356,7 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx2.VRFNonce = (*uint64)(&nonce2)
 	atx2.Sign(sig)
 	atxHdlr.expectAtxV1(atx2, sig.NodeID())
-	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx2)))
+	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx2)))
 
 	got, err = atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx2.PublishEpoch+1)
 	require.NoError(t, err)
@@ -376,7 +376,7 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 	second.Sign(sig)
 
 	// the poet is missing
-	atxHdlr.mclock.EXPECT().CurrentLayer().Return(second.PublishEpoch.FirstLayer())
+	atxHdlr.mClock.EXPECT().CurrentLayer().Return(second.PublishEpoch.FirstLayer())
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(
 		p2p.NoPeer,
 		[]types.Hash32{first.ID().Hash32(), types.Hash32(second.NIPost.PostMetadata.Challenge)},
@@ -385,27 +385,27 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 		GetPoetProof(gomock.Any(), types.Hash32(second.NIPost.PostMetadata.Challenge)).
 		Return(errors.New("missing poet proof"))
 
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(second))
 	require.ErrorContains(t, err, "missing poet proof")
 
 	// deps (prevATX, posATX, commitmentATX) are missing
-	atxHdlr.mclock.EXPECT().CurrentLayer().Return(second.PublishEpoch.FirstLayer())
+	atxHdlr.mClock.EXPECT().CurrentLayer().Return(second.PublishEpoch.FirstLayer())
 	atxHdlr.mockFetch.EXPECT().RegisterPeerHashes(
 		p2p.NoPeer,
 		[]types.Hash32{first.ID().Hash32(), types.Hash32(second.NIPost.PostMetadata.Challenge)},
 	)
 	atxHdlr.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.Hash32(second.NIPost.PostMetadata.Challenge))
 	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(second))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	// valid first comes in
 	atxHdlr.expectAtxV1(first, sig.NodeID())
-	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(first)))
+	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(first)))
 
 	// second is now valid (deps are in)
 	atxHdlr.expectAtxV1(second, sig.NodeID())
-	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second)))
+	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(second)))
 }
 
 func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
@@ -426,7 +426,7 @@ func TestHandler_HandleParallelGossipAtxV1(t *testing.T) {
 	var eg errgroup.Group
 	for range 10 {
 		eg.Go(func() error {
-			return atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1))
+			return atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx1))
 		})
 	}
 
@@ -444,7 +444,7 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		atx1 := newInitialATXv1(t, goldenATXID)
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
-		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1)))
+		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx1)))
 
 		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
 		require.NoError(t, err)
@@ -469,7 +469,7 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		)
 
 		msg := codec.MustEncode(atx2)
-		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.Hash32{}, "", msg))
+		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), types.EmptyHash32, p2p.NoPeer, msg))
 	})
 
 	t.Run("produced and published during gossip", func(t *testing.T) {
@@ -482,7 +482,7 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		atx1 := newInitialATXv1(t, goldenATXID)
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
-		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx1)))
+		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx1)))
 
 		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
 		require.NoError(t, err)
@@ -541,8 +541,8 @@ func TestHandler_HandleSyncedAtx(t *testing.T) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 		atxHdlr.expectAtxV1(atx, sig.NodeID())
 
-		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf))
-		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), "", buf), errKnownAtx)
+		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, buf))
+		require.ErrorIs(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, buf), errKnownAtx)
 		require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), p2p.NoPeer, buf))
 	})
 
@@ -730,7 +730,7 @@ func TestHandler_WrongHash(t *testing.T) {
 	atx := newInitialATXv1(t, goldenATXID)
 	atx.Sign(sig)
 
-	err = atxHdlr.HandleSyncedAtx(context.Background(), types.RandomHash(), "", codec.MustEncode(atx))
+	err = atxHdlr.HandleSyncedAtx(context.Background(), types.RandomHash(), p2p.NoPeer, codec.MustEncode(atx))
 	require.ErrorIs(t, err, errWrongHash)
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 }
@@ -749,7 +749,7 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 
 		atxHdlr := newTestHandler(t, goldenATXID)
 		atxHdlr.expectAtxV1(atx, sig.NodeID(), func(o *atxHandleOpts) { o.distributedPost = false })
-		err := atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		err := atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx))
 		require.NoError(t, err)
 
 		vatx, err := atxs.Get(atxHdlr.cdb, atx.ID())
@@ -764,7 +764,7 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 
 		atxHdlr := newTestHandler(t, goldenATXID)
 		atxHdlr.expectAtxV1(atx, sig.NodeID(), func(o *atxHandleOpts) { o.distributedPost = true })
-		err := atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		err := atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx))
 		require.NoError(t, err)
 
 		vatx, err := atxs.Get(atxHdlr.cdb, atx.ID())

@@ -26,8 +26,8 @@ type Publisher struct {
 func NewPublisher(
 	logger *zap.Logger,
 	cdb *datastore.CachedDB,
-	tortoise tortoise,
 	sync syncer,
+	tortoise tortoise,
 	publisher pubsub.Publisher,
 ) *Publisher {
 	return &Publisher{
@@ -68,9 +68,7 @@ func (p *Publisher) PublishProof(ctx context.Context, smesherID types.NodeID, pr
 		MalfeasanceProof: *proof,
 	}
 	if err := p.publisher.Publish(ctx, pubsub.MalfeasanceProof, codec.MustEncode(&gossip)); err != nil {
-		p.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
 		return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 	}
-
 	return nil
 }

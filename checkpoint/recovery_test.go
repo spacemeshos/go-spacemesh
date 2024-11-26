@@ -253,7 +253,7 @@ func validateAndPreserveData(
 	mValidator := activation.NewMocknipostValidator(ctrl)
 	mMalPublisher := activation.NewMockatxMalfeasancePublisher(ctrl)
 	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
-	mReceiver := activation.NewMockatxReceiver(ctrl)
+	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
 	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
@@ -268,7 +268,7 @@ func validateAndPreserveData(
 		mValidator,
 		mMalPublisher,
 		mLegacyPublish,
-		mReceiver,
+		mBeacon,
 		mTortoise,
 		lg,
 	)
@@ -314,7 +314,7 @@ func validateAndPreserveData(
 			NIPost(gomock.Any(), atx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
 		mValidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
-		mReceiver.EXPECT().OnAtx(gomock.Any())
+		mBeacon.EXPECT().OnAtx(gomock.Any())
 		mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), "self", dep.Blob))
 	}

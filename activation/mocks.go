@@ -510,17 +510,17 @@ func (c *MocknipostValidatorPoetMembershipCall) DoAndReturn(f func(context.Conte
 }
 
 // PositioningAtx mocks base method.
-func (m *MocknipostValidator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
+func (m *MocknipostValidator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubEpoch types.EpochID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, pubepoch)
+	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, pubEpoch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PositioningAtx indicates an expected call of PositioningAtx.
-func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID, pubepoch any) *MocknipostValidatorPositioningAtxCall {
+func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID, pubEpoch any) *MocknipostValidatorPositioningAtxCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningAtx", reflect.TypeOf((*MocknipostValidator)(nil).PositioningAtx), id, atxs, goldenATXID, pubepoch)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningAtx", reflect.TypeOf((*MocknipostValidator)(nil).PositioningAtx), id, atxs, goldenATXID, pubEpoch)
 	return &MocknipostValidatorPositioningAtxCall{Call: call}
 }
 

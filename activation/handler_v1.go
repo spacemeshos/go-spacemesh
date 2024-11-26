@@ -58,7 +58,7 @@ type nipostValidatorV1 interface {
 	) error
 
 	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce, labelsPerUnit uint64, numUnits uint32) error
-	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubEpoch types.EpochID) error
 }
 
 // HandlerV1 processes ATXs version 1.
@@ -348,6 +348,12 @@ func (h *HandlerV1) checkDoublePublish(
 		return nil, fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(), atx.PublishEpoch)
 	}
 
+	h.logger.Debug("smesher produced more than one atx in the same epoch",
+		log.ZContext(ctx),
+		zap.Stringer("smesher", atx.SmesherID),
+		zap.Stringer("previous", prev),
+		zap.Stringer("current", atx.ID()),
+	)
 	prevSignature, err := atxSignature(ctx, tx, prev)
 	if err != nil {
 		return nil, fmt.Errorf("extracting signature for malfeasance proof: %w", err)
@@ -370,22 +376,13 @@ func (h *HandlerV1) checkDoublePublish(
 			Signature: atx.Signature,
 		}},
 	}
-	proof := &mwire.MalfeasanceProof{
+	return &mwire.MalfeasanceProof{
 		Layer: atx.PublishEpoch.FirstLayer(),
 		Proof: mwire.Proof{
 			Type: mwire.MultipleATXs,
 			Data: &atxProof,
 		},
-	}
-
-	h.logger.Debug("smesher produced more than one atx in the same epoch",
-		log.ZContext(ctx),
-		zap.Stringer("smesher", atx.SmesherID),
-		zap.Stringer("previous", prev),
-		zap.Stringer("current", atx.ID()),
-	)
-
-	return proof, nil
+	}, nil
 }
 
 // checkWrongPrevAtx verifies if the previous ATX referenced in the ATX is correct.
@@ -415,6 +412,12 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
 	}
 
+	h.logger.Debug("smesher referenced the wrong previous in published ATX",
+		log.ZContext(ctx),
+		zap.Stringer("smesher", atx.SmesherID),
+		log.ZShortStringer("actual", atx.PrevATXID),
+		log.ZShortStringer("expected", expectedPrevID),
+	)
 	atx2ID, err := atxs.AtxWithPrevious(tx, atx.PrevATXID, atx.SmesherID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
@@ -444,7 +447,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
 
-	proof := &mwire.MalfeasanceProof{
+	return &mwire.MalfeasanceProof{
 		Layer: atx.PublishEpoch.FirstLayer(),
 		Proof: mwire.Proof{
 			Type: mwire.InvalidPrevATX,
@@ -453,15 +456,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 				Atx2: watx2,
 			},
 		},
-	}
-
-	h.logger.Debug("smesher referenced the wrong previous in published ATX",
-		log.ZContext(ctx),
-		zap.Stringer("smesher", atx.SmesherID),
-		log.ZShortStringer("actual", atx.PrevATXID),
-		log.ZShortStringer("expected", expectedPrevID),
-	)
-	return proof, nil
+	}, nil
 }
 
 func (h *HandlerV1) checkMalicious(
@@ -477,11 +472,7 @@ func (h *HandlerV1) checkMalicious(
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *HandlerV1) storeAtx(
-	ctx context.Context,
-	atx *types.ActivationTx,
-	watx *wire.ActivationTxV1,
-) error {
+func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *wire.ActivationTxV1) error {
 	var (
 		proof     *mwire.MalfeasanceProof
 		malicious bool
@@ -513,22 +504,20 @@ func (h *HandlerV1) storeAtx(
 		return fmt.Errorf("store atx: %w", err)
 	}
 
-	if proof != nil {
-		if err := h.malPublisher.PublishProof(ctx, atx.SmesherID, proof); err != nil {
-			return fmt.Errorf("publishing malfeasance proof: %w", err)
-		}
-	}
-
 	atxs.AtxAdded(h.cdb, atx)
 	h.beacon.OnAtx(atx)
 	if added := h.cacheAtx(ctx, atx, malicious || proof != nil); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
-
 	h.logger.Debug("finished storing atx in epoch",
 		zap.Stringer("atx_id", atx.ID()),
 		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
 	)
+	if proof != nil {
+		if err := h.malPublisher.PublishProof(ctx, atx.SmesherID, proof); err != nil {
+			return fmt.Errorf("publishing malfeasance proof: %w", err)
+		}
+	}
 	return nil
 }
 
