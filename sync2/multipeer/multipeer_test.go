@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -101,7 +102,7 @@ func (mt *multiPeerSyncTester) addPeers(n int) []p2p.Peer {
 	r := make([]p2p.Peer, n)
 	for i := 0; i < n; i++ {
 		p := p2p.Peer(fmt.Sprintf("peer%d", i+1))
-		mt.peers.Add(p)
+		mt.peers.Add(p, func() []protocol.ID { return []protocol.ID{multipeer.Protocol} })
 		r[i] = p
 	}
 	return r

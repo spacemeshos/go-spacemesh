@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -16,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync2"
+	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
@@ -88,7 +90,9 @@ func TestP2P(t *testing.T) {
 		ps := peers.New()
 		for m := 0; m < numNodes; m++ {
 			if m != n {
-				ps.Add(mesh.Hosts()[m].ID())
+				ps.Add(mesh.Hosts()[m].ID(), func() []protocol.ID {
+					return []protocol.ID{multipeer.Protocol}
+				})
 			}
 		}
 		cfg := sync2.DefaultConfig()

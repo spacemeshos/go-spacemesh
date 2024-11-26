@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	p2phost "github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -137,7 +138,9 @@ func TestFetch_getHashes(t *testing.T) {
 		f.Start()
 		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
-			f.peers.Add(peer)
+			f.peers.Add(peer, func() []protocol.ID {
+				return []protocol.ID{hashProtocol, activeSetProtocol}
+			})
 		}
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.RegisterPeerHashes(peers[0], hashes[:2])
@@ -249,7 +252,9 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.Start()
 		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
-			f.peers.Add(peer)
+			f.peers.Add(peer, func() []protocol.ID {
+				return []protocol.ID{hashProtocol, activeSetProtocol}
+			})
 		}
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.RegisterPeerHashes(peers[0], hashes[:2])
