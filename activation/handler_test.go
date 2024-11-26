@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"testing"
 	"testing/quick"
@@ -12,6 +13,7 @@ import (
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/verifying"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -37,15 +39,15 @@ import (
 
 const layersPerEpochBig = 1000
 
-func newMerkleProof(t testing.TB, leafs []types.Hash32) (types.MerkleProof, types.Hash32) {
-	t.Helper()
+func newMerkleProof(tb testing.TB, leafs []types.Hash32) (types.MerkleProof, types.Hash32) {
+	tb.Helper()
 	tree, err := merkle.NewTreeBuilder().
 		WithHashFunc(poetShared.HashMembershipTreeNode).
 		WithLeavesToProve(map[uint64]bool{0: true}).
 		Build()
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	for _, m := range leafs {
-		require.NoError(t, tree.AddLeaf(m[:]))
+		require.NoError(tb, tree.AddLeaf(m[:]))
 	}
 	root, nodes := tree.RootAndProof()
 	nodesH32 := make([]types.Hash32, 0, len(nodes))
@@ -57,9 +59,9 @@ func newMerkleProof(t testing.TB, leafs []types.Hash32) (types.MerkleProof, type
 	}, types.BytesToHash(root)
 }
 
-func newNIPostWithPoet(t testing.TB, poetRef []byte) *nipost.NIPostState {
-	t.Helper()
-	proof, _ := newMerkleProof(t, []types.Hash32{
+func newNIPostWithPoet(tb testing.TB, poetRef []byte) *nipost.NIPostState {
+	tb.Helper()
+	proof, _ := newMerkleProof(tb, []types.Hash32{
 		types.BytesToHash([]byte("challenge")),
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
@@ -83,9 +85,9 @@ func newNIPostWithPoet(t testing.TB, poetRef []byte) *nipost.NIPostState {
 	}
 }
 
-func newNIPosV1tWithPoet(t testing.TB, poetRef []byte) *wire.NIPostV1 {
-	t.Helper()
-	proof, _ := newMerkleProof(t, []types.Hash32{
+func newNIPosV1tWithPoet(tb testing.TB, poetRef []byte) *wire.NIPostV1 {
+	tb.Helper()
+	proof, _ := newMerkleProof(tb, []types.Hash32{
 		types.BytesToHash([]byte("challenge")),
 		types.BytesToHash([]byte("leaf2")),
 		types.BytesToHash([]byte("leaf3")),
@@ -108,8 +110,8 @@ func newNIPosV1tWithPoet(t testing.TB, poetRef []byte) *wire.NIPostV1 {
 	}
 }
 
-func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
-	t.Helper()
+func toAtx(tb testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
+	tb.Helper()
 	atx := wire.ActivationTxFromWireV1(watx)
 	atx.SetReceived(time.Now())
 	atx.BaseTickHeight = uint64(atx.PublishEpoch)
@@ -118,6 +120,7 @@ func toAtx(t testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 }
 
 type handlerMocks struct {
+	ctrl        *gomock.Controller
 	goldenATXID types.ATXID
 
 	mclock      *MocklayerClock
@@ -126,7 +129,7 @@ type handlerMocks struct {
 	mValidator  *MocknipostValidator
 	mbeacon     *MockAtxReceiver
 	mtortoise   *mocks.MockTortoise
-	mMalPublish *MockmalfeasancePublisher
+	mMalPublish *MockatxMalfeasancePublisher
 }
 
 type testHandler struct {
@@ -157,6 +160,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	}
 	h.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	h.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.BytesToHash(atx.NIPost.PostMetadata.Challenge))
+	deps := []types.ATXID{atx.PrevATXID, atx.PositioningATXID}
 	if atx.PrevATXID == types.EmptyATXID {
 		h.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), h.goldenATXID)
 		h.mValidator.EXPECT().
@@ -168,8 +172,16 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 				time.Sleep(settings.postVerificationDuration)
 				return nil
 			})
+		deps = append(deps, *atx.CommitmentATXID)
 	} else {
 		h.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), nodeId)
+	}
+	deps = slices.Compact(deps)
+	deps = slices.DeleteFunc(deps, func(dep types.ATXID) bool {
+		return dep == types.EmptyATXID || dep == h.goldenATXID
+	})
+	if len(deps) > 0 {
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), deps, gomock.Any())
 	}
 	h.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), h.goldenATXID, atx.PublishEpoch)
 	h.mValidator.EXPECT().
@@ -183,6 +195,8 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 	ctrl := gomock.NewController(tb)
 	return handlerMocks{
+		ctrl: ctrl,
+
 		goldenATXID: golden,
 		mclock:      NewMocklayerClock(ctrl),
 		mpub:        pubsubmocks.NewMockPublisher(ctrl),
@@ -190,16 +204,19 @@ func newTestHandlerMocks(tb testing.TB, golden types.ATXID) handlerMocks {
 		mValidator:  NewMocknipostValidator(ctrl),
 		mbeacon:     NewMockAtxReceiver(ctrl),
 		mtortoise:   mocks.NewMockTortoise(ctrl),
-		mMalPublish: NewMockmalfeasancePublisher(ctrl),
+		mMalPublish: NewMockatxMalfeasancePublisher(ctrl),
 	}
 }
 
 func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOption) *testHandler {
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemory(), lg)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	edVerifier := signing.NewEdVerifier()
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
+	// TODO(mafa): make mandatory parameter when real publisher is available
+	opts = append(opts, func(h *Handler) { h.v2.malPublisher = mocks.mMalPublish })
 	atxHdlr := NewHandler(
 		"localID",
 		cdb,
@@ -336,7 +353,6 @@ func TestHandler_ProcessAtxStoresNewVRFNonce(t *testing.T) {
 	atx2.VRFNonce = (*uint64)(&nonce2)
 	atx2.Sign(sig)
 	atxHdlr.expectAtxV1(atx2, sig.NodeID())
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx2)))
 
 	got, err = atxs.VRFNonce(atxHdlr.cdb, sig.NodeID(), atx2.PublishEpoch+1)
@@ -386,7 +402,6 @@ func TestHandler_HandleGossipAtx(t *testing.T) {
 
 	// second is now valid (deps are in)
 	atxHdlr.expectAtxV1(second, sig.NodeID())
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{second.PrevATXID}, gomock.Any())
 	require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(second)))
 }
 
@@ -690,7 +705,6 @@ func TestHandler_AtxWeight(t *testing.T) {
 	buf = codec.MustEncode(atx2)
 
 	atxHdlr.expectAtxV1(atx2, sig.NodeID(), func(o *atxHandleOpts) { o.poetLeaves = leaves })
-	atxHdlr.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atx1.ID()}, gomock.Any())
 	require.NoError(t, atxHdlr.HandleSyncedAtx(context.Background(), atx2.ID().Hash32(), peer, buf))
 
 	stored2, err := atxHdlr.cdb.GetAtx(atx2.ID())
@@ -756,11 +770,11 @@ func TestHandler_MarksAtxValid(t *testing.T) {
 }
 
 func newInitialATXv1(
-	t testing.TB,
+	tb testing.TB,
 	goldenATXID types.ATXID,
 	opts ...func(*wire.ActivationTxV1),
 ) *wire.ActivationTxV1 {
-	t.Helper()
+	tb.Helper()
 	nonce := uint64(999)
 	poetRef := types.RandomHash()
 	atx := &wire.ActivationTxV1{
@@ -772,7 +786,7 @@ func newInitialATXv1(
 				CommitmentATXID:  &goldenATXID,
 				InitialPost:      &wire.PostV1{},
 			},
-			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
+			NIPost:   newNIPosV1tWithPoet(tb, poetRef.Bytes()),
 			VRFNonce: &nonce,
 			Coinbase: types.GenerateAddress([]byte("aaaa")),
 			NumUnits: 100,
@@ -785,11 +799,11 @@ func newInitialATXv1(
 }
 
 func newChainedActivationTxV1(
-	t testing.TB,
+	tb testing.TB,
 	prev *wire.ActivationTxV1,
 	pos types.ATXID,
 ) *wire.ActivationTxV1 {
-	t.Helper()
+	tb.Helper()
 	poetRef := types.RandomHash()
 	return &wire.ActivationTxV1{
 		InnerActivationTxV1: wire.InnerActivationTxV1{
@@ -798,7 +812,7 @@ func newChainedActivationTxV1(
 				PublishEpoch:     prev.PublishEpoch + 1,
 				PositioningATXID: pos,
 			},
-			NIPost:   newNIPosV1tWithPoet(t, poetRef.Bytes()),
+			NIPost:   newNIPosV1tWithPoet(tb, poetRef.Bytes()),
 			Coinbase: prev.Coinbase,
 			NumUnits: prev.NumUnits,
 		},

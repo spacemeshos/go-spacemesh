@@ -20,23 +20,23 @@ import (
 const epochWeight = uint64(100)
 
 func createProtocolDriverWithFirstRoundVotes(
-	t *testing.T,
+	tb testing.TB,
 	signer *signing.EdSigner,
 	malicious bool,
 	epoch types.EpochID,
 	round types.RoundID,
 ) (*testProtocolDriver, proposalList) {
-	tpd := setUpProtocolDriver(t)
+	tpd := setUpProtocolDriver(tb)
 	tpd.setBeginProtocol(context.Background())
-	id := createATX(t, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())
+	id := createATX(tb, tpd.cdb, epoch.FirstLayer().Sub(1), signer, 10, time.Now())
 	minerAtxs := map[types.NodeID]*minerInfo{signer.NodeID(): {atxid: id, malicious: malicious}}
-	createEpochState(t, tpd.ProtocolDriver, epoch, minerAtxs, nil)
+	createEpochState(tb, tpd.ProtocolDriver, epoch, minerAtxs, nil)
 	plist := make(proposalList, 3)
 	for i := range plist {
 		copy(plist[i][:], types.RandomBytes(types.BeaconSize))
 	}
-	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, plist)
-	setMinerFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.NodeID(), plist)
+	setOwnFirstRoundVotes(tb, tpd.ProtocolDriver, epoch, plist)
+	setMinerFirstRoundVotes(tb, tpd.ProtocolDriver, epoch, signer.NodeID(), plist)
 	tpd.setRoundInProgress(round)
 	return tpd, plist
 }
@@ -55,8 +55,8 @@ func createEpochState(
 	return pd.states[epoch]
 }
 
-func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
-	t.Helper()
+func setOwnFirstRoundVotes(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
+	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	for _, p := range ownFirstRound {
@@ -65,27 +65,27 @@ func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID
 }
 
 func setMinerFirstRoundVotes(
-	t *testing.T,
+	tb testing.TB,
 	pd *ProtocolDriver,
 	epoch types.EpochID,
 	minerID types.NodeID,
 	minerFirstRound proposalList,
 ) {
-	t.Helper()
+	tb.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	pd.states[epoch].setMinerFirstRoundVote(minerID, minerFirstRound)
 }
 
 func createProposal(
-	t *testing.T,
+	tb testing.TB,
 	vrfSigner *signing.VRFSigner,
 	epoch types.EpochID,
 	corruptSignature bool,
 ) *ProposalMessage {
 	sig := buildSignedProposal(
 		context.Background(),
-		zaptest.NewLogger(t),
+		zaptest.NewLogger(tb),
 		vrfSigner,
 		epoch,
 		types.VRFPostIndex(rand.Uint64()),
@@ -107,31 +107,31 @@ func setEarliestProposalTime(pd *ProtocolDriver, t time.Time) {
 	pd.earliestProposalTime = t
 }
 
-func checkProposed(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, nodeID types.NodeID, expected bool) {
+func checkProposed(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID, nodeID types.NodeID, expected bool) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
 	if _, ok := pd.states[epoch]; ok {
 		_, proposed := pd.states[epoch].hasProposed[nodeID]
-		require.Equal(t, expected, proposed)
+		require.Equal(tb, expected, proposed)
 	} else {
-		require.False(t, expected)
+		require.False(tb, expected)
 	}
 }
 
-func checkProposals(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expected proposals) {
+func checkProposals(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID, expected proposals) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
 	if _, ok := pd.states[epoch]; ok {
-		require.EqualValues(t, expected, pd.states[epoch].incomingProposals)
+		require.EqualValues(tb, expected, pd.states[epoch].incomingProposals)
 	} else {
-		require.Equal(t, expected, proposals{})
+		require.Equal(tb, expected, proposals{})
 	}
 }
 
 func createFirstVote(
-	t *testing.T,
+	tb testing.TB,
 	signer *signing.EdSigner,
 	epoch types.EpochID,
 	valid, pValid proposalList,
@@ -154,7 +154,7 @@ func createFirstVote(
 }
 
 func checkVoted(
-	t *testing.T,
+	tb testing.TB,
 	pd *ProtocolDriver,
 	epoch types.EpochID,
 	signer *signing.EdSigner,
@@ -163,29 +163,29 @@ func checkVoted(
 ) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	require.NotNil(t, pd.states[epoch])
+	require.NotNil(tb, pd.states[epoch])
 	tracker, exists := pd.states[epoch].hasVoted[signer.NodeID()]
 	if !exists {
-		require.Equal(t, voted, exists)
+		require.Equal(tb, voted, exists)
 	} else {
-		require.Equal(t, voted, tracker.voted(round))
+		require.Equal(tb, voted, tracker.voted(round))
 	}
 }
 
 func checkFirstIncomingVotes(
-	t *testing.T,
+	tb testing.TB,
 	pd *ProtocolDriver,
 	epoch types.EpochID,
 	expected map[types.NodeID]proposalList,
 ) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	require.NotNil(t, pd.states[epoch])
-	require.EqualValues(t, expected, pd.states[epoch].firstRoundIncomingVotes)
+	require.NotNil(tb, pd.states[epoch])
+	require.EqualValues(tb, expected, pd.states[epoch].firstRoundIncomingVotes)
 }
 
 func createFollowingVote(
-	t *testing.T,
+	tb testing.TB,
 	signer *signing.EdSigner,
 	epoch types.EpochID,
 	round types.RoundID,
@@ -208,11 +208,11 @@ func createFollowingVote(
 	return msg
 }
 
-func checkVoteMargins(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, expected map[Proposal]*big.Int) {
+func checkVoteMargins(tb testing.TB, pd *ProtocolDriver, epoch types.EpochID, expected map[Proposal]*big.Int) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	require.NotNil(t, pd.states[epoch])
-	require.EqualValues(t, expected, pd.states[epoch].votesMargin)
+	require.NotNil(tb, pd.states[epoch])
+	require.EqualValues(tb, expected, pd.states[epoch].votesMargin)
 }
 
 func emptyVoteMargins(plist proposalList) map[Proposal]*big.Int {

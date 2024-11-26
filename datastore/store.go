@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"go.uber.org/zap"
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -196,20 +198,15 @@ func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
 func (db *CachedDB) IterateMalfeasanceProofs(
 	iter func(types.NodeID, []byte) error,
 ) error {
-	ids, err := identities.GetMalicious(db)
-	if err != nil {
+	var callbackErr error
+	if err := identities.IterateOps(db, builder.Operations{},
+		func(id types.NodeID, proof []byte, _ time.Time) bool {
+			callbackErr = iter(id, proof)
+			return callbackErr == nil
+		}); err != nil {
 		return err
 	}
-	for _, id := range ids {
-		proof, err := db.MalfeasanceProof(id)
-		if err != nil {
-			return err
-		}
-		if err := iter(id, proof); err != nil {
-			return err
-		}
-	}
-	return nil
+	return callbackErr
 }
 
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
@@ -354,13 +351,11 @@ func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 	case TXDB:
 		return transactions.Has(bs.DB, types.TransactionID(types.BytesToHash(key)))
 	case POETDB:
-		var ref types.PoetProofRef
-		copy(ref[:], key)
-		return poets.Has(bs.DB, ref)
+		return poets.Has(bs.DB, types.ByteToPoetProofRef(key))
 	case Malfeasance:
 		return identities.IsMalicious(bs.DB, types.BytesToNodeID(key))
 	case ActiveSet:
-		return activesets.Has(bs.DB, key)
+		return activesets.Has(bs.DB, types.BytesToHash(key))
 	}
 	return false, fmt.Errorf("blob store not found %s", hint)
 }

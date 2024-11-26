@@ -3,7 +3,9 @@ package sim
 import (
 	"math/rand"
 	"path/filepath"
+	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -15,20 +17,22 @@ const (
 	atxpath = "atx"
 )
 
-func newCacheDB(logger *zap.Logger, conf config) *datastore.CachedDB {
+func newCacheDB(tb testing.TB, logger *zap.Logger, conf config) *datastore.CachedDB {
 	var (
 		db  sql.StateDatabase
 		err error
 	)
 	if len(conf.Path) == 0 {
-		db = statesql.InMemory()
+		db = statesql.InMemoryTest(tb)
 	} else {
 		db, err = statesql.Open(filepath.Join(conf.Path, atxpath), sql.WithMigrationsDisabled())
 		if err != nil {
 			panic(err)
 		}
 	}
-	return datastore.NewCachedDB(db, logger)
+	cdb := datastore.NewCachedDB(db, logger)
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
+	return cdb
 }
 
 func intInRange(rng *rand.Rand, ints [2]int) uint32 {

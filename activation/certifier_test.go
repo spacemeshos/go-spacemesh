@@ -22,7 +22,7 @@ import (
 func TestPersistsCerts(t *testing.T) {
 	client := NewMockcertifierClient(gomock.NewController(t))
 	id := types.RandomNodeID()
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	cert := &certdb.PoetCert{Data: []byte("cert"), Signature: []byte("sig")}
 	certifierAddress := &url.URL{Scheme: "http", Host: "certifier.org"}
 	pubkey := []byte("pubkey")
@@ -56,7 +56,7 @@ func TestPersistsCerts(t *testing.T) {
 }
 
 func TestAvoidsRedundantQueries(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 	client := NewMockcertifierClient(gomock.NewController(t))
 	id1 := types.RandomNodeID()
 	id2 := types.RandomNodeID()
@@ -114,16 +114,16 @@ func TestObtainingPost(t *testing.T) {
 	id := types.RandomNodeID()
 
 	t.Run("no POST or ATX", func(t *testing.T) {
-		db := statesql.InMemory()
-		localDb := localsql.InMemory()
+		db := statesql.InMemoryTest(t)
+		localDb := localsql.InMemoryTest(t)
 
 		certifier := NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		_, err := certifier.obtainPost(context.Background(), id)
 		require.ErrorContains(t, err, "PoST not found")
 	})
 	t.Run("initial POST available", func(t *testing.T) {
-		db := statesql.InMemory()
-		localDb := localsql.InMemory()
+		db := statesql.InMemoryTest(t)
+		localDb := localsql.InMemoryTest(t)
 
 		post := nipost.Post{
 			Nonce:         30,
@@ -143,8 +143,8 @@ func TestObtainingPost(t *testing.T) {
 		require.Equal(t, post, *got)
 	})
 	t.Run("initial POST unavailable but ATX exists", func(t *testing.T) {
-		db := statesql.InMemory()
-		localDb := localsql.InMemory()
+		db := statesql.InMemoryTest(t)
+		localDb := localsql.InMemoryTest(t)
 
 		atx := newInitialATXv1(t, types.RandomATXID())
 		atx.SmesherID = id

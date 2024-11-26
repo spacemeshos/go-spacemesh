@@ -341,7 +341,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 }
 
 func (s *Syncer) updateState(ctx context.Context) error {
-	if err := s.localdb.WithTx(ctx, func(tx sql.Transaction) error {
+	if err := s.localdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		return malsync.UpdateSyncState(tx, s.clock.Now())
 	}); err != nil {
 		if ctx.Err() != nil {
@@ -382,7 +382,9 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 				return ctx.Err()
 			case update = <-updates:
 				s.logger.Debug("malfeasance sync update",
-					log.ZContext(ctx), zap.Int("count", len(update.nodeIDs)))
+					log.ZContext(ctx),
+					zap.Int("count", len(update.nodeIDs)),
+				)
 				sst.update(update)
 				gotUpdate = true
 			}
@@ -392,7 +394,9 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 				return ctx.Err()
 			case update = <-updates:
 				s.logger.Debug("malfeasance sync update",
-					log.ZContext(ctx), zap.Int("count", len(update.nodeIDs)))
+					log.ZContext(ctx),
+					zap.Int("count", len(update.nodeIDs)),
+				)
 				sst.update(update)
 				gotUpdate = true
 			default:
@@ -417,7 +421,8 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		if len(batch) != 0 {
 			s.logger.Debug("retrieving malfeasant identities",
 				log.ZContext(ctx),
-				zap.Int("count", len(batch)))
+				zap.Int("count", len(batch)),
+			)
 			err := s.fetcher.GetMalfeasanceProofs(ctx, batch)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {

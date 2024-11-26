@@ -39,7 +39,7 @@ func (a *recoveryAdapter) TallyVotes(current types.LayerID) {
 
 func TestRecoverState(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	lg := zaptest.NewLogger(t)
@@ -74,7 +74,7 @@ func TestRecoverState(t *testing.T) {
 
 func TestRecoverEmpty(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()
@@ -93,7 +93,7 @@ func TestRecoverEmpty(t *testing.T) {
 
 func TestRecoverWithOpinion(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	lg := zaptest.NewLogger(t)
@@ -133,7 +133,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 
 func TestResetPending(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	lg := zaptest.NewLogger(t)
@@ -177,7 +177,7 @@ func TestResetPending(t *testing.T) {
 
 func TestWindowRecovery(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	lg := zaptest.NewLogger(t)
@@ -226,7 +226,7 @@ func TestWindowRecovery(t *testing.T) {
 
 func TestRecoverOnlyAtxs(t *testing.T) {
 	const size = 10
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()

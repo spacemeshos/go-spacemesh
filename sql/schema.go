@@ -31,15 +31,21 @@ func LoadDBSchemaScript(db Executor) (string, error) {
 		return "", err
 	}
 	fmt.Fprintf(&sb, "PRAGMA user_version = %d;\n", version)
-	if _, err = db.Exec(
-		// Type is either 'index' or 'table', we want tables to go first
-		`select tbl_name, sql || ';' from sqlite_master
-                 where sql is not null
-                 order by tbl_name, type desc, name`,
-		nil, func(st *Statement) bool {
-			fmt.Fprintln(&sb, st.ColumnText(1))
-			return true
-		}); err != nil {
+	// The following SQL query ensures that tables are listed first,
+	// ordered by name, and then all other objects, ordered by their table name
+	// and then by their own name.
+	if _, err = db.Exec(`
+		SELECT tbl_name, sql || ';'
+		FROM sqlite_master
+		WHERE sql IS NOT NULL AND tbl_name NOT LIKE 'sqlite_%'
+		ORDER BY
+			CASE WHEN type = 'table' THEN 1 ELSE 2 END,
+			tbl_name,
+			name
+	`, nil, func(st *Statement) bool {
+		fmt.Fprintln(&sb, st.ColumnText(1))
+		return true
+	}); err != nil {
 		return "", fmt.Errorf("error retrieving DB schema: %w", err)
 	}
 	// On Windows, the result contains extra carriage returns
@@ -82,11 +88,16 @@ func (s *Schema) SkipMigrations(i ...int) {
 
 // Apply applies the schema to the database.
 func (s *Schema) Apply(db Database) error {
-	return db.WithTx(context.Background(), func(tx Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 		scanner := bufio.NewScanner(strings.NewReader(s.Script))
 		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 			if i := bytes.Index(data, []byte(";")); i >= 0 {
-				return i + 1, data[0 : i+1], nil
+				if !bytes.Contains(data[:i], []byte("BEGIN")) {
+					return i + 1, data[:i+1], nil
+				}
+			}
+			if i := bytes.Index(data, []byte("END;")); i >= 0 {
+				return i + 4, data[:i+4], nil
 			}
 			return 0, nil, nil
 		})
@@ -139,7 +150,7 @@ func (s *Schema) Migrate(logger *zap.Logger, db Database, before, vacuumState in
 		if m.Order() <= before {
 			continue
 		}
-		if err := db.WithTx(context.Background(), func(tx Transaction) error {
+		if err := db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 			if _, ok := s.skipMigration[m.Order()]; !ok {
 				if err := m.Apply(tx, logger); err != nil {
 					for j := i; j >= 0 && s.Migrations[j].Order() > before; j-- {
@@ -188,7 +199,7 @@ func (s *Schema) MigrateTempDB(logger *zap.Logger, db Database, before int) erro
 		}
 
 		if _, ok := s.skipMigration[m.Order()]; !ok {
-			if err := db.WithTx(context.Background(), func(tx Transaction) error {
+			if err := db.WithTxImmediate(context.Background(), func(tx Transaction) error {
 				return m.Apply(tx, logger)
 			}); err != nil {
 				return fmt.Errorf("apply %s: %w", m.Name(), err)
@@ -251,7 +262,8 @@ func (g *SchemaGen) Generate(outputFile string) error {
 		WithLogger(g.logger),
 		WithDatabaseSchema(g.schema),
 		WithForceMigrations(true),
-		WithNoCheckSchemaDrift())
+		WithNoCheckSchemaDrift(),
+	)
 	if err != nil {
 		return fmt.Errorf("error opening in-memory db: %w", err)
 	}

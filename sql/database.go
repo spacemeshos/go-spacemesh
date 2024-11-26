@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 	"time"
 
 	sqlite "github.com/go-llsqlite/crawshaw"
@@ -30,6 +31,8 @@ var (
 	ErrNotFound = errors.New("database: not found")
 	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
+	// ErrConflict is returned if database constraints didn't allow to update an object.
+	ErrConflict = errors.New("database: conflict")
 	// ErrTooNew is returned if database version is newer than expected.
 	ErrTooNew = errors.New("database version is too new")
 	// ErrOldSchema is returned when the database version differs from the expected one
@@ -41,13 +44,6 @@ const (
 	beginDefault   = "BEGIN;"
 	beginImmediate = "BEGIN IMMEDIATE;"
 )
-
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/sql Executor
-
-// Executor is an interface for executing raw statement.
-type Executor interface {
-	Exec(string, Encoder, Decoder) (int, error)
-}
 
 // Statement is an sqlite statement.
 type Statement = sqlite.Stmt
@@ -93,6 +89,7 @@ type conf struct {
 	temp                       bool
 	handleIncompleteMigrations bool
 	exclusive                  bool
+	readOnly                   bool
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -214,6 +211,13 @@ func WithExclusive() Opt {
 	}
 }
 
+// WithReadOnly specifies that the database is to be open in read-only mode.
+func WithReadOnly() Opt {
+	return func(c *conf) {
+		c.readOnly = true
+	}
+}
+
 // Opt for configuring database.
 type Opt func(c *conf)
 
@@ -230,6 +234,15 @@ func InMemory(opts ...Opt) *sqliteDatabase {
 	if err != nil {
 		panic(err)
 	}
+	return db
+}
+
+// InMemoryTest returns an in-mem database for testing and ensures database is closed during `tb.Cleanup`.
+func InMemoryTest(tb testing.TB, opts ...Opt) *sqliteDatabase {
+	// When using empty DB schema, we don't want to check for schema drift due to
+	// "PRAGMA user_version = 0;" in the initial schema retrieved from the DB.
+	db := InMemory(append(opts, WithNoCheckSchemaDrift())...)
+	tb.Cleanup(func() { db.Close() })
 	return db
 }
 
@@ -256,8 +269,7 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 	logger := config.logger.With(zap.String("uri", config.uri))
 	var flags sqlite.OpenFlags
 	if !config.forceFresh {
-		flags = sqlite.SQLITE_OPEN_READWRITE |
-			sqlite.SQLITE_OPEN_URI |
+		flags = sqlite.SQLITE_OPEN_URI |
 			sqlite.SQLITE_OPEN_NOMUTEX
 		if !config.temp {
 			// Note that SQLITE_OPEN_WAL is not handled by SQLITE api itself,
@@ -267,7 +279,13 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 			// using any journal
 			flags |= sqlite.SQLITE_OPEN_WAL
 		}
+		if !config.readOnly {
+			flags |= sqlite.SQLITE_OPEN_READWRITE
+		} else {
+			flags |= sqlite.SQLITE_OPEN_READONLY
+		}
 	}
+
 	freshDB := config.forceFresh
 	if config.exclusive {
 		config.connections = 1
@@ -554,21 +572,68 @@ type Interceptor func(query string) error
 type Database interface {
 	Executor
 	QueryCache
+	// Close closes the database.
 	Close() error
+	// QueryCount returns the number of queries executed on the database.
 	QueryCount() int
+	// QueryCache returns the query cache for this database, if it's present,
+	// or nil otherwise.
 	QueryCache() QueryCache
+	// Tx creates deferred sqlite transaction.
+	//
+	// Deferred transactions are not started until the first statement.
+	// Transaction may be started in read mode and automatically upgraded to write mode
+	// after one of the write statements.
+	//
+	// https://www.sqlite.org/lang_transaction.html
 	Tx(ctx context.Context) (Transaction, error)
+	// WithTx starts a new transaction and passes it to the exec function.
+	// It then commits the transaction if the exec function doesn't return an error,
+	// and rolls it back otherwise.
+	// If the context is canceled, the currently running SQL statement is interrupted.
 	WithTx(ctx context.Context, exec func(Transaction) error) error
+	// TxImmediate begins a new immediate transaction on the database, that is,
+	// a transaction that starts a write immediately without waiting for a write
+	// statement.
+	// The transaction returned from this function must always be released by calling
+	// its Release method. Release rolls back the transaction if it hasn't been
+	// committed.
+	// If the context is canceled, the currently running SQL statement is interrupted.
 	TxImmediate(ctx context.Context) (Transaction, error)
+	// WithTxImmediate starts a new immediate transaction and passes it to the exec
+	// function.
+	// An immediate transaction is started immediately, without waiting for a write
+	// statement.
+	// It then commits the transaction if the exec function doesn't return an error,
+	// and rolls it back otherwise.
+	// If the context is canceled, the currently running SQL statement is interrupted.
 	WithTxImmediate(ctx context.Context, exec func(Transaction) error) error
+	// WithConnection executes the provided function with a connection from the
+	// database pool.
+	// If many queries are to be executed in a row, but there's no need for an
+	// explicit transaction which may be long-running and thus block
+	// WAL checkpointing, it may be preferable to use a single connection for
+	// it to avoid database pool overhead.
+	// The connection is released back to the pool after the function returns.
+	// If the context is canceled, the currently running SQL statement is interrupted.
+	WithConnection(ctx context.Context, exec func(Executor) error) error
+	// Intercept adds an interceptor function to the database. The interceptor
+	// functions are invoked upon each query on the database, including queries
+	// executed within transactions.
+	// The query will fail if the interceptor returns an error.
+	// The interceptor can later be removed using RemoveInterceptor with the same key.
 	Intercept(key string, fn Interceptor)
+	// RemoveInterceptor removes the interceptor function with specified key from the database.
 	RemoveInterceptor(key string)
 }
 
 // Transaction represents a transaction.
 type Transaction interface {
 	Executor
+	// Commit commits the transaction.
 	Commit() error
+	// Release releases the transaction. If the transaction hasn't been committed,
+	// it's rolled back.
 	Release() error
 }
 
@@ -601,12 +666,16 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	if db.closed {
 		return nil, ErrClosed
 	}
-	conn := db.getConn(ctx)
+	conCtx, cancel := context.WithCancel(ctx)
+	conn := db.getConn(conCtx)
 	if conn == nil {
+		cancel()
 		return nil, ErrNoConnection
 	}
-	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn}
+	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn, freeConn: cancel}
 	if err := tx.begin(initstmt); err != nil {
+		cancel()
+		db.pool.Put(conn)
 		return nil, err
 	}
 	return tx, nil
@@ -662,38 +731,23 @@ func (db *sqliteDatabase) startExclusive() error {
 	return nil
 }
 
-// Tx creates deferred sqlite transaction.
-//
-// Deferred transactions are not started until the first statement.
-// Transaction may be started in read mode and automatically upgraded to write mode
-// after one of the write statements.
-//
-// https://www.sqlite.org/lang_transaction.html
+// Tx implements Database.
 func (db *sqliteDatabase) Tx(ctx context.Context) (Transaction, error) {
 	return db.getTx(ctx, beginDefault)
 }
 
-// WithTx will pass initialized deferred transaction to exec callback.
-// Will commit only if error is nil.
+// WithTx implements Database.
 func (db *sqliteDatabase) WithTx(ctx context.Context, exec func(Transaction) error) error {
-	return db.withTx(ctx, beginImmediate, exec)
+	return db.withTx(ctx, beginDefault, exec)
 }
 
-// TxImmediate creates immediate transaction.
-//
-// IMMEDIATE cause the database connection to start a new write immediately, without waiting
-// for a write statement. The BEGIN IMMEDIATE might fail with SQLITE_BUSY if another write
-// transaction is already active on another database connection.
+// TxImmediate implements Database.
 func (db *sqliteDatabase) TxImmediate(ctx context.Context) (Transaction, error) {
 	return db.getTx(ctx, beginImmediate)
 }
 
-// WithTxImmediate will pass initialized immediate transaction to exec callback.
-// Will commit only if error is nil.
-func (db *sqliteDatabase) WithTxImmediate(
-	ctx context.Context,
-	exec func(Transaction) error,
-) error {
+// WithTxImmediate implements Database.
+func (db *sqliteDatabase) WithTxImmediate(ctx context.Context, exec func(Transaction) error) error {
 	return db.withTx(ctx, beginImmediate, exec)
 }
 
@@ -708,7 +762,7 @@ func (db *sqliteDatabase) runInterceptors(query string) error {
 	return nil
 }
 
-// Exec statement using one of the connection from the pool.
+// Exec implements Executor.
 //
 // If you care about atomicity of the operation (for example writing rewards to multiple accounts)
 // Tx should be used. Otherwise sqlite will not guarantee that all side-effects of operations are
@@ -739,7 +793,7 @@ func (db *sqliteDatabase) Exec(query string, encoder Encoder, decoder Decoder) (
 	return exec(conn, query, encoder, decoder)
 }
 
-// Close closes all pooled connections.
+// Close implements Database.
 func (db *sqliteDatabase) Close() error {
 	db.closeMux.Lock()
 	defer db.closeMux.Unlock()
@@ -751,6 +805,23 @@ func (db *sqliteDatabase) Close() error {
 	}
 	db.closed = true
 	return nil
+}
+
+// WithConnection implements Database.
+func (db *sqliteDatabase) WithConnection(ctx context.Context, exec func(Executor) error) error {
+	if db.closed {
+		return ErrClosed
+	}
+	conCtx, cancel := context.WithCancel(ctx)
+	conn := db.getConn(conCtx)
+	defer func() {
+		cancel()
+		db.pool.Put(conn)
+	}()
+	if conn == nil {
+		return ErrNoConnection
+	}
+	return exec(&sqliteConn{queryCache: db.queryCache, db: db, conn: conn})
 }
 
 // Intercept adds an interceptor function to the database. The interceptor functions
@@ -990,6 +1061,7 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 		encoder(stmt)
 	}
 	defer stmt.ClearBindings()
+	defer stmt.Reset()
 
 	rows := 0
 	for {
@@ -1019,6 +1091,7 @@ type sqliteTx struct {
 	*queryCache
 	db        *sqliteDatabase
 	conn      *sqlite.Conn
+	freeConn  func()
 	committed bool
 	err       error
 }
@@ -1047,10 +1120,12 @@ func (tx *sqliteTx) Commit() error {
 func (tx *sqliteTx) Release() error {
 	defer tx.db.pool.Put(tx.conn)
 	if tx.committed {
+		tx.freeConn()
 		return nil
 	}
 	stmt := tx.conn.Prep("ROLLBACK")
 	_, tx.err = stmt.Step()
+	tx.freeConn()
 	return mapSqliteError(tx.err)
 }
 
@@ -1068,6 +1143,27 @@ func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 		}()
 	}
 	return exec(tx.conn, query, encoder, decoder)
+}
+
+type sqliteConn struct {
+	*queryCache
+	db   *sqliteDatabase
+	conn *sqlite.Conn
+}
+
+func (c *sqliteConn) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+	if err := c.db.runInterceptors(query); err != nil {
+		return 0, fmt.Errorf("running query interceptors: %w", err)
+	}
+
+	c.db.queryCount.Add(1)
+	if c.db.latency != nil {
+		start := time.Now()
+		defer func() {
+			c.db.latency.WithLabelValues(query).Observe(float64(time.Since(start)))
+		}()
+	}
+	return exec(c.conn, query, encoder, decoder)
 }
 
 func mapSqliteError(err error) error {
@@ -1149,15 +1245,18 @@ func GetBlobSizes(db Executor, cmd string, ids [][]byte) (sizes []int, err error
 
 // LoadBlob loads an encoded blob.
 func LoadBlob(db Executor, cmd string, id []byte, blob *Blob) error {
-	if rows, err := db.Exec(cmd,
+	rows, err := db.Exec(cmd,
 		func(stmt *Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *Statement) bool {
 			blob.FromColumn(stmt, 0)
 			return true
-		}); err != nil {
+		},
+	)
+	if err != nil {
 		return fmt.Errorf("get %v: %w", types.BytesToHash(id), err)
-	} else if rows == 0 {
+	}
+	if rows == 0 {
 		return fmt.Errorf("%w: object %s", ErrNotFound, hex.EncodeToString(id))
 	}
 	return nil

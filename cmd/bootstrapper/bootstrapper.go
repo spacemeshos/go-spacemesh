@@ -254,7 +254,7 @@ func queryNetworkParams(ctx context.Context, endpoint string) (*NetworkParam, er
 
 func main() {
 	if err := cmd.Execute(); err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }

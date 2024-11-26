@@ -14,7 +14,7 @@ import (
 )
 
 func TestAddGet(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	block := types.NewExistingBlock(
 		types.BlockID{1, 1},
 		types.InnerBlock{LayerIndex: types.LayerID(1)},
@@ -27,7 +27,7 @@ func TestAddGet(t *testing.T) {
 }
 
 func TestAlreadyExists(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	block := types.NewExistingBlock(
 		types.BlockID{1},
 		types.InnerBlock{},
@@ -37,7 +37,7 @@ func TestAlreadyExists(t *testing.T) {
 }
 
 func TestHas(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	block := types.NewExistingBlock(
 		types.BlockID{1},
 		types.InnerBlock{},
@@ -53,7 +53,7 @@ func TestHas(t *testing.T) {
 }
 
 func TestValidity(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
@@ -87,7 +87,7 @@ func TestValidity(t *testing.T) {
 }
 
 func TestLayerFilter(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	start := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
@@ -123,7 +123,7 @@ func TestLayerFilter(t *testing.T) {
 }
 
 func TestLayerOrdered(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	start := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
@@ -154,7 +154,7 @@ func TestLayerOrdered(t *testing.T) {
 }
 
 func TestContextualValidity(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid := types.LayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
@@ -198,7 +198,7 @@ func TestContextualValidity(t *testing.T) {
 }
 
 func TestGetLayer(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	lid1 := types.LayerID(11)
 	block1 := types.NewExistingBlock(
 		types.BlockID{1, 1},
@@ -223,12 +223,12 @@ func TestGetLayer(t *testing.T) {
 
 func TestLastValid(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		_, err := LastValid(db)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 	t.Run("all valid", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		blocks := map[types.BlockID]struct {
 			lid types.LayerID
 		}{
@@ -249,7 +249,7 @@ func TestLastValid(t *testing.T) {
 		require.Equal(t, 33, int(last))
 	})
 	t.Run("last is invalid", func(t *testing.T) {
-		db := statesql.InMemory()
+		db := statesql.InMemoryTest(t)
 		blocks := map[types.BlockID]struct {
 			invalid bool
 			lid     types.LayerID
@@ -275,7 +275,7 @@ func TestLastValid(t *testing.T) {
 }
 
 func TestLoadBlob(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 
 	lid1 := types.LayerID(11)
@@ -316,7 +316,7 @@ func TestLoadBlob(t *testing.T) {
 }
 
 func TestLayerForMangledBlock(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	_, err := db.Exec("insert into blocks (id, layer, block) values (?1, ?2, ?3);",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, []byte(`mangled-block-id`))

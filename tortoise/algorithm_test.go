@@ -24,19 +24,19 @@ func TestGetBallot(t *testing.T) {
 	s.runOn(trt)
 
 	require.Equal(t, &BallotData{
-		ID:           ref.ID,
-		Layer:        ref.Layer,
-		ATXID:        ref.AtxID,
-		Smesher:      ref.Smesher,
-		Beacon:       ref.EpochData.Beacon,
-		Eligiblities: ref.EpochData.Eligibilities,
+		ID:            ref.ID,
+		Layer:         ref.Layer,
+		ATXID:         ref.AtxID,
+		Smesher:       ref.Smesher,
+		Beacon:        ref.EpochData.Beacon,
+		Eligibilities: ref.EpochData.Eligibilities,
 	}, trt.GetBallot(ref.ID))
 	require.Equal(t, &BallotData{
-		ID:           secondary.ID,
-		Layer:        secondary.Layer,
-		ATXID:        secondary.AtxID,
-		Smesher:      secondary.Smesher,
-		Beacon:       ref.EpochData.Beacon,
-		Eligiblities: ref.EpochData.Eligibilities,
+		ID:            secondary.ID,
+		Layer:         secondary.Layer,
+		ATXID:         secondary.AtxID,
+		Smesher:       secondary.Smesher,
+		Beacon:        ref.EpochData.Beacon,
+		Eligibilities: ref.EpochData.Eligibilities,
 	}, trt.GetBallot(secondary.ID))
 }

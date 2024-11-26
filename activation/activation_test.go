@@ -32,7 +32,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
-	sqlmocks "github.com/spacemeshos/go-spacemesh/sql/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -78,8 +77,8 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 
 	ctrl := gomock.NewController(tb)
 	tab := &testAtxBuilder{
-		db:          statesql.InMemory(),
-		localDb:     localsql.InMemory(sql.WithConnections(numSigners)),
+		db:          statesql.InMemoryTest(tb),
+		localDb:     localsql.InMemoryTest(tb, sql.WithConnections(numSigners)),
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 
 		observedLogs: observedLogs,
@@ -405,7 +404,7 @@ func TestBuilder_Loop_WaitsOnStaleChallenge(t *testing.T) {
 
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, ErrATXChallengeExpired)
+		Return(nil, errATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -706,6 +705,66 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
+func TestBuilder_PublishActivationTx_NoPrevATX_ValidatingInitialPostTimeout(t *testing.T) {
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
+
+	posEpoch := postGenesisEpoch
+	currLayer := posEpoch.FirstLayer()
+
+	// generate and store initial post in state
+	post := nipost.Post{
+		Indices: types.RandomBytes(10),
+		Nonce:   rand.Uint32(),
+		Pow:     rand.Uint64(),
+
+		NumUnits:      uint32(12),
+		CommitmentATX: types.RandomATXID(),
+		VRFNonce:      types.VRFPostIndex(rand.Uint64()),
+		Challenge:     shared.ZeroChallenge,
+	}
+	require.NoError(t, nipost.AddPost(tab.localDb, sig.NodeID(), post))
+	initialPost := &types.Post{
+		Nonce:   post.Nonce,
+		Indices: post.Indices,
+		Pow:     post.Pow,
+	}
+	tab.mValidator.EXPECT().
+		PostV2(gomock.Any(), sig.NodeID(), post.CommitmentATX, initialPost, shared.ZeroChallenge, post.NumUnits).
+		Return(context.DeadlineExceeded)
+
+	// create and publish ATX
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(got types.LayerID) time.Time {
+		genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+		return genesis.Add(layerDuration * time.Duration(got))
+	}).AnyTimes()
+	err := tab.PublishActivationTx(context.Background(), tab.signers[sig.NodeID()])
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+
+	// initial post is preserved
+	got, err := nipost.GetPost(tab.localDB, sig.NodeID())
+	require.NoError(t, err)
+	require.Equal(t, post, *got)
+}
+
+func TestBuilder_PublishActivationTx_NoPrevATX_MissingInitialPost(t *testing.T) {
+	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
+	sig := maps.Values(tab.signers)[0]
+
+	posEpoch := postGenesisEpoch
+	currLayer := posEpoch.FirstLayer()
+
+	// no initial post in state
+	tab.mclock.EXPECT().CurrentLayer().Return(currLayer).AnyTimes()
+	tab.mclock.EXPECT().LayerToTime(gomock.Any()).DoAndReturn(func(got types.LayerID) time.Time {
+		genesis := time.Now().Add(-time.Duration(currLayer) * layerDuration)
+		return genesis.Add(layerDuration * time.Duration(got))
+	}).AnyTimes()
+	err := tab.PublishActivationTx(context.Background(), tab.signers[sig.NodeID()])
+	require.ErrorIs(t, err, ErrInvalidInitialPost)
+}
+
 func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserved(t *testing.T) {
 	tab := newTestBuilder(t, 1, WithPoetConfig(PoetConfig{PhaseShift: layerDuration * 4}))
 	sig := maps.Values(tab.signers)[0]
@@ -744,7 +803,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX_PublishFails_InitialPost_preserve
 		}).AnyTimes()
 	tab.mnipost.EXPECT().
 		BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil, ErrATXChallengeExpired)
+		Return(nil, errATXChallengeExpired)
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 	ch := make(chan struct{})
 	tab.mclock.EXPECT().AwaitLayer(currLayer.Add(1)).Do(func(got types.LayerID) <-chan struct{} {
@@ -1396,7 +1455,7 @@ func TestGetPositioningAtx(t *testing.T) {
 		t.Parallel()
 		tab := newTestBuilder(t, 1)
 
-		db := sqlmocks.NewMockExecutor(gomock.NewController(t))
+		db := sql.NewMockExecutor(gomock.NewController(t))
 		tab.Builder.db = db
 		expected := errors.New("db error")
 		db.EXPECT().Exec(gomock.Any(), gomock.Any(), gomock.Any()).Return(0, expected)

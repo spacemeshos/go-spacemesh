@@ -11,7 +11,7 @@ import (
 )
 
 func Test_AddPost(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	nodeID := types.RandomNodeID()
 	post := Post{
@@ -34,7 +34,7 @@ func Test_AddPost(t *testing.T) {
 }
 
 func Test_AddPost_NoDuplicates(t *testing.T) {
-	db := localsql.InMemory()
+	db := localsql.InMemoryTest(t)
 
 	nodeID := types.RandomNodeID()
 	post := Post{

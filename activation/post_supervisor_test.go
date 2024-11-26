@@ -42,9 +42,9 @@ func testSetupOpts(t *testing.T) PostSetupOpts {
 	return opts
 }
 
-func newPostManager(t *testing.T, cfg PostConfig, opts PostSetupOpts) *PostSetupManager {
-	t.Helper()
-	ctrl := gomock.NewController(t)
+func newPostManager(tb testing.TB, cfg PostConfig, opts PostSetupOpts) *PostSetupManager {
+	tb.Helper()
+	ctrl := gomock.NewController(tb)
 	validator := NewMocknipostValidator(ctrl)
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -56,10 +56,10 @@ func newPostManager(t *testing.T, cfg PostConfig, opts PostSetupOpts) *PostSetup
 		close(ch)
 		return ch
 	})
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
-	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(t), db, atxsdata, types.RandomATXID(), syncer, validator)
-	require.NoError(t, err)
+	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(tb), db, atxsdata, types.RandomATXID(), syncer, validator)
+	require.NoError(tb, err)
 	return mgr
 }
 
