@@ -141,3 +141,79 @@ func (c *MockidentityStateAllCall) DoAndReturn(f func() map[types.NodeID][]activ
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// AllEligibilities mocks base method.
+func (m *MockidentityState) AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllEligibilities")
+	ret0, _ := ret[0].(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
+	return ret0
+}
+
+// AllEligibilities indicates an expected call of AllEligibilities.
+func (mr *MockidentityStateMockRecorder) AllEligibilities() *MockidentityStateAllEligibilitiesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllEligibilities", reflect.TypeOf((*MockidentityState)(nil).AllEligibilities))
+	return &MockidentityStateAllEligibilitiesCall{Call: call}
+}
+
+// MockidentityStateAllEligibilitiesCall wrap *gomock.Call
+type MockidentityStateAllEligibilitiesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockidentityStateAllEligibilitiesCall) Return(arg0 map[types.NodeID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockidentityStateAllEligibilitiesCall) Do(f func() map[types.NodeID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockidentityStateAllEligibilitiesCall) DoAndReturn(f func() map[types.NodeID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// AllProposals mocks base method.
+func (m *MockidentityState) AllProposals() map[types.NodeID][]*types.Proposal {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllProposals")
+	ret0, _ := ret[0].(map[types.NodeID][]*types.Proposal)
+	return ret0
+}
+
+// AllProposals indicates an expected call of AllProposals.
+func (mr *MockidentityStateMockRecorder) AllProposals() *MockidentityStateAllProposalsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllProposals", reflect.TypeOf((*MockidentityState)(nil).AllProposals))
+	return &MockidentityStateAllProposalsCall{Call: call}
+}
+
+// MockidentityStateAllProposalsCall wrap *gomock.Call
+type MockidentityStateAllProposalsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockidentityStateAllProposalsCall) Return(arg0 map[types.NodeID][]*types.Proposal) *MockidentityStateAllProposalsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockidentityStateAllProposalsCall) Do(f func() map[types.NodeID][]*types.Proposal) *MockidentityStateAllProposalsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockidentityStateAllProposalsCall) DoAndReturn(f func() map[types.NodeID][]*types.Proposal) *MockidentityStateAllProposalsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

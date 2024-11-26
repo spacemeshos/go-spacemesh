@@ -27,6 +27,11 @@ type beaconService interface {
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
 
+type identityStates interface {
+	SetEligibilities(id types.NodeID, eligibilities map[types.LayerID][]types.VotingEligibility)
+	SetProposals(id types.NodeID, proposals *types.Proposal)
+}
+
 type RemoteProposalBuilder struct {
 	logger *zap.Logger
 	cfg    config
@@ -39,6 +44,7 @@ type RemoteProposalBuilder struct {
 		mu      sync.Mutex
 		signers map[types.NodeID]*signerSession
 	}
+	identityStates identityStates
 }
 
 // New creates a struct of block builder type.
@@ -50,6 +56,7 @@ func NewRemoteBuilder(
 	layerSize uint32,
 	layersPerEpoch uint32,
 	logger *zap.Logger,
+	is identityStates,
 ) *RemoteProposalBuilder {
 	pb := &RemoteProposalBuilder{
 		cfg: config{
@@ -69,6 +76,7 @@ func NewRemoteBuilder(
 		}{
 			signers: map[types.NodeID]*signerSession{},
 		},
+		identityStates: is,
 	}
 	if logger == nil {
 		pb.logger = zap.NewNop()
@@ -195,6 +203,7 @@ func (pb *RemoteProposalBuilder) build(
 				panic("missing node epoch eligibilities")
 			}
 		}
+		pb.identityStates.SetEligibilities(nodeId, proofs)
 
 		eligibilities, ok := proofs[layer]
 		if !ok {
@@ -220,6 +229,7 @@ func (pb *RemoteProposalBuilder) build(
 				zap.Error(err),
 			)
 		}
+		pb.identityStates.SetProposals(nodeId, proposal)
 	}
 	return nil
 }

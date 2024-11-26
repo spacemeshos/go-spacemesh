@@ -13,4 +13,6 @@ type malfeasanceInfo interface {
 
 type identityState interface {
 	All() map[types.NodeID][]activation.IdentityStateInfo
+	AllProposals() map[types.NodeID][]*types.Proposal
+	AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility
 }

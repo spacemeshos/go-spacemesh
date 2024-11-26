@@ -32,11 +32,12 @@ func TestRemoteProposals(t *testing.T) {
 		beacon      = mocks.NewMockbeaconService(ctrl)
 		prop        = mocks.NewMockproposalService(ctrl)
 		beaconVal   = types.Beacon{1}
+		idStates    = mocks.NewMockidentityStates(ctrl)
 	)
 
 	clock.EXPECT().LayerToTime(gomock.Any()).Return(time.Unix(0, 0)).AnyTimes()
 
-	builder := NewRemoteBuilder(clock, publisher, beacon, prop, 5, layersPerEpoch, zaptest.NewLogger(t))
+	builder := NewRemoteBuilder(clock, publisher, beacon, prop, 5, layersPerEpoch, zaptest.NewLogger(t), idStates)
 	for _, signer := range signers {
 		builder.Register(signer)
 	}
@@ -72,6 +73,8 @@ func TestRemoteProposals(t *testing.T) {
 			prop := createTestProposal(t, activeSet, lid, meshHash, atxId, nodeId, txIds, beaconVal, 1)
 			return prop, 11, nil
 		}).AnyTimes()
+	idStates.EXPECT().SetEligibilities(gomock.Any(), gomock.Any()).AnyTimes()
+	idStates.EXPECT().SetProposals(gomock.Any(), gomock.Any()).AnyTimes()
 	go builder.Run(ctx)
 	defer cancel()
 	select {
