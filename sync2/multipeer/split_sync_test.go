@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -75,7 +76,7 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 		tst.syncPeers[n] = p2p.Peer(fmt.Sprintf("peer%d", n))
 	}
 	for _, p := range tst.syncPeers {
-		tst.peers.Add(p)
+		tst.peers.Add(p, func() []protocol.ID { return []protocol.ID{multipeer.Protocol} })
 	}
 	tst.splitSync = multipeer.NewSplitSync(
 		zaptest.NewLogger(t),

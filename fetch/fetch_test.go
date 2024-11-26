@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -187,7 +188,9 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			f := createFetch(t)
 			f.cfg.MaxRetriesForRequest = 0
 			peer := p2p.Peer("buddy")
-			f.peers.Add(peer)
+			f.peers.Add(peer, func() []protocol.ID {
+				return []protocol.ID{hashProtocol, activeSetProtocol}
+			})
 
 			hsh0 := types.RandomHash()
 			res0 := ResponseMessage{
@@ -259,8 +262,9 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f.cfg.BatchTimeout = 1
 	f.cfg.BatchSize = 2
 	peer := p2p.Peer("buddy")
-	f.peers.Add(peer)
-
+	f.peers.Add(peer, func() []protocol.ID {
+		return []protocol.ID{hashProtocol, activeSetProtocol}
+	})
 	h1 := types.RandomHash()
 	h2 := types.RandomHash()
 	h3 := types.RandomHash()
