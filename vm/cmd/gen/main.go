@@ -88,7 +88,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 
 	// first print the keys and addresses
 	for i, pubkey := range pubkeys {
-		addr := walletSdk.Address(*signing.NewPublicKey(pubkey))
+		addr := walletSdk.Address(pubkey)
 		addrs = append(addrs, addr)
 		t1.AppendRow(table.Row{
 			hex.EncodeToString(pubkey),

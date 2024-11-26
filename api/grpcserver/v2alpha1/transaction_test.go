@@ -235,7 +235,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		address := wallet.Address(*signing.NewPublicKey(pub))
+		address := wallet.Address(pub)
 		accounts[i] = types.Account{Address: address, Balance: 1e12}
 	}
 	accounts[len(keys)] = types.Account{
@@ -313,7 +313,7 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		pub, priv, err := ed25519.GenerateKey(rng)
 		require.NoError(t, err)
 		keys[i] = priv
-		addr := wallet.Address(*signing.NewPublicKey(pub))
+		addr := wallet.Address(pub)
 		accounts[i] = types.Account{Address: addr, Balance: 1e12}
 	}
 	accounts[len(keys)] = types.Account{
@@ -452,7 +452,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	addr := wallet.Address(*signer.PublicKey())
+	addr := wallet.Address(signer.PublicKey().Bytes())
 	tx := newTx(t, 0, addr, signer)
 	serializedTx, err := codec.Encode(tx)
 	req.NoError(err, "error serializing tx")
@@ -495,7 +495,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	addr := wallet.Address(*signer.PublicKey())
+	addr := wallet.Address(signer.PublicKey().Bytes())
 	tx := newTx(t, 0, addr, signer)
 	serializedTx, err := codec.Encode(tx)
 	req.NoError(err, "error serializing tx")
@@ -532,7 +532,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	addr := wallet.Address(*signer.PublicKey())
+	addr := wallet.Address(signer.PublicKey().Bytes())
 	tx := newTx(t, 0, addr, signer)
 	for range numTxs {
 		res, err := c.SubmitTransaction(ctx, &spacemeshv2alpha1.SubmitTransactionRequest{
@@ -546,7 +546,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 
 func newTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
-	principal := wallet.Address(*signer.PublicKey())
+	principal := wallet.Address(signer.PublicKey().Bytes())
 	tx.Principal = principal
 	if nonce == 0 {
 		tx2, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGasPrice(0))

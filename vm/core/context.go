@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"maps"
 	"math"
 
 	"github.com/spacemeshos/go-scale"
@@ -29,10 +30,9 @@ type Context struct {
 	LayerID   LayerID
 	GenesisID types.Hash20
 
-	PrincipalAddress   Address
-	PrincipalHandler   Handler
-	PrincipalTemplate  Template
-	PrincipalNextNonce uint64
+	PrincipalAccount  types.Account
+	PrincipalHandler  Handler
+	PrincipalTemplate Template
 
 	ParseOutput ParseOutput
 	Gas         struct {
@@ -59,29 +59,52 @@ type Context struct {
 	changed map[Address]*Account
 }
 
+func New(
+	genesisID types.Hash20,
+	layer types.LayerID,
+	principal types.Address,
+	loader AccountLoader,
+	registry HandlerRegistry,
+	logger *zap.Logger,
+) (*Context, error) {
+	principalAccount, err := loader.Get(principal)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"%w: failed load state for principal %s - %w",
+			ErrInternal,
+			principal,
+			err,
+		)
+	}
+	logger.Debug("loaded principal account state", zap.Inline(&principalAccount))
+
+	return &Context{
+		GenesisID:        genesisID,
+		Registry:         registry,
+		Loader:           loader,
+		LayerID:          layer,
+		Logger:           logger,
+		PrincipalAccount: principalAccount,
+
+		changed: make(map[types.Address]*types.Account),
+	}, nil
+}
+
 // Clone returns a shallow copy of the context.
 func (c *Context) Clone() Host {
 	clone := *c
-	clone.changed = make(map[Address]*Account, len(c.changed))
-	for k, v := range c.changed {
-		clone.changed[k] = v
-	}
+	clone.changed = maps.Clone(c.changed)
 	return &clone
-}
-
-// PrincipalAccount returns the current state of the principal account.
-func (c *Context) PrincipalAccount() (*Account, error) {
-	return c.load(c.PrincipalAddress)
 }
 
 // Principal returns address of the account that signed the transaction and pays for the gas.
 func (c *Context) Principal() Address {
-	return c.PrincipalAddress
+	return c.PrincipalAccount.Address
 }
 
 // NextNonce returns the next nonce of the principal account.
 func (c *Context) NextNonce() uint64 {
-	return c.PrincipalNextNonce
+	return c.PrincipalAccount.NextNonce
 }
 
 // Nonce returns the transaction nonce.
@@ -115,12 +138,8 @@ func (c *Context) GetGenesisID() Hash20 {
 }
 
 // Balance returns the principal account balance.
-func (c *Context) Balance() (uint64, error) {
-	acct, err := c.PrincipalAccount()
-	if err != nil {
-		return 0, err
-	}
-	return acct.Balance, nil
+func (c *Context) Balance() uint64 {
+	return c.PrincipalAccount.Balance
 }
 
 // Template of the principal account.
@@ -191,16 +210,11 @@ func (c *Context) IsSpawn() bool {
 
 // Transfer amount to the address after validation passes.
 func (c *Context) Transfer(to Address, amount uint64) error {
-	acct, err := c.PrincipalAccount()
-	if err != nil {
-		return err
-	}
-	// no-op
 	if amount == 0 {
 		c.Logger.Debug("ignoring zero-value transfer")
 		return nil
 	}
-	return c.transfer(acct, to, amount, c.Header.MaxSpend)
+	return c.transfer(&c.PrincipalAccount, to, amount, c.Header.MaxSpend)
 }
 
 func safeAdd(a, b uint64) (uint64, error) {
@@ -240,6 +254,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	c.change(account)
 	c.Logger.Debug(
 		"transfer",
+		zap.Uint64("transfered", c.transferred),
 		zap.Uint64("amount", amount),
 		zap.Stringer("from", from.Address),
 		zap.Stringer("to", to),
@@ -261,13 +276,9 @@ func (c *Context) GasSpent() uint64 {
 
 // Consume gas from the account after validation passes.
 func (c *Context) Consume(gas uint64) (err error) {
-	principalAccount, err := c.PrincipalAccount()
-	if err != nil {
-		return err
-	}
 	amount := gas * c.Header.GasPrice
-	if amount > principalAccount.Balance {
-		amount = principalAccount.Balance
+	if amount > c.Balance() {
+		amount = c.Balance()
 		err = ErrOutOfGas
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
@@ -276,12 +287,12 @@ func (c *Context) Consume(gas uint64) (err error) {
 	}
 	c.consumed += gas
 	c.fee += amount
-	principalAccount.Balance -= amount
-	c.change(principalAccount)
+	c.PrincipalAccount.Balance -= amount
+	c.change(&c.PrincipalAccount)
 
 	c.Logger.Debug(
 		"consume",
-		zap.String("principal", c.PrincipalAddress.String()),
+		zap.Stringer("principal", c.Principal()),
 		zap.Uint64("gas", gas),
 		zap.Uint64("fee", amount),
 		zap.Uint64("consumed", c.consumed),
@@ -294,19 +305,15 @@ func (c *Context) Consume(gas uint64) (err error) {
 func (c *Context) Refund() (err error) {
 	// TODO(lane): safe math
 	unspent := c.consumed - c.gasSpent
-	principalAccount, err := c.PrincipalAccount()
-	if err != nil {
-		return err
-	}
 	amount := unspent * c.Header.GasPrice
 	c.consumed -= unspent
 	c.fee -= amount
-	principalAccount.Balance += amount
-	c.change(principalAccount)
+	c.PrincipalAccount.Balance += amount
+	c.change(&c.PrincipalAccount)
 
 	c.Logger.Debug(
 		"refund",
-		zap.String("principal", c.PrincipalAddress.String()),
+		zap.Stringer("principal", c.Principal()),
 		zap.Uint64("consumed", c.consumed),
 		zap.Uint64("gas spent", c.gasSpent),
 		zap.Uint64("unspent gas", unspent),
@@ -318,16 +325,12 @@ func (c *Context) Refund() (err error) {
 
 // Apply is executed if transaction was consumed.
 func (c *Context) Apply(updater AccountUpdater) error {
-	acct, err := c.PrincipalAccount()
-	if err != nil {
-		return err
-	}
-	acct.NextNonce = c.Header.Nonce + 1
-	if err := updater.Update(*acct); err != nil {
+	c.PrincipalAccount.NextNonce = c.Header.Nonce + 1
+	if err := updater.Update(c.PrincipalAccount); err != nil {
 		return fmt.Errorf("%w: %w", ErrInternal, err)
 	}
 	for _, address := range c.touched {
-		if address == c.PrincipalAddress {
+		if address == c.PrincipalAccount.Address {
 			continue
 		}
 		account := c.changed[address]
@@ -363,24 +366,20 @@ func (c *Context) Has(address types.Address) (bool, error) {
 	return true, nil
 }
 
-func (c *Context) Get(address types.Address) (Account, error) {
-	addr, err := c.load(address)
-	return *addr, err
+func (c *Context) Get(address types.Address) (*Account, error) {
+	return c.load(address)
 }
 
 func (c *Context) load(address types.Address) (*Account, error) {
-	if c.changed == nil {
-		c.changed = map[Address]*Account{}
-	}
 	account, exist := c.changed[address]
-	if !exist {
-		loaded, err := c.Loader.Get(address)
-		if err != nil {
-			return nil, fmt.Errorf("%w: error loading account: %w", ErrInternal, err)
-		}
-		account = &loaded
+	if exist {
+		return account, nil
 	}
-	return account, nil
+	loaded, err := c.Loader.Get(address)
+	if err != nil {
+		return nil, fmt.Errorf("%w: error loading account: %w", ErrInternal, err)
+	}
+	return &loaded, nil
 }
 
 func (c *Context) change(account *Account) {

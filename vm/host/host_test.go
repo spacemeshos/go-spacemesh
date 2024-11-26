@@ -10,11 +10,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/registry"
 )
 
 func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
-	ctx := &core.Context{Loader: cache, Logger: zaptest.NewLogger(t)}
+	ctx, err := core.New(types.Hash20{}, 0, types.Address{}, cache, registry.New(), zaptest.NewLogger(t))
+	require.NoError(t, err)
 	host, err := NewHost(ctx)
 	require.NoError(t, err)
 	t.Cleanup(host.Destroy)

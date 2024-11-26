@@ -19,7 +19,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -142,7 +141,7 @@ func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
 		pub, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		address := sdkwallet.Address(*signing.NewPublicKey(pub))
+		address := sdkwallet.Address(pub)
 		t.addAccount(&singlesigAccount{pk, address}, 1_000_000_000)
 	}
 	return t

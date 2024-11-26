@@ -155,8 +155,8 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	addr1 = wallet.Address(*signer1.PublicKey())
-	addr2 = wallet.Address(*signer2.PublicKey())
+	addr1 = wallet.Address(signer1.PublicKey().Bytes())
+	addr2 = wallet.Address(signer2.PublicKey().Bytes())
 
 	globalAtx = &types.ActivationTx{
 		PublishEpoch: postGenesisEpoch,
@@ -379,7 +379,7 @@ func (t *ConStateAPIMock) Validation(raw types.RawTx) system.ValidationRequest {
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx := types.Transaction{TxHeader: &types.TxHeader{}}
-	principal := wallet.Address(*signer.PublicKey())
+	principal := wallet.Address(signer.PublicKey().Bytes())
 	tx.Principal = principal
 	if nonce == 0 {
 		tx2, err := wallet.Spawn(signer.PrivateKey(), 0, sdk.WithGasPrice(0))
@@ -2318,7 +2318,7 @@ func TestTransactionsRewards(t *testing.T) {
 	t.Cleanup(cancel)
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 
-	address := wallet.Address(*signing.NewPublicKey(types.RandomNodeID().Bytes()))
+	address := wallet.Address(types.RandomNodeID().Bytes())
 	weight := new(big.Rat).SetFloat64(18.7)
 	rewards := []types.CoinbaseReward{{Coinbase: address, Weight: types.RatNumFromBigRat(weight)}}
 
@@ -2388,7 +2388,7 @@ func TestVMAccountUpdates(t *testing.T) {
 		signer, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		keys[i] = signer
-		addr := wallet.Address(*signing.NewPublicKey(signer.NodeID().Bytes()))
+		addr := wallet.Address(signer.NodeID().Bytes())
 		accounts[i] = types.Account{
 			Address: addr,
 			Balance: initial,

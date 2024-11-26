@@ -7,7 +7,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func SigningBody(genesis, tx []byte) []byte {
@@ -28,12 +27,12 @@ func ComputePrincipalFromBlob(template types.Address, blob []byte) Address {
 	return types.GenerateAddress(sum)
 }
 
-func ComputePrincipalFromPubkey(template types.Address, pubkey signing.PublicKey) Address {
+func ComputePrincipalFromPubkey(template types.Address, pubkey []byte) Address {
 	// construct and encode the blob, which is a SCALE-encoded Athena wallet template instance
 	blob, err := scale.Marshal(struct {
 		Nonce, Balance uint64
 		Owner          [32]byte
-	}{0, 0, [32]byte(pubkey.PublicKey)})
+	}{0, 0, [32]byte(pubkey)})
 	if err != nil {
 		panic(fmt.Sprintf("scale-encoding spawn args failed: %s", err))
 	}
