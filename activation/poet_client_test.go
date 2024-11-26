@@ -336,7 +336,7 @@ func TestPoetClient_Certify(t *testing.T) {
 		poet := NewPoetServiceWithClient(
 			nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 		_, err = poet.Certify(context.Background(), sig.NodeID())
-		require.ErrorIs(t, err, ErrCertificatesNotSupported)
+		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
 	t.Run("poet does not support certificate (empty certifier URL)", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -355,7 +355,7 @@ func TestPoetClient_Certify(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 		poet := NewPoetServiceWithClient(nil, client, cfg, logger, testTickSize, WithCertifier(mCertifier))
 		_, err = poet.Certify(context.Background(), sig.NodeID())
-		require.ErrorIs(t, err, ErrCertificatesNotSupported)
+		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
 	t.Run("poet does not support certificate (empty certifier pubkey)", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -375,7 +375,7 @@ func TestPoetClient_Certify(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 		poet := NewPoetServiceWithClient(nil, client, cfg, logger, testTickSize, WithCertifier(mCertifier))
 		_, err = poet.Certify(context.Background(), sig.NodeID())
-		require.ErrorIs(t, err, ErrCertificatesNotSupported)
+		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
 }
 

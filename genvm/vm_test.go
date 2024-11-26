@@ -2492,7 +2492,7 @@ func FuzzParse(f *testing.F) {
 		req := tt.VM.Validation(types.NewRawTx(buf.Bytes()))
 		_, err = req.Parse()
 		if err == nil {
-			_ = req.Verify()
+			req.Verify()
 		}
 	})
 }

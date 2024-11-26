@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"sort"
 	"testing"
 	"time"
@@ -27,6 +28,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
+
+func TestMain(m *testing.M) {
+	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
+	types.SetNetworkHRP("stest")
+	res := m.Run()
+	os.Exit(res)
+}
 
 // TestSmeshing tests the network is healthy, smeshers are creating proposals, transactions are processed, and vesting
 // is working.

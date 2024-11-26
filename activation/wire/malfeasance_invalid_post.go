@@ -16,10 +16,10 @@ import (
 // ProofInvalidPost is a proof that a merged ATX with an invalid Post was published by a smesher.
 //
 // We are proofing the following:
-// 1. The ATX has a valid signature.
-// 2. If NodeID is different from SmesherID, we prove that NodeID and SmesherID are married.
-// 3. The commitment ATX of NodeID used for the invalid PoST based on their initial ATX.
-// 4. The provided Post is invalid for the given NodeID.
+//  1. The ATX has a valid signature.
+//  2. If NodeID is different from SmesherID, we prove that NodeID and SmesherID are married.
+//  3. The commitment ATX of NodeID used for the invalid PoST based on their initial ATX.
+//  4. The provided Post is invalid for the given NodeID.
 type ProofInvalidPost struct {
 	// ATXID is the ID of the ATX containing the invalid PoST.
 	ATXID types.ATXID
@@ -156,8 +156,8 @@ type InvalidPostProof struct {
 	SubPostRootProof SubPostRootProof `scale:"max=32"`
 	SubPostRootIndex uint16
 
-	// MarriageIndexProof is the proof that the MarriageIndex (CertificateIndex from MarryProof) is contained in the
-	// SubPostRoot.
+	// MarriageIndexProof is the proof that the MarriageIndex (CertificateIndex from NodeIDMarryProof) is contained in
+	// the SubPostRoot.
 	MarriageIndexProof MarriageIndexProof `scale:"max=32"`
 
 	// Post is the invalid PoST and its proof that it is contained in the SubPostRoot.
@@ -271,7 +271,7 @@ func (p InvalidPostProof) Valid(
 		p.NumUnits,
 		int(p.ValidPostIndex),
 	); err != nil {
-		return errors.New("Commitment ATX is not valid")
+		return errors.New("commitment ATX is not valid")
 	}
 
 	if err := malValidator.PostIndex(
