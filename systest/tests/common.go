@@ -49,13 +49,15 @@ func sendTransactions(
 			if layer.Layer.Number.Number >= stop {
 				return false, nil
 			}
-			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED || layer.Layer.Number.Number < first {
+			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED || layer.Layer.Number.Number < first {
 				return true, nil
 			}
+			// give some time for a previous layer to be applied
+			// TODO(dshulyak) introduce api that simply subscribes to internal clock
+			// and outputs events when the tick for the layer is available
 			// TODO(mafa) it looks like a layer returning status "APPLIED" doesn't mean that the transactions are
 			// actually applied
-			// give some time for a previous layer to be applied
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
 			if nonce == 0 {
 				logger.Info("address needs to be spawned",
 					zap.String("client", client.Name),
@@ -75,24 +77,22 @@ func sendTransactions(
 				zap.Int("batch", batch),
 			)
 			for j := range batch {
-				// in case spawn isn't executed on this particular client
-				retries := 3
-				spendClient := client
-				for k := range retries {
-					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), spendClient)
+				var err error
+				for range 3 { // retry on failure 3 times
+					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client)
 					if err == nil {
 						break
 					}
 					logger.Warn("failed to spend",
-						zap.String("client", spendClient.Name),
+						zap.String("client", client.Name),
 						zap.Stringer("address", cl.Address(i)),
 						zap.Uint64("nonce", nonce+uint64(j)),
 						zap.Error(err),
 					)
-					spendClient = cl.Client((i + k + 1) % cl.Total())
+					time.Sleep(1 * time.Second) // wait before retrying
 				}
 				if err != nil {
-					return false, fmt.Errorf("spend failed %s %w", spendClient.Name, err)
+					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
 				}
 			}
 			nonce += uint64(batch)
@@ -505,7 +505,8 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	defer cancel()
 	_, err := submitTransaction(ctx,
 		wallet.SelfSpawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID())),
-		client)
+		client,
+	)
 	return err
 }
 
