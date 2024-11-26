@@ -44,7 +44,7 @@ func ParseArgs(payload athcon.Payload) (any, error) {
 	case spendSelector:
 		txArgs = new(SpendArgs)
 	default:
-		return nil, fmt.Errorf("unknown method selector %s", payload.Selector.String())
+		return nil, fmt.Errorf("unknown method selector %q", payload.Selector.String())
 	}
 	err := gossamerScale.Unmarshal(payload.Input, txArgs)
 	if err != nil {

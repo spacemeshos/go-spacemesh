@@ -387,8 +387,5 @@ func (c *Context) change(account *Account) {
 	if !exist {
 		c.touched = append(c.touched, account.Address)
 	}
-	if c.changed == nil {
-		c.changed = make(map[types.Address]*types.Account)
-	}
 	c.changed[account.Address] = account
 }

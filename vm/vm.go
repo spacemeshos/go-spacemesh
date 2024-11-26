@@ -580,8 +580,8 @@ func parse(
 
 		computedPrincipal := core.ComputePrincipalFromPubkey(ctx.Header.TemplateAddress, args.Pubkey[:])
 		if computedPrincipal != principal {
-			return nil, nil, fmt.Errorf(
-				"%w: calculated spawn principal does not match %s", core.ErrMalformed, principal.String())
+			return nil, nil, fmt.Errorf("%w: computed spawn principal %q does not match %q",
+				core.ErrMalformed, computedPrincipal.String(), principal.String())
 		}
 	case *wallet.SpendArgs:
 		if ctx.PrincipalAccount.TemplateAddress == nil {
