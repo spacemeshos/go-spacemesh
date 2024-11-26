@@ -911,7 +911,12 @@ func deployNode(
 				).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
 			).
 			WithEnv(
-				corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
+				corev1.EnvVar().WithName("GOMAXPROCS").
+					WithValueFrom(corev1.EnvVarSource().WithResourceFieldRef(
+						corev1.ResourceFieldSelector().
+							WithResource("limits.cpu").
+							WithDivisor(resource.MustParse("1")),
+					)),
 			).
 			WithCommand(cmd...),
 		)
