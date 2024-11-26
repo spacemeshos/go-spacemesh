@@ -578,7 +578,7 @@ func parse(
 		ctx.SpawnTx = true
 		ctx.Header.MaxGas = core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
 
-		computedPrincipal := core.ComputePrincipalFromPubkey(ctx.Header.TemplateAddress, args.Pubkey[:])
+		computedPrincipal := wallet.ComputePrincipal(args.Pubkey[:])
 		if computedPrincipal != principal {
 			return nil, nil, fmt.Errorf("%w: computed spawn principal %q does not match %q",
 				core.ErrMalformed, computedPrincipal.String(), principal.String())

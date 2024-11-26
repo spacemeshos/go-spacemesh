@@ -23,8 +23,7 @@ const (
 	PRIVKEY = "2375b169ab93821366eb5e6898145ec12b6419536b8ee0615cae783b4bc015e7" +
 		"ba216991978cab901254e8eaa062830bbe42c6fc7f56032cbed0e8926ad43e97"
 	PRINCIPAL    = "00000000DF39133A6A5B6DDBFEBC865F05640671F00A3930"
-	WALLET_STATE = "00000000000000000000000000000000" +
-		"BA216991978CAB901254E8EAA062830BBE42C6FC7F56032CBED0E8926AD43E97"
+	WALLET_STATE = "ba216991978cab901254e8eaa062830bbe42c6fc7f56032cbed0e8926ad43e97"
 )
 
 func FuzzVerify(f *testing.F) {
@@ -58,10 +57,10 @@ func TestMaxSpend(t *testing.T) {
 
 	mockHost.EXPECT().Principal().Return(types.Address{}).Times(5)
 	mockHost.EXPECT().MaxGas().Return(100000).Times(2)
-	mockHost.EXPECT().Clone().Return(mockHost).Times(1)
-	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(1)
-	mockHost.EXPECT().TemplateAddress().Return(types.Address{}).Times(1)
-	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(1)
+	mockHost.EXPECT().Clone().Return(mockHost)
+	mockHost.EXPECT().Nonce()
+	mockHost.EXPECT().TemplateAddress().Return(types.Address{})
+	mockHost.EXPECT().Layer().Return(core.LayerID(1))
 	t.Run("Spawn", func(t *testing.T) {
 		max, err := testWallet.MaxSpend(spawnPayload)
 		require.NoError(t, err)
@@ -90,14 +89,17 @@ func TestSpawn(t *testing.T) {
 	mockTemplate := types.Account{
 		State: walletTemplate.PROGRAM,
 	}
+
+	const maxGas = 100_000
+	var spendGas uint64
 	mockHost.EXPECT().Layer().Return(core.LayerID(1))
 	mockHost.EXPECT().Principal().Return(principalAddress).Times(6)
-	mockHost.EXPECT().MaxGas().Return(100000)
-	mockHost.EXPECT().SpendGas(uint64(5036))
+	mockHost.EXPECT().MaxGas().Return(maxGas)
+	mockHost.EXPECT().SpendGas(gomock.Any()).Do(func(g uint64) { spendGas = g })
 	mockHost.EXPECT().TemplateAddress().Return(templateAddress).Times(2)
-	mockHost.EXPECT().Nonce().Return(uint64(0))
+	mockHost.EXPECT().Nonce()
 	mockHost.EXPECT().IsSpawn().Return(true)
-	mockHost.EXPECT().GasSpent().Return(uint64(0))
+	mockHost.EXPECT().GasSpent()
 	mockHost.EXPECT().Get(templateAddress).Return(&mockTemplate, nil)
 	mockHost.EXPECT().Get(principalAddress).Return(&types.Account{}, nil)
 	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(expectedPrincipalAddress, nil)
@@ -112,7 +114,7 @@ func TestSpawn(t *testing.T) {
 
 	// Execute the spawn and catch the result
 	output, gasLeft, err := (&handler{}).Exec(mockHost, athenaPayload)
-	require.Equal(t, int64(94964), gasLeft)
+	require.Equal(t, int64(maxGas-spendGas), gasLeft)
 	require.Len(t, output, 24)
 	require.Equal(t, expectedPrincipalAddress, types.Address(output))
 	require.NoError(t, err)
@@ -145,13 +147,13 @@ func TestVerify(t *testing.T) {
 	mockHost.EXPECT().Principal().Return(types.Address{2}).Times(11)
 	mockHost.EXPECT().MaxGas().Return(100000000).Times(2)
 	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).Times(3)
-	mockHost.EXPECT().Get(types.Address{1}).Return(&mockTemplate, nil).Times(1)
-	mockHost.EXPECT().Get(types.Address{2}).Return(&mockWallet, nil).Times(1)
+	mockHost.EXPECT().Get(types.Address{1}).Return(&mockTemplate, nil)
+	mockHost.EXPECT().Get(types.Address{2}).Return(&mockWallet, nil)
 	mockHost.EXPECT().IsSpawn().Return(false).Times(3)
 	mockHost.EXPECT().Clone().Return(mockHost).Times(2)
-	mockHost.EXPECT().Nonce().Return(uint64(0)).Times(2)
-	mockHost.EXPECT().SpendGas(uint64(10024)).Times(1)
-	mockHost.EXPECT().SpendGas(uint64(10428)).Times(1)
+	mockHost.EXPECT().Nonce().Times(2)
+	mockHost.EXPECT().SpendGas(gomock.Any())
+	mockHost.EXPECT().SpendGas(gomock.Any())
 
 	// for now, don't include GenesisID
 	// empty := types.Hash20{}

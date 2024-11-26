@@ -263,7 +263,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 			Transaction: tx,
 		})
 		require.NoError(t, err)
-		require.Equal(t, uint64(20200), resp.RecommendedMaxGas)
+		require.Equal(t, uint64(0x4120), resp.RecommendedMaxGas)
 	})
 	t.Run("malformed tx", func(t *testing.T) {
 		_, err := client.EstimateGas(ctx, &spacemeshv2alpha1.EstimateGasRequest{

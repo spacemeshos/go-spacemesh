@@ -9,6 +9,7 @@ import (
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
 )
@@ -216,4 +217,16 @@ func (s *Wallet) BaseGas() uint64 {
 
 func (s *Wallet) LoadGas() uint64 {
 	return LoadGas()
+}
+
+// ComputePrincipal computes the principal address of the wallet for the given
+// public key. The key must be 32B.
+func ComputePrincipal(pub []byte) types.Address {
+	if len(pub) != 32 {
+		panic("invalid public key length")
+	}
+
+	// NOTE: the spawn arguments are just a [32]byte, which scale encodes
+	// "as is".	// construct and encode the blob, which is a SCALE-encoded Athena wallet template instance
+	return core.ComputePrincipalFromBlob(TemplateAddress, pub)
 }
