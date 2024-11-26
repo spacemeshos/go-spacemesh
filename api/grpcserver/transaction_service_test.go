@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
-	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
@@ -241,7 +240,7 @@ func TestParseTransactions(t *testing.T) {
 	// add the wallet template account
 	accounts[len(accounts)-1] = types.Account{
 		Address:         walletTemplate.TemplateAddress,
-		State:           walletProgram.PROGRAM,
+		State:           walletTemplate.PROGRAM,
 		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))

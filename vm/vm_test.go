@@ -23,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
@@ -133,7 +132,7 @@ func (t *tester) addAccount(account testAccount, balance uint64) {
 }
 
 func (t *tester) addWalletTemplate() *tester {
-	t.templates = append(t.templates, testTemplate{address: wallet.TemplateAddress, state: walletProgram.PROGRAM})
+	t.templates = append(t.templates, testTemplate{address: wallet.TemplateAddress, state: wallet.PROGRAM})
 	return t
 }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/core/mocks"
 	"github.com/spacemeshos/go-spacemesh/vm/host"
-	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 )
 
 const (
@@ -41,7 +40,7 @@ func TestMaxSpend(t *testing.T) {
 	testWallet := Wallet{}
 	mockHost := mocks.NewMockHost(ctrl)
 	testWallet.host = mockHost
-	testWallet.templateCode = walletTemplate.PROGRAM
+	testWallet.templateCode = PROGRAM
 	walletState, err := hex.DecodeString(WALLET_STATE)
 	require.NoError(t, err)
 	testWallet.walletState = walletState
@@ -87,7 +86,7 @@ func TestSpawn(t *testing.T) {
 	pubkey := athcon.Bytes32(pubkeyBytes)
 
 	mockTemplate := types.Account{
-		State: walletTemplate.PROGRAM,
+		State: PROGRAM,
 	}
 
 	const maxGas = 100_000
@@ -134,7 +133,7 @@ func TestVerify(t *testing.T) {
 	mockHost := mocks.NewMockHost(ctrl)
 
 	mockTemplate := types.Account{
-		State: walletTemplate.PROGRAM,
+		State: PROGRAM,
 	}
 	mockWallet := types.Account{
 		State: walletState,

@@ -30,7 +30,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func init() {

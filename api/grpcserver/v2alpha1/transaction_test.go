@@ -27,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
@@ -240,7 +239,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 	}
 	accounts[len(keys)] = types.Account{
 		Address:         walletTemplate.TemplateAddress,
-		State:           walletProgram.PROGRAM,
+		State:           walletTemplate.PROGRAM,
 		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
@@ -318,7 +317,7 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	}
 	accounts[len(keys)] = types.Account{
 		Address:         walletTemplate.TemplateAddress,
-		State:           walletProgram.PROGRAM,
+		State:           walletTemplate.PROGRAM,
 		TemplateAddress: &walletTemplate.TemplateAddress,
 	}
 	require.NoError(t, vminst.ApplyGenesis(accounts))
