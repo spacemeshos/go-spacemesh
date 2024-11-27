@@ -49,6 +49,7 @@ func TestMaxSpend(t *testing.T) {
 	require.NoError(t, err)
 	vmlib, err := athcon.LoadLibrary(libPath)
 	require.NoError(t, err)
+	defer vmlib.Close()
 
 	// construct spawn and spend payloads
 	spawnPayload := vmlib.EncodeTxSpawn(athcon.Bytes32{})
@@ -108,6 +109,7 @@ func TestSpawn(t *testing.T) {
 	require.NoError(t, err)
 	vmLib, err := athcon.LoadLibrary(libPath)
 	require.NoError(t, err)
+	defer vmLib.Close()
 
 	athenaPayload := vmLib.EncodeTxSpawn(athcon.Bytes32(pubkey))
 

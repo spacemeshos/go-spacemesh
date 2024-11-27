@@ -48,6 +48,7 @@ func Spawn(
 	if err != nil {
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
+	defer vmlib.Close()
 
 	meta := core.Metadata{}
 	meta.Nonce = nonce
@@ -87,6 +88,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	if err != nil {
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
+	defer vmlib.Close()
 
 	principal := wallet.ComputePrincipal(signing.Public(pk))
 	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), amount))
