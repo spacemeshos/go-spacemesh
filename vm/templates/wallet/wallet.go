@@ -226,7 +226,6 @@ func ComputePrincipal(pub []byte) types.Address {
 		panic("invalid public key length")
 	}
 
-	// NOTE: the spawn arguments are just a [32]byte, which scale encodes
-	// "as is".	// construct and encode the blob, which is a SCALE-encoded Athena wallet template instance
+	// NOTE: the spawn arguments are just a [32]byte, which scale encodes "as is".
 	return core.ComputePrincipalFromBlob(TemplateAddress, pub)
 }
