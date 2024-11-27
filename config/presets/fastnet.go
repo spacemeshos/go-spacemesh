@@ -46,7 +46,7 @@ func fastnet() config.Config {
 	conf.Genesis = config.GenesisConfig{
 		ExtraData: "fastnet",
 		Accounts: map[string]uint64{
-			wallet.TemplateAddress.StringWithHRP(conf.NetworkHRP): 10000000000000,
+			wallet.TemplateAddress.StringWithHRP(conf.NetworkHRP): 0,
 		},
 		Templates: map[string][]byte{
 			wallet.TemplateAddress.StringWithHRP(conf.NetworkHRP): wallet.PROGRAM,

@@ -90,14 +90,10 @@ func athena() config.Config {
 		Genesis: config.GenesisConfig{
 			ExtraData: "000000000000000000001549a7b3a17a81b805488cd0439f16993c5a021638bc",
 			Accounts: map[string]uint64{
-				"atest1qqqqqqzm9w8yaav5kgwwzqqdqvaxj0ml4nq65zckgclkp": 1000000000000000000,
-				// This should be - fix it for the next devnet:
-				// walletTemplate.TemplateAddress.StringWithHRP("atest"): 1000000000000000000,
+				wallet.TemplateAddress.StringWithHRP("atest"): 0,
 			},
 			Templates: map[string][]byte{
-				"atest1qqqqqqzm9w8yaav5kgwwzqqdqvaxj0ml4nq65zckgclkp": wallet.PROGRAM,
-				// This should be - fix it for the next devnet:
-				// walletTemplate.TemplateAddress.StringWithHRP("atest"): wallet.PROGRAM,
+				wallet.TemplateAddress.StringWithHRP("atest"): wallet.PROGRAM,
 			},
 		},
 		Tortoise: tortoise.Config{
