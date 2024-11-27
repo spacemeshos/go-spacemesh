@@ -116,10 +116,15 @@ func (s *SmeshingIdentitiesService) Eligibilities(
 ) (*pb.EligibilitiesResponse, error) {
 	eligibilities := s.states.AllEligibilities()
 
-	pbEligibilities := make(map[string]*pb.Eligibilities)
-	for nodeId, eli := range eligibilities {
-		pbEligibilities[nodeId.String()] = &pb.Eligibilities{
-			Eligibilities: castEligibilities(eli),
+	pbEligibilities := make(map[string]*pb.EpochEligibilities)
+	for nodeId, epochMap := range eligibilities {
+		pbEligibilities[nodeId.String()] = &pb.EpochEligibilities{
+			Epochs: make(map[uint32]*pb.Eligibilities),
+		}
+		for epoch, eli := range epochMap {
+			pbEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
+				Eligibilities: castEligibilities(eli),
+			}
 		}
 	}
 

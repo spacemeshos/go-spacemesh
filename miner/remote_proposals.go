@@ -28,8 +28,11 @@ type beaconService interface {
 }
 
 type identityStates interface {
-	SetEligibilities(id types.NodeID, eligibilities map[types.LayerID][]types.VotingEligibility)
-	SetProposals(id types.NodeID, proposals *types.Proposal)
+	SetEligibilitiesForEpoch(
+		id types.NodeID,
+		epoch types.EpochID,
+		eligibilities map[types.LayerID][]types.VotingEligibility)
+	AddProposal(id types.NodeID, proposals *types.Proposal)
 }
 
 type RemoteProposalBuilder struct {
@@ -194,6 +197,7 @@ func (pb *RemoteProposalBuilder) build(
 					pb.cfg.layersPerEpoch,
 				)
 				eligibilities[nodeId] = proofs
+				pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
 			} else {
 				proofs = nodeElig
 			}
@@ -203,7 +207,6 @@ func (pb *RemoteProposalBuilder) build(
 				panic("missing node epoch eligibilities")
 			}
 		}
-		pb.identityStates.SetEligibilities(nodeId, proofs)
 
 		eligibilities, ok := proofs[layer]
 		if !ok {
@@ -229,7 +232,7 @@ func (pb *RemoteProposalBuilder) build(
 				zap.Error(err),
 			)
 		}
-		pb.identityStates.SetProposals(nodeId, proposal)
+		pb.identityStates.AddProposal(nodeId, proposal)
 	}
 	return nil
 }

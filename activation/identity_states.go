@@ -85,14 +85,14 @@ type IdentityStateInfo struct {
 type IdentityStateStorage struct {
 	mu            sync.RWMutex
 	identities    map[types.NodeID][]IdentityStateInfo
-	eligibilities map[types.NodeID]map[types.LayerID][]types.VotingEligibility
+	eligibilities map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility
 	proposals     map[types.NodeID][]*types.Proposal
 }
 
 func NewIdentityStateStorage() *IdentityStateStorage {
 	return &IdentityStateStorage{
 		identities:    make(map[types.NodeID][]IdentityStateInfo),
-		eligibilities: make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility),
+		eligibilities: make(map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility),
 		proposals:     make(map[types.NodeID][]*types.Proposal),
 	}
 }
@@ -139,16 +139,30 @@ func (s *IdentityStateStorage) All() map[types.NodeID][]IdentityStateInfo {
 	return s.identities
 }
 
-func (s *IdentityStateStorage) SetEligibilities(
+func (s *IdentityStateStorage) SetEligibilitiesForEpoch(
 	id types.NodeID,
+	epoch types.EpochID,
 	eligibilities map[types.LayerID][]types.VotingEligibility,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.eligibilities[id] = eligibilities
+
+	if _, exists := s.eligibilities[id]; !exists {
+		s.eligibilities[id] = make(map[types.EpochID]map[types.LayerID][]types.VotingEligibility)
+	}
+
+	if len(s.eligibilities[id]) > 100 {
+		delete(s.eligibilities[id], epoch-100)
+	}
+
+	if _, exists := s.eligibilities[id][epoch]; !exists {
+		s.eligibilities[id][epoch] = make(map[types.LayerID][]types.VotingEligibility)
+	}
+
+	s.eligibilities[id][epoch] = eligibilities
 }
 
-func (s *IdentityStateStorage) SetProposals(id types.NodeID, proposal *types.Proposal) {
+func (s *IdentityStateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -174,7 +188,8 @@ func (s *IdentityStateStorage) AllProposals() map[types.NodeID][]*types.Proposal
 	return s.proposals
 }
 
-func (s *IdentityStateStorage) AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility {
+//nolint:lll
+func (s *IdentityStateStorage) AllEligibilities() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.eligibilities
