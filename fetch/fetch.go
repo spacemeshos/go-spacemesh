@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/network"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
@@ -297,7 +298,16 @@ func NewFetch(
 	// there is one test that covers this part.
 	if host != nil {
 		connectedf := func(peer p2p.Peer) {
-			if f.peers.Add(peer) {
+			protocols := func() []protocol.ID {
+				ps, err := host.Peerstore().GetProtocols(peer)
+				if err != nil {
+					f.logger.Debug("failed to get protocols for peer",
+						zap.Stringer("id", peer), zap.Error(err))
+					return nil
+				}
+				return ps
+			}
+			if f.peers.Add(peer, protocols) {
 				f.logger.Debug("adding peer", zap.Stringer("id", peer))
 			}
 		}
@@ -329,7 +339,7 @@ func NewFetch(
 			f.registerServer(host, hashProtocol, h.handleHashReqStream)
 			f.registerServer(
 				host, activeSetProtocol,
-				func(ctx context.Context, msg []byte, s io.ReadWriter) error {
+				func(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 					return h.doHandleHashReqStream(ctx, msg, s, datastore.ActiveSet)
 				})
 			f.registerServer(host, meshHashProtocol, h.handleMeshHashReqStream)
@@ -339,7 +349,7 @@ func NewFetch(
 			f.registerServer(host, hashProtocol, server.WrapHandler(h.handleHashReq))
 			f.registerServer(
 				host, activeSetProtocol,
-				server.WrapHandler(func(ctx context.Context, data []byte) ([]byte, error) {
+				server.WrapHandler(func(ctx context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 					return h.doHandleHashReq(ctx, data, datastore.ActiveSet)
 				}))
 			f.registerServer(host, meshHashProtocol, server.WrapHandler(h.handleMeshHashReq))
@@ -450,7 +460,7 @@ func (f *Fetch) Stop() {
 	}
 	f.mu.Unlock()
 
-	_ = f.eg.Wait()
+	f.eg.Wait()
 	f.logger.Debug("stopped fetch")
 }
 
@@ -703,7 +713,9 @@ func (f *Fetch) organizeRequests(requests []RequestMessage) map[p2p.Peer][]*batc
 	rng := rand.New(rand.NewChaCha8(seed))
 	peer2requests := make(map[p2p.Peer][]RequestMessage)
 
-	best := f.peers.SelectBest(RedundantPeers)
+	// When selecting peers, provide protocol IDs so that peers that aren't yet fully
+	// initialized are not picked for the request, avoiding unnecessary errors.
+	best := f.peers.SelectBestWithProtocols(RedundantPeers, []protocol.ID{hashProtocol, activeSetProtocol})
 	if len(best) == 0 {
 		f.logger.Warn("cannot send batch: no peers found")
 		f.mu.Lock()

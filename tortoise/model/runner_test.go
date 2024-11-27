@@ -17,7 +17,7 @@ func TestBasicModel(t *testing.T) {
 	)
 
 	rng := rand.New(rand.NewSource(1001))
-	c := newCluster(zaptest.NewLogger(t), rng)
+	c := newCluster(t, zaptest.NewLogger(t), rng)
 	for i := 0; i < numSmeshers; i++ {
 		c.addCore()
 	}

@@ -262,7 +262,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if poetProofDeadline.Before(now) {
 			return nil, fmt.Errorf(
 				"%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)",
-				ErrATXChallengeExpired,
+				errATXChallengeExpired,
 				postChallenge.PublishEpoch,
 				poetProofDeadline,
 				now,
@@ -270,12 +270,13 @@ func (nb *NIPostBuilder) BuildNIPost(
 		}
 
 		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
+		events.EmitWaitingForPoETRoundEnd(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
 		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
 		if poetProofRef == types.EmptyPoetProofRef {
-			return nil, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
+			return nil, &PoetSvcUnstableError{source: errPoetProofNotReceived}
 		}
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
@@ -294,7 +295,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if publishEpochEnd.Before(now) {
 			return nil, fmt.Errorf(
 				"%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)",
-				ErrATXChallengeExpired,
+				errATXChallengeExpired,
 				postChallenge.PublishEpoch,
 				publishEpochEnd,
 				now,
@@ -445,7 +446,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 			// no existing registration at all, drop current registration challenge
 			return nil, fmt.Errorf(
 				"%w: poet round has already started at %s (now: %s)",
-				ErrATXChallengeExpired,
+				errATXChallengeExpired,
 				curPoetRoundStartDeadline,
 				now,
 			)
@@ -498,7 +499,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 	if len(existingRegistrations) == 0 {
 		if curPoetRoundStartDeadline.Before(time.Now()) {
-			return nil, ErrATXChallengeExpired
+			return nil, errATXChallengeExpired
 		}
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 	}
@@ -525,6 +526,9 @@ func (nb *NIPostBuilder) getBestProof(
 	type poetProof struct {
 		poet       *types.PoetProof
 		membership *types.MerkleProof
+		round      string
+		url        string
+		ticks      uint64
 	}
 	proofs := make(chan *poetProof, len(registrations))
 
@@ -568,6 +572,9 @@ func (nb *NIPostBuilder) getBestProof(
 			proofs <- &poetProof{
 				poet:       proof,
 				membership: membership,
+				round:      round,
+				url:        client.Address(),
+				ticks:      proof.LeafCount / client.TickSize(),
 			}
 			return nil
 		})
@@ -600,10 +607,16 @@ func (nb *NIPostBuilder) getBestProof(
 			zap.Binary("ref", ref[:]),
 			log.ZShortStringer("smesherID", nodeID),
 		)
+		events.EmitBestProofSelected(
+			nodeID,
+			bestProof.url,
+			bestProof.round,
+			bestProof.ticks,
+		)
 		return ref, bestProof.membership, nil
 	}
 
-	return types.PoetProofRef{}, nil, ErrPoetProofNotReceived
+	return types.PoetProofRef{}, nil, errPoetProofNotReceived
 }
 
 func constructMerkleProof(challenge types.Hash32, members []types.Hash32) (*types.MerkleProof, error) {

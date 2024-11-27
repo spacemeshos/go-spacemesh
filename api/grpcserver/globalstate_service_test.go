@@ -21,15 +21,15 @@ type globalStateServiceConn struct {
 	conStateAPI *MockconservativeState
 }
 
-func setupGlobalStateService(t *testing.T) (*globalStateServiceConn, context.Context) {
-	ctrl, mockCtx := gomock.WithContext(context.Background(), t)
+func setupGlobalStateService(tb testing.TB) (*globalStateServiceConn, context.Context) {
+	ctrl, mockCtx := gomock.WithContext(context.Background(), tb)
 	meshAPI := NewMockmeshAPI(ctrl)
 	conStateAPI := NewMockconservativeState(ctrl)
 	svc := NewGlobalStateService(meshAPI, conStateAPI)
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
+	cfg, cleanup := launchServer(tb, svc)
+	tb.Cleanup(cleanup)
 
-	conn := dialGrpc(t, cfg)
+	conn := dialGrpc(tb, cfg)
 	client := pb.NewGlobalStateServiceClient(conn)
 
 	return &globalStateServiceConn{

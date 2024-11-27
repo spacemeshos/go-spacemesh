@@ -36,22 +36,22 @@ type testCertifier struct {
 	mTortoise *smocks.MockTortoise
 }
 
-func newTestCertifier(t *testing.T, signers int) *testCertifier {
-	t.Helper()
+func newTestCertifier(tb testing.TB, signers int) *testCertifier {
+	tb.Helper()
 	types.SetLayersPerEpoch(3)
-	db := statesql.InMemory()
-	ctrl := gomock.NewController(t)
+	db := statesql.InMemoryTest(tb)
+	ctrl := gomock.NewController(tb)
 	mo := eligibility.NewMockRolacle(ctrl)
 	mp := pubsubmock.NewMockPublisher(ctrl)
 	mc := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
 	c := NewCertifier(db, mo, signing.NewEdVerifier(), mp, mc, mb, mtortoise,
-		WithCertifierLogger(zaptest.NewLogger(t)),
+		WithCertifierLogger(zaptest.NewLogger(tb)),
 	)
 	for i := 0; i < signers; i++ {
 		signer, err := signing.NewEdSigner()
-		require.NoError(t, err)
+		require.NoError(tb, err)
 		c.Register(signer)
 	}
 
@@ -66,13 +66,13 @@ func newTestCertifier(t *testing.T, signers int) *testCertifier {
 	}
 }
 
-func generateBlock(t *testing.T, db sql.Executor) *types.Block {
-	t.Helper()
+func generateBlock(tb testing.TB, db sql.Executor) *types.Block {
+	tb.Helper()
 	block := types.NewExistingBlock(
 		types.RandomBlockID(),
 		types.InnerBlock{LayerIndex: types.LayerID(11)},
 	)
-	require.NoError(t, blocks.Add(db, block))
+	require.NoError(tb, blocks.Add(db, block))
 	return block
 }
 
@@ -99,52 +99,52 @@ func genCertifyMsg(
 }
 
 func genEncodedMsg(
-	t *testing.T,
+	tb testing.TB,
 	lid types.LayerID,
 	bid types.BlockID,
 ) (types.NodeID, *types.CertifyMessage, []byte) {
-	t.Helper()
-	nid, msg := genCertifyMsg(t, lid, bid, defaultCnt)
+	tb.Helper()
+	nid, msg := genCertifyMsg(tb, lid, bid, defaultCnt)
 	data, err := codec.Encode(msg)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	return nid, msg, data
 }
 
 func verifyCerts(
-	t *testing.T,
+	tb testing.TB,
 	db sql.Executor,
 	lid types.LayerID,
 	expected map[types.BlockID]bool,
 ) {
-	t.Helper()
+	tb.Helper()
 	var allValids []types.BlockID
 	certs, err := certificates.Get(db, lid)
 	if len(expected) == 0 {
-		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.ErrorIs(tb, err, sql.ErrNotFound)
 	} else {
-		require.NoError(t, err)
-		require.Equal(t, len(expected), len(certs))
+		require.NoError(tb, err)
+		require.Equal(tb, len(expected), len(certs))
 		for _, cert := range certs {
 			ev, ok := expected[cert.Block]
-			require.True(t, ok)
-			require.Equal(t, ev, cert.Valid)
+			require.True(tb, ok)
+			require.Equal(tb, ev, cert.Valid)
 			delete(expected, cert.Block)
 			if ev {
 				allValids = append(allValids, cert.Block)
 			}
 		}
-		require.Empty(t, expected)
+		require.Empty(tb, expected)
 	}
 	// check hare output
 	ho, err := certificates.GetHareOutput(db, lid)
 	if len(allValids) == 0 {
-		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.ErrorIs(tb, err, sql.ErrNotFound)
 	} else if len(allValids) == 1 {
-		require.NoError(t, err)
-		require.Equal(t, allValids[0], ho)
+		require.NoError(tb, err)
+		require.Equal(tb, allValids[0], ho)
 	} else {
-		require.NoError(t, err)
-		require.Equal(t, types.EmptyBlockID, ho)
+		require.NoError(tb, err)
+		require.Equal(tb, types.EmptyBlockID, ho)
 	}
 }
 

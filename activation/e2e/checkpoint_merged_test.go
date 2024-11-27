@@ -27,8 +27,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -43,9 +43,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 	cfg := testPostConfig()
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, logger)
-	localDB := localsql.InMemory()
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
+	localDB := localsql.InMemoryTest(t)
 
 	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
@@ -83,7 +84,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	}
 
 	client := ae2e.NewTestPoetClient(2, poetCfg)
-	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetSvc := activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 
 	clock, err := timesync.NewClock(
 		timesync.WithGenesisTime(genesis),
@@ -268,10 +269,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 
 	// 3.3 Verify IDs are still married
 	for i, signer := range signers {
-		marriage, err := identities.Marriage(newDB, signer.NodeID())
+		info, err := marriage.FindByNodeID(newDB, signer.NodeID())
 		require.NoError(t, err)
-		require.Equal(t, marriageATX.ID(), marriage.ATX)
-		require.Equal(t, i, marriage.Index)
+		require.Equal(t, marriageATX.ID(), info.ATX)
+		require.Equal(t, i, info.MarriageIndex)
 	}
 
 	checkpointedMerged, err := atxs.Get(newDB, mergedATX.ID())
@@ -283,14 +284,15 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	// 4. Spawn new ATX handler and builder using the new DB
 	poetDb, err = activation.NewPoetDb(newDB, logger.Named("poetDb"))
 	require.NoError(t, err)
-	cdb = datastore.NewCachedDB(newDB, logger)
+	newCdb := datastore.NewCachedDB(newDB, logger)
+	t.Cleanup(func() { assert.NoError(t, newCdb.Close()) })
 
-	poetSvc = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger)
+	poetSvc = activation.NewPoetServiceWithClient(poetDb, client, poetCfg, logger, testTickSize)
 	validator = activation.NewValidator(newDB, poetDb, cfg, opts.Scrypt, verifier)
 	require.NoError(t, err)
 	atxHdlr = activation.NewHandler(
 		"local",
-		cdb,
+		newCdb,
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		clock,

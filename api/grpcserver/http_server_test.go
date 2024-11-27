@@ -64,9 +64,12 @@ func TestJsonApi(t *testing.T) {
 	genTime := NewMockgenesisTimeAPI(ctrl)
 	syncer := NewMocksyncer(ctrl)
 	conStateAPI := NewMockconservativeState(ctrl)
+
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
 	svc2 := NewMeshService(
-		datastore.NewCachedDB(statesql.InMemory(), zaptest.NewLogger(t)),
+		cdb,
 		meshAPIMock,
 		conStateAPI,
 		genTime,

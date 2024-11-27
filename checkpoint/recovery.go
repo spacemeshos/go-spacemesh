@@ -23,15 +23,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/atxsync"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-	localmigrations "github.com/spacemeshos/go-spacemesh/sql/localsql/migrations"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/recovery"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
-	statemigrations "github.com/spacemeshos/go-spacemesh/sql/statesql/migrations"
 )
 
 const recoveryDir = "recovery"
@@ -123,32 +121,24 @@ func Recover(
 		return nil, errors.New("restore layer not set")
 	}
 	logger.Info("recovering from checkpoint", zap.String("url", cfg.Uri), zap.Stringer("restore", cfg.Restore))
-	schema, err := statemigrations.SchemaWithInCodeMigrations()
-	if err != nil {
-		return nil, fmt.Errorf("error loading db schema: %w", err)
-	}
 	db, err := statesql.Open(
 		"file:"+cfg.DbPath(),
-		sql.WithDatabaseSchema(schema),
+		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open old database: %w", err)
 	}
 	defer db.Close()
-	lSchema, err := localmigrations.SchemaWithInCodeMigrations()
-	if err != nil {
-		return nil, fmt.Errorf("get schema with in-code migrations: %w", err)
-	}
 	localDB, err := localsql.Open(
 		"file:"+filepath.Join(cfg.DataDir, cfg.LocalDbFile),
-		sql.WithDatabaseSchema(lSchema),
+		sql.WithMigrationsDisabled(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("open old local database: %w", err)
 	}
 	defer localDB.Close()
 	logger.Info("clearing atx and malfeasance sync metadata from local database")
-	if err := localDB.WithTx(ctx, func(tx sql.Transaction) error {
+	if err := localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if err := atxsync.Clear(tx); err != nil {
 			return err
 		}
@@ -198,7 +188,7 @@ func RecoverWithDb(
 type recoveryData struct {
 	accounts  []*types.Account
 	atxs      []*atxs.CheckpointAtx
-	marriages map[types.NodeID]*identities.MarriageData
+	marriages []marriage.Info
 }
 
 func RecoverFromLocalFile(
@@ -284,7 +274,7 @@ func RecoverFromLocalFile(
 		zap.Int("num accounts", len(data.accounts)),
 		zap.Int("num atxs", len(data.atxs)),
 	)
-	if err = newDB.WithTx(ctx, func(tx sql.Transaction) error {
+	if err = newDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		for _, acct := range data.accounts {
 			if err = accounts.Update(tx, acct); err != nil {
 				return fmt.Errorf("restore account snapshot: %w", err)
@@ -306,9 +296,9 @@ func RecoverFromLocalFile(
 				log.ZShortStringer("smesherID", cAtx.SmesherID),
 			)
 		}
-		for id, marriage := range data.marriages {
-			if err = identities.SetMarriage(tx, id, marriage); err != nil {
-				return fmt.Errorf("add marriage for %s: %w", id.String(), err)
+		for _, info := range data.marriages {
+			if err = marriage.Add(tx, info); err != nil {
+				return fmt.Errorf("add marriage for %s: %w", info.NodeID.String(), err)
 			}
 		}
 
@@ -386,16 +376,18 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.Units = atx.Units
 		allAtxs = append(allAtxs, &cAtx)
 	}
-	marriages := make(map[types.NodeID]*identities.MarriageData, len(checkpoint.Data.Marriages))
-	for atx, ms := range checkpoint.Data.Marriages {
+	marriages := make([]marriage.Info, 0, len(checkpoint.Data.Marriages))
+	for id, ms := range checkpoint.Data.Marriages {
 		for _, m := range ms {
-			marriage := identities.MarriageData{
-				ATX:       atx,
-				Index:     m.Index,
-				Signature: types.EdSignature(m.Signature),
-				Target:    types.BytesToNodeID(m.MarriedTo),
+			info := marriage.Info{
+				ID:            marriage.ID(id),
+				NodeID:        types.BytesToNodeID(m.Signer),
+				ATX:           types.ATXID(m.ATX),
+				MarriageIndex: m.Index,
+				Signature:     types.EdSignature(m.Signature),
+				Target:        types.BytesToNodeID(m.MarriedTo),
 			}
-			marriages[types.BytesToNodeID(m.Signer)] = &marriage
+			marriages = append(marriages, info)
 		}
 	}
 

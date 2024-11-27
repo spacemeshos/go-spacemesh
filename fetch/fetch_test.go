@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -80,8 +81,10 @@ func createFetch(tb testing.TB) *testFetch {
 	}
 
 	lg := zaptest.NewLogger(tb)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
+	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 	fetch, err := NewFetch(
-		datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb,
 		store.New(),
 		nil,
 		WithContext(context.Background()),
@@ -124,8 +127,10 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := zaptest.NewLogger(t)
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), lg)
+	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
 	f, err := NewFetch(
-		datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb,
 		store.New(),
 		nil,
 		WithContext(context.Background()),
@@ -183,7 +188,9 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			f := createFetch(t)
 			f.cfg.MaxRetriesForRequest = 0
 			peer := p2p.Peer("buddy")
-			f.peers.Add(peer)
+			f.peers.Add(peer, func() []protocol.ID {
+				return []protocol.ID{hashProtocol, activeSetProtocol}
+			})
 
 			hsh0 := types.RandomHash()
 			res0 := ResponseMessage{
@@ -255,8 +262,9 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f.cfg.BatchTimeout = 1
 	f.cfg.BatchSize = 2
 	peer := p2p.Peer("buddy")
-	f.peers.Add(peer)
-
+	f.peers.Add(peer, func() []protocol.ID {
+		return []protocol.ID{hashProtocol, activeSetProtocol}
+	})
 	h1 := types.RandomHash()
 	h2 := types.RandomHash()
 	h3 := types.RandomHash()
@@ -370,7 +378,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	require.Len(t, h.GetPeers(), 1)
 
 	// This handler returns a ResponseBatch with an empty response that will fail validation on the remote peer
-	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
+	badPeerHandler := func(_ context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 		var b RequestBatch
 		codec.Decode(data, &b)
 
@@ -393,8 +401,10 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), lg)
+	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
 	fetcher, err := NewFetch(
-		datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb,
 		store.New(),
 		h,
 		WithContext(ctx),

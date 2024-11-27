@@ -120,22 +120,22 @@ func Test_HandleBlock(t *testing.T) {
 }
 
 func gossipExpectations(
-	t *testing.T,
+	tb testing.TB,
 	fee uint64,
 	hasErr, parseErr, addErr error,
 	has, verify, noHeader bool,
 ) (*TxHandler, *types.Transaction) {
-	ctrl := gomock.NewController(t)
+	ctrl := gomock.NewController(tb)
 	cstate := NewMockconservativeState(ctrl)
 	_, pub, err := crypto.GenerateEd25519Key(nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	id, err := peer.IDFromPublicKey(pub)
-	require.NoError(t, err)
-	th := NewTxHandler(cstate, id, zaptest.NewLogger(t))
+	require.NoError(tb, err)
+	th := NewTxHandler(cstate, id, zaptest.NewLogger(tb))
 
 	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	tx := newTx(t, 3, 10, fee, signer)
+	require.NoError(tb, err)
+	tx := newTx(tb, 3, 10, fee, signer)
 	var rst *types.MeshTransaction
 	if has {
 		rst = &types.MeshTransaction{Transaction: *tx}
@@ -153,8 +153,8 @@ func gossipExpectations(
 			if verify {
 				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got *types.Transaction, _ time.Time) error {
-						assert.Equal(t, tx.ID, got.ID) // causing ID to be calculated
-						assert.Equal(t, tx, got)
+						assert.Equal(tb, tx.ID, got.ID) // causing ID to be calculated
+						assert.Equal(tb, tx, got)
 						return addErr
 					}).Times(1)
 			}

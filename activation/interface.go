@@ -92,7 +92,7 @@ type syncer interface {
 	RegisterForATXSynced() <-chan struct{}
 }
 
-// malfeasancePublisher is an interface for publishing malfeasance proofs.
+// atxMalfeasancePublisher is an interface for publishing malfeasance proofs.
 // This interface is used to publish proofs in V2.
 //
 // The provider of that interface ensures that only valid proofs are published (invalid ones return an error).
@@ -100,7 +100,7 @@ type syncer interface {
 //
 // Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them
 // and mark the associated identity as malfeasant.
-type malfeasancePublisher interface {
+type atxMalfeasancePublisher interface {
 	Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error
 }
 
@@ -149,6 +149,9 @@ type PoetService interface {
 
 	// Proof returns the proof for the given round ID.
 	Proof(ctx context.Context, roundID string) (*types.PoetProof, []types.Hash32, error)
+
+	// TickSize returns tickSize configured for particular PoET service
+	TickSize() uint64
 }
 
 // A certifier client that the certifierService uses to obtain certificates

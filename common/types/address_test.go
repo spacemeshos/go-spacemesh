@@ -1,6 +1,7 @@
 package types_test
 
 import (
+	"os"
 	"testing"
 
 	"github.com/spacemeshos/go-scale/tester"
@@ -9,8 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func init() {
+func TestMain(m *testing.M) {
 	types.SetNetworkHRP("stest")
+	res := m.Run()
+	os.Exit(res)
 }
 
 func TestAddress_NewAddress(t *testing.T) {
@@ -122,10 +125,10 @@ func TestAddress_ReservedBytesOnTop(t *testing.T) {
 	}
 }
 
-func checkAddressesEqual(t *testing.T, addrA, addrB types.Address) {
-	require.Equal(t, addrA.Bytes(), addrB.Bytes())
-	require.Equal(t, addrA.String(), addrB.String())
-	require.Equal(t, addrA.IsEmpty(), addrB.IsEmpty())
+func checkAddressesEqual(tb testing.TB, addrA, addrB types.Address) {
+	require.Equal(tb, addrA.Bytes(), addrB.Bytes())
+	require.Equal(tb, addrA.String(), addrB.String())
+	require.Equal(tb, addrA.IsEmpty(), addrB.IsEmpty())
 }
 
 func FuzzAddressConsistency(f *testing.F) {

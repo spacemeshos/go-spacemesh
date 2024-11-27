@@ -8,9 +8,11 @@ import (
 
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
+	"github.com/grpc-ecosystem/go-grpc-middleware/logging/zap/ctxzap"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
@@ -37,6 +39,7 @@ const (
 // transactionConState is an API to validate transaction.
 type transactionConState interface {
 	Validation(raw types.RawTx) system.ValidationRequest
+	HasEvicted(tid types.TransactionID) (bool, error)
 }
 
 // transactionSyncer is an API to get sync status.
@@ -128,7 +131,7 @@ func (s *TransactionService) List(
 	if err := transactions.IterateTransactionsOps(s.db, ops, func(tx *types.MeshTransaction,
 		result *types.TransactionResult,
 	) bool {
-		rst = append(rst, toTx(tx, result, request.IncludeResult, request.IncludeState))
+		rst = append(rst, s.toTx(ctx, tx, result, request.IncludeResult, request.IncludeState))
 		return true
 	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
@@ -207,6 +210,9 @@ func (s *TransactionService) SubmitTransaction(
 	}
 
 	raw := types.NewRawTx(request.Transaction)
+	ctxzap.Info(ctx, "successfully submitted transaction",
+		zap.Stringer("tx_id", raw.ID),
+	)
 	return &spacemeshv2alpha1.SubmitTransactionResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 		TxId:   raw.ID[:],
@@ -298,7 +304,10 @@ func toTransactionOperations(filter *spacemeshv2alpha1.TransactionRequest) (buil
 	return ops, nil
 }
 
-func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
+func (s *TransactionService) toTx(
+	ctx context.Context,
+	tx *types.MeshTransaction,
+	result *types.TransactionResult,
 	includeResult, includeState bool,
 ) *spacemeshv2alpha1.TransactionResponse {
 	rst := &spacemeshv2alpha1.TransactionResponse{}
@@ -327,11 +336,11 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 
 	if includeResult && result != nil {
 		rst.TxResult = &spacemeshv2alpha1.TransactionResult{
-			Status:      convertTxResult(result),
+			Status:      s.convertTxResult(result),
 			Message:     result.Message,
 			GasConsumed: result.Gas,
 			Fee:         result.Fee,
-			Block:       result.Block[:],
+			Block:       result.Block.Bytes(),
 			Layer:       result.Layer.Uint32(),
 		}
 		if len(result.Addresses) > 0 {
@@ -343,7 +352,7 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 	}
 
 	if includeState {
-		rst.TxState = convertTxState(tx)
+		rst.TxState = s.convertTxState(ctx, tx)
 	}
 
 	rst.Tx = t
@@ -351,7 +360,9 @@ func toTx(tx *types.MeshTransaction, result *types.TransactionResult,
 	return rst
 }
 
-func convertTxResult(result *types.TransactionResult) spacemeshv2alpha1.TransactionResult_Status {
+func (s *TransactionService) convertTxResult(
+	result *types.TransactionResult,
+) spacemeshv2alpha1.TransactionResult_Status {
 	switch result.Status {
 	case types.TransactionSuccess:
 		return spacemeshv2alpha1.TransactionResult_TRANSACTION_STATUS_SUCCESS
@@ -362,8 +373,9 @@ func convertTxResult(result *types.TransactionResult) spacemeshv2alpha1.Transact
 	}
 }
 
-// TODO: REJECTED, INSUFFICIENT_FUNDS, CONFLICTING, MESH.
-func convertTxState(tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionState {
+func (s *TransactionService) convertTxState(
+	ctx context.Context, tx *types.MeshTransaction,
+) *spacemeshv2alpha1.TransactionState {
 	switch tx.State {
 	case types.MEMPOOL:
 		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_MEMPOOL
@@ -372,6 +384,19 @@ func convertTxState(tx *types.MeshTransaction) *spacemeshv2alpha1.TransactionSta
 		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_PROCESSED
 		return &state
 	default:
+		evicted, err := s.conState.HasEvicted(tx.ID)
+		if err != nil {
+			ctxzap.Debug(ctx, "failed to check if tx is evicted",
+				zap.String("tx_id", tx.ID.String()),
+				zap.Error(err),
+			)
+			state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+			return &state
+		}
+		if evicted {
+			state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_INEFFECTUAL
+			return &state
+		}
 		state := spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 		return &state
 	}

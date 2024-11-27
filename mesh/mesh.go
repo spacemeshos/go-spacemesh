@@ -95,7 +95,7 @@ func NewMesh(
 	}
 
 	genesis := types.GetEffectiveGenesis()
-	if err = db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	if err = db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		if err = layers.SetProcessed(dbtx, genesis); err != nil {
 			return fmt.Errorf("mesh init: %w", err)
 		}
@@ -385,7 +385,7 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 				return fmt.Errorf("execute block %v/%v: %w", layer.Layer, target, err)
 			}
 		}
-		if err := msh.cdb.WithTx(ctx, func(dbtx sql.Transaction) error {
+		if err := msh.cdb.WithTxImmediate(ctx, func(dbtx sql.Transaction) error {
 			if err := layers.SetApplied(dbtx, layer.Layer, target); err != nil {
 				return fmt.Errorf("set applied for %v/%v: %w", layer.Layer, target, err)
 			}
@@ -440,7 +440,7 @@ func (msh *Mesh) saveHareOutput(ctx context.Context, lid types.LayerID, bid type
 		certs []certificates.CertValidity
 		err   error
 	)
-	if err = msh.cdb.WithTx(ctx, func(tx sql.Transaction) error {
+	if err = msh.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		// check if a certificate has been generated or sync'ed.
 		// - node generated the certificate when it collected enough certify messages
 		// - hare outputs are processed in layer order. i.e. when hare fails for a previous layer N,
@@ -573,7 +573,7 @@ func (msh *Mesh) AddBallot(
 	// we call the hooks to notify tortoise and atxsdata
 	if !malicious && ballot.IsMalicious() {
 		// so this is a bit of double work (getting the malfeasance proof right after
-		// we stored it), BUT, probably negligble considering the amount of malfeasant
+		// we stored it), BUT, probably negligible considering the amount of malicious
 		// identities we have. The other way to go about this is to allocate an individual channel
 		// for every write (so that every writer gets its own response with the potential proof)
 		// However I find that more costly than this approach.

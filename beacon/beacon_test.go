@@ -13,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/spacemeshos/fixed"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -92,7 +93,8 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id
 
 	tpd.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(true)
 
-	tpd.cdb = datastore.NewCachedDB(statesql.InMemory(), lg)
+	tpd.cdb = datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
+	tb.Cleanup(func() { assert.NoError(tb, tpd.cdb.Close()) })
 	tpd.ProtocolDriver = New(p, signing.NewEdVerifier(), tpd.mVerifier, tpd.cdb, tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -494,12 +496,13 @@ func TestBeacon_NoRaceOnClose(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:           lg.Named("Beacon"),
 		beacons:          make(map[types.EpochID]types.Beacon),
-		cdb:              datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb:              datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 		clock:            mclock,
 		closed:           make(chan struct{}),
 		results:          make(chan result.Beacon, 100),
 		metricsCollector: metrics.NewBeaconMetricsCollector(nil, lg.Named("metrics")),
 	}
+	t.Cleanup(func() { assert.NoError(t, pd.cdb.Close()) })
 	// check for a race between onResult and Close
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -529,9 +532,10 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:  lg.Named("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb:     datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 		clock:   mclock,
 	}
+	t.Cleanup(func() { assert.NoError(t, pd.cdb.Close()) })
 	epoch3 := types.EpochID(3)
 	beacon2 := types.RandomBeacon()
 	epoch5 := types.EpochID(5)
@@ -582,9 +586,10 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:  lg.Named("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		cdb:     datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb:     datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 		clock:   mclock,
 	}
+	t.Cleanup(func() { assert.NoError(t, pd.cdb.Close()) })
 	epoch := types.EpochID(3)
 
 	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
@@ -600,11 +605,12 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	mclock := NewMocklayerClock(gomock.NewController(t))
 	pd := &ProtocolDriver{
 		logger:         lg.Named("Beacon"),
-		cdb:            datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb:            datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,
 	}
+	t.Cleanup(func() { assert.NoError(t, pd.cdb.Close()) })
 
 	epoch := types.EpochID(5)
 	mclock.EXPECT().CurrentLayer().Return(epoch.FirstLayer()).AnyTimes()
@@ -705,11 +711,12 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 			pd := &ProtocolDriver{
 				logger:         lg.Named("Beacon"),
 				config:         UnitTestConfig(),
-				cdb:            datastore.NewCachedDB(statesql.InMemory(), lg),
+				cdb:            datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 				beacons:        make(map[types.EpochID]types.Beacon),
 				ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 				clock:          mclock,
 			}
+			t.Cleanup(func() { assert.NoError(t, pd.cdb.Close()) })
 			pd.config.BeaconSyncWeightUnits = 4
 
 			epoch := types.EpochID(3)
@@ -741,11 +748,12 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:         lg.Named("Beacon"),
 		config:         UnitTestConfig(),
-		cdb:            datastore.NewCachedDB(statesql.InMemory(), lg),
+		cdb:            datastore.NewCachedDB(statesql.InMemoryTest(t), lg),
 		beacons:        make(map[types.EpochID]types.Beacon),
 		ballotsBeacons: make(map[types.EpochID]map[types.Beacon]*beaconWeight),
 		clock:          mclock,
 	}
+	t.Cleanup(func() { assert.NoError(t, pd.cdb.Close()) })
 	pd.config.BeaconSyncWeightUnits = 2
 
 	epoch := types.EpochID(3)

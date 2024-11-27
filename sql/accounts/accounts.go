@@ -9,32 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
-func load(db sql.Executor, address types.Address, query string, enc sql.Encoder) (types.Account, error) {
-	var account types.Account
-	_, err := db.Exec(query, enc, func(stmt *sql.Statement) bool {
-		account.Balance = uint64(stmt.ColumnInt64(0))
-		account.NextNonce = uint64(stmt.ColumnInt64(1))
-		account.Layer = types.LayerID(uint32(stmt.ColumnInt64(2)))
-		if stmt.ColumnLen(3) > 0 {
-			account.TemplateAddress = &types.Address{}
-			stmt.ColumnBytes(3, account.TemplateAddress[:])
-			account.State = make([]byte, stmt.ColumnLen(4))
-			stmt.ColumnBytes(4, account.State)
-			var err error
-			account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
-			if err != nil {
-				panic(fmt.Sprintf("decoding account storage: %v", err))
-			}
-		}
-		return false
-	})
-	if err != nil {
-		return types.Account{}, err
-	}
-	account.Address = address
-	return account, nil
-}
-
 // Has the account in the database.
 func Has(db sql.Executor, address types.Address) (bool, error) {
 	rows, err := db.Exec("select 1 from accounts where address = ?1;",
@@ -50,34 +24,86 @@ func Has(db sql.Executor, address types.Address) (bool, error) {
 
 // Latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
-	account, err := load(
-		db,
-		address,
-		`select balance, next_nonce, layer_updated, template, state, storage
-		from accounts where address = ?1 order by layer_updated desc;`,
-		func(stmt *sql.Statement) {
-			stmt.BindBytes(1, address.Bytes())
+	var account types.Account
+	_, err := db.Exec(`
+		select balance, next_nonce, layer_updated, template, state, storage from accounts
+		where address = ?1
+		order by layer_updated desc;`,
+		func(stmt *sql.Statement) { stmt.BindBytes(1, address.Bytes()) },
+		func(stmt *sql.Statement) bool {
+			account.Balance = uint64(stmt.ColumnInt64(0))
+			account.NextNonce = uint64(stmt.ColumnInt64(1))
+			account.Layer = types.LayerID(uint32(stmt.ColumnInt64(2)))
+			if stmt.ColumnLen(3) > 0 {
+				account.TemplateAddress = &types.Address{}
+				stmt.ColumnBytes(3, account.TemplateAddress[:])
+				account.State = make([]byte, stmt.ColumnLen(4))
+				stmt.ColumnBytes(4, account.State)
+			}
+			if stmt.ColumnLen(5) > 0 {
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
+			}
+			account.Address = address
+			return false
 		},
 	)
 	if err != nil {
 		return types.Account{}, fmt.Errorf("failed to load %v: %w", address, err)
 	}
+	// TODO(mafa): returning `sql.ErrNotFound` causes a bunch of tests to fail, some even panic
+	// this needs to be investigated and fixed
+	//
+	// if account.Address != address {
+	// 	return types.Account{}, sql.ErrNotFound
+	// }
+	account.Address = address // without this tests are failing not only assertions but are also panicking
 	return account, nil
 }
 
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
-	account, err := load(db, address,
-		`select balance, next_nonce, layer_updated, template, state, storage
-		 from accounts where address = ?1 and layer_updated <= ?2 order by layer_updated desc;`,
+	var account types.Account
+	_, err := db.Exec(`
+		select balance, next_nonce, layer_updated, template, state, storage from accounts
+		where address = ?1 and layer_updated <= ?2
+		order by layer_updated desc;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address.Bytes())
 			stmt.BindInt64(2, int64(layer))
+		},
+		func(stmt *sql.Statement) bool {
+			account.Balance = uint64(stmt.ColumnInt64(0))
+			account.NextNonce = uint64(stmt.ColumnInt64(1))
+			account.Layer = types.LayerID(uint32(stmt.ColumnInt64(2)))
+			if stmt.ColumnLen(3) > 0 {
+				account.TemplateAddress = &types.Address{}
+				stmt.ColumnBytes(3, account.TemplateAddress[:])
+				account.State = make([]byte, stmt.ColumnLen(4))
+				stmt.ColumnBytes(4, account.State)
+				var err error
+				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
+				if err != nil {
+					panic(fmt.Sprintf("decoding account storage: %v", err))
+				}
+			}
+			account.Address = address
+			return false
 		},
 	)
 	if err != nil {
 		return types.Account{}, fmt.Errorf("failed to load %v for layer %v: %w", address, layer, err)
 	}
+	// TODO(mafa): returning `sql.ErrNotFound` causes a bunch of tests to fail, some even panic
+	// this needs to be investigated and fixed
+	//
+	// if account.Address != address {
+	// 	return types.Account{}, sql.ErrNotFound
+	// }
+	account.Address = address // without this tests are failing not only assertions but are also panicking
 	return account, nil
 }
 
@@ -158,8 +184,8 @@ func Update(db sql.Executor, to *types.Account) error {
 	if err != nil {
 		return fmt.Errorf("failed to encode storage: %w", err)
 	}
-	_, err = db.Exec(`insert into 
-	accounts (address, balance, next_nonce, layer_updated, template, state, storage) 
+	_, err = db.Exec(`insert into
+	accounts (address, balance, next_nonce, layer_updated, template, state, storage)
 	values (?1, ?2, ?3, ?4, ?5, ?6, ?7);`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, to.Address.Bytes())
 		stmt.BindInt64(2, int64(to.Balance))
@@ -226,6 +252,5 @@ func IterateAccountsOps(
 	if err != nil {
 		return err
 	}
-
 	return nil
 }

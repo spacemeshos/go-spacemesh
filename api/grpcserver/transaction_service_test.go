@@ -31,7 +31,7 @@ import (
 )
 
 func TestTransactionService_StreamResults(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -39,7 +39,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 	gen := fixture.NewTransactionResultGenerator().
 		WithAddresses(2)
 	txs := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(ctx, func(dtx sql.Transaction) error {
 		for i := range txs {
 			tx := gen.Next(t)
 
@@ -137,7 +137,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 }
 
 func BenchmarkStreamResults(b *testing.B) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(b)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -219,7 +219,7 @@ func parseOk() parseExpectation {
 }
 
 func TestParseTransactions(t *testing.T) {
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 
 	vminst := vm.New(db)
 	cfg, cleanup := launchServer(t, NewTransactionService(db, nil, nil, txs.NewConservativeState(vminst, db), nil, nil))

@@ -25,10 +25,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -38,6 +40,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+// TestPostMalfeasanceProof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
@@ -94,9 +97,49 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	logger.Info("p2p host created", zap.Stringer("id", host.ID()))
 	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error { return nil })
-
 	require.NoError(t, host.Start())
 	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
+
+	db := statesql.InMemoryTest(t)
+	cdb := datastore.NewCachedDB(db, zap.NewNop())
+	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
+
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(cl.Genesis()),
+		timesync.WithLogger(logger.Named("clock")),
+	)
+	require.NoError(t, err)
+	t.Cleanup(clock.Close)
+
+	proposalsStore := store.New(
+		store.WithEvictedLayer(clock.CurrentLayer()),
+		store.WithLogger(logger.Named("proposals-store")),
+		store.WithCapacity(cfg.Tortoise.Zdist+1),
+	)
+
+	fetcher, err := fetch.NewFetch(cdb, proposalsStore, host,
+		fetch.WithContext(ctx),
+		fetch.WithConfig(cfg.FETCH),
+		fetch.WithLogger(logger.Named("fetcher")),
+	)
+	require.NoError(t, err)
+
+	fetcher.SetValidators(
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
+	)
+
+	require.NoError(t, fetcher.Start())
+	t.Cleanup(fetcher.Stop)
 
 	ctrl := gomock.NewController(t)
 	syncer := activation.NewMocksyncer(ctrl)
@@ -110,7 +153,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
-		datastore.NewCachedDB(statesql.InMemory(), zap.NewNop()),
+		cdb,
 		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,
@@ -131,15 +174,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
 	// 2. create ATX with invalid POST labels
-	clock, err := timesync.NewClock(
-		timesync.WithLayerDuration(cfg.LayerDuration),
-		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(cl.Genesis()),
-		timesync.WithLogger(logger.Named("clock")),
-	)
-	require.NoError(t, err)
-	t.Cleanup(clock.Close)
-
 	grpcPostService := grpcserver.NewPostService(
 		logger.Named("grpc-post-service"),
 		grpcserver.PostServiceQueryInterval(500*time.Millisecond),
@@ -156,18 +190,17 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
-	db := statesql.InMemory()
-	localDb := localsql.InMemory()
+	localDb := localsql.InMemoryTest(t)
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
 	poetDb, err := activation.NewPoetDb(db, zap.NewNop())
 	require.NoError(t, err)
 	poetService, err := activation.NewPoetService(
 		poetDb,
-		types.PoetServer{
-			Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0),
-		}, cfg.POET,
+		types.PoetServer{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
+		cfg.POET,
 		logger,
+		1,
 		activation.WithCertifier(certifier),
 	)
 	require.NoError(t, err)
@@ -244,6 +277,8 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Pow:     challenge.InitialPost.Pow,
 		},
 	}
+	err = nipost.AddChallenge(localDb, signer.NodeID(), nipostChallenge)
+	require.NoError(t, err)
 
 	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.Hash(), nipostChallenge)
 	require.NoError(t, err)
@@ -293,7 +328,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 	eg.Go(func() error {
 		for {
-			logger.Sugar().Infow("publishing ATX", "atx", atx)
+			logger.Info("publishing ATX", zap.Object("atx", &atx))
 			buf := codec.MustEncode(&atx)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)
@@ -322,7 +357,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.NoError(t, codec.Decode(malf.Proof.Proof, &proof))
 		require.Equal(t, mwire.InvalidPostIndex, proof.Proof.Type)
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
-		logger.Sugar().Infow("malfeasance post proof", "proof", invalidPostProof)
+		logger.Info("malfeasance post proof", zap.Object("proof", invalidPostProof))
 		invalidAtx := invalidPostProof.Atx
 		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
 		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)

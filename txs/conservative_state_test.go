@@ -83,19 +83,19 @@ func (t *testConState) handler() *TxHandler {
 	return NewTxHandler(t, t.id, t.logger)
 }
 
-func createTestState(t *testing.T, gasLimit uint64) *testConState {
-	ctrl := gomock.NewController(t)
+func createTestState(tb testing.TB, gasLimit uint64) *testConState {
+	ctrl := gomock.NewController(tb)
 	mvm := NewMockvmState(ctrl)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(tb)
 	cfg := CSConfig{
 		BlockGasLimit:     gasLimit,
 		NumTXsPerProposal: numTXsInProposal,
 	}
 	logger := zap.NewNop()
 	_, pub, err := crypto.GenerateEd25519Key(nil)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 	id, err := peer.IDFromPublicKey(pub)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	return &testConState{
 		ConservativeState: NewConservativeState(mvm, db,

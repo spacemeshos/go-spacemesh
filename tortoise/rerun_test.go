@@ -17,7 +17,7 @@ func TestRerunRevertNonverifiedLayers(t *testing.T) {
 		size = 10
 		good = 10
 	)
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(t, sim.WithLayerSize(size))
 	s.Setup(sim.WithSetupUnitsRange(2, 2))
 
 	cfg := defaultTestConfig()
@@ -46,7 +46,7 @@ func TestWindowSizeVoteCounting(t *testing.T) {
 func testWindowCounting(tb testing.TB, maliciousLayers, windowSize int, expectedValidity bool) {
 	genesis := types.GetEffectiveGenesis()
 	const size = 4
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(tb, sim.WithLayerSize(size))
 	s.Setup(sim.WithSetupMinerRange(size, size))
 
 	cfg := defaultTestConfig()
@@ -120,6 +120,7 @@ func BenchmarkTallyVotes(b *testing.B) {
 func benchmarkTallyVotes(b *testing.B, size int, windowsize uint32, opts ...sim.NextOpt) {
 	const layerSize = 30
 	s := sim.New(
+		b,
 		sim.WithLayerSize(layerSize),
 		sim.WithPath(b.TempDir()),
 	)

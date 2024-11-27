@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	stdtime "time"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -14,9 +14,9 @@ import (
 )
 
 var (
-	extra = flag.String("extra", "", "genesis extra data. valid size is between [1, 255]")
-	time  = flag.String("time", "", "genesis time. format "+stdtime.RFC3339)
-	n     = flag.Int("n", 10, "number of keys")
+	extra       = flag.String("extra", "", "genesis extra data. valid size is between [1, 255]")
+	genesisTime = flag.String("time", "", "genesis time. format "+time.RFC3339)
+	n           = flag.Int("n", 10, "number of keys")
 )
 
 type output struct {
@@ -28,8 +28,13 @@ type output struct {
 
 func main() {
 	flag.Parse()
+	genesis, err := time.Parse(*genesisTime, time.RFC3339)
+	if err != nil {
+		fmt.Printf("invalid genesis time: %s\n", err)
+		os.Exit(1)
+	}
 
-	conf := config.GenesisConfig{GenesisTime: *time, ExtraData: *extra}
+	conf := config.GenesisConfig{GenesisTime: config.Genesis(genesis), ExtraData: *extra}
 	if err := conf.Validate(); err != nil {
 		fmt.Printf("invalid config values: %s\n", err)
 		os.Exit(1)

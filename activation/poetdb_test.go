@@ -24,19 +24,19 @@ var (
 	createProofOnce sync.Once
 )
 
-func getPoetProof(t *testing.T) types.PoetProofMessage {
+func getPoetProof(tb testing.TB) types.PoetProofMessage {
 	createProofOnce.Do(func() {
 		challenge := []byte("hello world, this is a challenge")
 
 		leaves, merkleProof, err := prover.GenerateProofWithoutPersistency(
 			context.Background(),
-			prover.TreeConfig{Datadir: t.TempDir()},
+			prover.TreeConfig{Datadir: tb.TempDir()},
 			poetHash.GenLabelHashFunc(challenge),
 			poetHash.GenMerkleHashFunc(challenge),
 			time.Now(),
 			shared.T,
 		)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		err = verifier.Validate(
 			*merkleProof,
@@ -45,7 +45,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 			leaves,
 			shared.T,
 		)
-		require.NoError(t, err)
+		require.NoError(tb, err)
 
 		proof = &types.PoetProofMessage{
 			PoetProof: types.PoetProof{
@@ -63,7 +63,7 @@ func getPoetProof(t *testing.T) types.PoetProofMessage {
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemoryTest(t), zaptest.NewLogger(t))
 	r.NoError(err)
 
 	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
@@ -84,7 +84,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemoryTest(t), zaptest.NewLogger(t))
 	r.NoError(err)
 	msg.PoetProof.Root = []byte("some other root")
 
@@ -101,7 +101,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemoryTest(t), zaptest.NewLogger(t))
 	r.NoError(err)
 	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
@@ -118,7 +118,7 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 	msg := getPoetProof(t)
-	poetDb, err := NewPoetDb(statesql.InMemory(), zaptest.NewLogger(t))
+	poetDb, err := NewPoetDb(statesql.InMemoryTest(t), zaptest.NewLogger(t))
 	r.NoError(err)
 
 	_, err = poetDb.GetProofRef(msg.PoetServiceID, "0")
