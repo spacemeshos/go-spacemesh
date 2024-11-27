@@ -57,7 +57,7 @@ func TestSmeshing(t *testing.T) {
 	)
 	require.NoError(t, err)
 	testSmeshing(t, tctx, cl)
-	testTransactions(t, tctx, cl, 8)
+	testTransactions(t, tctx, cl, 10)
 	testVesting(t, tctx, cl, vests...)
 }
 
