@@ -371,14 +371,7 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	)
 
 	/**========================  Deprecated flags ========================== **/
-	// left for reference
-	//
-	// flagSet.Var(flags.NewDeprecatedFlag(config.DeprecatedPoETServers{}), "poet-server",
-	// 	"deprecated, use poet-servers instead",
-	// )
-	// if err := flagSet.MarkHidden("poet-server"); err != nil {
-	// 	panic(err) // unreachable
-	// }
+	// none at the moment
 
 	return configPath
 }
