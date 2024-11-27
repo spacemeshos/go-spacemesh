@@ -39,12 +39,9 @@ func TestCheckpoint(t *testing.T) {
 
 	tctx := testcontext.New(t)
 	addedLater := 2
-	size := min(tctx.ClusterSize, 20)
-	oldSize := size - addedLater
-	if tctx.ClusterSize > oldSize {
-		tctx.Log.Info("cluster size changed to ", oldSize)
-		tctx.ClusterSize = oldSize
-	}
+	oldSize := tctx.ClusterSize - addedLater
+	tctx.Log.Info("cluster size changed to ", oldSize)
+	tctx.ClusterSize = oldSize
 
 	// at the last layer of epoch 3, in the beginning of poet round 2.
 	// it is important to avoid check-pointing in the middle of cycle gap
@@ -175,8 +172,8 @@ func TestCheckpoint(t *testing.T) {
 	ensureSmeshing(t, tctx, cl, checkpointEpoch)
 
 	// increase the cluster size to the original test size
-	tctx.Log.Info("cluster size changed to ", size)
-	tctx.ClusterSize = size
+	tctx.ClusterSize += addedLater
+	tctx.Log.Info("cluster size changed to ", tctx.ClusterSize)
 	require.NoError(t, cl.AddSmeshers(tctx, addedLater))
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
