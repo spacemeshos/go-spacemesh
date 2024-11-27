@@ -47,7 +47,7 @@ func testTransactions(
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
-	deadline := cl.Genesis().Add(time.Duration(stop) * layerDuration)
+	deadline := cl.Genesis().Add(time.Duration(stop+2) * layerDuration) // add some buffer for results to arrive
 	ctx, cancel := context.WithDeadline(tctx, deadline)
 	defer cancel()
 	eg, ctx := errgroup.WithContext(ctx)
@@ -58,19 +58,21 @@ func testTransactions(
 
 	for i := range cl.Total() {
 		client := cl.Client(i)
-		watchTransactionResults(tctx, eg, client, tctx.Log.Desugar(),
-			func(rst *pb.TransactionResult) (bool, error) {
-				txs[i] = append(txs[i], rst.Tx)
-				count := len(txs[i])
-				tctx.Log.Debugw("received transaction client",
-					"layer", rst.Layer,
-					"client", client.Name,
-					"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
-					"count", count,
-				)
-				return len(txs[i]) < expectedCount, nil
-			},
-		)
+		eg.Go(func() error {
+			return watchTransactionResults(ctx, client, tctx.Log.Desugar(),
+				func(rst *pb.TransactionResult) (bool, error) {
+					txs[i] = append(txs[i], rst.Tx)
+					count := len(txs[i])
+					tctx.Log.Debugw("received transaction client",
+						"layer", rst.Layer,
+						"client", client.Name,
+						"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
+						"count", count,
+					)
+					return len(txs[i]) < expectedCount, nil
+				},
+			)
+		})
 	}
 	require.NoError(tb, eg.Wait())
 

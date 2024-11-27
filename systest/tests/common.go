@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"testing"
 	"time"
 
@@ -45,19 +46,18 @@ func sendTransactions(
 		if err != nil {
 			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
 		}
+		spawnLayer := math.MinInt
 		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number >= stop {
 				return false, nil
 			}
+			if int(layer.Layer.Number.Number) < spawnLayer+2 {
+				// wait for the spawn transaction to be applied
+				return true, nil
+			}
 			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED || layer.Layer.Number.Number < first {
 				return true, nil
 			}
-			// give some time for a previous layer to be applied
-			// TODO(dshulyak) introduce api that simply subscribes to internal clock
-			// and outputs events when the tick for the layer is available
-			// TODO(mafa) it looks like a layer returning status "APPLIED" doesn't mean that the transactions are
-			// actually applied
-			time.Sleep(500 * time.Millisecond)
 			if nonce == 0 {
 				logger.Info("address needs to be spawned",
 					zap.String("client", client.Name),
@@ -66,6 +66,7 @@ func sendTransactions(
 				if err := submitSpawn(ctx, cl, i, client); err != nil {
 					return false, fmt.Errorf("failed to spawn %w", err)
 				}
+				spawnLayer = int(layer.Layer.Number.Number)
 				nonce++
 				return true, nil
 			}
@@ -328,53 +329,51 @@ func waitTransaction(ctx context.Context, eg *errgroup.Group, client *cluster.No
 	})
 }
 
-func watchTransactionResults(ctx context.Context,
-	eg *errgroup.Group,
+func watchTransactionResults(
+	ctx context.Context,
 	client *cluster.NodeClient,
 	log *zap.Logger,
 	collector func(*pb.TransactionResult) (bool, error),
-) {
-	eg.Go(func() error {
-		retries := 0
-	BACKOFF:
-		api := pb.NewTransactionServiceClient(client.PubConn())
-		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
-		if err != nil {
+) error {
+	retries := 0
+BACKOFF:
+	api := pb.NewTransactionServiceClient(client.PubConn())
+	rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
+	if err != nil {
+		return err
+	}
+	for {
+		rst, err := rsts.Recv()
+		s, ok := status.FromError(err)
+		if !ok {
 			return err
 		}
-		for {
-			rst, err := rsts.Recv()
-			s, ok := status.FromError(err)
-			if !ok {
+		switch s.Code() {
+		case codes.OK:
+			if cont, err := collector(rst); !cont {
 				return err
 			}
-			switch s.Code() {
-			case codes.OK:
-				if cont, err := collector(rst); !cont {
-					return err
-				}
-			case codes.Canceled:
-				return nil
-			case codes.DeadlineExceeded:
-				return nil
-			case codes.Unavailable:
-				if retries == attempts {
-					return errors.New("transaction results unavailable")
-				}
-				retries++
-				time.Sleep(retryBackoff)
-				goto BACKOFF
-			default:
-				log.Warn(
-					"transactions stream error",
-					zap.String("client", client.Name),
-					zap.Error(err),
-					zap.Any("status", s),
-				)
-				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+		case codes.Canceled:
+			return nil
+		case codes.DeadlineExceeded:
+			return nil
+		case codes.Unavailable:
+			if retries == attempts {
+				return errors.New("transaction results unavailable")
 			}
+			retries++
+			time.Sleep(retryBackoff)
+			goto BACKOFF
+		default:
+			log.Warn(
+				"transactions stream error",
+				zap.String("client", client.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
+			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
 		}
-	})
+	}
 }
 
 func watchProposals(

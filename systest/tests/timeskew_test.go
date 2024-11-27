@@ -14,8 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-// TestShortTimeskew runs a network where ~20% of nodes have their clocks skewed by 3 seconds.
-func TestShortTimeskew(t *testing.T) {
+// TestShortTimeSkew runs a network where ~20% of nodes have their clocks skewed by 3 seconds.
+func TestShortTimeSkew(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
