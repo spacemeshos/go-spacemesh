@@ -39,7 +39,7 @@ func TestTransactionService_List(t *testing.T) {
 
 	gen := fixture.NewTransactionResultGenerator().WithAddresses(2)
 	txsList := make([]types.TransactionWithResult, 100)
-	require.NoError(t, db.WithTx(ctx, func(dtx sql.Transaction) error {
+	require.NoError(t, db.WithTxImmediate(ctx, func(dtx sql.Transaction) error {
 		for i := range txsList {
 			tx := gen.Next(t)
 
@@ -795,4 +795,38 @@ func TestToTxContents(t *testing.T) {
 		// require.Nil(t, contents.GetDrainVault())
 		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_VESTING_SPAWN, txType)
 	})
+}
+
+func TestEvictedTransaction(t *testing.T) {
+	req := require.New(t)
+
+	db := statesql.InMemoryTest(t)
+	ctrl := gomock.NewController(t)
+	syncer := NewMocktransactionSyncer(ctrl)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	txHandler := NewMocktransactionValidator(ctrl)
+	conState := NewMocktransactionConState(ctrl)
+
+	signer, err := signing.NewEdSigner()
+	require.NoError(t, err)
+	tx := newTx(t, 0, types.Address{}, signer)
+	require.NoError(t, transactions.Add(db, &types.Transaction{
+		RawTx:    tx.RawTx,
+		TxHeader: nil,
+	}, time.Now()))
+
+	svc := NewTransactionService(db, conState, syncer, txHandler, publisher)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
+	conn := dialGrpc(t, cfg)
+	client := spacemeshv2alpha1.NewTransactionServiceClient(conn)
+
+	conState.EXPECT().HasEvicted(gomock.Any()).Return(true, nil)
+	list, err := client.List(context.Background(), &spacemeshv2alpha1.TransactionRequest{Limit: 1, IncludeState: true})
+	req.NoError(err)
+	req.Len(list.Transactions, 1)
+	req.Equal(tx.ID.Bytes(), list.Transactions[0].Tx.Id)
+	req.Equal(list.Transactions[0].TxState.String(),
+		spacemeshv2alpha1.TransactionState_TRANSACTION_STATE_INEFFECTUAL.String())
 }

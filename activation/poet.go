@@ -22,6 +22,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
@@ -32,9 +33,9 @@ import (
 var (
 	ErrInvalidRequest           = errors.New("invalid request")
 	ErrUnauthorized             = errors.New("unauthorized")
-	ErrCertificatesNotSupported = errors.New("poet doesn't support certificates")
-	ErrIncompatiblePhaseShift   = errors.New("fetched poet phase_shift is incompatible with configured phase_shift")
-	ErrCertifierNotConfigured   = errors.New("certifier service not configured")
+	errCertificatesNotSupported = errors.New("poet doesn't support certificates")
+	errIncompatiblePhaseShift   = errors.New("fetched poet phase_shift is incompatible with configured phase_shift")
+	errCertifierNotConfigured   = errors.New("certifier service not configured")
 )
 
 type PoetPowParams struct {
@@ -245,7 +246,10 @@ func (c *HTTPPoetClient) Submit(
 		roundEnd = time.Now().Add(resBody.RoundEnd.AsDuration())
 	}
 
-	return &types.PoetRound{ID: resBody.RoundId, End: roundEnd}, nil
+	round := types.PoetRound{ID: resBody.RoundId, End: roundEnd}
+	events.EmitRegisteredInPoet(nodeID, c.Address(), round.ID)
+
+	return &round, nil
 }
 
 func (c *HTTPPoetClient) Info(ctx context.Context) (*types.PoetInfo, error) {
@@ -400,6 +404,9 @@ type poetService struct {
 	expectedPhaseShift time.Duration
 	infoCache          cachedData[*types.PoetInfo]
 	powParamsCache     cachedData[*PoetPowParams]
+
+	// Used to calculate ticks from PoetProof.LeafCount.
+	tickSize uint64
 }
 
 type PoetServiceOpt func(*poetService)
@@ -415,6 +422,7 @@ func NewPoetService(
 	server types.PoetServer,
 	cfg PoetConfig,
 	logger *zap.Logger,
+	tickSize uint64,
 	opts ...PoetServiceOpt,
 ) (*poetService, error) {
 	client, err := NewHTTPPoetClient(server, cfg, WithLogger(logger))
@@ -426,6 +434,7 @@ func NewPoetService(
 		client,
 		cfg,
 		logger,
+		tickSize,
 		opts...,
 	), nil
 }
@@ -435,6 +444,7 @@ func NewPoetServiceWithClient(
 	client PoetClient,
 	cfg PoetConfig,
 	logger *zap.Logger,
+	tickSize uint64,
 	opts ...PoetServiceOpt,
 ) *poetService {
 	service := &poetService{
@@ -446,6 +456,7 @@ func NewPoetServiceWithClient(
 		powParamsCache:     cachedData[*PoetPowParams]{ttl: cfg.PowParamsCacheTTL},
 		proofMembers:       make(map[string][]types.Hash32, 1),
 		expectedPhaseShift: cfg.PhaseShift,
+		tickSize:           tickSize,
 	}
 	for _, opt := range opts {
 		opt(service)
@@ -453,7 +464,7 @@ func NewPoetServiceWithClient(
 
 	err := service.verifyPhaseShiftConfiguration(context.Background())
 	switch {
-	case errors.Is(err, ErrIncompatiblePhaseShift):
+	case errors.Is(err, errIncompatiblePhaseShift):
 		logger.Fatal("failed to create poet service", zap.String("poet", client.Address()))
 		return nil
 	case err != nil:
@@ -465,6 +476,10 @@ func NewPoetServiceWithClient(
 	return service
 }
 
+func (c *poetService) TickSize() uint64 {
+	return c.tickSize
+}
+
 func (c *poetService) verifyPhaseShiftConfiguration(ctx context.Context) error {
 	info, err := c.getInfo(ctx)
 	if err != nil {
@@ -472,7 +487,7 @@ func (c *poetService) verifyPhaseShiftConfiguration(ctx context.Context) error {
 	}
 
 	if info.PhaseShift != c.expectedPhaseShift {
-		return ErrIncompatiblePhaseShift
+		return errIncompatiblePhaseShift
 	}
 
 	return nil
@@ -493,7 +508,7 @@ func (c *poetService) authorize(
 	switch {
 	case err == nil:
 		return &PoetAuth{PoetCert: cert}, nil
-	case errors.Is(err, ErrCertificatesNotSupported):
+	case errors.Is(err, errCertificatesNotSupported):
 		logger.Debug("poet doesn't support certificates")
 	default:
 		logger.Warn("failed to certify", zap.Error(err))
@@ -559,7 +574,7 @@ func (c *poetService) Submit(
 
 	err := c.verifyPhaseShiftConfiguration(ctx)
 	switch {
-	case errors.Is(err, ErrIncompatiblePhaseShift):
+	case errors.Is(err, errIncompatiblePhaseShift):
 		logger.Fatal("failed to submit challenge", zap.String("poet", c.client.Address()))
 		return nil, err
 	case err != nil:
@@ -617,12 +632,14 @@ func (c *poetService) Proof(ctx context.Context, roundID string) (*types.PoetPro
 	clear(c.proofMembers)
 	c.proofMembers[roundID] = members
 
+	events.EmitProofDownloadedFromPoet(c.Address(), proof.RoundID, proof.LeafCount/c.tickSize)
+
 	return &proof.PoetProof, members, nil
 }
 
 func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.PoetCert, error) {
 	if c.certifier == nil {
-		return nil, ErrCertifierNotConfigured
+		return nil, errCertifierNotConfigured
 	}
 
 	info, err := c.getInfo(ctx)
@@ -631,7 +648,7 @@ func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.
 	}
 
 	if info.Certifier == nil {
-		return nil, ErrCertificatesNotSupported
+		return nil, errCertificatesNotSupported
 	}
 	return c.certifier.Certificate(ctx, id, info.Certifier.Url, info.Certifier.Pubkey)
 }

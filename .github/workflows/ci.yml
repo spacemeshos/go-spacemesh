@@ -86,6 +86,8 @@ jobs:
           make test-fmt
           make test-tidy
           make test-generate
+      - name: Check for vulnerabilities
+        run: make vulncheck
 
   lint:
     runs-on: ubuntu-22.04
@@ -185,7 +187,6 @@ jobs:
         with:
           lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -204,7 +205,12 @@ jobs:
       - name: test coverage
         run: make cover
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -283,7 +289,7 @@ jobs:
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v5
         # always run even if the previous step fails
         if: always()
         with:

@@ -42,7 +42,7 @@ import (
 func newTester(tb testing.TB) *tester {
 	return &tester{
 		TB: tb,
-		VM: New(statesql.InMemory(),
+		VM: New(statesql.InMemoryTest(tb),
 			WithLogger(zaptest.NewLogger(tb)),
 			WithConfig(Config{GasLimit: math.MaxUint64}),
 		),
@@ -2492,7 +2492,7 @@ func FuzzParse(f *testing.F) {
 		req := tt.VM.Validation(types.NewRawTx(buf.Bytes()))
 		_, err = req.Parse()
 		if err == nil {
-			_ = req.Verify()
+			req.Verify()
 		}
 	})
 }
@@ -2564,7 +2564,7 @@ func TestVestingData(t *testing.T) {
 			spendAccountNonce := t2.nonces[0]
 			spendAmount := uint64(1_000_000)
 
-			vm := New(statesql.InMemory(), WithLogger(zaptest.NewLogger(t)))
+			vm := New(statesql.InMemoryTest(t), WithLogger(zaptest.NewLogger(t)))
 			require.NoError(t, vm.ApplyGenesis(
 				[]core.Account{
 					{

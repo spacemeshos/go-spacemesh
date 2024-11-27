@@ -13,7 +13,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
 
 const (
@@ -45,7 +47,7 @@ func checkpointDB(
 		Version: SchemaVersion,
 		Data: types.InnerData{
 			CheckpointId: fmt.Sprintf("snapshot-%d", snapshot),
-			Marriages:    make(map[types.ATXID][]types.MarriageSnaphot),
+			Marriages:    make(map[int][]types.MarriageSnapshot),
 		},
 	}
 
@@ -116,13 +118,15 @@ func checkpointDB(
 		}
 		checkpoint.Data.Accounts = append(checkpoint.Data.Accounts, a)
 	}
-	err = identities.IterateMarriages(tx, func(id types.NodeID, data *identities.MarriageData) bool {
-		checkpoint.Data.Marriages[data.ATX] = append(checkpoint.Data.Marriages[data.ATX], types.MarriageSnaphot{
-			Index:     data.Index,
-			Signer:    id.Bytes(),
-			MarriedTo: data.Target.Bytes(),
-			Signature: data.Signature.Bytes(),
-		})
+	err = marriage.IterateOps(tx, builder.Operations{}, func(info marriage.Info) bool {
+		snapshot := types.MarriageSnapshot{
+			ATX:       info.ATX.Bytes(),
+			Index:     info.MarriageIndex,
+			Signer:    info.NodeID.Bytes(),
+			MarriedTo: info.Target.Bytes(),
+			Signature: info.Signature.Bytes(),
+		}
+		checkpoint.Data.Marriages[int(info.ID)] = append(checkpoint.Data.Marriages[int(info.ID)], snapshot)
 		return true
 	})
 	if err != nil {
@@ -130,7 +134,14 @@ func checkpointDB(
 	}
 
 	// collect marriage ATXs
+	marriageATXs := make(map[types.ATXID]struct{})
 	for id := range checkpoint.Data.Marriages {
+		for _, m := range checkpoint.Data.Marriages[id] {
+			marriageATXs[types.ATXID(m.ATX)] = struct{}{}
+		}
+	}
+
+	for id := range marriageATXs {
 		atx, err := atxs.Get(tx, id)
 		if err != nil {
 			return nil, fmt.Errorf("getting marriage atx: %w", err)

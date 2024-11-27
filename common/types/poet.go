@@ -19,6 +19,11 @@ type PoetServer struct {
 	Pubkey  Base64Enc `mapstructure:"pubkey"  json:"pubkey"`
 }
 
+func ByteToPoetProofRef(b []byte) (ref PoetProofRef) {
+	copy(ref[:], b)
+	return ref
+}
+
 type PoetProofRef Hash32
 
 func (r *PoetProofRef) String() string {

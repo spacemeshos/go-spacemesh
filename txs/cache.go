@@ -396,7 +396,30 @@ func (ac *accountCache) resetAfterApply(
 	ac.txsByNonce = list.New()
 	ac.startNonce = nextNonce
 	ac.startBalance = newBalance
+
+	err := ac.evictPendingNonce(db)
+	if err != nil {
+		return fmt.Errorf("evict pending: %w", err)
+	}
 	return ac.addPendingFromNonce(logger, db, ac.startNonce, applied)
+}
+
+func (ac *accountCache) evictPendingNonce(db sql.StateDatabase) error {
+	return db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+		txIds, err := transactions.GetAcctPendingToNonce(tx, ac.addr, ac.startNonce)
+		if err != nil {
+			return fmt.Errorf("get pending to nonce: %w", err)
+		}
+		for _, tid := range txIds {
+			if err := transactions.SetEvicted(tx, tid); err != nil {
+				return fmt.Errorf("set evicted for %s: %w", tid, err)
+			}
+			if err := transactions.Delete(tx, tid); err != nil {
+				return fmt.Errorf("delete tx %s: %w", tid, err)
+			}
+		}
+		return nil
+	})
 }
 
 func (ac *accountCache) shouldEvict() bool {
@@ -514,7 +537,7 @@ func (c *Cache) BuildFromTXs(rst []*types.MeshTransaction, blockSeed []byte) err
 			acctsAdded++
 		}
 	}
-	c.logger.Sugar().Debug("added pending tx for %d accounts", acctsAdded)
+	c.logger.Sugar().Debugf("added pending tx for %d accounts", acctsAdded)
 	return nil
 }
 
@@ -688,7 +711,7 @@ func (c *Cache) ApplyLayer(
 
 	// commit results before reporting them
 	// TODO(dshulyak) save results in vm
-	if err := db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	if err := db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, rst := range results {
 			err := transactions.AddResult(dbtx, rst.ID, &rst.TransactionResult)
 			if err != nil {
@@ -776,6 +799,11 @@ func (c *Cache) ApplyLayer(
 		}
 		acctResetDuration.Observe(float64(time.Since(t2)))
 	}
+
+	err := transactions.PruneEvicted(db, time.Now().Add(-12*time.Hour))
+	if err != nil {
+		logger.Warn("failed to prune evicted", zap.Error(err))
+	}
 	return nil
 }
 
@@ -835,7 +863,7 @@ func checkApplyOrder(logger *zap.Logger, db sql.StateDatabase, toApply types.Lay
 }
 
 func addToProposal(db sql.StateDatabase, lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, tid := range tids {
 			if err := transactions.AddToProposal(dbtx, tid, lid, pid); err != nil {
 				return fmt.Errorf("add2prop %w", err)
@@ -846,7 +874,7 @@ func addToProposal(db sql.StateDatabase, lid types.LayerID, pid types.ProposalID
 }
 
 func addToBlock(db sql.StateDatabase, lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		for _, tid := range tids {
 			if err := transactions.AddToBlock(dbtx, tid, lid, bid); err != nil {
 				return fmt.Errorf("add2block %w", err)
@@ -857,7 +885,7 @@ func addToBlock(db sql.StateDatabase, lid types.LayerID, bid types.BlockID, tids
 }
 
 func undoLayers(db sql.StateDatabase, from types.LayerID) error {
-	return db.WithTx(context.Background(), func(dbtx sql.Transaction) error {
+	return db.WithTxImmediate(context.Background(), func(dbtx sql.Transaction) error {
 		err := transactions.UndoLayers(dbtx, from)
 		if err != nil {
 			return fmt.Errorf("undo %w", err)

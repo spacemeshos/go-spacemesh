@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"fmt"
+	"os"
 	"sort"
 	"testing"
 	"time"
@@ -25,12 +26,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+func TestMain(m *testing.M) {
+	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
+	types.SetNetworkHRP("stest")
+	res := m.Run()
+	os.Exit(res)
+}
+
+// TestSmeshing tests the network is healthy, smeshers are creating proposals, transactions are processed, and vesting
+// is working.
 func TestSmeshing(t *testing.T) {
 	// TODO(mafa): add new test with multi-smeshing nodes
 	t.Parallel()
 
 	tctx := testcontext.New(t)
 	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
+	tctx.OldSize = tctx.ClusterSize / 4    // 25% of nodes are old
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
 		prepareVesting(t, 5, 8, 20, 1e15, 10e15),

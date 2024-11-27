@@ -30,10 +30,10 @@ type testForkFinder struct {
 	mFetcher *mocks.Mockfetcher
 }
 
-func newTestForkFinderWithDuration(t *testing.T, d time.Duration, lg *zap.Logger) *testForkFinder {
-	mf := mocks.NewMockfetcher(gomock.NewController(t))
-	db := statesql.InMemory()
-	require.NoError(t, layers.SetMeshHash(db, types.GetEffectiveGenesis(), types.RandomHash()))
+func newTestForkFinderWithDuration(tb testing.TB, d time.Duration, lg *zap.Logger) *testForkFinder {
+	mf := mocks.NewMockfetcher(gomock.NewController(tb))
+	db := statesql.InMemoryTest(tb)
+	require.NoError(tb, layers.SetMeshHash(db, types.GetEffectiveGenesis(), types.RandomHash()))
 	return &testForkFinder{
 		ForkFinder: syncer.NewForkFinder(lg, db, mf, d),
 		db:         db,
@@ -89,17 +89,17 @@ func layerHash(layer int, good bool) types.Hash32 {
 	return h2
 }
 
-func storeNodeHashes(t *testing.T, db sql.StateDatabase, diverge, max int) {
+func storeNodeHashes(tb testing.TB, db sql.StateDatabase, diverge, max int) {
 	for lid := 0; lid <= max; lid++ {
 		if lid < diverge {
-			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, true)))
+			require.NoError(tb, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, true)))
 		} else {
-			require.NoError(t, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, false)))
+			require.NoError(tb, layers.SetMeshHash(db, types.LayerID(uint32(lid)), layerHash(lid, false)))
 		}
 	}
 }
 
-func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
+func serveHashReq(tb testing.TB, req *fetch.MeshHashRequest) (*fetch.MeshHashes, error) {
 	hashes := make([]types.Hash32, 0, req.Count())
 	for lid := req.From; lid.Before(req.To); lid = lid.Add(req.Step) {
 		hashes = append(hashes, layerHash(int(lid.Uint32()), true))
@@ -108,7 +108,7 @@ func serveHashReq(t *testing.T, req *fetch.MeshHashRequest) (*fetch.MeshHashes, 
 	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
 
 	expCount := int(req.Count())
-	require.Len(t, hashes, expCount, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, len(hashes)))
+	require.Len(tb, hashes, expCount, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, len(hashes)))
 	mh := &fetch.MeshHashes{
 		Hashes: hashes,
 	}

@@ -14,6 +14,7 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/afero"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -59,11 +60,13 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 	}
 }
 
-func launchServer(tb testing.TB, cdb *datastore.CachedDB) (grpcserver.Config, func()) {
+func launchServer(tb testing.TB, db sql.StateDatabase) (grpcserver.Config, func()) {
 	cfg := grpcserver.DefaultTestConfig()
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
 	jsonService := grpcserver.NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0",
 		[]string{}, false)
+	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(tb))
+	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil,
 		0, types.Hash20{}, 0, 0, 0)
 
@@ -103,9 +106,9 @@ func verifyUpdate(tb testing.TB, data []byte, epoch types.EpochID, expBeacon str
 func TestGenerator_Generate(t *testing.T) {
 	t.Parallel()
 	targetEpoch := types.EpochID(3)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
+	cfg, cleanup := launchServer(t, db)
 	t.Cleanup(cleanup)
 
 	for _, tc := range []struct {
@@ -168,9 +171,9 @@ func TestGenerator_Generate(t *testing.T) {
 
 func TestGenerator_Generate_CheckBitcoinAPIResilience(t *testing.T) {
 	targetEpoch := types.EpochID(3)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, zaptest.NewLogger(t)))
+	cfg, cleanup := launchServer(t, db)
 	t.Cleanup(cleanup)
 
 	for _, tc := range []struct {
@@ -240,17 +243,16 @@ func TestGenerator_Generate_CheckBitcoinAPIResilience(t *testing.T) {
 func TestGenerator_CheckAPI(t *testing.T) {
 	t.Parallel()
 	targetEpoch := types.EpochID(3)
-	db := statesql.InMemory()
-	lg := zaptest.NewLogger(t)
+	db := statesql.InMemoryTest(t)
 	createAtxs(t, db, targetEpoch-1, types.RandomActiveSet(activeSetSize))
-	cfg, cleanup := launchServer(t, datastore.NewCachedDB(db, lg))
+	cfg, cleanup := launchServer(t, db)
 	t.Cleanup(cleanup)
 
 	fs := afero.NewMemMapFs()
 	g := NewGenerator(
 		"https://api.blockcypher.com/v1/btc/main",
 		cfg.PublicListener,
-		WithLogger(lg),
+		WithLogger(zaptest.NewLogger(t)),
 		WithFilesystem(fs),
 	)
 	ctx, cancel := context.WithCancel(context.Background())

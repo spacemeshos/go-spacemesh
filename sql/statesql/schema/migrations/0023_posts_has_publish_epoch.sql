@@ -8,5 +8,4 @@ SET publish_epoch = (
     WHERE atxs.id = posts.atxid
 );
 
-
 CREATE INDEX posts_by_atxid_by_pubkey_epoch ON posts (pubkey, publish_epoch);

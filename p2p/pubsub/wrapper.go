@@ -105,7 +105,7 @@ func (ps *GossipPubSub) Publish(ctx context.Context, topic string, msg []byte) e
 		ps.logger.Sugar().Panicf("Publish is called before Register for topic %s", topic)
 	}
 	if err := topich.Publish(ctx, msg); err != nil {
-		return fmt.Errorf("failed to publish to topic %v: %w", topic, err)
+		return fmt.Errorf("failed to publish to topic %s: %w", topic, err)
 	}
 	return nil
 }

@@ -24,13 +24,13 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func checkInNonceOrder(t *testing.T, tids []types.TransactionID, byTid map[types.TransactionID]*types.MeshTransaction) {
+func checkInNonceOrder(tb testing.TB, ids []types.TransactionID, byId map[types.TransactionID]*types.MeshTransaction) {
 	accounts := make(map[types.Address]uint64)
-	for _, tid := range tids {
-		mtx, ok := byTid[tid]
-		require.True(t, ok)
+	for _, tid := range ids {
+		mtx, ok := byId[tid]
+		require.True(tb, ok)
 		if nonce, ok := accounts[mtx.Principal]; ok {
-			require.Greater(t, mtx.Nonce, nonce)
+			require.Greater(tb, mtx.Nonce, nonce)
 		}
 		accounts[mtx.Principal] = mtx.Nonce
 	}
@@ -159,7 +159,7 @@ func Test_getBlockTXs_expected_order(t *testing.T) {
 
 func Test_getProposalMetadata(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	db := statesql.InMemory()
+	db := statesql.InMemoryTest(t)
 	data := atxsdata.New()
 	cfg := Config{OptFilterThreshold: 70}
 	lid := types.LayerID(111)

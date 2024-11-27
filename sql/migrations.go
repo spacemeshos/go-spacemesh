@@ -1,6 +1,8 @@
 package sql
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 	"io/fs"
 	"regexp"
@@ -58,15 +60,24 @@ func (m *sqlMigration) Apply(db Executor, logger *zap.Logger) error {
 	}
 	// TODO: use more advanced approach to split the SQL script
 	// into commands
-	for _, cmd := range strings.Split(m.content, ";") {
-		cmd = sqlCommentRx.ReplaceAllString(cmd, "")
-		if strings.TrimSpace(cmd) != "" {
-			if _, err := db.Exec(cmd, nil, nil); err != nil {
-				return fmt.Errorf("exec %s: %w", cmd, err)
+	scanner := bufio.NewScanner(strings.NewReader(m.content))
+	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
+		if i := bytes.Index(data, []byte(";")); i >= 0 {
+			if !bytes.Contains(data[:i], []byte("BEGIN")) {
+				return i + 1, sqlCommentRx.ReplaceAll(data[:i+1], []byte{}), nil
 			}
 		}
-	}
+		if i := bytes.Index(data, []byte("END;")); i >= 0 {
+			return i + 4, data[:i+4], nil
+		}
+		return 0, nil, nil
+	})
 
+	for scanner.Scan() {
+		if _, err := db.Exec(scanner.Text(), nil, nil); err != nil {
+			return fmt.Errorf("exec %s: %w", scanner.Text(), err)
+		}
+	}
 	return nil
 }
 

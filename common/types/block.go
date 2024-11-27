@@ -89,7 +89,7 @@ type InnerBlock struct {
 }
 
 // RatNum represents a rational number with the numerator and denominator.
-// note: RatNum aims to be a generic representation of a rational number and parse-able by
+// note: RatNum aims to be a generic representation of a rational number and parseable by
 // different programming languages.
 // For doing math around weight inside go-spacemesh codebase, use util.Weight.
 type RatNum struct {

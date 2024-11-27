@@ -23,6 +23,8 @@ type Config struct {
 	JSONCorsAllowedOrigins []string  `mapstructure:"grpc-cors-allowed-origins"`
 
 	SmesherStreamInterval time.Duration `mapstructure:"smesherstreaminterval"`
+
+	DatabaseConnections int `mapstructure:"db-connections"`
 }
 
 type Service = string
@@ -77,6 +79,7 @@ func DefaultConfig() Config {
 		GrpcSendMsgSize:        1024 * 1024 * 10,
 		GrpcRecvMsgSize:        1024 * 1024 * 10,
 		SmesherStreamInterval:  time.Second,
+		DatabaseConnections:    16,
 	}
 }
 

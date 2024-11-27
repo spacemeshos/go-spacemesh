@@ -135,36 +135,42 @@ func stateHashStream(
 	retries := 0
 BACKOFF:
 	stateapi := pb.NewGlobalStateServiceClient(node.PubConn())
-	states, err := stateapi.GlobalStateStream(ctx,
-		&pb.GlobalStateStreamRequest{
-			GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH),
-		})
+	states, err := stateapi.GlobalStateStream(ctx, &pb.GlobalStateStreamRequest{
+		GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH),
+	})
 	if err != nil {
 		return err
 	}
 	for {
 		state, err := states.Recv()
 		s, ok := status.FromError(err)
-		if ok && s.Code() != codes.OK {
-			logger.Warn("global state stream error",
+		if !ok {
+			return err
+		}
+		switch s.Code() {
+		case codes.OK:
+			if cont, err := collector(state); !cont {
+				return err
+			}
+		case codes.Canceled:
+			return nil
+		case codes.DeadlineExceeded:
+			return nil
+		case codes.Unavailable:
+			if retries == attempts {
+				return errors.New("state stream unavailable")
+			}
+			retries++
+			time.Sleep(retryBackoff)
+			goto BACKOFF
+		default:
+			logger.Warn(
+				"global state stream error",
 				zap.String("client", node.Name),
 				zap.Error(err),
 				zap.Any("status", s),
 			)
-			if s.Code() == codes.Unavailable {
-				if retries == attempts {
-					return errors.New("state stream unavailable")
-				}
-				retries++
-				time.Sleep(retryBackoff)
-				goto BACKOFF
-			}
-		}
-		if err != nil {
 			return fmt.Errorf("stream err from client %v: %w", node.Name, err)
-		}
-		if cont, err := collector(state); !cont {
-			return err
 		}
 	}
 }
@@ -181,13 +187,11 @@ func watchLayers(
 	})
 }
 
-type layerCollector func(*pb.LayerStreamResponse) (bool, error)
-
 func layersStream(
 	ctx context.Context,
 	node *cluster.NodeClient,
 	logger *zap.Logger,
-	collector layerCollector,
+	collector func(*pb.LayerStreamResponse) (bool, error),
 ) error {
 	retries := 0
 BACKOFF:
@@ -199,22 +203,33 @@ BACKOFF:
 	for {
 		layer, err := layers.Recv()
 		s, ok := status.FromError(err)
-		if ok && s.Code() != codes.OK {
-			logger.Warn("layers stream error", zap.String("client", node.Name), zap.Error(err), zap.Any("status", s))
-			if s.Code() == codes.Unavailable {
-				if retries == attempts {
-					return errors.New("layer stream unavailable")
-				}
-				retries++
-				time.Sleep(retryBackoff)
-				goto BACKOFF
+		if !ok {
+			return err
+		}
+		switch s.Code() {
+		case codes.OK:
+			if cont, err := collector(layer); !cont {
+				return err
 			}
-		}
-		if err != nil {
-			return err
-		}
-		if cont, err := collector(layer); !cont {
-			return err
+		case codes.Canceled:
+			return nil
+		case codes.DeadlineExceeded:
+			return nil
+		case codes.Unavailable:
+			if retries == attempts {
+				return errors.New("layer stream unavailable")
+			}
+			retries++
+			time.Sleep(retryBackoff)
+			goto BACKOFF
+		default:
+			logger.Warn(
+				"layer stream error",
+				zap.String("client", node.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
+			return fmt.Errorf("stream err from client %v: %w", node.Name, err)
 		}
 	}
 }
@@ -227,36 +242,41 @@ func malfeasanceStream(
 ) error {
 	retries := 0
 BACKOFF:
-
 	meshapi := pb.NewMeshServiceClient(node.PubConn())
-	layers, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
+	proofs, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
 	if err != nil {
 		return err
 	}
 	for {
-		proof, err := layers.Recv()
+		proof, err := proofs.Recv()
 		s, ok := status.FromError(err)
-		if ok && s.Code() != codes.OK {
-			logger.Warn("malfeasance stream error",
+		if !ok {
+			return err
+		}
+		switch s.Code() {
+		case codes.OK:
+			if cont, err := collector(proof); !cont {
+				return err
+			}
+		case codes.Canceled:
+			return nil
+		case codes.DeadlineExceeded:
+			return nil
+		case codes.Unavailable:
+			if retries == attempts {
+				return errors.New("malfeasance stream unavailable")
+			}
+			retries++
+			time.Sleep(retryBackoff)
+			goto BACKOFF
+		default:
+			logger.Warn(
+				"malfeasance stream error",
 				zap.String("client", node.Name),
 				zap.Error(err),
 				zap.Any("status", s),
 			)
-			if s.Code() == codes.Unavailable {
-				if retries == attempts {
-					return errors.New("layer stream unavailable")
-				}
-				retries++
-				time.Sleep(retryBackoff)
-				goto BACKOFF
-
-			}
-		}
-		if err != nil {
-			return err
-		}
-		if cont, err := collector(proof); !cont {
-			return err
+			return fmt.Errorf("stream err from client %v: %w", node.Name, err)
 		}
 	}
 }
@@ -303,11 +323,7 @@ func waitLayer(ctx *testcontext.Context, node *cluster.NodeClient, lid uint32) e
 	}
 }
 
-func waitTransaction(ctx context.Context,
-	eg *errgroup.Group,
-	client *cluster.NodeClient,
-	id []byte,
-) {
+func waitTransaction(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, id []byte) {
 	eg.Go(func() error {
 		api := pb.NewTransactionServiceClient(client.PubConn())
 		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true, Id: id})
@@ -331,7 +347,6 @@ func watchTransactionResults(ctx context.Context,
 	eg.Go(func() error {
 		retries := 0
 	BACKOFF:
-
 		api := pb.NewTransactionServiceClient(client.PubConn())
 		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
 		if err != nil {
@@ -340,26 +355,33 @@ func watchTransactionResults(ctx context.Context,
 		for {
 			rst, err := rsts.Recv()
 			s, ok := status.FromError(err)
-			if ok && s.Code() != codes.OK {
-				log.Warn("transactions stream error",
+			if !ok {
+				return err
+			}
+			switch s.Code() {
+			case codes.OK:
+				if cont, err := collector(rst); !cont {
+					return err
+				}
+			case codes.Canceled:
+				return nil
+			case codes.DeadlineExceeded:
+				return nil
+			case codes.Unavailable:
+				if retries == attempts {
+					return errors.New("transaction results unavailable")
+				}
+				retries++
+				time.Sleep(retryBackoff)
+				goto BACKOFF
+			default:
+				log.Warn(
+					"transactions stream error",
 					zap.String("client", client.Name),
 					zap.Error(err),
 					zap.Any("status", s),
 				)
-				if s.Code() == codes.Unavailable {
-					if retries == attempts {
-						return errors.New("transaction results unavailable")
-					}
-					retries++
-					time.Sleep(retryBackoff)
-					goto BACKOFF
-				}
-			}
-			if err != nil {
 				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
-			}
-			if cont, err := collector(rst); !cont {
-				return err
 			}
 		}
 	})
@@ -383,26 +405,33 @@ func watchProposals(
 		for {
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
-			if ok && s.Code() != codes.OK {
-				log.Warn("proposals stream error",
+			if !ok {
+				return err
+			}
+			switch s.Code() {
+			case codes.OK:
+				if cont, err := collector(proposal); !cont {
+					return err
+				}
+			case codes.Canceled:
+				return nil
+			case codes.DeadlineExceeded:
+				return nil
+			case codes.Unavailable:
+				if retries == attempts {
+					return errors.New("proposal stream unavailable")
+				}
+				retries++
+				time.Sleep(retryBackoff)
+				goto BACKOFF
+			default:
+				log.Warn(
+					"proposals stream error",
 					zap.String("client", client.Name),
 					zap.Error(err),
 					zap.Any("status", s),
 				)
-				if s.Code() == codes.Unavailable {
-					if retries == attempts {
-						return errors.New("watch proposals unavailable")
-					}
-					retries++
-					time.Sleep(retryBackoff)
-					goto BACKOFF
-				}
-			}
-			if err != nil {
 				return fmt.Errorf("proposal event for %s: %w", client.Name, err)
-			}
-			if cont, err := collector(proposal); !cont {
-				return err
 			}
 		}
 	})

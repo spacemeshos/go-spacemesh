@@ -143,7 +143,15 @@ func (s *TransactionService) getTransactionAndStatus(
 	case types.APPLIED:
 		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
 	default:
-		state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		evicted, err := s.conState.HasEvicted(txID)
+		if err != nil {
+			return nil, state
+		}
+		if evicted {
+			state = pb.TransactionState_TRANSACTION_STATE_INEFFECTUAL
+		} else {
+			state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		}
 	}
 	return &tx.Transaction, state
 }

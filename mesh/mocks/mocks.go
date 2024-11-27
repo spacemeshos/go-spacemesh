@@ -21,6 +21,7 @@ import (
 type MockconservativeState struct {
 	ctrl     *gomock.Controller
 	recorder *MockconservativeStateMockRecorder
+	isgomock struct{}
 }
 
 // MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
@@ -196,6 +197,7 @@ func (c *MockconservativeStateUpdateCacheCall) DoAndReturn(f func(context.Contex
 type MockvmState struct {
 	ctrl     *gomock.Controller
 	recorder *MockvmStateMockRecorder
+	isgomock struct{}
 }
 
 // MockvmStateMockRecorder is the mock recorder for MockvmState.

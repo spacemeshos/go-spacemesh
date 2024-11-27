@@ -47,7 +47,7 @@ func (h Hash20) ShortString() string {
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (h Hash20) Format(s fmt.State, c rune) {
-	_, _ = fmt.Fprintf(s, "%"+string(c), h[:])
+	fmt.Fprintf(s, "%"+string(c), h[:])
 }
 
 // UnmarshalText parses a hash in hex syntax.
@@ -69,7 +69,10 @@ func (h *Hash20) UnmarshalJSON(input []byte) error {
 
 // MarshalText returns the hex representation of h.
 func (h Hash20) MarshalText() ([]byte, error) {
-	return util.Bytes(h[:]).MarshalText()
+	result := make([]byte, len(h)*2+2)
+	copy(result, `0x`)
+	hex.Encode(result[2:], h[:])
+	return result, nil
 }
 
 // SetBytes sets the hash to the value of b.
@@ -163,7 +166,7 @@ func (h Hash32) ShortString() string {
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (h Hash32) Format(s fmt.State, c rune) {
-	_, _ = fmt.Fprintf(s, "%"+string(c), h[:])
+	fmt.Fprintf(s, "%"+string(c), h[:])
 }
 
 // UnmarshalText parses a hash in hex syntax.
@@ -186,7 +189,10 @@ func (h *Hash32) UnmarshalJSON(input []byte) error {
 
 // MarshalText returns the hex representation of h.
 func (h Hash32) MarshalText() ([]byte, error) {
-	return util.Bytes(h[:]).MarshalText()
+	result := make([]byte, len(h)*2+2)
+	copy(result, `0x`)
+	hex.Encode(result[2:], h[:])
+	return result, nil
 }
 
 // SetBytes sets the hash to the value of b.

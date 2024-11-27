@@ -344,7 +344,7 @@ func loadPost(ctx context.Context, db sql.Executor, id types.ATXID) (*types.Post
 		if err := codec.Decode(blob.Bytes, &atx); err != nil {
 			return nil, nil, fmt.Errorf("decoding ATX blob: %w", err)
 		}
-		return wire.PostFromWireV1(&atx.NiPosts[0].Posts[0].Post), atx.NiPosts[0].Challenge[:], nil
+		return wire.PostFromWireV1(&atx.NIPosts[0].Posts[0].Post), atx.NIPosts[0].Challenge[:], nil
 	}
 	panic("unsupported ATX version")
 }

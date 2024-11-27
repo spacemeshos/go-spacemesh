@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -42,10 +44,11 @@ func (err *deadlineAdjusterError) Error() string {
 
 type deadlineAdjuster struct {
 	peerStream
+	adjustMtx       sync.Mutex
 	timeout         time.Duration
 	hardTimeout     time.Duration
-	totalRead       int
-	totalWritten    int
+	totalRead       atomic.Int64
+	totalWritten    atomic.Int64
 	start           time.Time
 	clock           clockwork.Clock
 	chunkSize       int
@@ -78,8 +81,8 @@ func (dadj *deadlineAdjuster) augmentError(what string, err error) error {
 		what:         what,
 		innerErr:     err,
 		elapsed:      dadj.clock.Now().Sub(dadj.start),
-		totalRead:    dadj.totalRead,
-		totalWritten: dadj.totalWritten,
+		totalRead:    int(dadj.totalRead.Load()),
+		totalWritten: int(dadj.totalWritten.Load()),
 		timeout:      dadj.timeout,
 		hardTimeout:  dadj.hardTimeout,
 	}
@@ -88,11 +91,13 @@ func (dadj *deadlineAdjuster) augmentError(what string, err error) error {
 // Close closes the stream. This method is safe to call multiple times.
 func (dadj *deadlineAdjuster) Close() error {
 	// FIXME: unsure if this is really needed (inherited from the older Server code)
-	_ = dadj.peerStream.SetDeadline(time.Time{})
+	dadj.peerStream.SetDeadline(time.Time{})
 	return dadj.peerStream.Close()
 }
 
 func (dadj *deadlineAdjuster) adjust() error {
+	dadj.adjustMtx.Lock()
+	defer dadj.adjustMtx.Unlock()
 	now := dadj.clock.Now()
 	if dadj.hardDeadline.IsZero() {
 		dadj.hardDeadline = now.Add(dadj.hardTimeout)
@@ -102,12 +107,12 @@ func (dadj *deadlineAdjuster) adjust() error {
 	}
 	// Do not adjust the deadline too often
 	adj := false
-	if dadj.totalRead > dadj.nextAdjustRead {
-		dadj.nextAdjustRead = dadj.totalRead + dadj.chunkSize
+	if int(dadj.totalRead.Load()) > dadj.nextAdjustRead {
+		dadj.nextAdjustRead = int(dadj.totalRead.Load()) + dadj.chunkSize
 		adj = true
 	}
-	if dadj.totalWritten > dadj.nextAdjustWrite {
-		dadj.nextAdjustWrite = dadj.totalWritten + dadj.chunkSize
+	if int(dadj.totalWritten.Load()) > dadj.nextAdjustWrite {
+		dadj.nextAdjustWrite = int(dadj.totalWritten.Load()) + dadj.chunkSize
 		adj = true
 	}
 	if adj {
@@ -115,9 +120,9 @@ func (dadj *deadlineAdjuster) adjust() error {
 		// doesn't work for mock hosts
 		deadline := now.Add(dadj.timeout)
 		if deadline.After(dadj.hardDeadline) {
-			_ = dadj.SetDeadline(dadj.hardDeadline)
+			dadj.SetDeadline(dadj.hardDeadline)
 		} else {
-			_ = dadj.SetDeadline(deadline)
+			dadj.SetDeadline(deadline)
 		}
 	}
 
@@ -133,7 +138,7 @@ func (dadj *deadlineAdjuster) Read(p []byte) (int, error) {
 		to := min(len(p), n+dadj.chunkSize)
 		nCur, err := dadj.peerStream.Read(p[n:to])
 		n += nCur
-		dadj.totalRead += nCur
+		dadj.totalRead.Add(int64(nCur))
 		if err != nil {
 			return n, dadj.augmentError("read", err)
 		}
@@ -154,10 +159,18 @@ func (dadj *deadlineAdjuster) Write(p []byte) (n int, err error) {
 		to := min(len(p), n+dadj.chunkSize)
 		nCur, err = dadj.peerStream.Write(p[n:to])
 		n += nCur
-		dadj.totalWritten += nCur
+		dadj.totalWritten.Add(int64(nCur))
 		if err != nil {
 			return n, dadj.augmentError("write", err)
 		}
 	}
 	return n, nil
+}
+
+// ReadByte implements io.ByteReader, which is needed for varint.ReadUvarint, which is
+// used to read request length.
+func (dadj *deadlineAdjuster) ReadByte() (byte, error) {
+	var b [1]byte
+	_, err := io.ReadFull(dadj, b[:])
+	return b[0], err
 }
