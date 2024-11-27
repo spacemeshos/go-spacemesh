@@ -453,7 +453,7 @@ func (s *GlobalStateService) GlobalStateStream(
 			root, err := s.conState.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
 				ctxzap.Warn(stream.Context(), "error retrieving layer data", zap.Error(err))
-				root = types.Hash32{}
+				root = types.EmptyHash32
 			}
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{

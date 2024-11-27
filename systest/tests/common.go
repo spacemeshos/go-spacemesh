@@ -143,9 +143,7 @@ BACKOFF:
 			if cont, err := collector(state); !cont {
 				return err
 			}
-		case codes.Canceled:
-			return nil
-		case codes.DeadlineExceeded:
+		case codes.Canceled, codes.DeadlineExceeded:
 			return nil
 		case codes.Unavailable:
 			if retries == attempts {

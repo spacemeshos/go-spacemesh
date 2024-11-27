@@ -96,7 +96,7 @@ func GetLatestStateHash(db sql.Executor) (rst types.Hash32, err error) {
 		}); err != nil {
 		return rst, fmt.Errorf("failed to load latest state root %w", err)
 	} else if rows == 0 {
-		return rst, fmt.Errorf("%w: state root doesnt exist", sql.ErrNotFound)
+		return rst, fmt.Errorf("%w: state root does not exist", sql.ErrNotFound)
 	}
 	return rst, err
 }
@@ -117,7 +117,7 @@ func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err err
 		}); err != nil {
 		return rst, fmt.Errorf("failed to load state root for %v: %w", lid, err)
 	} else if rows == 0 {
-		return rst, fmt.Errorf("%w: %s doesnt exist", sql.ErrNotFound, lid)
+		return rst, fmt.Errorf("%w: %s does not exist", sql.ErrNotFound, lid)
 	}
 	return rst, err
 }
