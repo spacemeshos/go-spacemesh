@@ -878,8 +878,7 @@ func deployNode(
 			corev1.Volume().WithName("config").
 				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
 			corev1.Volume().WithName("data").
-				WithEmptyDir(corev1.EmptyDirVolumeSource().
-					WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+				WithEmptyDir(corev1.EmptyDirVolumeSource().WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
 		).
 		WithDNSConfig(corev1.PodDNSConfig().WithOptions(
 			corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
@@ -911,12 +910,13 @@ func deployNode(
 				).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
 			).
 			WithEnv(
-				corev1.EnvVar().WithName("GOMAXPROCS").
-					WithValueFrom(corev1.EnvVarSource().WithResourceFieldRef(
+				corev1.EnvVar().WithName("GOMAXPROCS").WithValueFrom(
+					corev1.EnvVarSource().WithResourceFieldRef(
 						corev1.ResourceFieldSelector().
 							WithResource("limits.cpu").
 							WithDivisor(resource.MustParse("1")),
-					)),
+					),
+				),
 			).
 			WithCommand(cmd...),
 		)

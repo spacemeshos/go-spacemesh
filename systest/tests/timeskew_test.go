@@ -3,6 +3,7 @@ package tests
 import (
 	"context"
 	"testing"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -33,8 +34,13 @@ func TestShortTimeskew(t *testing.T) {
 		"stop test", stopTest,
 	)
 
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	deadline := cl.Genesis().Add(time.Duration(stopTest) * layerDuration)
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+	eg, ctx := errgroup.WithContext(ctx)
+
 	failed := int(0.2 * float64(tctx.ClusterSize))
-	eg, ctx := errgroup.WithContext(tctx)
 	client := cl.Client(0)
 	scheduleChaos(
 		ctx,
@@ -63,27 +69,21 @@ func TestShortTimeskew(t *testing.T) {
 	// abstain on one or two layers. in such case longer delay might be necessary to confirm that layer
 
 	var confirmed uint32
-	watchLayers(
-		ctx,
-		eg,
-		client,
-		tctx.Log.Desugar(),
-		func(layer *pb.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Number.Number == stopTest {
+	watchLayers(ctx, eg, client, tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
+		if layer.Layer.Number.Number >= stopTest {
+			return false, nil
+		}
+		if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
+			tctx.Log.Debugw(
+				"layer applied", "layer", layer.Layer.Number.Number, "hash", prettyHex(layer.Layer.Hash),
+			)
+			confirmed = layer.Layer.Number.Number
+			if confirmed >= stopSkew {
 				return false, nil
 			}
-			if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
-				tctx.Log.Debugw(
-					"layer applied", "layer", layer.Layer.Number.Number, "hash", prettyHex(layer.Layer.Hash),
-				)
-				confirmed = layer.Layer.Number.Number
-				if confirmed >= stopSkew {
-					return false, nil
-				}
-			}
-			return true, nil
-		},
-	)
+		}
+		return true, nil
+	})
 	require.NoError(t, eg.Wait())
 	require.LessOrEqual(t, int(stopSkew), int(confirmed))
 }

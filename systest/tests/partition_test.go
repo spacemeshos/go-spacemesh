@@ -2,6 +2,7 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -118,7 +119,7 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 							"layer", layer,
 							"state", stateHash.ShortString(),
 						)
-						return false, nil
+						return false, errors.New("state hash channel is full")
 					}
 					return true, nil
 				},
