@@ -115,7 +115,7 @@ var (
 		10,
 	)
 	poetSize = parameters.Int(
-		"poet-size", "size of the poet servers", 1,
+		"poet-size", "size of the poet servers", 2,
 	)
 	bsSize = parameters.Int(
 		"bs-size", "size of bootstrappers", 1,
