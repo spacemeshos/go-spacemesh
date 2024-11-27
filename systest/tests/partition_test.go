@@ -30,7 +30,11 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 	)
 
 	tctx.Log.Debug("scheduling chaos...")
-	eg, ctx := errgroup.WithContext(tctx)
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	deadline := cl.Genesis().Add(time.Duration(stop) * layerDuration)
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+	eg, ctx := errgroup.WithContext(ctx)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := pct*cl.Total()/100 + 1
 	scheduleChaos(ctx, eg, cl.Client(0), tctx.Log.Desugar(), startSplit, rejoin,
@@ -63,8 +67,6 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 	tctx.Log.Debug("sending transactions...")
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 
-	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
-	deadline := cl.Genesis().Add(time.Duration(stop) * layerDuration)
 	ctx2, cancel := context.WithDeadline(tctx, deadline)
 	eg2, ctx2 := errgroup.WithContext(ctx2)
 	defer cancel()
@@ -102,10 +104,21 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 						"layer", layer,
 						"state", stateHash.ShortString(),
 					)
-					stateCh <- &stateUpdate{
+					select {
+					case stateCh <- &stateUpdate{
 						layer:  layer,
 						hash:   stateHash,
 						client: node.Name,
+					}: // continue
+					case <-ctx.Done():
+						return false, ctx.Err()
+					default:
+						tctx.Log.Errorw("state hash channel is full",
+							"client", node.Name,
+							"layer", layer,
+							"state", stateHash.ShortString(),
+						)
+						return false, nil
 					}
 					return true, nil
 				},
