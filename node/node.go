@@ -1064,6 +1064,7 @@ func (app *App) initServices(ctx context.Context) error {
 			layerSize,
 			layersPerEpoch,
 			app.addLogger(ProposalBuilderLogger, lg).Zap(),
+			app.idStates,
 		)
 		for _, sig := range app.signers {
 			remoteProposalBuilder.Register(sig)

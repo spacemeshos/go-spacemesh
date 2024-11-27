@@ -238,6 +238,4 @@ type PostStates interface {
 
 type IdentityStates interface {
 	Set(id types.NodeID, publishEpoch *types.EpochID, newState IdentityState, message string)
-	Get(id types.NodeID) ([]IdentityStateInfo, error)
-	All() map[types.NodeID][]IdentityStateInfo
 }

@@ -38,6 +38,8 @@ const (
 	// atx.
 	IdentityStateATXReady
 	IdentityStateATXBroadcasted
+
+	IdentityStateProposalPublished
 )
 
 func (s IdentityState) String() string {
@@ -66,6 +68,8 @@ func (s IdentityState) String() string {
 		return "atx ready"
 	case IdentityStateATXBroadcasted:
 		return "atx broadcasted"
+	case IdentityStateProposalPublished:
+		return "proposal published"
 	default:
 		panic(fmt.Sprintf(ErrIdentityStateUnknown.Error()+" %d", s))
 	}
@@ -79,13 +83,17 @@ type IdentityStateInfo struct {
 }
 
 type IdentityStateStorage struct {
-	mu         sync.RWMutex
-	identities map[types.NodeID][]IdentityStateInfo
+	mu            sync.RWMutex
+	identities    map[types.NodeID][]IdentityStateInfo
+	eligibilities map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility
+	proposals     map[types.NodeID][]*types.Proposal
 }
 
 func NewIdentityStateStorage() *IdentityStateStorage {
 	return &IdentityStateStorage{
-		identities: make(map[types.NodeID][]IdentityStateInfo),
+		identities:    make(map[types.NodeID][]IdentityStateInfo),
+		eligibilities: make(map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility),
+		proposals:     make(map[types.NodeID][]*types.Proposal),
 	}
 }
 
@@ -129,4 +137,60 @@ func (s *IdentityStateStorage) All() map[types.NodeID][]IdentityStateInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.identities
+}
+
+func (s *IdentityStateStorage) SetEligibilitiesForEpoch(
+	id types.NodeID,
+	epoch types.EpochID,
+	eligibilities map[types.LayerID][]types.VotingEligibility,
+) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.eligibilities[id]; !exists {
+		s.eligibilities[id] = make(map[types.EpochID]map[types.LayerID][]types.VotingEligibility)
+	}
+
+	if len(s.eligibilities[id]) > 100 {
+		delete(s.eligibilities[id], epoch-100)
+	}
+
+	if _, exists := s.eligibilities[id][epoch]; !exists {
+		s.eligibilities[id][epoch] = make(map[types.LayerID][]types.VotingEligibility)
+	}
+
+	s.eligibilities[id][epoch] = eligibilities
+}
+
+func (s *IdentityStateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.identities[id]; !exists {
+		s.proposals[id] = []*types.Proposal{}
+	}
+
+	if len(s.identities[id]) > 100 {
+		s.proposals[id] = s.proposals[id][1:]
+	}
+
+	s.proposals[id] = append(s.proposals[id], proposal)
+	s.identities[id] = append(s.identities[id], IdentityStateInfo{
+		State:   IdentityStateProposalPublished,
+		Message: fmt.Sprintf("proposal %s published at layer %d", proposal.ID(), proposal.Layer.Uint32()),
+		Time:    time.Now(),
+	})
+}
+
+func (s *IdentityStateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.proposals
+}
+
+//nolint:lll
+func (s *IdentityStateStorage) AllEligibilities() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.eligibilities
 }

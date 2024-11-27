@@ -143,3 +143,99 @@ func (c *MockbeaconServiceBeaconCall) DoAndReturn(f func(context.Context, types.
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockidentityStates is a mock of identityStates interface.
+type MockidentityStates struct {
+	ctrl     *gomock.Controller
+	recorder *MockidentityStatesMockRecorder
+	isgomock struct{}
+}
+
+// MockidentityStatesMockRecorder is the mock recorder for MockidentityStates.
+type MockidentityStatesMockRecorder struct {
+	mock *MockidentityStates
+}
+
+// NewMockidentityStates creates a new mock instance.
+func NewMockidentityStates(ctrl *gomock.Controller) *MockidentityStates {
+	mock := &MockidentityStates{ctrl: ctrl}
+	mock.recorder = &MockidentityStatesMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockidentityStates) EXPECT() *MockidentityStatesMockRecorder {
+	return m.recorder
+}
+
+// AddProposal mocks base method.
+func (m *MockidentityStates) AddProposal(id types.NodeID, proposals *types.Proposal) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddProposal", id, proposals)
+}
+
+// AddProposal indicates an expected call of AddProposal.
+func (mr *MockidentityStatesMockRecorder) AddProposal(id, proposals any) *MockidentityStatesAddProposalCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposal", reflect.TypeOf((*MockidentityStates)(nil).AddProposal), id, proposals)
+	return &MockidentityStatesAddProposalCall{Call: call}
+}
+
+// MockidentityStatesAddProposalCall wrap *gomock.Call
+type MockidentityStatesAddProposalCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockidentityStatesAddProposalCall) Return() *MockidentityStatesAddProposalCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockidentityStatesAddProposalCall) Do(f func(types.NodeID, *types.Proposal)) *MockidentityStatesAddProposalCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockidentityStatesAddProposalCall) DoAndReturn(f func(types.NodeID, *types.Proposal)) *MockidentityStatesAddProposalCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SetEligibilitiesForEpoch mocks base method.
+func (m *MockidentityStates) SetEligibilitiesForEpoch(id types.NodeID, epoch types.EpochID, eligibilities map[types.LayerID][]types.VotingEligibility) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "SetEligibilitiesForEpoch", id, epoch, eligibilities)
+}
+
+// SetEligibilitiesForEpoch indicates an expected call of SetEligibilitiesForEpoch.
+func (mr *MockidentityStatesMockRecorder) SetEligibilitiesForEpoch(id, epoch, eligibilities any) *MockidentityStatesSetEligibilitiesForEpochCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEligibilitiesForEpoch", reflect.TypeOf((*MockidentityStates)(nil).SetEligibilitiesForEpoch), id, epoch, eligibilities)
+	return &MockidentityStatesSetEligibilitiesForEpochCall{Call: call}
+}
+
+// MockidentityStatesSetEligibilitiesForEpochCall wrap *gomock.Call
+type MockidentityStatesSetEligibilitiesForEpochCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockidentityStatesSetEligibilitiesForEpochCall) Return() *MockidentityStatesSetEligibilitiesForEpochCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockidentityStatesSetEligibilitiesForEpochCall) Do(f func(types.NodeID, types.EpochID, map[types.LayerID][]types.VotingEligibility)) *MockidentityStatesSetEligibilitiesForEpochCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockidentityStatesSetEligibilitiesForEpochCall) DoAndReturn(f func(types.NodeID, types.EpochID, map[types.LayerID][]types.VotingEligibility)) *MockidentityStatesSetEligibilitiesForEpochCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

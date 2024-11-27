@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
@@ -42,6 +43,7 @@ var statusMap = map[activation.IdentityState]pb.IdentityState{
 	activation.IdentityStatePostProofReady:                   pb.IdentityState_POST_PROOF_READY,
 	activation.IdentityStateATXReady:                         pb.IdentityState_ATX_READY,
 	activation.IdentityStateATXBroadcasted:                   pb.IdentityState_ATX_BROADCASTED,
+	activation.IdentityStateProposalPublished:                pb.IdentityState_PROPOSAL_PUBLISHED,
 }
 
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
@@ -106,4 +108,65 @@ func (s *SmeshingIdentitiesService) PoetInfo(
 	return &pb.PoetInfoResponse{
 		Poets: poets,
 	}, nil
+}
+
+func (s *SmeshingIdentitiesService) Eligibilities(
+	ctx context.Context,
+	_ *pb.EligibilitiesRequest,
+) (*pb.EligibilitiesResponse, error) {
+	eligibilities := s.states.AllEligibilities()
+
+	pbEligibilities := make(map[string]*pb.EpochEligibilities)
+	for nodeId, epochMap := range eligibilities {
+		pbEligibilities[nodeId.String()] = &pb.EpochEligibilities{
+			Epochs: make(map[uint32]*pb.Eligibilities),
+		}
+		for epoch, eli := range epochMap {
+			pbEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
+				Eligibilities: castEligibilities(eli),
+			}
+		}
+	}
+
+	return &pb.EligibilitiesResponse{
+		Eligibilities: pbEligibilities,
+	}, nil
+}
+
+func castEligibilities(proofs map[types.LayerID][]types.VotingEligibility) []*pb.ProposalEligibility {
+	rst := make([]*pb.ProposalEligibility, 0, len(proofs))
+	for lid, eligs := range proofs {
+		rst = append(rst, &pb.ProposalEligibility{
+			Layer: lid.Uint32(),
+			Count: uint32(len(eligs)),
+		})
+	}
+	return rst
+}
+
+func (s *SmeshingIdentitiesService) Proposals(
+	ctx context.Context,
+	_ *pb.ProposalsRequest,
+) (*pb.ProposalsResponse, error) {
+	proposals := s.states.AllProposals()
+
+	pbProposals := make(map[string]*pb.Proposals)
+	for nodeId, prop := range proposals {
+		pbProposals[nodeId.String()] = &pb.Proposals{Proposals: castProposals(prop)}
+	}
+
+	return &pb.ProposalsResponse{
+		Proposals: pbProposals,
+	}, nil
+}
+
+func castProposals(proposals []*types.Proposal) []*pb.Proposal {
+	rst := make([]*pb.Proposal, 0, len(proposals))
+	for _, prop := range proposals {
+		rst = append(rst, &pb.Proposal{
+			Layer:    prop.Layer.Uint32(),
+			Proposal: prop.ID().Bytes(),
+		})
+	}
+	return rst
 }
