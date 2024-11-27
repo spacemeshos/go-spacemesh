@@ -55,7 +55,7 @@ func Spawn(
 
 	// note that principal is computed from pk
 	athenaPayload := vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk)))
-	principal := core.ComputePrincipalFromPubkey(wallet.TemplateAddress, signing.Public(pk))
+	principal := wallet.ComputePrincipal(signing.Public(pk))
 	payload := core.Payload(athenaPayload)
 
 	// The payload is already encoded. Why, might you ask, are we encoding it again?
@@ -88,7 +88,7 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
 
-	principal := core.ComputePrincipalFromPubkey(wallet.TemplateAddress, signing.Public(pk))
+	principal := wallet.ComputePrincipal(signing.Public(pk))
 	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), amount))
 
 	meta := core.Metadata{}

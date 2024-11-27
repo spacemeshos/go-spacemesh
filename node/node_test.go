@@ -49,7 +49,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
@@ -505,7 +504,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 				walletTemplate.TemplateAddress.String(): 0,
 			},
 			Templates: map[string][]byte{
-				walletTemplate.TemplateAddress.String(): walletProgram.PROGRAM,
+				walletTemplate.TemplateAddress.String(): walletTemplate.PROGRAM,
 			},
 		}
 

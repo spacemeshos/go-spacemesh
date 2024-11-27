@@ -1,1 +1,2 @@
 tortoise/data/*.json filter=lfs diff=lfs merge=lfs -text
+vm/templates/wallet/wallet.bin filter=lfs diff=lfs merge=lfs -text

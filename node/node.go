@@ -92,7 +92,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
-	walletProgram "github.com/spacemeshos/go-spacemesh/vm/programs/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -644,7 +643,7 @@ func (app *App) initServices(ctx context.Context) error {
 		walletAccount := types.Account{
 			Address:         wallet.TemplateAddress,
 			TemplateAddress: &wallet.TemplateAddress,
-			State:           walletProgram.PROGRAM,
+			State:           wallet.PROGRAM,
 		}
 		err := accounts.Update(app.db, &walletAccount)
 		switch {
