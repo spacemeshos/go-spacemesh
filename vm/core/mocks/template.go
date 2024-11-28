@@ -156,10 +156,10 @@ func (c *MockTemplateMaxSpendCall) DoAndReturn(f func([]byte) (uint64, error)) *
 }
 
 // Verify mocks base method.
-func (m *MockTemplate) Verify(arg0 []byte, arg1 *scale.Decoder) bool {
+func (m *MockTemplate) Verify(arg0 []byte, arg1 *scale.Decoder) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", arg0, arg1)
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
@@ -176,19 +176,19 @@ type MockTemplateVerifyCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockTemplateVerifyCall) Return(arg0 bool) *MockTemplateVerifyCall {
+func (c *MockTemplateVerifyCall) Return(arg0 error) *MockTemplateVerifyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockTemplateVerifyCall) Do(f func([]byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
+func (c *MockTemplateVerifyCall) Do(f func([]byte, *scale.Decoder) error) *MockTemplateVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateVerifyCall) DoAndReturn(f func([]byte, *scale.Decoder) bool) *MockTemplateVerifyCall {
+func (c *MockTemplateVerifyCall) DoAndReturn(f func([]byte, *scale.Decoder) error) *MockTemplateVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

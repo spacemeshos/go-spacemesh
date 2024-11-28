@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -45,7 +46,7 @@ type Handler interface {
 	Exec(Host, Payload) ([]byte, int64, error)
 
 	// New instantiates Template from host context.
-	New(Host) (Template, error)
+	New(Host, *zap.Logger) (Template, error)
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
@@ -62,7 +63,7 @@ type Template interface {
 	// LoadGas is a cost to load account from disk.
 	LoadGas() uint64
 	// Verify security of the transaction.
-	Verify([]byte, *scale.Decoder) bool
+	Verify([]byte, *scale.Decoder) error
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/loader.go github.com/spacemeshos/go-spacemesh/vm/core AccountLoader

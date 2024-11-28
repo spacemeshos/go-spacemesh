@@ -80,10 +80,10 @@ func (c *MockValidationRequestParseCall) DoAndReturn(f func() (*types.TxHeader, 
 }
 
 // Verify mocks base method.
-func (m *MockValidationRequest) Verify() bool {
+func (m *MockValidationRequest) Verify() error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify")
-	ret0, _ := ret[0].(bool)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
@@ -100,19 +100,19 @@ type MockValidationRequestVerifyCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockValidationRequestVerifyCall) Return(arg0 bool) *MockValidationRequestVerifyCall {
+func (c *MockValidationRequestVerifyCall) Return(arg0 error) *MockValidationRequestVerifyCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockValidationRequestVerifyCall) Do(f func() bool) *MockValidationRequestVerifyCall {
+func (c *MockValidationRequestVerifyCall) Do(f func() error) *MockValidationRequestVerifyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockValidationRequestVerifyCall) DoAndReturn(f func() bool) *MockValidationRequestVerifyCall {
+func (c *MockValidationRequestVerifyCall) DoAndReturn(f func() error) *MockValidationRequestVerifyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

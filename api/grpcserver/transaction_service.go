@@ -86,8 +86,10 @@ func (s *TransactionService) ParseTransaction(
 	} else if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if in.Verify && !req.Verify() {
-		return nil, status.Error(codes.InvalidArgument, "signature is invalid")
+	if in.Verify {
+		if err := req.Verify(); err != nil {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("tx failed verification: %v", err))
+		}
 	}
 	tx := types.Transaction{RawTx: raw, TxHeader: header}
 	return &pb.ParseTransactionResponse{Tx: castTransaction(&tx)}, nil

@@ -118,8 +118,8 @@ func (th *TxHandler) verifyAndCache(ctx context.Context, expHash types.Hash32, m
 	if header.GasPrice == 0 || header.Fee() == 0 {
 		return fmt.Errorf("%w: zero gas price %s", errParse, raw.ID)
 	}
-	if !req.Verify() {
-		return fmt.Errorf("%w: %s", errVerify, raw.ID)
+	if err := req.Verify(); err != nil {
+		return fmt.Errorf("%w: %s: %w", errVerify, raw.ID, err)
 	}
 	if err := th.state.AddToCache(ctx, tx, time.Now()); err != nil {
 		th.logger.With(log.ZContext(ctx)).Debug("failed to add tx to conservative cache",
@@ -149,9 +149,10 @@ func (th *TxHandler) HandleBlockTransaction(_ context.Context, expHash types.Has
 	req := th.state.Validation(raw)
 	header, err := req.Parse()
 	if err == nil {
-		if req.Verify() {
+		if err := req.Verify(); err == nil {
 			tx.TxHeader = header
 		} else {
+			th.logger.Debug("tx didn't pass verification", zap.Error(err))
 			blockTxCount.WithLabelValues(cantVerify).Inc()
 		}
 	} else {

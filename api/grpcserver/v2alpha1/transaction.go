@@ -157,8 +157,10 @@ func (s *TransactionService) ParseTransaction(
 	} else if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	if request.Verify && !req.Verify() {
-		return nil, status.Error(codes.InvalidArgument, "signature is invalid")
+	if request.Verify {
+		if err := req.Verify(); err != nil {
+			return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("tx failed verification: %v", err))
+		}
 	}
 
 	t := &spacemeshv2alpha1.Transaction{

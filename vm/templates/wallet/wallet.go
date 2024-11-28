@@ -8,6 +8,7 @@ import (
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
@@ -15,7 +16,7 @@ import (
 )
 
 // New returns Wallet instance with SpawnArguments.
-func New(host core.Host) (*Wallet, error) {
+func New(host core.Host, logger *zap.Logger) (*Wallet, error) {
 	// Load the template account
 	templateAccount, err := host.Get(host.TemplateAddress())
 	if err != nil {
@@ -38,7 +39,7 @@ func New(host core.Host) (*Wallet, error) {
 	}
 	walletState := walletAccount.State
 
-	return &Wallet{host, templateCode, walletState}, nil
+	return &Wallet{host, templateCode, walletState, logger}, nil
 }
 
 // Wallet is a single-key wallet.
@@ -46,6 +47,7 @@ type Wallet struct {
 	host         core.Host
 	templateCode []byte
 	walletState  []byte
+	logger       *zap.Logger
 }
 
 // MaxSpend returns amount specified in the SpendArguments for Spend method.
@@ -109,11 +111,11 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 }
 
 // Verify the transaction signature using the VM.
-func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
+func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 	sig := core.Signature{}
 	n, err := sig.DecodeScale(dec)
 	if err != nil {
-		return false
+		return fmt.Errorf("decoding signature: %w", err)
 	}
 
 	// deconstruct the tx, temporarily removing the signature, and add the genesis ID
@@ -130,12 +132,12 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 		Sig   [64]byte
 	}{rawTx, sig})
 	if err != nil {
-		return false
+		return fmt.Errorf("marshalling verify args: %w", err)
 	}
 
 	maxgas := int64(s.host.MaxGas())
 	if maxgas < 0 {
-		return false
+		return fmt.Errorf("negative maxgas: %d", maxgas)
 	}
 
 	// Instantiate the VM
@@ -143,7 +145,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 	host := s.host.Clone()
 	vmhost, err := vmhost.NewHost(host)
 	if err != nil {
-		return false
+		return fmt.Errorf("creating new host: %w", err)
 	}
 	defer vmhost.Destroy()
 
@@ -152,7 +154,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 	if s.host.IsSpawn() {
 		if len(s.walletState) != 0 {
 			// TODO(lane): should we allow spawn to be called multiple times on the same account?
-			return false
+			return errors.New("cannot spawn multiple times")
 		}
 
 		// the transaction must already be a spawn tx, so there's no need to modify the payload.
@@ -167,17 +169,16 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 			s.templateCode,
 		)
 		if err != nil {
-			return false
+			return fmt.Errorf("executing auto-spawn: %w", err)
 		}
 
 		// the account should've been spawned
 		walletAccount, err := host.Get(s.host.Principal())
 		if err != nil {
-			return false
+			return fmt.Errorf("spawn failed - account not found: %w", err)
 		}
 		if len(walletAccount.State) == 0 {
-			// this should not happen!
-			return false
+			s.logger.Panic("wallet acount is empty after spawn - this should never happen")
 		}
 		s.walletState = walletAccount.State
 	}
@@ -190,7 +191,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 	}
 	payloadEncoded, err := gossamerScale.Marshal(payload)
 	if err != nil {
-		return false
+		return fmt.Errorf("marshaling verify payload: %w", err)
 	}
 	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
@@ -207,8 +208,16 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) bool {
 	// consume verify gas
 	// TODO(lane): safe arithmetic/assumption checking
 	s.host.SpendGas(uint64(maxgas) - uint64(gasLeft))
-
-	return err == nil && len(output) == 1 && output[0] == 1
+	if err != nil {
+		return fmt.Errorf("verifying TX: %w", err)
+	}
+	if len(output) == 0 {
+		return errors.New("empty verify output")
+	}
+	if output[0] != 1 {
+		return errors.New("TX didn't pass verification")
+	}
+	return nil
 }
 
 func (s *Wallet) BaseGas() uint64 {
