@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	lp2plog "github.com/ipfs/go-log/v2"
@@ -63,9 +64,8 @@ func DefaultConfig() Config {
 			MaxCircuits: 16,
 			BufferSize:  2048,
 
-			MaxReservationsPerPeer: 4,
-			MaxReservationsPerIP:   8,
-			MaxReservationsPerASN:  32,
+			MaxReservationsPerIP:  8,
+			MaxReservationsPerASN: 32,
 		},
 		IP4Blocklist: []string{
 			// localhost
@@ -189,17 +189,25 @@ type AutoNATServer struct {
 	ResetPeriod time.Duration `mapstructure:"reset-period"`
 }
 
+type DeprecatedMaxReservationsPerPeer struct{}
+
+// DeprecatedMsg implements Deprecated interface.
+func (DeprecatedMaxReservationsPerPeer) DeprecatedMsg() string {
+	return `The 'max-reservations-per-peer' is deprecated. ` +
+		`There's always 1 reservation per peer.`
+}
+
 type RelayServer struct {
-	Enable                 bool          `mapstructure:"enable"`
-	Reservations           int           `mapstructure:"reservations"`
-	TTL                    time.Duration `mapstructure:"ttl"`
-	ConnDurationLimit      time.Duration `mapstructure:"conn-duration-limit"`
-	ConnDataLimit          int64         `mapstructure:"conn-data-limit"`
-	MaxCircuits            int           `mapstructure:"max-circuits"`
-	BufferSize             int           `mapstructure:"buffer-size"`
-	MaxReservationsPerPeer int           `mapstructure:"max-reservations-per-peer"`
-	MaxReservationsPerIP   int           `mapstructure:"max-reservations-per-ip"`
-	MaxReservationsPerASN  int           `mapstructure:"max-reservations-per-asn"`
+	Enable                 bool                             `mapstructure:"enable"`
+	Reservations           int                              `mapstructure:"reservations"`
+	TTL                    time.Duration                    `mapstructure:"ttl"`
+	ConnDurationLimit      time.Duration                    `mapstructure:"conn-duration-limit"`
+	ConnDataLimit          int64                            `mapstructure:"conn-data-limit"`
+	MaxCircuits            int                              `mapstructure:"max-circuits"`
+	BufferSize             int                              `mapstructure:"buffer-size"`
+	MaxReservationsPerPeer DeprecatedMaxReservationsPerPeer `mapstructure:"max-reservations-per-peer"`
+	MaxReservationsPerIP   int                              `mapstructure:"max-reservations-per-ip"`
+	MaxReservationsPerASN  int                              `mapstructure:"max-reservations-per-asn"`
 }
 
 func (cfg *Config) Validate() error {
@@ -348,7 +356,7 @@ func New(
 		lopts = append(
 			lopts,
 			libp2p.AddrsFactory(func([]ma.Multiaddr) []ma.Multiaddr {
-				return cfg.AdvertiseAddress
+				return slices.Clone(cfg.AdvertiseAddress)
 			}),
 		)
 	}
@@ -367,7 +375,6 @@ func New(
 			resources.MaxReservations = cfg.RelayServer.Reservations
 			resources.MaxCircuits = cfg.RelayServer.MaxCircuits
 			resources.BufferSize = cfg.RelayServer.BufferSize
-			resources.MaxReservationsPerPeer = cfg.RelayServer.MaxReservationsPerPeer
 			resources.MaxReservationsPerIP = cfg.RelayServer.MaxReservationsPerIP
 			resources.MaxReservationsPerASN = cfg.RelayServer.MaxReservationsPerASN
 			lopts = append(lopts, libp2p.EnableRelayService(relay.WithResources(resources)))

@@ -99,8 +99,7 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
-	PoETServers DeprecatedPoETServers `mapstructure:"poet-server"`
-	PoetServers []types.PoetServer    `mapstructure:"poet-servers"`
+	PoetServers []types.PoetServer `mapstructure:"poet-servers"`
 
 	PprofHTTPServer         bool   `mapstructure:"pprof-server"`
 	PprofHTTPServerListener string `mapstructure:"pprof-listener"`
@@ -158,14 +157,6 @@ type DatabaseQueryCacheSizes struct {
 	EpochATXs     int `mapstructure:"epoch-atxs"`
 	ATXBlob       int `mapstructure:"atx-blob"`
 	ActiveSetBlob int `mapstructure:"active-set-blob"`
-}
-
-type DeprecatedPoETServers struct{}
-
-// DeprecatedMsg implements Deprecated interface.
-func (DeprecatedPoETServers) DeprecatedMsg() string {
-	return `The 'poet-server' is deprecated. Please migrate to the 'poet-servers'. ` +
-		`Check 'Upgrade Information' in CHANGELOG.md for details.`
 }
 
 type PublicMetrics struct {
