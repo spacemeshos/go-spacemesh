@@ -362,9 +362,9 @@ func New(t *testing.T, opts ...Opt) *Context {
 		Keep:              keep.Get(p),
 		ClusterSize:       clSize,
 		BootnodeSize:      max(2, (clSize/1000)*2),
-		RemoteSize:        0,
+		RemoteSize:        clSize / 2, // 50% of smeshers are remote
 		PoetSize:          poetSize.Get(p),
-		OldSize:           0,
+		OldSize:           clSize / 4, // 25% of smeshers are old (use previous version of go-spacemesh)
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
 		OldImage:          oldImageFlag.Get(p),
