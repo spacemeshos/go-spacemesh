@@ -25,6 +25,7 @@ jobs:
     - name: checkout
       uses: actions/checkout@v4
       with:
+        lfs: true
         ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
 
     - uses: extractions/netrc@v2
