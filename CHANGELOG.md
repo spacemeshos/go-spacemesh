@@ -12,6 +12,22 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Improvements
 
+## v1.7.8
+
+### Upgrade information
+
+### Highlights
+
+* [#6498](https://github.com/spacemeshos/go-spacemesh/pull/6498) Removed deprecated `--poet-server` flag. Use `--poet-servers` instead. 
+
+### Features
+
+### Improvements
+
+* [#6447](https://github.com/spacemeshos/go-spacemesh/pull/6447) Smarter peer selection in fetcher.
+
+* [#6500](https://github.com/spacemeshos/go-spacemesh/pull/6500) Fixed crash in the bundled POST proving profiler binary.
+
 ## v1.7.7
 
 ### Improvements
