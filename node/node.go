@@ -815,8 +815,10 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
 	)
 	if app.Config.Certificate.CommitteeSize == 0 {
-		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
-			log.Uint16("size", app.Config.HARE3.Committee))
+		app.log.With().
+			Debug("certificate committee size is not set, defaulting to hare committee size",
+				log.Uint16("size", app.Config.HARE3.Committee),
+			)
 		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
 	}
 	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
