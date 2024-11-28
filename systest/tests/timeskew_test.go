@@ -35,7 +35,8 @@ func TestShortTimeSkew(t *testing.T) {
 	)
 
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
-	deadline := cl.Genesis().Add(time.Duration(stopTest) * layerDuration)
+	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
+	deadline := cl.Genesis().Add(time.Duration(stopTest+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
 	ctx, cancel := context.WithDeadline(tctx, deadline)
 	defer cancel()
 	eg, ctx := errgroup.WithContext(ctx)

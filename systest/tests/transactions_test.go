@@ -47,7 +47,8 @@ func testTransactions(
 	before := response.AccountWrapper.StateCurrent.Balance
 
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
-	deadline := cl.Genesis().Add(time.Duration(stop+2) * layerDuration) // add some buffer for results to arrive
+	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
+	deadline := cl.Genesis().Add(time.Duration(stop+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
 	ctx, cancel := context.WithDeadline(tctx, deadline)
 	defer cancel()
 	eg, ctx := errgroup.WithContext(ctx)

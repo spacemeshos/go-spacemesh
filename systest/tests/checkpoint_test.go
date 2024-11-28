@@ -65,7 +65,7 @@ func TestCheckpoint(t *testing.T) {
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	tctx.Log.Infow("sending transactions", "from", first, "to", stop-1)
 
-	deadline := cl.Genesis().Add(time.Duration(stop+1) * layerDuration)
+	deadline := cl.Genesis().Add(time.Duration(stop+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
 	ctx, cancel := context.WithDeadline(tctx, deadline)
 	defer cancel()
 	require.NoError(t, sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, receiver, 1, 100))

@@ -32,7 +32,7 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 
 	tctx.Log.Debug("scheduling chaos...")
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
-	deadline := cl.Genesis().Add(time.Duration(stop) * layerDuration)
+	deadline := cl.Genesis().Add(time.Duration(stop+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
 	ctx, cancel := context.WithDeadline(tctx, deadline)
 	defer cancel()
 	eg, ctx := errgroup.WithContext(ctx)
