@@ -38,11 +38,8 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-# command := gotestsum --raw-command -- test2json -t -p systest \
+command := gotestsum --raw-command -- test2json -t -p systest \
  	/bin/tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
-	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
-
-command := /bin/tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
 	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
 
 .PHONY: docker

@@ -51,8 +51,9 @@ func GetWeakCoin(db sql.Executor, lid types.LayerID) (bool, error) {
 
 // SetApplied for the layer to a block id.
 func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error {
-	if _, err := db.Exec(`insert into layers (id, applied_block) values (?1, ?2) 
-					on conflict(id) do update set applied_block=?2;`,
+	if _, err := db.Exec(`
+		insert into layers (id, applied_block) values (?1, ?2) 
+		on conflict(id) do update set applied_block=?2`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
 			stmt.BindBytes(2, applied[:])
@@ -85,7 +86,10 @@ func UpdateStateHash(db sql.Executor, lid types.LayerID, hash types.Hash32) erro
 		}, nil); err != nil {
 		return fmt.Errorf("set applied %s: %w", lid, err)
 	}
-	log.Info("set state hash", "layer", lid, "hash", hash.ShortString())
+	log.With().Info("set state hash",
+		log.Uint32("layer", lid.Uint32()),
+		log.ShortStringer("hash", hash),
+	)
 	return nil
 }
 
@@ -106,7 +110,9 @@ func GetLatestStateHash(db sql.Executor) (rst types.Hash32, err error) {
 
 // GetStateHash loads state hash for the layer.
 func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
-	log.Info("get state hash", "layer", lid)
+	log.With().Info("get state hash",
+		log.Uint32("layer", lid.Uint32()),
+	)
 	if rows, err := db.Exec(
 		"select state_hash from layers where id = ?1",
 		func(stmt *sql.Statement) {
