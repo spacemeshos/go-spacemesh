@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
@@ -75,14 +76,16 @@ func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
 
 // UpdateStateHash for the layer.
 func UpdateStateHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
-	if _, err := db.Exec(`insert into layers (id, state_hash) values (?1, ?2) 
-	on conflict(id) do update set state_hash=?2;`,
+	if _, err := db.Exec(`
+		insert into layers (id, state_hash) values (?1, ?2) 
+		on conflict(id) do update set state_hash=?2;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
 			stmt.BindBytes(2, hash[:])
 		}, nil); err != nil {
 		return fmt.Errorf("set applied %s: %w", lid, err)
 	}
+	log.Info("set state hash", "layer", lid, "hash", hash.ShortString())
 	return nil
 }
 
@@ -103,7 +106,9 @@ func GetLatestStateHash(db sql.Executor) (rst types.Hash32, err error) {
 
 // GetStateHash loads state hash for the layer.
 func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
-	if rows, err := db.Exec("select state_hash from layers where id = ?1;",
+	log.Info("get state hash", "layer", lid)
+	if rows, err := db.Exec(
+		"select state_hash from layers where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
 		},
