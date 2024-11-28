@@ -2,15 +2,15 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
-
-### Upgrade information
-
-### Highlights
-
-### Features
+## v1.7.8
 
 ### Improvements
+
+* [#6477](https://github.com/spacemeshos/go-spacemesh/pull/6477) Improve peer selection during sync. A node will not
+  request data from nodes that have not yet completed their initialization.
+
+* [#6500](https://github.com/spacemeshos/go-spacemesh/pull/6500) Updated post-rs dependency. This fixes an issue where
+  the profiler would exit with an error when profiling PoS proving options.
 
 ## v1.7.7
 
