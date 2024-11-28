@@ -2,15 +2,24 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## v1.7.8
 
 ### Upgrade information
 
-### Highlights
-
-### Features
+The deprecated `--poet-server` flag was removed from the node. Using the flag before this version would have resulted
+in an error asking to change to `--poet-servers`. Now the node will only print that the flag is unknown.
+Use `--poet-servers` instead.
 
 ### Improvements
+
+* [#6477](https://github.com/spacemeshos/go-spacemesh/pull/6477) Improve peer selection during sync. A node will not
+  request data from nodes that have not yet completed their initialization.
+
+* [#6498](https://github.com/spacemeshos/go-spacemesh/pull/6498) Removed deprecated `--poet-server` flag. Use
+  `--poet-servers` instead.
+
+* [#6500](https://github.com/spacemeshos/go-spacemesh/pull/6500) Updated post-rs dependency. This fixes an issue where
+  the profiler would exit with an error when profiling PoS proving options.
 
 ## v1.7.7
 
