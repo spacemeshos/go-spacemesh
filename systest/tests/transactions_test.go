@@ -80,7 +80,7 @@ func testTransactions(
 	for i, tested := range txs[1:] {
 		require.Len(tb, tested, len(reference))
 		for j := range reference {
-			require.Equal(tb, reference[j], tested[j], "%s", cl.Client(i+1).Name)
+			require.Equal(tb, reference[j], tested[j], cl.Client(i+1).Name)
 		}
 	}
 
@@ -94,7 +94,7 @@ func testTransactions(
 		)
 		require.NoError(tb, err)
 		after := response.AccountWrapper.StateCurrent.Balance
-		tctx.Log.Debugw("receiver state",
+		tctx.Log.Infow("receiver state",
 			"before", before.Value,
 			"after", after.Value,
 			"expected-diff", diff,

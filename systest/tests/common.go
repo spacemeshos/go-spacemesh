@@ -200,9 +200,7 @@ BACKOFF:
 			if cont, err := collector(layer); !cont {
 				return err
 			}
-		case codes.Canceled:
-			return nil
-		case codes.DeadlineExceeded:
+		case codes.Canceled, codes.DeadlineExceeded:
 			return nil
 		case codes.Unavailable:
 			if retries == attempts {
@@ -247,9 +245,7 @@ BACKOFF:
 			if cont, err := collector(proof); !cont {
 				return err
 			}
-		case codes.Canceled:
-			return nil
-		case codes.DeadlineExceeded:
+		case codes.Canceled, codes.DeadlineExceeded:
 			return nil
 		case codes.Unavailable:
 			if retries == attempts {
@@ -351,9 +347,7 @@ BACKOFF:
 			if cont, err := collector(rst); !cont {
 				return err
 			}
-		case codes.Canceled:
-			return nil
-		case codes.DeadlineExceeded:
+		case codes.Canceled, codes.DeadlineExceeded:
 			return nil
 		case codes.Unavailable:
 			if retries == attempts {
@@ -400,9 +394,7 @@ func watchProposals(
 				if cont, err := collector(proposal); !cont {
 					return err
 				}
-			case codes.Canceled:
-				return nil
-			case codes.DeadlineExceeded:
+			case codes.Canceled, codes.DeadlineExceeded:
 				return nil
 			case codes.Unavailable:
 				if retries == attempts {
