@@ -2,6 +2,8 @@ FROM golang:1.23 AS builder
 
 WORKDIR /src
 
+RUN apt-get update && apt-get install git-lfs -y
+
 COPY Makefile* .
 COPY go.mod .
 COPY go.sum .

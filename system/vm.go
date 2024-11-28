@@ -9,5 +9,5 @@ import (
 // ValidationRequest parses transaction and verifies it.
 type ValidationRequest interface {
 	Parse() (*types.TxHeader, error)
-	Verify() bool
+	Verify() error
 }

@@ -6,6 +6,7 @@ import (
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/spacemeshos/go-scale"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
@@ -49,8 +50,8 @@ func (*handler) Parse(decoder *scale.Decoder) (output core.ParseOutput, err erro
 }
 
 // New instatiates single sig wallet with spawn arguments.
-func (*handler) New(host core.Host) (core.Template, error) {
-	return New(host)
+func (*handler) New(host core.Host, logger *zap.Logger) (core.Template, error) {
+	return New(host, logger)
 }
 
 // Pass the transaction into the VM for execution.

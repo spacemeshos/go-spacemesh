@@ -39,7 +39,8 @@ jobs:
       nondocchanges: ${{ steps.filter.outputs.nondoc }}
     steps:
       - uses: actions/checkout@v4
-        with:
+        with: 
+          lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - uses: dorny/paths-filter@v3
         id: filter
@@ -68,6 +69,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - uses: extractions/netrc@v2
         with:
@@ -101,6 +103,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - uses: extractions/netrc@v2
         with:
@@ -149,6 +152,7 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
         with:
+          lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
       - uses: extractions/netrc@v2
         with:

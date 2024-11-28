@@ -1353,9 +1353,12 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
-				require.Equal(t, tc.verified, req.Verify())
+				err := req.Verify()
 				if tc.verified {
+					require.NoError(t, err)
 					require.Equal(t, tc.header, header)
+				} else {
+					require.Error(t, err)
 				}
 			}
 		})
@@ -1454,12 +1457,8 @@ func BenchmarkValidation(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			req := tt.Validation(raw)
 			_, err := req.Parse()
-			if err != nil {
-				b.Fatal(err)
-			}
-			if !req.Verify() {
-				b.Fatalf("expected Verify to return true")
-			}
+			require.NoError(b, err)
+			require.NoError(b, req.Verify())
 		}
 	}
 

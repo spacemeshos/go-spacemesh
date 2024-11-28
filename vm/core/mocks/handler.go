@@ -15,6 +15,7 @@ import (
 	scale "github.com/spacemeshos/go-scale"
 	core "github.com/spacemeshos/go-spacemesh/vm/core"
 	gomock "go.uber.org/mock/gomock"
+	zap "go.uber.org/zap"
 )
 
 // MockHandler is a mock of Handler interface.
@@ -82,18 +83,18 @@ func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, core.Payload) ([]byt
 }
 
 // New mocks base method.
-func (m *MockHandler) New(arg0 core.Host) (core.Template, error) {
+func (m *MockHandler) New(arg0 core.Host, arg1 *zap.Logger) (core.Template, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "New", arg0)
+	ret := m.ctrl.Call(m, "New", arg0, arg1)
 	ret0, _ := ret[0].(core.Template)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // New indicates an expected call of New.
-func (mr *MockHandlerMockRecorder) New(arg0 any) *MockHandlerNewCall {
+func (mr *MockHandlerMockRecorder) New(arg0, arg1 any) *MockHandlerNewCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockHandler)(nil).New), arg0)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "New", reflect.TypeOf((*MockHandler)(nil).New), arg0, arg1)
 	return &MockHandlerNewCall{Call: call}
 }
 
@@ -109,13 +110,13 @@ func (c *MockHandlerNewCall) Return(arg0 core.Template, arg1 error) *MockHandler
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerNewCall) Do(f func(core.Host) (core.Template, error)) *MockHandlerNewCall {
+func (c *MockHandlerNewCall) Do(f func(core.Host, *zap.Logger) (core.Template, error)) *MockHandlerNewCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerNewCall) DoAndReturn(f func(core.Host) (core.Template, error)) *MockHandlerNewCall {
+func (c *MockHandlerNewCall) DoAndReturn(f func(core.Host, *zap.Logger) (core.Template, error)) *MockHandlerNewCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

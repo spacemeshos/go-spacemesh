@@ -101,7 +101,7 @@ func Test_HandleBlock(t *testing.T) {
 				req.EXPECT().Parse().Return(tx.TxHeader, tc.parseErr)
 				cstate.EXPECT().Validation(tx.RawTx).Return(req)
 				if tc.parseErr == nil {
-					req.EXPECT().Verify().Return(true)
+					req.EXPECT().Verify()
 					cstate.EXPECT().
 						AddToDB(&types.Transaction{RawTx: tx.RawTx, TxHeader: tx.TxHeader}).
 						Return(tc.addErr)
@@ -149,14 +149,16 @@ func gossipExpectations(
 		req.EXPECT().Parse().Return(tx.TxHeader, parseErr)
 		cstate.EXPECT().Validation(tx.RawTx).Return(req)
 		if parseErr == nil && fee != 0 {
-			req.EXPECT().Verify().Return(verify)
 			if verify {
+				req.EXPECT().Verify()
 				cstate.EXPECT().AddToCache(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 					func(_ context.Context, got *types.Transaction, _ time.Time) error {
 						assert.Equal(tb, tx.ID, got.ID) // causing ID to be calculated
 						assert.Equal(tb, tx, got)
 						return addErr
 					}).Times(1)
+			} else {
+				req.EXPECT().Verify().Return(errors.New("failed"))
 			}
 		}
 	}

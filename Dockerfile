@@ -32,6 +32,7 @@ ENV VERSION=${VERSION}
 RUN set -ex \
    && apt-get update --fix-missing \
    && apt-get install -qy --no-install-recommends \
+   git-lfs \
    unzip sudo \
    ocl-icd-opencl-dev
 

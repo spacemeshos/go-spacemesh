@@ -64,6 +64,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
 
       - name: Setup kubectl
@@ -175,7 +176,7 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
-      
+
       - name: Delete Node Pool
         if: always()
         run: |

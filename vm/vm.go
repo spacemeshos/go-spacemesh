@@ -359,16 +359,19 @@ func (v *VM) execute(
 
 		// NOTE this part is executed only for transactions that weren't verified
 		// when saved into database by txs module
-		if !tx.Verified() && !req.Verify() {
-			logger.Warn("ineffective transaction. failed verify",
-				zap.Stringer("txid", tx.GetRaw().ID),
-				zap.Object("header", header),
-				zap.Stringer("account", ctx.Principal()),
-				zap.Object("payload", ctx.Payload()),
-			)
-			ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
-			invalidTxCount.Inc()
-			continue
+		if !tx.Verified() {
+			if err := req.Verify(); err != nil {
+				logger.Warn("ineffective transaction. failed verify",
+					zap.Stringer("txid", tx.GetRaw().ID),
+					zap.Object("header", header),
+					zap.Stringer("account", ctx.Principal()),
+					zap.Object("payload", ctx.Payload()),
+					zap.Error(err),
+				)
+				ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
+				invalidTxCount.Inc()
+				continue
+			}
 		}
 
 		if ctx.NextNonce() > ctx.Header.Nonce {
@@ -479,7 +482,7 @@ func (r *Request) Parse() (*core.Header, error) {
 }
 
 // Verify transaction. Will panic if called before Parse completes succcessfully.
-func (r *Request) Verify() bool {
+func (r *Request) Verify() error {
 	if r.ctx == nil {
 		panic("Verify should be called after successful Parse")
 	}
@@ -595,7 +598,7 @@ func parse(
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
-	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx)
+	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, logger.Named("template"))
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
 	}
@@ -615,6 +618,6 @@ func parse(
 	return &ctx.Header, ctx, nil
 }
 
-func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) bool {
+func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) error {
 	return ctx.PrincipalTemplate.Verify(raw, dec)
 }

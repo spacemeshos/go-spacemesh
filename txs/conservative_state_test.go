@@ -583,7 +583,7 @@ func TestConsistentHandling(t *testing.T) {
 
 			req := smocks.NewMockValidationRequest(gomock.NewController(t))
 			req.EXPECT().Parse().Return(txs[i].TxHeader, nil)
-			req.EXPECT().Verify().Return(true)
+			req.EXPECT().Verify()
 			instances[0].mvm.EXPECT().Validation(txs[i].RawTx).Return(req)
 
 			failed := smocks.NewMockValidationRequest(gomock.NewController(t))

@@ -1652,9 +1652,12 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
-				require.Equal(t, tc.verified, req.Verify())
+				err := req.Verify()
 				if tc.verified {
+					require.NoError(t, err)
 					require.Equal(t, tc.header, header)
+				} else {
+					require.Error(t, err)
 				}
 			}
 		})
@@ -2088,7 +2091,7 @@ func TestVaultValidation(t *testing.T) {
 		header, err := req.Parse()
 		require.NoError(t, err)
 		require.NotNil(t, header)
-		require.False(t, req.Verify())
+		require.Error(t, req.Verify())
 	})
 	t.Run("spawn", func(t *testing.T) {
 		principal := tt.accounts[1].getAddress()
@@ -2103,7 +2106,7 @@ func TestVaultValidation(t *testing.T) {
 		header, err := req.Parse()
 		require.NoError(t, err)
 		require.NotNil(t, header)
-		require.False(t, req.Verify())
+		require.Error(t, req.Verify())
 	})
 	t.Run("spend", func(t *testing.T) {
 		principal := tt.accounts[1].getAddress()
@@ -2117,7 +2120,7 @@ func TestVaultValidation(t *testing.T) {
 		header, err := req.Parse()
 		require.NoError(t, err)
 		require.NotNil(t, header)
-		require.False(t, req.Verify())
+		require.Error(t, req.Verify())
 	})
 }
 
@@ -2303,12 +2306,8 @@ func BenchmarkValidation(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			req := tt.Validation(raw)
 			_, err := req.Parse()
-			if err != nil {
-				b.Fatal(err)
-			}
-			if !req.Verify() {
-				b.Fatalf("expected Verify to return true")
-			}
+			require.NoError(b, err)
+			require.NoError(b, req.Verify())
 		}
 	}
 

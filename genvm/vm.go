@@ -363,7 +363,7 @@ func (v *VM) execute(
 
 		// NOTE this part is executed only for transactions that weren't verified
 		// when saved into database by txs module
-		if !tx.Verified() && !req.Verify() {
+		if !tx.Verified() && req.Verify() != nil {
 			logger.Warn("ineffective transaction. failed verify",
 				zap.Object("header", header),
 				zap.Object("account", &ctx.PrincipalAccount),
@@ -465,14 +465,17 @@ func (r *Request) Parse() (*core.Header, error) {
 }
 
 // Verify transaction. Will panic if called without Parse completing successfully.
-func (r *Request) Verify() bool {
+func (r *Request) Verify() error {
 	if r.ctx == nil {
 		panic("Verify should be called after successful Parse")
 	}
 	start := time.Now()
 	rst := verify(r.ctx, r.raw.Raw, r.decoder)
 	transactionDurationVerify.Observe(float64(time.Since(start)))
-	return rst
+	if !rst {
+		return errors.New("tx didn't pass verification")
+	}
+	return nil
 }
 
 func parse(

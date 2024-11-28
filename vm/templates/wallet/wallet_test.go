@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
@@ -160,20 +161,20 @@ func TestVerify(t *testing.T) {
 	// empty := types.Hash20{}
 	// mockHost.EXPECT().GetGenesisID().Return(empty).Times(3)
 
-	wallet, err := New(mockHost)
+	wallet, err := New(mockHost, zaptest.NewLogger(t))
 	require.NoError(t, err)
 
 	t.Run("Invalid", func(t *testing.T) {
 		buf64 := types.EdSignature{}
-		require.False(t, wallet.Verify(buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
+		require.Error(t, wallet.Verify(buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
 	})
 	t.Run("Empty", func(t *testing.T) {
-		require.False(t, wallet.Verify(nil, scale.NewDecoder(bytes.NewBuffer(nil))))
+		require.Error(t, wallet.Verify(nil, scale.NewDecoder(bytes.NewBuffer(nil))))
 	})
 	t.Run("Valid", func(t *testing.T) {
 		msg := []byte{1, 2, 3}
 		sig := ed25519.Sign(privkeyBytes, msg)
-		require.True(
+		require.NoError(
 			t,
 			wallet.Verify(append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))),
 		)
