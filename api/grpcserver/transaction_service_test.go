@@ -302,7 +302,7 @@ func TestParseTransactions(t *testing.T) {
 			"mangled signature",
 			mangled,
 			true,
-			expectParseError(codes.InvalidArgument, "signature is invalid"),
+			expectParseError(codes.InvalidArgument, "tx failed verification"),
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {

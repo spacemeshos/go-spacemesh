@@ -393,7 +393,7 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 		s, ok := status.FromError(err)
 		require.True(t, ok)
 		assert.Equal(t, codes.InvalidArgument, s.Code())
-		assert.Contains(t, s.Message(), "signature is invalid")
+		assert.Contains(t, s.Message(), "tx failed verification")
 	})
 	t.Run("verify transaction contents for spend tx", func(t *testing.T) {
 		addr := accounts[3].Address
