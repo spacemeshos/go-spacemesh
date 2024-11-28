@@ -81,6 +81,7 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 	if err != nil {
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
+	defer vmlib.Close()
 
 	types.SetNetworkHRP(hrp)
 

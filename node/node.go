@@ -72,7 +72,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/prune"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/activesets"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
@@ -92,7 +91,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
 	"github.com/spacemeshos/go-spacemesh/vm"
-	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 const (
@@ -637,24 +635,6 @@ func (app *App) initServices(ctx context.Context) error {
 		txs.WithLogger(app.addLogger(ConStateLogger, lg).Zap()))
 
 	genesisAccts := app.Config.Genesis.ToAccounts()
-	if app.Config.Preset == "athena" {
-		// fixup wallet template account for devnet-athena-8
-		// TODO: Remove it before deploying the next devnet
-		walletAccount := types.Account{
-			Address:         wallet.TemplateAddress,
-			TemplateAddress: &wallet.TemplateAddress,
-			State:           wallet.PROGRAM,
-		}
-		err := accounts.Update(app.db, &walletAccount)
-		switch {
-		case err == nil:
-			app.log.Zap().Info("fixed wallet template account", zap.Inline(&walletAccount))
-		case errors.Is(err, sql.ErrObjectExists):
-			app.log.Zap().Info("wallet template account already fixed", zap.Inline(&walletAccount))
-		case err != nil:
-			return fmt.Errorf("inserting fixed wallet account: %w", err)
-		}
-	}
 	if len(genesisAccts) > 0 {
 		exists, err := state.AccountExists(genesisAccts[0].Address)
 		if err != nil {

@@ -47,7 +47,6 @@
         "log-encoder": "json",
         "txHandler": "debug",
         "grpc": "debug",
-        "sync": "debug",
-        "fetcher": "debug"
+        "vm": "debug"
     }
 }
