@@ -282,7 +282,13 @@ func (nb *NIPostBuilder) BuildNIPost(
 		events.EmitWaitingForPoETRoundEnd(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
 		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStateWaitForPoetRoundEnd, "")
 
-		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
+		var poetUrl string
+		poetProofRef, membership, poetUrl, err = nb.getBestProof(
+			ctx,
+			signer.NodeID(),
+			challenge,
+			submittedRegistrations,
+		)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -292,7 +298,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetProofReceived, "")
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetProofReceived, poetUrl)
 	}
 
 	// Phase 2: Post execution.
@@ -531,12 +537,9 @@ func membersContainChallenge(members []types.Hash32, challenge types.Hash32) (ui
 	return 0, errors.New("challenge is not a member of the proof")
 }
 
-func (nb *NIPostBuilder) getBestProof(
-	ctx context.Context,
-	nodeID types.NodeID,
-	challenge types.Hash32,
+func (nb *NIPostBuilder) getBestProof(ctx context.Context, nodeID types.NodeID, challenge types.Hash32,
 	registrations []nipost.PoETRegistration,
-) (types.PoetProofRef, *types.MerkleProof, error) {
+) (types.PoetProofRef, *types.MerkleProof, string, error) {
 	type poetProof struct {
 		poet       *types.PoetProof
 		membership *types.MerkleProof
@@ -594,7 +597,7 @@ func (nb *NIPostBuilder) getBestProof(
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		return types.PoetProofRef{}, nil, fmt.Errorf("querying for proofs: %w", err)
+		return types.PoetProofRef{}, nil, "", fmt.Errorf("querying for proofs: %w", err)
 	}
 	close(proofs)
 
@@ -613,7 +616,7 @@ func (nb *NIPostBuilder) getBestProof(
 	if bestProof != nil {
 		ref, err := bestProof.poet.Ref()
 		if err != nil {
-			return types.PoetProofRef{}, nil, err
+			return types.PoetProofRef{}, nil, "", err
 		}
 		nb.logger.Info(
 			"selected the best proof",
@@ -627,10 +630,10 @@ func (nb *NIPostBuilder) getBestProof(
 			bestProof.round,
 			bestProof.ticks,
 		)
-		return ref, bestProof.membership, nil
+		return ref, bestProof.membership, bestProof.url, nil
 	}
 
-	return types.PoetProofRef{}, nil, ErrPoetProofNotReceived
+	return types.PoetProofRef{}, nil, "", ErrPoetProofNotReceived
 }
 
 func constructMerkleProof(challenge types.Hash32, members []types.Hash32) (*types.MerkleProof, error) {
