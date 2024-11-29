@@ -53,7 +53,7 @@ func TestLatest(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 		account, err := Latest(db, types.RandomAddress(t))
 		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Equal(t, types.Account{}, account)
+		require.Empty(t, account)
 	})
 	t.Run("picks latest", func(t *testing.T) {
 		address := types.RandomAddress(t)
@@ -82,7 +82,7 @@ func TestGet(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 		account, err := Get(db, types.RandomAddress(t), 0)
 		require.ErrorIs(t, err, sql.ErrNotFound)
-		require.Equal(t, types.Account{}, account)
+		require.Empty(t, account)
 	})
 	t.Run("picks the right one", func(t *testing.T) {
 		address := types.RandomAddress(t)
@@ -96,10 +96,10 @@ func TestGet(t *testing.T) {
 		err := Update(db, &account)
 		require.NoError(t, err)
 
-		got, err := Get(db, address, 0)
+		_, err = Get(db, address, 0)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 
-		got, err = Get(db, address, 1)
+		got, err := Get(db, address, 1)
 		require.NoError(t, err)
 		require.Equal(t, account, got)
 	})
