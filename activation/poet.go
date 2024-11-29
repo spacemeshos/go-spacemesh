@@ -647,7 +647,7 @@ func (c *poetService) Certify(ctx context.Context, id types.NodeID) (*certifier.
 		return nil, err
 	}
 
-	if info.Certifier == nil {
+	if info.Certifier == nil || len(info.Certifier.Url.Host) == 0 || len(info.Certifier.Pubkey) == 0 {
 		return nil, errCertificatesNotSupported
 	}
 	return c.certifier.Certificate(ctx, id, info.Certifier.Url, info.Certifier.Pubkey)
