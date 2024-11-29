@@ -39,12 +39,9 @@ func TestCheckpoint(t *testing.T) {
 
 	tctx := testcontext.New(t)
 	addedLater := 2
-	size := min(tctx.ClusterSize, 30)
-	oldSize := size - addedLater
-	if tctx.ClusterSize > oldSize {
-		tctx.Log.Info("cluster size changed to ", oldSize)
-		tctx.ClusterSize = oldSize
-	}
+	oldSize := tctx.ClusterSize - addedLater
+	tctx.Log.Info("cluster size changed to ", oldSize)
+	tctx.ClusterSize = oldSize
 
 	// at the last layer of epoch 3, in the beginning of poet round 2.
 	// it is important to avoid check-pointing in the middle of cycle gap
@@ -63,14 +60,15 @@ func TestCheckpoint(t *testing.T) {
 	require.EqualValues(t, 4, layersPerEpoch, "checkpoint layer require tuning as layersPerEpoch is changed")
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
 
-	eg, ctx := errgroup.WithContext(tctx)
 	first := layersPerEpoch * 2
 	stop := first + 2
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	tctx.Log.Infow("sending transactions", "from", first, "to", stop-1)
-	require.NoError(t, sendTransactions(ctx, eg, tctx.Log, cl, first, stop, receiver, 1, 100))
-	require.NoError(t, eg.Wait())
 
+	deadline := cl.Genesis().Add(time.Duration(stop+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+	require.NoError(t, sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, receiver, 1, 100))
 	require.NoError(t, waitLayer(tctx, cl.Client(0), snapshotLayer))
 
 	tctx.Log.Debugw("getting account balances")
@@ -100,7 +98,8 @@ func TestCheckpoint(t *testing.T) {
 			diffs = append(diffs, cl.Client(i).Name)
 			tctx.Log.Errorw("diff checkpoint data",
 				fmt.Sprintf("reference %v", cl.Client(0).Name), string(checkpoints[0]),
-				fmt.Sprintf("client %v", cl.Client(i).Name), string(checkpoints[i]))
+				fmt.Sprintf("client %v", cl.Client(i).Name), string(checkpoints[i]),
+			)
 		}
 	}
 	require.Empty(t, diffs)
@@ -173,8 +172,8 @@ func TestCheckpoint(t *testing.T) {
 	ensureSmeshing(t, tctx, cl, checkpointEpoch)
 
 	// increase the cluster size to the original test size
-	tctx.Log.Info("cluster size changed to ", size)
-	tctx.ClusterSize = size
+	tctx.ClusterSize += addedLater
+	tctx.Log.Info("cluster size changed to ", tctx.ClusterSize)
 	require.NoError(t, cl.AddSmeshers(tctx, addedLater))
 	require.NoError(t, cl.WaitAll(tctx))
 

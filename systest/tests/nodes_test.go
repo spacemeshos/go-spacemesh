@@ -27,18 +27,15 @@ func TestAddNodes(t *testing.T) {
 	)
 
 	tctx := testcontext.New(t)
-	size := min(tctx.ClusterSize, 30)
-	oldSize := size - addedLater
-	if tctx.ClusterSize > oldSize {
-		tctx.Log.Info("cluster size changed to ", oldSize)
-		tctx.ClusterSize = oldSize
-	}
+	oldSize := tctx.ClusterSize - addedLater
+	tctx.Log.Info("cluster size changed to ", oldSize)
+	tctx.ClusterSize = oldSize
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
 
 	// increase the cluster size to the original test size
-	tctx.Log.Info("cluster size changed to ", size)
-	tctx.ClusterSize = size
+	tctx.ClusterSize += addedLater
+	tctx.Log.Info("cluster size changed to ", tctx.ClusterSize)
 
 	var eg errgroup.Group
 	watchLayers(tctx, &eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {

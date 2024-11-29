@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -177,12 +178,32 @@ func (f *Fetch) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 
 // GetProposalTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
 func (f *Fetch) GetProposalTxs(ctx context.Context, ids []types.TransactionID) error {
+	f.logger.Debug("requesting proposal txs from peer",
+		log.ZContext(ctx),
+		zap.Int("num_txs", len(ids)),
+		zap.Array("txs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, id := range ids {
+				enc.AppendString(id.ShortString())
+			}
+			return nil
+		})),
+	)
 	return f.getTxs(ctx, ids, f.validators.txProposal.HandleMessage)
 }
 
 // GetBlockTxs fetches the txs provided as IDs and saves them, they will be validated
 // before block is applied.
 func (f *Fetch) GetBlockTxs(ctx context.Context, ids []types.TransactionID) error {
+	f.logger.Debug("requesting block txs from peer",
+		log.ZContext(ctx),
+		zap.Int("num_txs", len(ids)),
+		zap.Array("txs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, id := range ids {
+				enc.AppendString(id.ShortString())
+			}
+			return nil
+		})),
+	)
 	return f.getTxs(ctx, ids, f.validators.txBlock.HandleMessage)
 }
 
@@ -190,7 +211,6 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.Debug("requesting txs from peer", log.ZContext(ctx), zap.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
 	return f.getHashes(ctx, hashes, datastore.TXDB, receiver)
 }

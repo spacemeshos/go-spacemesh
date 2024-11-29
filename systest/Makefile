@@ -18,7 +18,7 @@ test_job_name ?= systest-$(version_info)-$(date)
 keep ?= false
 clusters ?= 1
 size ?= 10
-poet_size ?= 3
+poet_size ?= 2
 level ?= debug
 bootstrap ?= 5m
 storage ?= standard=1Gi
@@ -39,7 +39,7 @@ ifeq ($(configname),$(test_job_name))
 endif
 
 command := gotestsum --raw-command -- test2json -t -p systest \
-	/bin/tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
+ 	/bin/tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
 	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
 
 .PHONY: docker
