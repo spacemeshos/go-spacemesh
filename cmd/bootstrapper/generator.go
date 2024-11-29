@@ -107,12 +107,14 @@ func (g *Generator) Generate(
 	}
 
 	if genBeacon {
+		g.logger.Info("bootstrapping beacon", zap.Uint32("epoch", targetEpoch.Uint32()))
 		beacon, err = g.genBeacon(ctx, g.logger)
 		if err != nil {
 			return "", err
 		}
 	}
 	if genActiveSet {
+		g.logger.Info("bootstrapping activeset", zap.Uint32("epoch", targetEpoch.Uint32()))
 		activeSet, err = getActiveSet(ctx, g.smEndpoint, targetEpoch-1)
 		if err != nil {
 			return "", err
@@ -245,6 +247,7 @@ func (g *Generator) GenUpdate(
 	if len(activeSet) > 0 {
 		edata.ActiveSet = as
 	}
+	g.logger.Info("generated bootstrap", zap.Inline(&edata))
 	update.Data = bootstrap.InnerData{
 		Epoch: edata,
 	}
@@ -261,8 +264,6 @@ func (g *Generator) GenUpdate(
 	if err != nil {
 		return "", fmt.Errorf("persist epoch update %v: %w", filename, err)
 	}
-	g.logger.Info("generated update",
-		zap.String("filename", filename),
-	)
+	g.logger.Info("generated update", zap.String("filename", filename))
 	return filename, nil
 }
