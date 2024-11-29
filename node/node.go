@@ -754,7 +754,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
 	})
 
-	hOracle := eligibility.New(
+	hOracle, err := eligibility.New(
 		beaconProtocol,
 		app.db,
 		app.atxsdata,
@@ -763,6 +763,9 @@ func (app *App) initServices(ctx context.Context) error {
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	)
+	if err != nil {
+		return fmt.Errorf("create hare oracle: %w", err)
+	}
 
 	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
 		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
@@ -849,16 +852,6 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	for _, sig := range app.signers {
 		atxHandler.Register(sig)
-	}
-
-	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf(
-			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
-				"layers-per-epoch: %d",
-			app.Config.HareEligibility.ConfidenceParam,
-			app.Config.BaseConfig.LayersPerEpoch,
-		)
 	}
 
 	blockHandler := blocks.NewHandler(

@@ -63,16 +63,18 @@ func defaultOracle(tb testing.TB) *testOracle {
 	mVerifier := NewMockvrfVerifier(ctrl)
 	mSyncer := mocks.NewMockSyncStateProvider(ctrl)
 
+	o, err := New(
+		mBeacon,
+		db,
+		atxsdata,
+		mVerifier,
+		defLayersPerEpoch,
+		WithConfig(Config{ConfidenceParam: confidenceParam}),
+		WithLogger(zaptest.NewLogger(tb)),
+	)
+	require.NoError(tb, err)
 	to := &testOracle{
-		Oracle: New(
-			mBeacon,
-			db,
-			atxsdata,
-			mVerifier,
-			defLayersPerEpoch,
-			WithConfig(Config{ConfidenceParam: confidenceParam}),
-			WithLogger(zaptest.NewLogger(tb)),
-		),
+		Oracle:    o,
 		tb:        tb,
 		mBeacon:   mBeacon,
 		mVerifier: mVerifier,
