@@ -660,6 +660,20 @@ func (app *App) initServices(ctx context.Context) error {
 		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 
+	vrfVerifier := signing.NewVRFVerifier()
+	beaconProtocol := beacon.New(
+		app.host,
+		app.edVerifier,
+		vrfVerifier,
+		app.cachedDB,
+		app.clock,
+		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		beaconProtocol.Register(sig)
+	}
+
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
@@ -685,6 +699,14 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
 	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
+	app.eg.Go(func() error {
+		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
+			trtl.OnBeacon(rst.Epoch, rst.Beacon)
+		}
+		app.log.Debug("beacon results watcher exited")
+		return nil
+	})
 
 	executor := mesh.NewExecutor(
 		app.db,
@@ -763,66 +785,6 @@ func (app *App) initServices(ctx context.Context) error {
 		syncer.WithLogger(app.syncLogger.Zap()),
 	)
 
-	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(
-		app.host,
-		app.edVerifier,
-		vrfVerifier,
-		app.cachedDB,
-		app.clock,
-		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
-	)
-	for _, sig := range app.signers {
-		beaconProtocol.Register(sig)
-	}
-	app.eg.Go(func() error {
-		for rst := range beaconProtocol.Results() {
-			events.EmitBeacon(rst.Epoch, rst.Beacon)
-			trtl.OnBeacon(rst.Epoch, rst.Beacon)
-		}
-		app.log.Debug("beacon results watcher exited")
-		return nil
-	})
-
-	hOracle := eligibility.New(
-		beaconProtocol,
-		app.db,
-		app.atxsdata,
-		vrfVerifier,
-		app.Config.LayersPerEpoch,
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
-	)
-
-	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
-		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
-			log.Uint16("size", app.Config.HARE3.Committee),
-		)
-		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
-	}
-	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
-	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
-	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
-	certifier := blocks.NewCertifier(
-		app.db,
-		hOracle,
-		app.edVerifier,
-		app.host,
-		app.clock,
-		beaconProtocol,
-		trtl,
-		blocks.WithCertConfig(app.Config.Certificate),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
-	)
-	for _, sig := range app.signers {
-		certifier.Register(sig)
-	}
-
-	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	beaconProtocol.SetSyncState(syncer)
-	hOracle.SetSync(syncer)
-
 	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
 		malfeasanceLogger,
@@ -876,6 +838,16 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
+	hOracle := eligibility.New(
+		beaconProtocol,
+		app.db,
+		app.atxsdata,
+		vrfVerifier,
+		app.Config.LayersPerEpoch,
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+	)
+
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
 	bscfg.Interval = app.Config.LayerDuration / 5
@@ -884,6 +856,32 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
 	)
+	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
+		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee),
+		)
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
+	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
+	certifier := blocks.NewCertifier(
+		app.db,
+		hOracle,
+		app.edVerifier,
+		app.host,
+		app.clock,
+		beaconProtocol,
+		trtl,
+		blocks.WithCertConfig(app.Config.Certificate),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		certifier.Register(sig)
+	}
+	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	beaconProtocol.SetSyncState(syncer)
+	hOracle.SetSync(syncer)
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {

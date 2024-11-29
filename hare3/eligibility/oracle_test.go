@@ -63,19 +63,16 @@ func defaultOracle(tb testing.TB) *testOracle {
 	mVerifier := NewMockvrfVerifier(ctrl)
 	mSyncer := mocks.NewMockSyncStateProvider(ctrl)
 
-	oracle := New(
-		mBeacon,
-		db,
-		atxsdata,
-		mVerifier,
-		defLayersPerEpoch,
-		WithConfig(Config{ConfidenceParam: confidenceParam}),
-		WithLogger(zaptest.NewLogger(tb)),
-	)
-	oracle.SetSync(mSyncer)
-
-	return &testOracle{
-		Oracle:    oracle,
+	to := &testOracle{
+		Oracle: New(
+			mBeacon,
+			db,
+			atxsdata,
+			mVerifier,
+			defLayersPerEpoch,
+			WithConfig(Config{ConfidenceParam: confidenceParam}),
+			WithLogger(zaptest.NewLogger(tb)),
+		),
 		tb:        tb,
 		mBeacon:   mBeacon,
 		mVerifier: mVerifier,
@@ -83,6 +80,8 @@ func defaultOracle(tb testing.TB) *testOracle {
 		db:        db,
 		atxsdata:  atxsdata,
 	}
+	to.SetSync(mSyncer)
+	return to
 }
 
 func (t *testOracle) createBallots(
