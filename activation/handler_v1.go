@@ -57,13 +57,8 @@ type nipostValidatorV1 interface {
 		opts ...validatorOption,
 	) error
 
-	VRFNonce(
-		nodeId types.NodeID,
-		commitmentAtxId types.ATXID,
-		vrfNonce, labelsPerUnit uint64,
-		numUnits uint32,
-	) error
-	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error
+	VRFNonce(nodeId types.NodeID, commitmentAtxId types.ATXID, vrfNonce, labelsPerUnit uint64, numUnits uint32) error
+	PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubEpoch types.EpochID) error
 }
 
 // HandlerV1 processes ATXs version 1.
@@ -76,10 +71,11 @@ type HandlerV1 struct {
 	tickSize        uint64
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidatorV1
-	beacon          AtxReceiver
+	beacon          atxReceiver
 	tortoise        system.Tortoise
 	logger          *zap.Logger
 	fetcher         system.Fetcher
+	malPublisher    legacyMalfeasancePublisher
 
 	signerMtx sync.Mutex
 	signers   map[types.NodeID]*signing.EdSigner
@@ -173,10 +169,10 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	ctx context.Context,
 	watx *wire.ActivationTxV1,
 	received time.Time,
-) (*types.ActivationTx, *mwire.MalfeasanceProof, error) {
+) (*types.ActivationTx, error) {
 	commitmentATX, err := h.commitment(watx)
 	if err != nil {
-		return nil, nil, fmt.Errorf("commitment atx for %s not found: %w", watx.SmesherID, err)
+		return nil, fmt.Errorf("commitment atx for %s not found: %w", watx.SmesherID, err)
 	}
 
 	var effectiveNumUnits uint32
@@ -184,29 +180,29 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	if watx.PrevATXID == types.EmptyATXID {
 		err := h.nipostValidator.InitialNIPostChallengeV1(&watx.NIPostChallengeV1, h.cdb, h.goldenATXID)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		effectiveNumUnits = watx.NumUnits
 		vrfNonce = *watx.VRFNonce
 	} else {
 		previous, err := atxs.Get(h.cdb, watx.PrevATXID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("fetching previous atx %s: %w", watx.PrevATXID, err)
+			return nil, fmt.Errorf("fetching previous atx %s: %w", watx.PrevATXID, err)
 		}
 		vrfNonce, err = h.validateNonInitialAtx(ctx, watx, previous, commitmentATX)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 		prevUnits, err := atxs.Units(h.cdb, watx.PrevATXID, watx.SmesherID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("fetching previous atx units: %w", err)
+			return nil, fmt.Errorf("fetching previous atx units: %w", err)
 		}
 		effectiveNumUnits = min(prevUnits, watx.NumUnits)
 	}
 
 	err = h.nipostValidator.PositioningAtx(watx.PositioningATXID, h.cdb, h.goldenATXID, watx.PublishEpoch)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	expectedChallengeHash := watx.NIPostChallengeV1.Hash()
@@ -234,10 +230,10 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		)
 		malicious, err := identities.IsMalicious(h.cdb, watx.SmesherID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("check if smesher is malicious: %w", err)
+			return nil, fmt.Errorf("check if smesher is malicious: %w", err)
 		}
 		if malicious {
-			return nil, nil, fmt.Errorf("smesher %s is known malfeasant", watx.SmesherID.ShortString())
+			return nil, fmt.Errorf("smesher %s is known malfeasant", watx.SmesherID.ShortString())
 		}
 		proof := &mwire.MalfeasanceProof{
 			Layer: watx.PublishEpoch.FirstLayer(),
@@ -249,23 +245,20 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 				},
 			},
 		}
-		encodedProof := codec.MustEncode(proof)
-		if err := identities.SetMalicious(h.cdb, watx.SmesherID, encodedProof, time.Now()); err != nil {
-			return nil, nil, fmt.Errorf("adding malfeasance proof: %w", err)
+		if err := h.malPublisher.PublishProof(ctx, watx.SmesherID, proof); err != nil {
+			return nil, fmt.Errorf("publishing malfeasance proof: %w", err)
 		}
-		h.cdb.CacheMalfeasanceProof(watx.SmesherID, encodedProof)
-		h.tortoise.OnMalfeasance(watx.SmesherID)
-		return nil, proof, nil
+		return nil, errMaliciousATX
 	}
 	if err != nil {
-		return nil, nil, fmt.Errorf("validating nipost: %w", err)
+		return nil, fmt.Errorf("validating nipost: %w", err)
 	}
 
 	var baseTickHeight uint64
 	if watx.PositioningATXID != h.goldenATXID {
 		posAtx, err := h.cdb.GetAtx(watx.PositioningATXID)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
+			return nil, fmt.Errorf("failed to get positioning atx %s: %w", watx.PositioningATXID, err)
 		}
 		baseTickHeight = posAtx.TickHeight()
 	}
@@ -281,10 +274,10 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	atx.TickCount = leaves / h.tickSize
 	hi, weight := bits.Mul64(uint64(atx.NumUnits), atx.TickCount)
 	if hi != 0 {
-		return nil, nil, errors.New("atx weight would overflow uint64")
+		return nil, errors.New("atx weight would overflow uint64")
 	}
 	atx.Weight = weight
-	return atx, nil, nil
+	return atx, nil
 }
 
 func (h *HandlerV1) validateNonInitialAtx(
@@ -355,6 +348,12 @@ func (h *HandlerV1) checkDoublePublish(
 		return nil, fmt.Errorf("%s already published an ATX in epoch %d", atx.SmesherID.ShortString(), atx.PublishEpoch)
 	}
 
+	h.logger.Debug("smesher produced more than one atx in the same epoch",
+		log.ZContext(ctx),
+		zap.Stringer("smesher", atx.SmesherID),
+		zap.Stringer("previous", prev),
+		zap.Stringer("current", atx.ID()),
+	)
 	prevSignature, err := atxSignature(ctx, tx, prev)
 	if err != nil {
 		return nil, fmt.Errorf("extracting signature for malfeasance proof: %w", err)
@@ -377,25 +376,13 @@ func (h *HandlerV1) checkDoublePublish(
 			Signature: atx.Signature,
 		}},
 	}
-	proof := &mwire.MalfeasanceProof{
+	return &mwire.MalfeasanceProof{
 		Layer: atx.PublishEpoch.FirstLayer(),
 		Proof: mwire.Proof{
 			Type: mwire.MultipleATXs,
 			Data: &atxProof,
 		},
-	}
-	if err := identities.SetMalicious(tx, atx.SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
-		return nil, fmt.Errorf("add malfeasance proof: %w", err)
-	}
-
-	h.logger.Debug("smesher produced more than one atx in the same epoch",
-		log.ZContext(ctx),
-		zap.Stringer("smesher", atx.SmesherID),
-		zap.Stringer("previous", prev),
-		zap.Stringer("current", atx.ID()),
-	)
-
-	return proof, nil
+	}, nil
 }
 
 // checkWrongPrevAtx verifies if the previous ATX referenced in the ATX is correct.
@@ -425,6 +412,12 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
 	}
 
+	h.logger.Debug("smesher referenced the wrong previous in published ATX",
+		log.ZContext(ctx),
+		zap.Stringer("smesher", atx.SmesherID),
+		log.ZShortStringer("actual", atx.PrevATXID),
+		log.ZShortStringer("expected", expectedPrevID),
+	)
 	atx2ID, err := atxs.AtxWithPrevious(tx, atx.PrevATXID, atx.SmesherID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
@@ -454,7 +447,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
 
-	proof := &mwire.MalfeasanceProof{
+	return &mwire.MalfeasanceProof{
 		Layer: atx.PublishEpoch.FirstLayer(),
 		Proof: mwire.Proof{
 			Type: mwire.InvalidPrevATX,
@@ -463,19 +456,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 				Atx2: watx2,
 			},
 		},
-	}
-
-	if err := identities.SetMalicious(tx, atx.SmesherID, codec.MustEncode(proof), time.Now()); err != nil {
-		return nil, fmt.Errorf("add malfeasance proof: %w", err)
-	}
-
-	h.logger.Debug("smesher referenced the wrong previous in published ATX",
-		log.ZContext(ctx),
-		zap.Stringer("smesher", atx.SmesherID),
-		log.ZShortStringer("actual", atx.PrevATXID),
-		log.ZShortStringer("expected", expectedPrevID),
-	)
-	return proof, nil
+	}, nil
 }
 
 func (h *HandlerV1) checkMalicious(
@@ -491,11 +472,7 @@ func (h *HandlerV1) checkMalicious(
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *HandlerV1) storeAtx(
-	ctx context.Context,
-	atx *types.ActivationTx,
-	watx *wire.ActivationTxV1,
-) (*mwire.MalfeasanceProof, error) {
+func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *wire.ActivationTxV1) error {
 	var (
 		proof     *mwire.MalfeasanceProof
 		malicious bool
@@ -524,13 +501,14 @@ func (h *HandlerV1) storeAtx(
 
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("store atx: %w", err)
+		return fmt.Errorf("store atx: %w", err)
 	}
 
 	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
-		h.cdb.CacheMalfeasanceProof(atx.SmesherID, codec.MustEncode(proof))
-		h.tortoise.OnMalfeasance(atx.SmesherID)
+		if err := h.malPublisher.PublishProof(ctx, atx.SmesherID, proof); err != nil {
+			return fmt.Errorf("publishing malfeasance proof: %w", err)
+		}
 	}
 
 	added := h.cacheAtx(ctx, atx, malicious || proof != nil)
@@ -543,7 +521,7 @@ func (h *HandlerV1) storeAtx(
 		zap.Stringer("atx_id", atx.ID()),
 		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
 	)
-	return proof, nil
+	return nil
 }
 
 func (h *HandlerV1) processATX(
@@ -551,14 +529,14 @@ func (h *HandlerV1) processATX(
 	peer p2p.Peer,
 	watx *wire.ActivationTxV1,
 	received time.Time,
-) (*mwire.MalfeasanceProof, error) {
+) error {
 	if !h.edVerifier.Verify(signing.ATX, watx.SmesherID, watx.SignedBytes(), watx.Signature) {
-		return nil, fmt.Errorf("%w: invalid atx signature: %w", pubsub.ErrValidationReject, errMalformedData)
+		return fmt.Errorf("%w: invalid atx signature: %w", pubsub.ErrValidationReject, errMalformedData)
 	}
 
 	existing, _ := h.cdb.GetAtx(watx.ID())
 	if existing != nil {
-		return nil, fmt.Errorf("%w: %s", errKnownAtx, watx.ID())
+		return fmt.Errorf("%w: %s", errKnownAtx, watx.ID())
 	}
 
 	h.logger.Debug("processing atx",
@@ -570,26 +548,25 @@ func (h *HandlerV1) processATX(
 
 	err := h.syntacticallyValidate(ctx, watx)
 	if err != nil {
-		return nil, fmt.Errorf("%w: validating atx %s: %w", pubsub.ErrValidationReject, watx.ID(), err)
+		return fmt.Errorf("%w: validating atx %s: %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 
 	poetRef, atxIDs := collectAtxDeps(h.goldenATXID, watx)
 	h.registerHashes(peer, poetRef, atxIDs)
 	if err := h.fetchReferences(ctx, poetRef, atxIDs); err != nil {
-		return nil, fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
+		return fmt.Errorf("fetching references for atx %s: %w", watx.ID(), err)
 	}
 
-	atx, proof, err := h.syntacticallyValidateDeps(ctx, watx, received)
-	if err != nil {
-		return nil, fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
-	}
-	if proof != nil {
-		return proof, nil
+	atx, err := h.syntacticallyValidateDeps(ctx, watx, received)
+	switch {
+	case errors.Is(err, errMaliciousATX):
+		return nil
+	case err != nil:
+		return fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 
-	proof, err = h.storeAtx(ctx, atx, watx)
-	if err != nil {
-		return nil, fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
+	if err := h.storeAtx(ctx, atx, watx); err != nil {
+		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
 	if err := events.ReportNewActivation(atx); err != nil {
@@ -602,9 +579,8 @@ func (h *HandlerV1) processATX(
 	h.logger.Debug("new atx",
 		log.ZContext(ctx),
 		zap.Inline(atx),
-		zap.Bool("malicious", proof != nil),
 	)
-	return proof, err
+	return err
 }
 
 // registerHashes registers that the given peer should be asked for

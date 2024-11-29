@@ -23,7 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -106,9 +106,9 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
-	mBeacon := activation.NewMockAtxReceiver(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
+	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
 	atxHdlr := activation.NewHandler(
@@ -117,10 +117,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,
@@ -183,9 +183,9 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{mergedIdAtx.ID()}, gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedIdAtx))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedIdAtx))
 	require.NoError(t, err)
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(marriageATX))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(marriageATX))
 	require.NoError(t, err)
 
 	// Step 2. Publish merged ATX together
@@ -236,7 +236,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedATX))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX))
 	require.NoError(t, err)
 
 	// Step 3. Checkpoint
@@ -296,10 +296,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,
@@ -352,6 +352,6 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedATX2))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX2))
 	require.NoError(t, err)
 }

@@ -187,18 +187,21 @@ func (n *node) withSyncer() *node {
 	return n
 }
 
-func (n *node) withOracle() *node {
+func (n *node) withOracle(tb testing.TB) *node {
 	beaconget := smocks.NewMockBeaconGetter(n.ctrl)
 	beaconget.EXPECT().GetBeacon(gomock.Any()).DoAndReturn(func(epoch types.EpochID) (types.Beacon, error) {
 		return beacons.Get(n.db, epoch)
 	}).AnyTimes()
-	n.oracle = eligibility.New(
+	oracle, err := eligibility.New(
 		beaconget,
 		n.db,
 		n.atxsdata,
 		signing.NewVRFVerifier(),
 		layersPerEpoch,
 	)
+	require.NoError(tb, err)
+	oracle.SetSync(n.msyncer)
+	n.oracle = oracle
 	return n
 }
 
@@ -344,7 +347,7 @@ func (cl *lockstepCluster) addActive(n int) *lockstepCluster {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
 			withClock().withDb(cl.t).withSigner().withAtx(cl.units.min, cl.units.max).
-			withOracle().withHare())
+			withOracle(cl.t).withHare())
 	}
 	return cl
 }
@@ -355,7 +358,7 @@ func (cl *lockstepCluster) addInactive(n int) *lockstepCluster {
 		cl.addNode((&node{t: cl.t, i: i}).
 			withController().withSyncer().withPublisher().
 			withClock().withDb(cl.t).withSigner().
-			withOracle().withHare())
+			withOracle(cl.t).withHare())
 	}
 	return cl
 }
@@ -368,7 +371,7 @@ func (cl *lockstepCluster) addEquivocators(n int) *lockstepCluster {
 			reuseSigner(cl.nodes[i-last].signer).
 			withController().withSyncer().withPublisher().
 			withClock().withDb(cl.t).withAtx(cl.units.min, cl.units.max).
-			withOracle().withHare())
+			withOracle(cl.t).withHare())
 	}
 	return cl
 }

@@ -256,7 +256,11 @@ func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.Nod
 		if err := f.meteredStreamRequest(
 			ctx, malProtocol, peer, []byte{},
 			func(ctx context.Context, s io.ReadWriter) (int, error) {
-				return readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
+				total, err := readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
+				if ctx.Err() != nil {
+					return total, ctx.Err()
+				}
+				return total, err
 			},
 		); err != nil {
 			return nil, err
@@ -292,7 +296,11 @@ func (f *Fetch) peerEpochInfoStreamed(ctx context.Context, peer p2p.Peer, epochB
 	if err := f.meteredStreamRequest(
 		ctx, atxProtocol, peer, epochBytes,
 		func(ctx context.Context, s io.ReadWriter) (int, error) {
-			return readIDSlice(s, &ed.AtxIDs, maxEpochDataAtxIDs)
+			total, err := readIDSlice(s, &ed.AtxIDs, maxEpochDataAtxIDs)
+			if ctx.Err() != nil {
+				return total, ctx.Err()
+			}
+			return total, err
 		},
 	); err != nil {
 		return nil, err
@@ -305,7 +313,8 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	f.logger.Debug("requesting epoch info from peer",
 		log.ZContext(ctx),
 		zap.Stringer("peer", peer),
-		zap.Stringer("epoch", epoch))
+		zap.Stringer("epoch", epoch),
+	)
 	epochBytes := codec.MustEncode(epoch)
 
 	var (

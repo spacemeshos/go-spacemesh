@@ -79,6 +79,68 @@ func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *Mockt
 	return c
 }
 
+// Mocksyncer is a mock of syncer interface.
+type Mocksyncer struct {
+	ctrl     *gomock.Controller
+	recorder *MocksyncerMockRecorder
+	isgomock struct{}
+}
+
+// MocksyncerMockRecorder is the mock recorder for Mocksyncer.
+type MocksyncerMockRecorder struct {
+	mock *Mocksyncer
+}
+
+// NewMocksyncer creates a new mock instance.
+func NewMocksyncer(ctrl *gomock.Controller) *Mocksyncer {
+	mock := &Mocksyncer{ctrl: ctrl}
+	mock.recorder = &MocksyncerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocksyncer) EXPECT() *MocksyncerMockRecorder {
+	return m.recorder
+}
+
+// ListenToATXGossip mocks base method.
+func (m *Mocksyncer) ListenToATXGossip() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListenToATXGossip")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// ListenToATXGossip indicates an expected call of ListenToATXGossip.
+func (mr *MocksyncerMockRecorder) ListenToATXGossip() *MocksyncerListenToATXGossipCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenToATXGossip", reflect.TypeOf((*Mocksyncer)(nil).ListenToATXGossip))
+	return &MocksyncerListenToATXGossipCall{Call: call}
+}
+
+// MocksyncerListenToATXGossipCall wrap *gomock.Call
+type MocksyncerListenToATXGossipCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocksyncerListenToATXGossipCall) Return(arg0 bool) *MocksyncerListenToATXGossipCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocksyncerListenToATXGossipCall) Do(f func() bool) *MocksyncerListenToATXGossipCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocksyncerListenToATXGossipCall) DoAndReturn(f func() bool) *MocksyncerListenToATXGossipCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockMalfeasanceHandler is a mock of MalfeasanceHandler interface.
 type MockMalfeasanceHandler struct {
 	ctrl     *gomock.Controller

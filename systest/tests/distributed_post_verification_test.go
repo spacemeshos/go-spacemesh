@@ -313,6 +313,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	atx.Sign(signer)
 
 	// 3. Wait for publish epoch
+	require.NoError(t, cl.WaitAll(ctx))
 	epoch := atx.PublishEpoch
 	logger.Sugar().Infow("waiting for publish epoch", "epoch", epoch, "layer", epoch.FirstLayer())
 	err = layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {
@@ -370,7 +371,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
 		}
-		err = verifier.Verify(awaitCtx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
+		err := verifier.Verify(awaitCtx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
 		var invalidIdxError *verifying.ErrInvalidIndex
 		require.ErrorAs(t, err, &invalidIdxError)
 		receivedProof = true
