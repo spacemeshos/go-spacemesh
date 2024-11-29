@@ -38,6 +38,7 @@ const (
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
+	activationApp    = "activation"
 	postServiceApp   = "postservice"
 	bootstrapperApp  = "bootstrapper"
 	bootstrapperPort = 80
@@ -161,13 +162,14 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
 
-	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.OldSize - cctx.RemoteSize
+	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.OldSize - cctx.RemoteSize - cctx.NodeSplitSize
 
 	cctx.Log.Desugar().Info("Using the following nodes",
 		zap.Int("total", cctx.ClusterSize),
 		zap.Int("bootnodes", cctx.BootnodeSize),
 		zap.Int("smeshers", smeshers),
 		zap.Int("old smeshers", cctx.OldSize),
+		zap.Int("node split setup", cctx.NodeSplitSize),
 		zap.Int("remote", cctx.RemoteSize),
 	)
 
@@ -196,18 +198,26 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		return nil, err
 	}
 
-	smesherKeys := keys[cctx.BootnodeSize : cctx.BootnodeSize+smeshers]
+	oldOffset := cctx.BootnodeSize + smeshers
+	smesherKeys := keys[cctx.BootnodeSize:oldOffset]
 	if err := cl.AddSmeshers(cctx, smeshers, WithSmeshers(smesherKeys)); err != nil {
 		return nil, err
 	}
 
-	oldKeys := keys[cctx.BootnodeSize+smeshers : cctx.BootnodeSize+smeshers+cctx.OldSize]
+	remoteOffset := oldOffset + cctx.OldSize
+	oldKeys := keys[oldOffset:remoteOffset]
 	if err := cl.AddSmeshers(cctx, cctx.OldSize, WithSmeshers(oldKeys), WithImage(cctx.OldImage)); err != nil {
 		return nil, err
 	}
 
-	remoteKeys := keys[cctx.BootnodeSize+smeshers+cctx.OldSize:]
+	splitNodeOffset := remoteOffset + cctx.NodeSplitSize
+	remoteKeys := keys[remoteOffset:splitNodeOffset]
 	if err := cl.AddRemoteSmeshers(cctx, cctx.RemoteSize, WithSmeshers(remoteKeys)); err != nil {
+		return nil, err
+	}
+
+	splitNodeKeys := keys[splitNodeOffset:]
+	if err := cl.AddSplitNodes(cctx, cctx.NodeSplitSize, WithSmeshers(splitNodeKeys)); err != nil {
 		return nil, err
 	}
 	return cl, nil
@@ -416,6 +426,16 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	}
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
+
+	clients, err = discoverNodes(cctx, activationApp)
+	if err != nil {
+		return err
+	}
+	for _, node := range clients {
+		cctx.Log.Debugw("discovered existing activation nodes", "name", node.Name)
+	}
+	c.clients = append(c.clients, clients...)
+	c.smeshers += len(clients)
 
 	c.poets, err = discoverNodes(cctx, poetApp)
 	if err != nil {
@@ -633,6 +653,52 @@ func (c *Cluster) AddRemoteSmeshers(tctx *testcontext.Context, n int, opts ...De
 	dopts := []DeploymentOpt{WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(false))}
 	dopts = append(dopts, opts...)
 	clients, err := deployRemoteNodes(tctx, c.nextSmesher(), c.nextSmesher()+n, c.GoldenATX(), dopts...)
+	if err != nil {
+		return err
+	}
+	c.clients = append(c.clients, clients...)
+	c.smeshers += len(clients)
+	return nil
+}
+
+func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...DeploymentOpt) error {
+	if n == 0 {
+		return nil
+	}
+	if n == 1 {
+		return errors.New("split nodes size has to be at least 2 while provided size is 1")
+	}
+	if err := c.resourceControl(tctx, n); err != nil {
+		return err
+	}
+	if err := c.persist(tctx); err != nil {
+		return err
+	}
+	flags := maps.Values(c.smesherFlags)
+	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	if err != nil {
+		return fmt.Errorf("extracting p2p endpoints %w", err)
+	}
+
+	// deploy a single node-service
+	dopts := []DeploymentOpt{WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(false))}
+	dopts = append(dopts, opts...)
+	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+1, dopts...)
+	if err != nil {
+		return err
+	}
+	c.clients = append(c.clients, clients...)
+	c.smeshers += len(clients)
+
+	node := clients[0].Name
+	if err := deployNodeSvc(tctx, node); err != nil {
+		return err
+	}
+
+	// deploy client services
+	dopts = []DeploymentOpt{WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(true))}
+	dopts = append(dopts, opts...)
+	clients, err = deployActivationNodes(tctx, node, c.nextSmesher(), c.nextSmesher()+n-1, dopts...)
 	if err != nil {
 		return err
 	}

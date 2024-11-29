@@ -52,10 +52,30 @@ var (
 		"configuration for smesher service",
 		fastnet.SmesherConfig,
 	)
+	activationConfig = parameters.String(
+		"activation",
+		"configuration for activation service",
+		fastnet.ActivationConfig,
+	)
 
 	smesherResources = parameters.NewParameter(
 		"smesher_resources",
 		"requests and limits for smesher container",
+		&apiv1.ResourceRequirements{
+			Requests: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
+				apiv1.ResourceMemory: resource.MustParse("800Mi"),
+			},
+			Limits: apiv1.ResourceList{
+				apiv1.ResourceCPU:    resource.MustParse("1.3"),
+				apiv1.ResourceMemory: resource.MustParse("800Mi"),
+			},
+		},
+		toResources,
+	)
+	activationResources = parameters.NewParameter(
+		"smesher_resources",
+		"requests and limits for activation container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
 				apiv1.ResourceCPU:    resource.MustParse("1.3"),
@@ -111,13 +131,15 @@ func toResources(value string) (*apiv1.ResourceRequirements, error) {
 const (
 	configDir = "/etc/config/"
 
-	attachedCertifierConfig = "certifier.yaml"
-	attachedPoetConfig      = "poet.conf"
-	attachedSmesherConfig   = "smesher.json"
+	attachedCertifierConfig  = "certifier.yaml"
+	attachedPoetConfig       = "poet.conf"
+	attachedSmesherConfig    = "smesher.json"
+	attachedActivationConfig = "activation.json"
 
-	certifierConfigMapName = "certifier"
-	poetConfigMapName      = "poet"
-	spacemeshConfigMapName = "spacemesh"
+	certifierConfigMapName  = "certifier"
+	poetConfigMapName       = "poet"
+	spacemeshConfigMapName  = "spacemesh"
+	activationConfigMapName = "activation"
 
 	// smeshers are split in 10 approximately equal buckets
 	// to enable running chaos mesh tasks on the different parts of the cluster.
@@ -731,6 +753,89 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	return rst, nil
 }
 
+func deployActivationNodes(
+	ctx *testcontext.Context,
+	node string,
+	from, to int,
+	opts ...DeploymentOpt,
+) ([]*NodeClient, error) {
+	ctx.Log.Debugw("deploying activation nodes", "from", from, "to", to)
+	var (
+		eg      errgroup.Group
+		clients = make(chan *NodeClient, to-from)
+		cfg     = SmesherDeploymentConfig{
+			image: ctx.Image,
+		}
+	)
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if cfg.image == "" {
+		return nil, errors.New("go-spacemesh image must be set")
+	}
+	if delta := to - from; len(cfg.keys) > 0 && len(cfg.keys) != delta {
+		return nil, fmt.Errorf(
+			"keys must be overwritten for all or no members of the cluster: delta %d, keys %d %v",
+			delta,
+			len(cfg.keys),
+			cfg.keys,
+		)
+	}
+	for i := from; i < to; i++ {
+		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
+		copy(finalFlags, cfg.flags)
+		if !cfg.noDefaultPoets {
+			var poetIds []int
+			for idx := 0; idx < ctx.PoetSize; idx++ {
+				poetIds = append(poetIds, idx)
+			}
+			finalFlags = append(finalFlags, PoetEndpoints(poetIds...))
+		}
+		if ctx.BootstrapperSize > 1 {
+			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
+		} else {
+			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
+		}
+
+		var key ed25519.PrivateKey
+		if len(cfg.keys) > 0 {
+			key = cfg.keys[i-from]
+		}
+		eg.Go(func() error {
+			id := fmt.Sprintf("%s-%d", activationApp, i)
+			labels := nodeLabels(activationApp, id)
+			labels["bucket"] = strconv.Itoa(i % buckets)
+			if err := deployActivationNode(
+				ctx, id, node, key, cfg.image, "local.key", labels, finalFlags,
+			); err != nil {
+				return err
+			}
+			clients <- &NodeClient{
+				session: ctx,
+				Node: Node{
+					Name:      id,
+					P2P:       7513,
+					GRPC_PUB:  9092,
+					GRPC_PRIV: 9093,
+				},
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return nil, err
+	}
+	close(clients)
+	var rst []*NodeClient
+	for node := range clients {
+		rst = append(rst, node)
+	}
+	sort.Slice(rst, func(i, j int) bool {
+		return decodeOrdinal(rst[i].Name) < decodeOrdinal(rst[j].Name)
+	})
+	return rst, nil
+}
+
 func deployRemoteNodes(
 	ctx *testcontext.Context,
 	from, to int,
@@ -844,6 +949,119 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 	if err := ctx.Client.AppsV1().Deployments(ctx.Namespace).
 		Delete(ctx, id, apimetav1.DeleteOptions{}); err != nil {
 		return err
+	}
+	return nil
+}
+
+func deployActivationNode(
+	ctx *testcontext.Context,
+	id string,
+	node string,
+	key ed25519.PrivateKey,
+	image string,
+	keyName string,
+	labels map[string]string,
+	flags []DeploymentFlag,
+) error {
+	ctx.Log.Debugw("deploying node", "id", id)
+	cmd := []string{
+		"/bin/go-spacemesh",
+		"-c=" + configDir + attachedActivationConfig,
+		"--pprof-server",
+		"--smeshing-opts-datadir=/data/post",
+		"-d=/data",
+		"--log-encoder=json",
+		"--metrics",
+		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
+		"--node-service-address=", fmt.Sprintf("http://%s:9099", node),
+		"--proxy-api-v2-address", fmt.Sprintf("http://%s:9070", node),
+		"--grpc-json-listener", "0.0.0.0:9071",
+		"--proxy-listener", "0.0.0.0:9072",
+	}
+	for _, flag := range flags {
+		cmd = append(cmd, flag.Flag())
+	}
+
+	podSpec := corev1.PodSpec().
+		WithNodeSelector(ctx.NodeSelector).
+		WithVolumes(
+			corev1.Volume().WithName("config").
+				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(activationConfigMapName)),
+			corev1.Volume().WithName("data").
+				WithEmptyDir(corev1.EmptyDirVolumeSource().
+					WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+		).
+		WithDNSConfig(corev1.PodDNSConfig().WithOptions(
+			corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
+			corev1.PodDNSConfigOption().WithName("attempts").WithValue("5"),
+		)).
+		WithContainers(corev1.Container().
+			WithName("smesher").
+			WithImage(image).
+			WithImagePullPolicy(apiv1.PullIfNotPresent).
+			WithPorts(
+				corev1.ContainerPort().WithContainerPort(7513).WithName("p2p"),
+				corev1.ContainerPort().WithContainerPort(9092).WithName("grpc-pub"),
+				corev1.ContainerPort().WithContainerPort(9093).WithName("grpc-priv"),
+				corev1.ContainerPort().WithContainerPort(9094).WithName("grpc-post"),
+				corev1.ContainerPort().WithContainerPort(prometheusScrapePort).WithName("prometheus"),
+				corev1.ContainerPort().WithContainerPort(phlareScrapePort).WithName("pprof"),
+			).
+			WithVolumeMounts(
+				corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+				corev1.VolumeMount().WithName("config").WithMountPath(configDir),
+			).
+			WithResources(corev1.ResourceRequirements().
+				WithRequests(activationResources.Get(ctx.Parameters).Requests).
+				WithLimits(activationResources.Get(ctx.Parameters).Limits),
+			).
+			WithStartupProbe(
+				corev1.Probe().WithTCPSocket(
+					corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
+				).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
+			).
+			WithEnv(
+				corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
+			).
+			WithCommand(cmd...),
+		)
+
+	if key != nil {
+		podSpec = podSpec.
+			WithInitContainers(
+				corev1.Container().
+					WithName("file-creator").
+					WithImage("busybox").
+					WithCommand("sh", "-c",
+						fmt.Sprintf("mkdir -p /data/identities && echo -n '%x' > /data/identities/%s", key, keyName),
+					).
+					WithVolumeMounts(
+						corev1.VolumeMount().WithName("data").WithMountPath("/data"),
+					),
+			)
+	}
+
+	deployment := appsv1.Deployment(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(appsv1.DeploymentSpec().
+			WithSelector(metav1.LabelSelector().WithMatchLabels(labels)).
+			WithReplicas(1).
+			WithTemplate(corev1.PodTemplateSpec().
+				WithLabels(labels).
+				WithAnnotations(
+					map[string]string{
+						"prometheus.io/port":   strconv.Itoa(prometheusScrapePort),
+						"prometheus.io/scrape": "true",
+					},
+				).
+				WithSpec(podSpec),
+			),
+		)
+	_, err := ctx.Client.AppsV1().
+		Deployments(ctx.Namespace).
+		Apply(ctx, deployment, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return fmt.Errorf("apply pod %s: %w", id, err)
 	}
 	return nil
 }
