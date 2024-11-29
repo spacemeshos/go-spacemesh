@@ -53,6 +53,7 @@ func TestAddNodes(t *testing.T) {
 		return true, nil
 	})
 	require.NoError(t, eg.Wait())
+	require.NoError(t, cl.WaitAll(tctx))
 
 	created := make([][]*pb.Proposal, cl.Total())
 	for i := range cl.Total() {

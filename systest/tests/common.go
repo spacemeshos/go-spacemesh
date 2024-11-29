@@ -138,7 +138,7 @@ BACKOFF:
 		state, err := states.Recv()
 		s, ok := status.FromError(err)
 		if !ok {
-			return err
+			return fmt.Errorf("unknown error: %w", err)
 		}
 		switch s.Code() {
 		case codes.OK:
@@ -197,7 +197,7 @@ BACKOFF:
 		layer, err := layers.Recv()
 		s, ok := status.FromError(err)
 		if !ok {
-			return err
+			return fmt.Errorf("unknown error: %w", err)
 		}
 		switch s.Code() {
 		case codes.OK:
@@ -244,7 +244,7 @@ BACKOFF:
 		proof, err := proofs.Recv()
 		s, ok := status.FromError(err)
 		if !ok {
-			return err
+			return fmt.Errorf("unknown error: %w", err)
 		}
 		switch s.Code() {
 		case codes.OK:
@@ -349,7 +349,7 @@ func watchTransactionResults(ctx context.Context,
 			rst, err := rsts.Recv()
 			s, ok := status.FromError(err)
 			if !ok {
-				return err
+				return fmt.Errorf("unknown error: %w", err)
 			}
 			switch s.Code() {
 			case codes.OK:
@@ -399,7 +399,7 @@ func watchProposals(
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
 			if !ok {
-				return err
+				return fmt.Errorf("unknown error: %w", err)
 			}
 			switch s.Code() {
 			case codes.OK:

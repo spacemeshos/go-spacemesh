@@ -207,6 +207,7 @@ func TestStepReplaceNodes(t *testing.T) {
 	}
 	if len(deleting) > 0 {
 		require.NoError(t, cl.AddSmeshers(cctx, len(deleting)))
+		require.NoError(t, cl.WaitAll(cctx))
 	}
 }
 

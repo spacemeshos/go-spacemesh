@@ -111,9 +111,6 @@ type atxMalfeasancePublisher interface {
 
 // malfeasancePublisher is an interface for publishing malfeasance proofs.
 //
-// The provider of that interface ensures that only valid proofs are published (invalid ones return an error).
-// Proofs against an identity that is managed by the node will also return an error and will not be gossiped.
-//
 // Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them
 // and mark the associated identity as malfeasant.
 type malfeasancePublisher interface {

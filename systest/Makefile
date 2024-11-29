@@ -8,9 +8,9 @@ image_name ?= $(org)/systest:$(version_info)
 certifier_image ?= $(org)/certifier-service:v0.8.4
 poet_image ?= $(org)/poet:v0.10.10
 post_service_image ?= $(org)/post-service:v0.8.4
-post_init_image ?= $(org)/postcli:v0.12.5
+post_init_image ?= $(org)/postcli:v0.12.10
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
-old_smesher_image ?= $(org)/go-spacemesh-dev:7b9337a   # Update this when new version is released
+old_smesher_image ?= $(org)/go-spacemesh-dev:v1.7.7
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 
 test_id ?= systest-$(version_info)

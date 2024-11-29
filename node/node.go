@@ -662,6 +662,20 @@ func (app *App) initServices(ctx context.Context) error {
 		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 
+	vrfVerifier := signing.NewVRFVerifier()
+	beaconProtocol := beacon.New(
+		app.host,
+		app.edVerifier,
+		vrfVerifier,
+		app.cachedDB,
+		app.clock,
+		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		beaconProtocol.Register(sig)
+	}
+
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
@@ -687,6 +701,14 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
 	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
+	app.eg.Go(func() error {
+		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
+			trtl.OnBeacon(rst.Epoch, rst.Beacon)
+		}
+		app.log.Debug("beacon results watcher exited")
+		return nil
+	})
 
 	executor := mesh.NewExecutor(
 		app.db,
@@ -734,12 +756,52 @@ func (app *App) initServices(ctx context.Context) error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
 	})
 
+	hOracle, err := eligibility.New(
+		beaconProtocol,
+		app.db,
+		app.atxsdata,
+		vrfVerifier,
+		app.Config.LayersPerEpoch,
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+	)
+	if err != nil {
+		return fmt.Errorf("create hare oracle: %w", err)
+	}
+
+	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
+		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee),
+		)
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
+	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
+	certifier := blocks.NewCertifier(
+		app.db,
+		hOracle,
+		app.edVerifier,
+		app.host,
+		app.clock,
+		beaconProtocol,
+		trtl,
+		blocks.WithCertConfig(app.Config.Certificate),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		certifier.Register(sig)
+	}
+
 	patrol := layerpatrol.New()
 	syncerConf := app.Config.Sync
 	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
 
+	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
+		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
+	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
 	syncer := syncer.NewSyncer(
 		app.cachedDB,
@@ -748,7 +810,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		fetcher,
 		patrol,
-		app.certifier,
+		certifier,
 		atxsync.New(fetcher, app.db, app.localDB,
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
@@ -761,29 +823,9 @@ func (app *App) initServices(ctx context.Context) error {
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
 	)
-
-	vrfVerifier := signing.NewVRFVerifier()
-	beaconProtocol := beacon.New(
-		app.host,
-		app.edVerifier,
-		vrfVerifier,
-		app.cachedDB,
-		app.clock,
-		syncer,
-		beacon.WithConfig(app.Config.Beacon),
-		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
-	)
-	for _, sig := range app.signers {
-		beaconProtocol.Register(sig)
-	}
-	app.eg.Go(func() error {
-		for rst := range beaconProtocol.Results() {
-			events.EmitBeacon(rst.Epoch, rst.Beacon)
-			trtl.OnBeacon(rst.Epoch, rst.Beacon)
-		}
-		app.log.Debug("beacon results watcher exited")
-		return nil
-	})
+	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	beaconProtocol.SetSyncState(syncer)
+	hOracle.SetSync(syncer)
 
 	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
@@ -827,16 +869,6 @@ func (app *App) initServices(ctx context.Context) error {
 		atxHandler.Register(sig)
 	}
 
-	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf(
-			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
-				"layers-per-epoch: %d",
-			app.Config.HareEligibility.ConfidenceParam,
-			app.Config.BaseConfig.LayersPerEpoch,
-		)
-	}
-
 	blockHandler := blocks.NewHandler(
 		fetcher,
 		app.db,
@@ -851,17 +883,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
-	hOracle := eligibility.New(
-		beaconProtocol,
-		app.db,
-		app.atxsdata,
-		vrfVerifier,
-		syncer,
-		app.Config.LayersPerEpoch,
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
-	)
-
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
 	bscfg.Interval = app.Config.LayerDuration / 5
@@ -870,32 +891,6 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
 	)
-	if app.Config.Certificate.CommitteeSize == 0 {
-		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
-			log.Uint16("size", app.Config.HARE3.Committee))
-		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
-	}
-	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
-	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
-	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
-	app.certifier = blocks.NewCertifier(
-		app.db,
-		hOracle,
-		app.edVerifier,
-		app.host,
-		app.clock,
-		beaconProtocol,
-		trtl,
-		blocks.WithCertConfig(app.Config.Certificate),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
-	)
-	for _, sig := range app.signers {
-		app.certifier.Register(sig)
-	}
-
-	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
-		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
-	}
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
@@ -1002,7 +997,7 @@ func (app *App) initServices(ctx context.Context) error {
 		executor,
 		msh,
 		fetcher,
-		app.certifier,
+		certifier,
 		patrol,
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -1065,7 +1060,7 @@ func (app *App) initServices(ctx context.Context) error {
 		nipostLogger,
 		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
 	)
-	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+	poetCertifier := activation.NewCertifier(app.localDB, nipostLogger, client)
 
 	poetClients := make([]activation.PoetService, 0, len(app.Config.PoetServers))
 	for _, server := range app.Config.PoetServers {
@@ -1075,7 +1070,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.Config.POET,
 			lg.Zap().Named("poet"),
 			app.Config.TickSize,
-			activation.WithCertifier(certifier),
+			activation.WithCertifier(poetCertifier),
 		)
 		if err != nil {
 			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
@@ -1283,7 +1278,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.host.Register(
 		pubsub.BlockCertify,
-		pubsub.ChainGossipHandler(checkSynced, app.certifier.HandleCertifyMessage),
+		pubsub.ChainGossipHandler(checkSynced, certifier.HandleCertifyMessage),
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
@@ -1303,6 +1298,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
 	app.hOracle = hOracle
+	app.certifier = certifier
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,

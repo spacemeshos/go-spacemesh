@@ -120,20 +120,18 @@ func New(
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
-	syncer system.SyncStateProvider,
 	layersPerEpoch uint32,
 	opts ...Opt,
-) *Oracle {
+) (*Oracle, error) {
 	activesCache, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
-		panic("failed to create lru cache for active set" + err.Error())
+		return nil, fmt.Errorf("create lru cache for active set: %w", err)
 	}
 	oracle := &Oracle{
 		beacons:      beacons,
 		db:           db,
 		atxsdata:     atxsdata,
 		vrfVerifier:  vrfVerifier,
-		sync:         syncer,
 		activesCache: activesCache,
 		fallback:     map[types.EpochID][]types.ATXID{},
 		cfg:          DefaultConfig(),
@@ -142,8 +140,16 @@ func New(
 	for _, opt := range opts {
 		opt(oracle)
 	}
+	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
+	if oracle.cfg.ConfidenceParam >= layersPerEpoch {
+		return nil, fmt.Errorf(
+			"hare eligibility confidence param (%d) larger than layers per epoch (%d)",
+			oracle.cfg.ConfidenceParam,
+			layersPerEpoch,
+		)
+	}
 	oracle.log.Info("hare oracle initialized", zap.Uint32("epoch size", layersPerEpoch), zap.Inline(&oracle.cfg))
-	return oracle
+	return oracle, nil
 }
 
 //go:generate scalegen -types VrfMessage
@@ -154,6 +160,12 @@ type VrfMessage struct {
 	Beacon types.Beacon
 	Round  uint32
 	Layer  types.LayerID
+}
+
+func (o *Oracle) SetSync(sync system.SyncStateProvider) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.sync = sync
 }
 
 func (o *Oracle) resetCacheOnSynced(ctx context.Context) {

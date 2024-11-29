@@ -2,6 +2,18 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+### Highlights
+
+### Features
+
+### Improvements
+
+* [#6457](https://github.com/spacemeshos/go-spacemesh/pull/6457) Fix trying to certify POST when certifier URL is empty.
+
 ## v1.7.8
 
 ### Upgrade information
