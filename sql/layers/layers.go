@@ -5,15 +5,15 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 // SetWeakCoin for the layer.
 func SetWeakCoin(db sql.Executor, lid types.LayerID, weakcoin bool) error {
-	if _, err := db.Exec(`insert into layers (id, weak_coin) values (?1, ?2) 
-					on conflict(id) do update set weak_coin=?2;`,
+	if _, err := db.Exec(`
+		insert into layers (id, weak_coin) values (?1, ?2)
+		on conflict(id) do update set weak_coin=?2`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
 			stmt.BindBool(2, weakcoin)
@@ -52,7 +52,7 @@ func GetWeakCoin(db sql.Executor, lid types.LayerID) (bool, error) {
 // SetApplied for the layer to a block id.
 func SetApplied(db sql.Executor, lid types.LayerID, applied types.BlockID) error {
 	if _, err := db.Exec(`
-		insert into layers (id, applied_block) values (?1, ?2) 
+		insert into layers (id, applied_block) values (?1, ?2)
 		on conflict(id) do update set applied_block=?2`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
@@ -78,18 +78,14 @@ func UnsetAppliedFrom(db sql.Executor, lid types.LayerID) error {
 // UpdateStateHash for the layer.
 func UpdateStateHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
 	if _, err := db.Exec(`
-		insert into layers (id, state_hash) values (?1, ?2) 
-		on conflict(id) do update set state_hash=?2;`,
+		insert into layers (id, state_hash) values (?1, ?2)
+		on conflict(id) do update set state_hash=?2`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
 			stmt.BindBytes(2, hash[:])
 		}, nil); err != nil {
 		return fmt.Errorf("set applied %s: %w", lid, err)
 	}
-	log.With().Info("set state hash",
-		log.Uint32("layer", lid.Uint32()),
-		log.ShortStringer("hash", hash),
-	)
 	return nil
 }
 
@@ -110,9 +106,6 @@ func GetLatestStateHash(db sql.Executor) (rst types.Hash32, err error) {
 
 // GetStateHash loads state hash for the layer.
 func GetStateHash(db sql.Executor, lid types.LayerID) (rst types.Hash32, err error) {
-	log.With().Info("get state hash",
-		log.Uint32("layer", lid.Uint32()),
-	)
 	if rows, err := db.Exec(
 		"select state_hash from layers where id = ?1",
 		func(stmt *sql.Statement) {
@@ -161,7 +154,7 @@ func FirstAppliedInEpoch(db sql.Executor, epoch types.EpochID) (types.BlockID, e
 		rows   int
 	)
 	if rows, err = db.Exec(`
-		select applied_block from layers 
+		select applied_block from layers
 		where id between ?1 and ?2 and applied_block is not null and applied_block != ?3
 		order by id asc limit 1;`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch.FirstLayer()))
@@ -193,9 +186,9 @@ func GetLastApplied(db sql.Executor) (types.LayerID, error) {
 
 // SetProcessed sets a layer processed.
 func SetProcessed(db sql.Executor, lid types.LayerID) error {
-	if _, err := db.Exec(
-		`insert into layers (id, processed) values (?1, 1) 
-         on conflict(id) do update set processed=1;`,
+	if _, err := db.Exec(`
+		insert into layers (id, processed) values (?1, 1)
+        on conflict(id) do update set processed=1`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
 		}, nil); err != nil {
@@ -220,9 +213,9 @@ func GetProcessed(db sql.Executor) (types.LayerID, error) {
 
 // SetMeshHash sets the aggregated hash up to the specified layer.
 func SetMeshHash(db sql.Executor, lid types.LayerID, aggHash types.Hash32) error {
-	if _, err := db.Exec(
-		`insert into layers (id, aggregated_hash) values (?1, ?2) 
-         on conflict(id) do update set aggregated_hash=?2;`,
+	if _, err := db.Exec(`
+		insert into layers (id, aggregated_hash) values (?1, ?2)
+        on conflict(id) do update set aggregated_hash=?2`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Uint32()))
 			stmt.BindBytes(2, aggHash[:])

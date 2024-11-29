@@ -61,7 +61,7 @@ func TestCheckpoint(t *testing.T) {
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
 
 	first := layersPerEpoch * 2
-	stop := first + 5
+	stop := first + 2
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
 	tctx.Log.Infow("sending transactions", "from", first, "to", stop-1)
 

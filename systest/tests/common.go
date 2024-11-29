@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"testing"
 	"time"
 
@@ -46,18 +45,17 @@ func sendTransactions(
 		if err != nil {
 			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
 		}
-		spawnLayer := math.MinInt
 		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number >= stop {
 				return false, nil
 			}
-			if int(layer.Layer.Number.Number) < spawnLayer+2 {
-				// wait for the spawn transaction to be applied
-				return true, nil
-			}
 			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED || layer.Layer.Number.Number < first {
 				return true, nil
 			}
+			// give some time for a previous layer to be applied
+			// TODO(dshulyak) introduce api that simply subscribes to internal clock
+			// and outputs events when the tick for the layer is available
+			time.Sleep(200 * time.Millisecond)
 			if nonce == 0 {
 				logger.Info("address needs to be spawned",
 					zap.String("client", client.Name),
@@ -66,7 +64,6 @@ func sendTransactions(
 				if err := submitSpawn(ctx, cl, i, client); err != nil {
 					return false, fmt.Errorf("failed to spawn %w", err)
 				}
-				spawnLayer = int(layer.Layer.Number.Number)
 				nonce++
 				return true, nil
 			}
