@@ -313,6 +313,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	atx.Sign(signer)
 
 	// 3. Wait for publish epoch
+	require.NoError(t, cl.WaitAll(ctx))
 	epoch := atx.PublishEpoch
 	logger.Sugar().Infow("waiting for publish epoch", "epoch", epoch, "layer", epoch.FirstLayer())
 	err = layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {

@@ -176,6 +176,7 @@ func TestCheckpoint(t *testing.T) {
 	tctx.Log.Info("cluster size changed to ", size)
 	tctx.ClusterSize = size
 	require.NoError(t, cl.AddSmeshers(tctx, addedLater))
+	require.NoError(t, cl.WaitAll(tctx))
 
 	tctx.Log.Infow("waiting for all miners to be smeshing", "last epoch", lastEpoch)
 	ensureSmeshing(t, tctx, cl, lastEpoch)

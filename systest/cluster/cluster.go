@@ -148,7 +148,9 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := cl.WaitAllTimeout(cctx.BootstrapDuration); err != nil {
+	ctx, cancel := context.WithTimeout(cctx, cctx.BootstrapDuration)
+	defer cancel()
+	if err := cl.WaitAll(ctx); err != nil {
 		return nil, err
 	}
 	if err = cctx.CheckFail(); err != nil {
@@ -770,12 +772,6 @@ func (c *Cluster) WaitAll(ctx context.Context) error {
 	wait(c.poets)
 	wait(c.bootstrappers)
 	return eg.Wait()
-}
-
-func (c *Cluster) WaitAllTimeout(timeout time.Duration) error {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	return c.WaitAll(ctx)
 }
 
 // CloseClients closes connections to clients.

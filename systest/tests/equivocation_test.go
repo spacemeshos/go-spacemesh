@@ -74,6 +74,7 @@ func TestEquivocation(t *testing.T) {
 		)
 		require.NoError(t, err)
 	}
+	require.NoError(t, cl.WaitAll(cctx))
 
 	var (
 		layers    = uint32(testcontext.LayersPerEpoch.Get(cctx.Parameters))
