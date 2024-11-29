@@ -20,12 +20,10 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
-	apiappsv1 "k8s.io/api/apps/v1"
 	apiv1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	apimetav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/apimachinery/pkg/watch"
 	appsv1 "k8s.io/client-go/applyconfigurations/apps/v1"
 	corev1 "k8s.io/client-go/applyconfigurations/core/v1"
 	metav1 "k8s.io/client-go/applyconfigurations/meta/v1"
@@ -707,9 +705,6 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 			if err := deployNode(ctx, id, key, cfg.image, "local.key", labels, finalFlags); err != nil {
 				return err
 			}
-			if err := watchDeployment(ctx, id); err != nil {
-				return err
-			}
 			clients <- &NodeClient{
 				session: ctx,
 				Node: Node{
@@ -789,9 +784,6 @@ func deployRemoteNodes(
 				return err
 			}
 			deployNodeSvc(ctx, id)
-			if err := watchDeployment(ctx, id); err != nil {
-				return err
-			}
 			clients <- &NodeClient{
 				session: ctx,
 				Node: Node{
@@ -963,45 +955,6 @@ func deployNode(
 	}
 	if strings.Contains(id, bootnodeApp) {
 		return deployBootnodeSvc(ctx, id)
-	}
-	return nil
-}
-
-func watchDeployment(ctx *testcontext.Context, id string) error {
-	ctx.Log.Debugf("watching deployment %s", id)
-	// Watch the Deployment
-	watcher, err := ctx.Client.AppsV1().Deployments(ctx.Namespace).Watch(ctx, apimetav1.ListOptions{
-		FieldSelector: fmt.Sprintf("metadata.name=%s", id),
-	})
-	if err != nil {
-		return fmt.Errorf("failed to watch deployment: %w", err)
-	}
-	defer watcher.Stop()
-
-	// Process events
-	for event := range watcher.ResultChan() {
-		switch event.Type {
-		case watch.Added, watch.Modified:
-			deployment, ok := event.Object.(*apiappsv1.Deployment)
-			if !ok {
-				return fmt.Errorf("watching deployment %s: unexpected object type", id)
-			}
-
-			// Check deployment status
-			availableReplicas := deployment.Status.AvailableReplicas
-			desiredReplicas := *deployment.Spec.Replicas
-			ctx.Log.Debugf("Deployment %s: %d/%d replicas available\n", id, availableReplicas, desiredReplicas)
-
-			// Exit when the deployment is ready
-			if availableReplicas == desiredReplicas {
-				ctx.Log.Debugf("Deployment %s is ready", id)
-				return nil
-			}
-		case watch.Deleted:
-			return fmt.Errorf("deployment %s was deleted", id)
-		case watch.Error:
-			return fmt.Errorf("watching deployment %s: %v", id, event.Object)
-		}
 	}
 	return nil
 }

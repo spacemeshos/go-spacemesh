@@ -370,7 +370,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
 			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
 		}
-		err = verifier.Verify(awaitCtx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
+		err := verifier.Verify(awaitCtx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
 		var invalidIdxError *verifying.ErrInvalidIndex
 		require.ErrorAs(t, err, &invalidIdxError)
 		receivedProof = true
