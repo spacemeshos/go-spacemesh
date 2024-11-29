@@ -514,7 +514,7 @@ func parse(
 		return nil, nil, nil, fmt.Errorf(
 			"%w: failed load state for principal %s: %w",
 			core.ErrInternal,
-			principal.String(),
+			principal,
 			err,
 		)
 	}
