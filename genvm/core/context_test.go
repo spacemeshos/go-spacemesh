@@ -193,10 +193,8 @@ func TestRelay(t *testing.T) {
 				require.Equal(t, amount1, int(rec1state.Balance))
 				require.NotEqual(t, encoded, rec1state.State)
 
-				rec2state, err := cache.Get(receiver2)
-				require.NoError(t, err)
-				require.Equal(t, 0, int(rec2state.Balance))
-				require.NotEqual(t, encoded, rec2state.State)
+				_, err = cache.Get(receiver2)
+				require.ErrorIs(t, err, core.ErrNotFound) // relay to receiver2 failed
 
 				remoteState, err := cache.Get(remote)
 				require.NoError(t, err)

@@ -48,6 +48,63 @@ func TestHas(t *testing.T) {
 	require.True(t, has)
 }
 
+func TestLatest(t *testing.T) {
+	t.Run("doesn't exist", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+		account, err := Latest(db, types.RandomAddress(t))
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Equal(t, types.Account{}, account)
+	})
+	t.Run("picks latest", func(t *testing.T) {
+		address := types.RandomAddress(t)
+		db := statesql.InMemoryTest(t)
+		err := Update(db, &types.Account{
+			Address: address,
+		})
+		require.NoError(t, err)
+		account := types.Account{
+			Layer:     1,
+			NextNonce: 1,
+			Balance:   100,
+			Address:   address,
+		}
+		err = Update(db, &account)
+		require.NoError(t, err)
+
+		got, err := Latest(db, address)
+		require.NoError(t, err)
+		require.Equal(t, account, got)
+	})
+}
+
+func TestGet(t *testing.T) {
+	t.Run("doesn't exist", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+		account, err := Get(db, types.RandomAddress(t), 0)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Equal(t, types.Account{}, account)
+	})
+	t.Run("picks the right one", func(t *testing.T) {
+		address := types.RandomAddress(t)
+		db := statesql.InMemoryTest(t)
+		account := types.Account{
+			Layer:     1,
+			NextNonce: 1,
+			Balance:   100,
+			Address:   address,
+		}
+		err := Update(db, &account)
+		require.NoError(t, err)
+
+		got, err := Get(db, address, 0)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+
+		got, err = Get(db, address, 1)
+		require.NoError(t, err)
+		require.Equal(t, account, got)
+	})
+}
+
 func TestRevert(t *testing.T) {
 	address := types.Address{1, 1}
 	seq := genSeq(address, 10)

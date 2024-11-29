@@ -13,6 +13,7 @@ func TestCacheGetCopies(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	ss := core.NewStagedCache(core.DBLoader{db})
 	address := core.Address{1}
+	ss.Update(core.Account{Address: address})
 	account, err := ss.Get(address)
 	require.NoError(t, err)
 	account.Balance = 100

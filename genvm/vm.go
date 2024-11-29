@@ -156,7 +156,10 @@ func (v *VM) AccountExists(address core.Address) (bool, error) {
 // GetNonce returns expected next nonce for the address.
 func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 	account, err := accounts.Latest(v.db, address)
-	if err != nil {
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return 0, nil
+	case err != nil:
 		return 0, err
 	}
 	return account.NextNonce, nil
@@ -165,7 +168,10 @@ func (v *VM) GetNonce(address core.Address) (core.Nonce, error) {
 // GetBalance returns balance for an address.
 func (v *VM) GetBalance(address types.Address) (uint64, error) {
 	account, err := accounts.Latest(v.db, address)
-	if err != nil {
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return 0, nil
+	case err != nil:
 		return 0, err
 	}
 	return account.Balance, nil
@@ -501,11 +507,14 @@ func parse(
 		return nil, nil, nil, fmt.Errorf("%w: failed to decode method selector %w", core.ErrMalformed, err)
 	}
 	account, err := loader.Get(principal)
-	if err != nil {
+	switch {
+	case errors.Is(err, core.ErrNotFound):
+		account = types.Account{Address: principal}
+	case err != nil:
 		return nil, nil, nil, fmt.Errorf(
-			"%w: failed load state for principal %s - %w",
+			"%w: failed load state for principal %s: %w",
 			core.ErrInternal,
-			principal,
+			principal.String(),
 			err,
 		)
 	}

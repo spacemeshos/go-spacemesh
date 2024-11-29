@@ -1,6 +1,8 @@
 package core
 
 import (
+	"errors"
+
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -76,8 +78,13 @@ type Template interface {
 	Verify(Host, []byte, *scale.Decoder) bool
 }
 
+var ErrNotFound = errors.New("not found")
+
 // AccountLoader is an interface for loading accounts.
 type AccountLoader interface {
+	// Get account for given address
+	//
+	// Returns ErrNotFound if the account doesn't exist.
 	Get(Address) (Account, error)
 }
 
