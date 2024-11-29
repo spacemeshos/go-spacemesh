@@ -123,7 +123,8 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	for {
 		select {
 		case <-stream.Context().Done():
-			return stream.Context().Err()
+			s.log.Debug("stream closed", zap.Error(stream.Context().Err()))
+			return nil
 		case cmd := <-con:
 			if err := stream.SendMsg(cmd.req); err != nil {
 				s.log.Error("failed to send request", zap.Error(err))
