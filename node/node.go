@@ -738,6 +738,9 @@ func (app *App) initServices(ctx context.Context) error {
 	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
 	syncerConf.Standalone = app.Config.Standalone
 
+	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
+		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
+	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
 	syncer := syncer.NewSyncer(
 		app.cachedDB,
@@ -767,7 +770,6 @@ func (app *App) initServices(ctx context.Context) error {
 		vrfVerifier,
 		app.cachedDB,
 		app.clock,
-		syncer,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
 	)
@@ -782,6 +784,44 @@ func (app *App) initServices(ctx context.Context) error {
 		app.log.Debug("beacon results watcher exited")
 		return nil
 	})
+
+	hOracle := eligibility.New(
+		beaconProtocol,
+		app.db,
+		app.atxsdata,
+		vrfVerifier,
+		app.Config.LayersPerEpoch,
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+	)
+
+	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
+		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee),
+		)
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
+	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
+	certifier := blocks.NewCertifier(
+		app.db,
+		hOracle,
+		app.edVerifier,
+		app.host,
+		app.clock,
+		beaconProtocol,
+		trtl,
+		blocks.WithCertConfig(app.Config.Certificate),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		certifier.Register(sig)
+	}
+
+	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	beaconProtocol.SetSyncState(syncer)
+	hOracle.SetSync(syncer)
 
 	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
@@ -836,17 +876,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
-	hOracle := eligibility.New(
-		beaconProtocol,
-		app.db,
-		app.atxsdata,
-		vrfVerifier,
-		syncer,
-		app.Config.LayersPerEpoch,
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
-	)
-
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
 	bscfg.Interval = app.Config.LayerDuration / 5
@@ -855,32 +884,6 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
 	)
-	if app.Config.Certificate.CommitteeSize == 0 {
-		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
-			log.Uint16("size", app.Config.HARE3.Committee))
-		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
-	}
-	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
-	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
-	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
-	app.certifier = blocks.NewCertifier(
-		app.db,
-		hOracle,
-		app.edVerifier,
-		app.host,
-		app.clock,
-		beaconProtocol,
-		trtl,
-		blocks.WithCertConfig(app.Config.Certificate),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
-	)
-	for _, sig := range app.signers {
-		app.certifier.Register(sig)
-	}
-
-	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
-		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
-	}
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
@@ -987,7 +990,7 @@ func (app *App) initServices(ctx context.Context) error {
 		executor,
 		msh,
 		fetcher,
-		app.certifier,
+		certifier,
 		patrol,
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -1050,7 +1053,7 @@ func (app *App) initServices(ctx context.Context) error {
 		nipostLogger,
 		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
 	)
-	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+	poetCertifier := activation.NewCertifier(app.localDB, nipostLogger, client)
 
 	poetClients := make([]activation.PoetService, 0, len(app.Config.PoetServers))
 	for _, server := range app.Config.PoetServers {
@@ -1060,7 +1063,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.Config.POET,
 			lg.Zap().Named("poet"),
 			app.Config.TickSize,
-			activation.WithCertifier(certifier),
+			activation.WithCertifier(poetCertifier),
 		)
 		if err != nil {
 			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
@@ -1268,7 +1271,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.host.Register(
 		pubsub.BlockCertify,
-		pubsub.ChainGossipHandler(checkSynced, app.certifier.HandleCertifyMessage),
+		pubsub.ChainGossipHandler(checkSynced, certifier.HandleCertifyMessage),
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
@@ -1284,6 +1287,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
 	app.hOracle = hOracle
+	app.certifier = certifier
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,

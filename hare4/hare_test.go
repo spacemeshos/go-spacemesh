@@ -208,9 +208,9 @@ func (n *node) withOracle() *node {
 		n.db,
 		n.atxsdata,
 		signing.NewVRFVerifier(),
-		n.msyncer,
 		layersPerEpoch,
 	)
+	n.oracle.SetSync(n.msyncer)
 	return n
 }
 

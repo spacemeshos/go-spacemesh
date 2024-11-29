@@ -69,7 +69,6 @@ func defaultOracle(tb testing.TB) *testOracle {
 			db,
 			atxsdata,
 			mVerifier,
-			mSyncer,
 			defLayersPerEpoch,
 			WithConfig(Config{ConfidenceParam: confidenceParam}),
 			WithLogger(zaptest.NewLogger(tb)),
@@ -81,6 +80,7 @@ func defaultOracle(tb testing.TB) *testOracle {
 		db:        db,
 		atxsdata:  atxsdata,
 	}
+	to.SetSync(mSyncer)
 	return to
 }
 
