@@ -754,6 +754,40 @@ func (app *App) initServices(ctx context.Context) error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
 	})
 
+	hOracle := eligibility.New(
+		beaconProtocol,
+		app.db,
+		app.atxsdata,
+		vrfVerifier,
+		app.Config.LayersPerEpoch,
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+	)
+
+	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
+		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee),
+		)
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
+	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
+	certifier := blocks.NewCertifier(
+		app.db,
+		hOracle,
+		app.edVerifier,
+		app.host,
+		app.clock,
+		beaconProtocol,
+		trtl,
+		blocks.WithCertConfig(app.Config.Certificate),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		certifier.Register(sig)
+	}
+
 	patrol := layerpatrol.New()
 	syncerConf := app.Config.Sync
 	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
@@ -771,7 +805,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		fetcher,
 		patrol,
-		app.certifier,
+		certifier,
 		atxsync.New(fetcher, app.db, app.localDB,
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
@@ -784,6 +818,9 @@ func (app *App) initServices(ctx context.Context) error {
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
 	)
+	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	beaconProtocol.SetSyncState(syncer)
+	hOracle.SetSync(syncer)
 
 	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
@@ -838,16 +875,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
-	hOracle := eligibility.New(
-		beaconProtocol,
-		app.db,
-		app.atxsdata,
-		vrfVerifier,
-		app.Config.LayersPerEpoch,
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
-	)
-
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
 	bscfg.Interval = app.Config.LayerDuration / 5
@@ -856,32 +883,6 @@ func (app *App) initServices(ctx context.Context) error {
 		bootstrap.WithConfig(bscfg),
 		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
 	)
-	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
-		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
-			log.Uint16("size", app.Config.HARE3.Committee),
-		)
-		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
-	}
-	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
-	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
-	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
-	certifier := blocks.NewCertifier(
-		app.db,
-		hOracle,
-		app.edVerifier,
-		app.host,
-		app.clock,
-		beaconProtocol,
-		trtl,
-		blocks.WithCertConfig(app.Config.Certificate),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
-	)
-	for _, sig := range app.signers {
-		certifier.Register(sig)
-	}
-	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	beaconProtocol.SetSyncState(syncer)
-	hOracle.SetSync(syncer)
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
