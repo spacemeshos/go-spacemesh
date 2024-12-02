@@ -513,6 +513,7 @@ func deployNodeSvc(ctx *testcontext.Context, id string) error {
 				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
 				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
 				corev1.ServicePort().WithName("grpc-post").WithPort(9094).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("node-service-listener").WithPort(9099).WithProtocol("TCP"),
 			).
 			WithClusterIP("None"),
 		)
