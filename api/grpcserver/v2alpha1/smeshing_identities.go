@@ -2,6 +2,7 @@ package v2alpha1
 
 import (
 	"context"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"google.golang.org/grpc"
