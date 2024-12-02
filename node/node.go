@@ -2185,7 +2185,7 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 		cfg.LogLevel = zapcore.InfoLevel
 	}
 	prologue := fmt.Sprintf("%x-%v",
-		app.Config.Genesis.GenesisID(),
+		app.Config.Genesis.GenesisID().Bytes(),
 		types.GetEffectiveGenesis(),
 	)
 	// Prevent testnet nodes from working on the mainnet, but
