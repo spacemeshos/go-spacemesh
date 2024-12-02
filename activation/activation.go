@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -200,7 +201,7 @@ func NewBuilder(
 		logger:            log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postStates:        NewPostStates(log),
-		identitiesStates:  NewIdentityStateStorage(),
+		identitiesStates:  identity.NewIdentityStateStorage(),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
 			logger: log,
@@ -450,7 +451,8 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		b.logger.Warn("failed to publish atx", zap.Error(err))
 
-		b.identitiesStates.Set(sig.NodeID(), nil, IdentityStateRetrying, err.Error())
+		b.identitiesStates.Set(sig.NodeID(), nil,
+			identity.StateRetrying, identity.WithRetryingState(&identity.RetryingStateMetadata{Error: err}))
 
 		poetErr := &PoetSvcUnstableError{}
 		switch {
@@ -515,7 +517,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	select {
 	case <-atxSyncedCh:
 	default:
-		b.identitiesStates.Set(nodeID, nil, IdentityStateWaitForATXSynced, "")
+		b.identitiesStates.Set(nodeID, nil, identity.StateWaitForATXSynced)
 	}
 
 	select {
@@ -571,7 +573,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
 		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
-		b.identitiesStates.Set(nodeID, &publishEpochId, IdentityStateWaitingForPoetRegistrationWindow, "")
+		b.identitiesStates.Set(nodeID, &publishEpochId, identity.StateWaitingForPoetRegistrationWindow)
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -736,7 +738,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
 		zap.Object("challenge", challenge),
 	)
-	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStatePoetChallengeReady, "")
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, identity.StatePoetChallengeReady)
 
 	targetEpoch := challenge.PublishEpoch.Add(1)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
@@ -752,7 +754,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_layer", b.layerClock.CurrentLayer().Uint32()),
 		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
-	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStateATXReady, "")
+	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, identity.StateATXReady)
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("wait for publication epoch: %w", ctx.Err())
@@ -801,7 +803,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		atx.ID(),
 		b.layerClock.LayerToTime(target.FirstLayer()),
 	)
-	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, IdentityStateATXBroadcasted, "")
+	b.identitiesStates.Set(
+		sig.NodeID(),
+		&challenge.PublishEpoch,
+		identity.StateATXBroadcasted,
+		identity.WithAtxBroadcastedState(&identity.AtxBroadcastedStateMetadata{AtxId: atx.ID()}),
+	)
 	return nil
 }
 

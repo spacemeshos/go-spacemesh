@@ -1,4 +1,4 @@
-package activation
+package identity
 
 import (
 	"errors"
@@ -9,120 +9,131 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-var (
-	ErrIdentityStateUnknown       = errors.New("identity state is unknown")
-	ErrInvalidIdentityStateSwitch = errors.New("invalid identity state switch")
-)
+var ErrIdentityStateUnknown = errors.New("identity state is unknown")
 
-type IdentityState int
+type State int
 
 const (
-	IdentityStateNotSet IdentityState = iota
+	StateNotSet State = iota
 
-	IdentityStateWaitForATXSynced
-	IdentityStateRetrying
+	StateWaitForATXSynced
+	StateRetrying
 
 	// poet.
-	IdentityStateWaitingForPoetRegistrationWindow
+	StateWaitingForPoetRegistrationWindow
 	// building nipost challenge.
-	IdentityStatePoetChallengeReady
-	IdentityStatePoetRegistered
+	StatePoetChallengeReady
+	StatePoetRegistered
 	// 2w pass ...
-	IdentityStateWaitForPoetRoundEnd
-	IdentityStatePoetProofReceived
+	StateWaitForPoetRoundEnd
+	StatePoetProofReceived
 
 	// post.
-	IdentityStateGeneratingPostProof
-	IdentityStatePostProofReady
+	StateGeneratingPostProof
+	StatePostProofReady
 
 	// atx.
-	IdentityStateATXReady
-	IdentityStateATXBroadcasted
+	StateATXReady
+	StateATXBroadcasted
 
-	IdentityStateProposalPublished
+	StateProposalPublished
 )
 
-func (s IdentityState) String() string {
+func (s State) String() string {
 	switch s {
-	case IdentityStateNotSet:
+	case StateNotSet:
 		return "not set"
-	case IdentityStateWaitForATXSynced:
+	case StateWaitForATXSynced:
 		return "wait for atx synced"
-	case IdentityStateRetrying:
+	case StateRetrying:
 		return "retrying"
-	case IdentityStatePoetChallengeReady:
+	case StatePoetChallengeReady:
 		return "poet challenge ready"
-	case IdentityStateWaitingForPoetRegistrationWindow:
+	case StateWaitingForPoetRegistrationWindow:
 		return "waiting for poet registration window"
-	case IdentityStatePoetRegistered:
+	case StatePoetRegistered:
 		return "poet registered"
-	case IdentityStateWaitForPoetRoundEnd:
+	case StateWaitForPoetRoundEnd:
 		return "wait for poet round end"
-	case IdentityStatePoetProofReceived:
+	case StatePoetProofReceived:
 		return "poet proof received"
-	case IdentityStateGeneratingPostProof:
+	case StateGeneratingPostProof:
 		return "generating post proof"
-	case IdentityStatePostProofReady:
+	case StatePostProofReady:
 		return "post proof ready"
-	case IdentityStateATXReady:
+	case StateATXReady:
 		return "atx ready"
-	case IdentityStateATXBroadcasted:
+	case StateATXBroadcasted:
 		return "atx broadcasted"
-	case IdentityStateProposalPublished:
+	case StateProposalPublished:
 		return "proposal published"
 	default:
 		panic(fmt.Sprintf(ErrIdentityStateUnknown.Error()+" %d", s))
 	}
 }
 
-type IdentityStateInfo struct {
-	State        IdentityState
-	PublishEpoch *types.EpochID
-	Message      string
-	Time         time.Time
-}
+type (
+	StateInfoMetadata func(*StateInfo)
+	StateInfo         struct {
+		State        State
+		PublishEpoch *types.EpochID
+		Time         time.Time
 
-type IdentityStateStorage struct {
+		RetryingState            *RetryingStateMetadata
+		PoetRegisteredState      *PoetRegisteredStateMetadata
+		WaitForPoetRoundEndState *WaitForPoetRoundEndStateMetadata
+		PoetProofReceivedState   *PoetProofReceivedStateMetadata
+		AtxBroadcastedState      *AtxBroadcastedStateMetadata
+		ProposalPublishedState   *ProposalPublishedStateMetadata
+	}
+)
+
+type StateStorage struct {
 	mu            sync.RWMutex
-	identities    map[types.NodeID][]IdentityStateInfo
+	identities    map[types.NodeID][]StateInfo
 	eligibilities map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility
 	proposals     map[types.NodeID][]*types.Proposal
 }
 
-func NewIdentityStateStorage() *IdentityStateStorage {
-	return &IdentityStateStorage{
-		identities:    make(map[types.NodeID][]IdentityStateInfo),
+func NewIdentityStateStorage() *StateStorage {
+	return &StateStorage{
+		identities:    make(map[types.NodeID][]StateInfo),
 		eligibilities: make(map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility),
 		proposals:     make(map[types.NodeID][]*types.Proposal),
 	}
 }
 
-func (s *IdentityStateStorage) Set(
+func (s *StateStorage) Set(
 	id types.NodeID,
 	publishEpoch *types.EpochID,
-	newState IdentityState,
-	message string,
+	newState State,
+	metadata ...StateInfoMetadata,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, exists := s.identities[id]; !exists {
-		s.identities[id] = []IdentityStateInfo{}
+		s.identities[id] = []StateInfo{}
 	}
 
 	if len(s.identities[id]) > 100 {
 		s.identities[id] = s.identities[id][1:]
 	}
 
-	s.identities[id] = append(s.identities[id], IdentityStateInfo{
+	info := StateInfo{
 		State:        newState,
 		PublishEpoch: publishEpoch,
-		Message:      message,
 		Time:         time.Now(),
-	})
+	}
+
+	for _, data := range metadata {
+		data(&info)
+	}
+
+	s.identities[id] = append(s.identities[id], info)
 }
 
-func (s *IdentityStateStorage) Get(id types.NodeID) ([]IdentityStateInfo, error) {
+func (s *StateStorage) Get(id types.NodeID) ([]StateInfo, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -133,13 +144,13 @@ func (s *IdentityStateStorage) Get(id types.NodeID) ([]IdentityStateInfo, error)
 	return state, nil
 }
 
-func (s *IdentityStateStorage) All() map[types.NodeID][]IdentityStateInfo {
+func (s *StateStorage) All() map[types.NodeID][]StateInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.identities
 }
 
-func (s *IdentityStateStorage) SetEligibilitiesForEpoch(
+func (s *StateStorage) SetEligibilitiesForEpoch(
 	id types.NodeID,
 	epoch types.EpochID,
 	eligibilities map[types.LayerID][]types.VotingEligibility,
@@ -162,7 +173,7 @@ func (s *IdentityStateStorage) SetEligibilitiesForEpoch(
 	s.eligibilities[id][epoch] = eligibilities
 }
 
-func (s *IdentityStateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
+func (s *StateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -175,21 +186,24 @@ func (s *IdentityStateStorage) AddProposal(id types.NodeID, proposal *types.Prop
 	}
 
 	s.proposals[id] = append(s.proposals[id], proposal)
-	s.identities[id] = append(s.identities[id], IdentityStateInfo{
-		State:   IdentityStateProposalPublished,
-		Message: fmt.Sprintf("proposal %s published at layer %d", proposal.ID(), proposal.Layer.Uint32()),
-		Time:    time.Now(),
+	s.identities[id] = append(s.identities[id], StateInfo{
+		State: StateProposalPublished,
+		ProposalPublishedState: &ProposalPublishedStateMetadata{
+			Proposal: proposal.ID(),
+			Layer:    proposal.Layer,
+		},
+		Time: time.Now(),
 	})
 }
 
-func (s *IdentityStateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
+func (s *StateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.proposals
 }
 
 //nolint:lll
-func (s *IdentityStateStorage) AllEligibilities() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility {
+func (s *StateStorage) AllEligibilities() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.eligibilities

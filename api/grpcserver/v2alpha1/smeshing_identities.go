@@ -2,15 +2,15 @@ package v2alpha1
 
 import (
 	"context"
-
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/identity"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 )
 
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
@@ -30,20 +30,20 @@ func NewSmeshingIdentitiesService(
 	}
 }
 
-var statusMap = map[activation.IdentityState]pb.IdentityState{
-	activation.IdentityStateNotSet:                           pb.IdentityState_UNSPECIFIED,
-	activation.IdentityStateWaitForATXSynced:                 pb.IdentityState_WAIT_FOR_ATX_SYNCED,
-	activation.IdentityStateRetrying:                         pb.IdentityState_RETRYING,
-	activation.IdentityStateWaitingForPoetRegistrationWindow: pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
-	activation.IdentityStatePoetChallengeReady:               pb.IdentityState_POET_CHALLENGE_READY,
-	activation.IdentityStatePoetRegistered:                   pb.IdentityState_POET_REGISTERED,
-	activation.IdentityStateWaitForPoetRoundEnd:              pb.IdentityState_WAIT_FOR_POET_ROUND_END,
-	activation.IdentityStatePoetProofReceived:                pb.IdentityState_POET_PROOF_RECEIVED,
-	activation.IdentityStateGeneratingPostProof:              pb.IdentityState_GENERATING_POST_PROOF,
-	activation.IdentityStatePostProofReady:                   pb.IdentityState_POST_PROOF_READY,
-	activation.IdentityStateATXReady:                         pb.IdentityState_ATX_READY,
-	activation.IdentityStateATXBroadcasted:                   pb.IdentityState_ATX_BROADCASTED,
-	activation.IdentityStateProposalPublished:                pb.IdentityState_PROPOSAL_PUBLISHED,
+var statusMap = map[identity.State]pb.IdentityState{
+	identity.StateNotSet:                           pb.IdentityState_UNSPECIFIED,
+	identity.StateWaitForATXSynced:                 pb.IdentityState_WAIT_FOR_ATX_SYNCED,
+	identity.StateRetrying:                         pb.IdentityState_RETRYING,
+	identity.StateWaitingForPoetRegistrationWindow: pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
+	identity.StatePoetChallengeReady:               pb.IdentityState_POET_CHALLENGE_READY,
+	identity.StatePoetRegistered:                   pb.IdentityState_POET_REGISTERED,
+	identity.StateWaitForPoetRoundEnd:              pb.IdentityState_WAIT_FOR_POET_ROUND_END,
+	identity.StatePoetProofReceived:                pb.IdentityState_POET_PROOF_RECEIVED,
+	identity.StateGeneratingPostProof:              pb.IdentityState_GENERATING_POST_PROOF,
+	identity.StatePostProofReady:                   pb.IdentityState_POST_PROOF_READY,
+	identity.StateATXReady:                         pb.IdentityState_ATX_READY,
+	identity.StateATXBroadcasted:                   pb.IdentityState_ATX_BROADCASTED,
+	identity.StateProposalPublished:                pb.IdentityState_PROPOSAL_PUBLISHED,
 }
 
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
@@ -72,16 +72,65 @@ func (s *SmeshingIdentitiesService) States(
 
 		for i := len(history) - 1; i >= 0; i-- {
 			info := history[i]
-			ts := timestamppb.New(info.Time)
 			identityStateInfo := &pb.IdentityStateInfo{
-				State:   statusMap[info.State],
-				Time:    ts,
-				Message: info.Message,
+				State: statusMap[info.State],
+				Time:  timestamppb.New(info.Time),
 			}
 			if info.PublishEpoch != nil {
 				epoch := info.PublishEpoch.Uint32()
 				identityStateInfo.PublishEpoch = &epoch
 			}
+
+			if info.State == identity.StateRetrying && info.RetryingState != nil {
+				identityStateInfo.Metadata = &pb.IdentityStateInfo_Retrying{
+					Retrying: &pb.RetryingState{
+						Message: info.RetryingState.Error.Error(),
+					},
+				}
+			}
+
+			if info.State == identity.StatePoetRegistered && info.PoetRegisteredState != nil {
+				identityStateInfo.Metadata = &pb.IdentityStateInfo_PoetRegistered{
+					PoetRegistered: &pb.PoetRegisteredState{
+						Registrations: castRegistrations(info.PoetRegisteredState.Registrations),
+					},
+				}
+			}
+
+			if info.State == identity.StateWaitForPoetRoundEnd && info.WaitForPoetRoundEndState != nil {
+				identityStateInfo.Metadata = &pb.IdentityStateInfo_WaitForPoetRoundEnd{
+					WaitForPoetRoundEnd: &pb.WaitForPoetRoundEndState{
+						RoundEnd:        timestamppb.New(info.WaitForPoetRoundEndState.RoundEnd),
+						PublishEpochEnd: timestamppb.New(info.WaitForPoetRoundEndState.PublishEpochEnd),
+					},
+				}
+			}
+
+			if info.State == identity.StatePoetProofReceived && info.PoetProofReceivedState != nil {
+				identityStateInfo.Metadata = &pb.IdentityStateInfo_PoetProofReceived{
+					PoetProofReceived: &pb.PoetProofReceivedState{
+						PoetUrl: info.PoetProofReceivedState.PoetUrl,
+					},
+				}
+			}
+
+			if info.State == identity.StateATXBroadcasted && info.AtxBroadcastedState != nil {
+				identityStateInfo.Metadata = &pb.IdentityStateInfo_AtxBroadcasted{
+					AtxBroadcasted: &pb.AtxBroadcastedState{
+						AtxId: info.AtxBroadcastedState.AtxId.Bytes(),
+					},
+				}
+			}
+
+			if info.State == identity.StateProposalPublished && info.ProposalPublishedState != nil {
+				identityStateInfo.Metadata = &pb.IdentityStateInfo_ProposalPublished{
+					ProposalPublished: &pb.ProposalPublishedState{
+						Proposal: info.ProposalPublishedState.Proposal.Bytes(),
+						Layer:    info.ProposalPublishedState.Layer.Uint32(),
+					},
+				}
+			}
+
 			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)
 		}
 	}
@@ -89,25 +138,31 @@ func (s *SmeshingIdentitiesService) States(
 	return &pb.IdentityStatesResponse{Identities: pbIdentities}, nil
 }
 
+func castRegistrations(regs []nipost.PoETRegistration) []*pb.PoETRegistration {
+	rst := make([]*pb.PoETRegistration, 0, len(regs))
+	for _, reg := range regs {
+		rst = append(rst, &pb.PoETRegistration{
+			ChallengeHash: reg.ChallengeHash.Bytes(),
+			Address:       reg.Address,
+			RoundId:       reg.RoundID,
+			RoundEnd:      timestamppb.New(reg.RoundEnd),
+		})
+	}
+	return rst
+}
+
 func (s *SmeshingIdentitiesService) PoetInfo(
 	ctx context.Context,
 	_ *pb.PoetInfoRequest,
 ) (*pb.PoetInfoResponse, error) {
-	poets := make(map[string]*pb.PoetInfo)
-	for _, poet := range s.poetClients {
-		info, err := poet.Info(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		poets[poet.Address()] = &pb.PoetInfo{
-			PhaseShift: durationpb.New(info.PhaseShift),
-			CycleGap:   durationpb.New(info.CycleGap),
-		}
+	resp := &pb.PoetInfoResponse{
+		Poets: []string{},
 	}
-	return &pb.PoetInfoResponse{
-		Poets: poets,
-	}, nil
+	for _, poet := range s.poetClients {
+		resp.Poets = append(resp.Poets, poet.Address())
+	}
+
+	return resp, nil
 }
 
 func (s *SmeshingIdentitiesService) Eligibilities(
@@ -116,20 +171,20 @@ func (s *SmeshingIdentitiesService) Eligibilities(
 ) (*pb.EligibilitiesResponse, error) {
 	eligibilities := s.states.AllEligibilities()
 
-	pbEligibilities := make(map[string]*pb.EpochEligibilities)
+	pbEpochEligibilities := make(map[string]*pb.EpochEligibilities)
 	for nodeId, epochMap := range eligibilities {
-		pbEligibilities[nodeId.String()] = &pb.EpochEligibilities{
+		pbEpochEligibilities[nodeId.String()] = &pb.EpochEligibilities{
 			Epochs: make(map[uint32]*pb.Eligibilities),
 		}
 		for epoch, eli := range epochMap {
-			pbEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
+			pbEpochEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
 				Eligibilities: castEligibilities(eli),
 			}
 		}
 	}
 
 	return &pb.EligibilitiesResponse{
-		Eligibilities: pbEligibilities,
+		Identities: pbEpochEligibilities,
 	}, nil
 }
 

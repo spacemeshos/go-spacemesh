@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -237,5 +238,5 @@ type PostStates interface {
 }
 
 type IdentityStates interface {
-	Set(id types.NodeID, publishEpoch *types.EpochID, newState IdentityState, message string)
+	Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State, metadata ...identity.StateInfoMetadata)
 }

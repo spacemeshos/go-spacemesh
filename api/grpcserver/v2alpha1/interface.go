@@ -1,8 +1,8 @@
 package v2alpha1
 
 import (
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/identity"
 )
 
 //go:generate mockgen -typed -package=v2alpha1 -destination=./mocks.go -source=./interface.go
@@ -12,7 +12,7 @@ type malfeasanceInfo interface {
 }
 
 type identityState interface {
-	All() map[types.NodeID][]activation.IdentityStateInfo
+	All() map[types.NodeID][]identity.StateInfo
 	AllProposals() map[types.NodeID][]*types.Proposal
 	AllEligibilities() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility
 }
