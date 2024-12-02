@@ -327,6 +327,16 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 	}
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
+		corev1.ConfigMap(activationConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedSmesherConfig: activationConfig.Get(ctx.Parameters),
+		}),
+		apimetav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+	}
+	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
 		corev1.ConfigMap(certifierConfigMapName, ctx.Namespace).WithData(map[string]string{
 			attachedCertifierConfig: certifierConfig.Get(ctx.Parameters),
 		}),
