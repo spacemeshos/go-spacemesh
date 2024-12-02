@@ -680,9 +680,18 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
 
+	cfg := SmesherDeploymentConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	keys := cfg.keys
+
 	// deploy a single node-service
-	dopts := []DeploymentOpt{WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(false))}
-	dopts = append(dopts, opts...)
+	dopts := []DeploymentOpt{
+		WithFlags(flags...),
+		WithFlags(Bootnodes(endpoints...), StartSmeshing(false)),
+		WithSmeshers(keys[:1]),
+	}
 	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+1, dopts...)
 	if err != nil {
 		return err
@@ -696,8 +705,11 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 	}
 
 	// deploy client services
-	dopts = []DeploymentOpt{WithFlags(flags...), WithFlags(Bootnodes(endpoints...), StartSmeshing(true))}
-	dopts = append(dopts, opts...)
+	dopts = []DeploymentOpt{
+		WithFlags(flags...),
+		WithFlags(Bootnodes(endpoints...), StartSmeshing(true)),
+		WithSmeshers(keys[1:]),
+	}
 	clients, err = deployActivationNodes(tctx, node, c.nextSmesher(), c.nextSmesher()+n-1, dopts...)
 	if err != nil {
 		return err

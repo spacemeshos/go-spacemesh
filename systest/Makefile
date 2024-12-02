@@ -23,6 +23,7 @@ level ?= debug
 bootstrap ?= 5m
 storage ?= standard=1Gi
 node_selector ?=
+node_split_size ?=
 namespace ?=
 count ?= 1
 failfast ?= true
@@ -73,6 +74,7 @@ template:
 	@echo post-init-image=$(post_init_image) >> $(tmpfile)
 	@echo keep=$(keep) >> $(tmpfile)
 	@echo testid=$(test_id) >> $(tmpfile)
+	@echo node-split-size=$(node_split_size) >> $(tmpfile)
 
 .PHONY: config
 config: template

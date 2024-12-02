@@ -52,11 +52,6 @@ var (
 		"configuration for smesher service",
 		fastnet.SmesherConfig,
 	)
-	activationConfig = parameters.String(
-		"activation",
-		"configuration for activation service",
-		fastnet.ActivationConfig,
-	)
 
 	smesherResources = parameters.NewParameter(
 		"smesher_resources",
