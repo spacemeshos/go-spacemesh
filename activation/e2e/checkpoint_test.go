@@ -102,9 +102,9 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	atxdata := atxsdata.New()
 	atxVersions := activation.AtxVersions{0: types.AtxV2}
 	edVerifier := signing.NewEdVerifier()
-	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
-	mBeacon := activation.NewMockAtxReceiver(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
+	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
 	atxHdlr := activation.NewHandler(
@@ -113,16 +113,17 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		atxdata,
 		edVerifier,
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,
 		activation.WithAtxVersions(atxVersions),
 	)
 
+	mpub := mocks.NewMockPublisher(ctrl)
 	tab := activation.NewBuilder(
 		activation.Config{GoldenATXID: goldenATX},
 		db,
@@ -202,10 +203,10 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		atxdata,
 		edVerifier,
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,

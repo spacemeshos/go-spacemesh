@@ -35,7 +35,7 @@ require (
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.60.1
 	github.com/quic-go/quic-go v0.48.2
-	github.com/rqlite/sql v0.0.0-20241105143344-71b14bed566c
+	github.com/rqlite/sql v0.0.0-20241111133259-a4122fabb196
 	github.com/rs/cors v1.11.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0

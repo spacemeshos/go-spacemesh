@@ -1,8 +1,10 @@
 package tests
 
 import (
+	"context"
 	"encoding/hex"
 	"testing"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -21,10 +23,10 @@ func testTransactions(
 ) {
 	var (
 		// start sending transactions after two layers or after genesis
-		first       = max(currentLayer(tctx, tb, cl.Client(0))+2, 8)
-		stopSending = first + sendFor
-		batch       = 10
-		amount      = 100
+		first  = max(currentLayer(tctx, tb, cl.Client(0))+2, 8)
+		stop   = first + sendFor
+		batch  = 10
+		amount = 100
 
 		// each account creates spawn transaction in the first layer
 		// plus batch number of spend transactions in every layer after that
@@ -32,7 +34,7 @@ func testTransactions(
 	)
 	tctx.Log.Debugw("running transactions test",
 		"from", first,
-		"stop sending", stopSending,
+		"stop sending", stop,
 		"expected transactions", expectedCount,
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
@@ -44,28 +46,34 @@ func testTransactions(
 	require.NoError(tb, err)
 	before := response.AccountWrapper.StateCurrent.Balance
 
-	eg, ctx := errgroup.WithContext(tctx)
-	require.NoError(
-		tb,
-		sendTransactions(ctx, eg, tctx.Log, cl, first, stopSending, receiver, batch, amount),
-	)
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
+	deadline := cl.Genesis().Add(time.Duration(stop+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, receiver, batch, amount)
+	})
 	txs := make([][]*pb.Transaction, cl.Total())
 
 	for i := range cl.Total() {
 		client := cl.Client(i)
-		watchTransactionResults(tctx.Context, eg, client, tctx.Log.Desugar(),
-			func(rst *pb.TransactionResult) (bool, error) {
-				txs[i] = append(txs[i], rst.Tx)
-				count := len(txs[i])
-				tctx.Log.Debugw("received transaction client",
-					"layer", rst.Layer,
-					"client", client.Name,
-					"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
-					"count", count,
-				)
-				return len(txs[i]) < expectedCount, nil
-			},
-		)
+		eg.Go(func() error {
+			return watchTransactionResults(ctx, client, tctx.Log.Desugar(),
+				func(rst *pb.TransactionResult) (bool, error) {
+					txs[i] = append(txs[i], rst.Tx)
+					count := len(txs[i])
+					tctx.Log.Debugw("received transaction client",
+						"layer", rst.Layer,
+						"client", client.Name,
+						"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
+						"count", count,
+					)
+					return len(txs[i]) < expectedCount, nil
+				},
+			)
+		})
 	}
 	require.NoError(tb, eg.Wait())
 
@@ -73,7 +81,7 @@ func testTransactions(
 	for i, tested := range txs[1:] {
 		require.Len(tb, tested, len(reference))
 		for j := range reference {
-			require.Equal(tb, reference[j], tested[j], "%s", cl.Client(i+1).Name)
+			require.Equal(tb, reference[j], tested[j], cl.Client(i+1).Name)
 		}
 	}
 
@@ -87,7 +95,7 @@ func testTransactions(
 		)
 		require.NoError(tb, err)
 		after := response.AccountWrapper.StateCurrent.Balance
-		tctx.Log.Debugw("receiver state",
+		tctx.Log.Infow("receiver state",
 			"before", before.Value,
 			"after", after.Value,
 			"expected-diff", diff,

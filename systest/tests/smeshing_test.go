@@ -43,8 +43,6 @@ func TestSmeshing(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
-	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
-	tctx.OldSize = tctx.ClusterSize / 4    // 25% of nodes are old
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
 		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
@@ -57,7 +55,7 @@ func TestSmeshing(t *testing.T) {
 	)
 	require.NoError(t, err)
 	testSmeshing(t, tctx, cl)
-	testTransactions(t, tctx, cl, 8)
+	testTransactions(t, tctx, cl, 10)
 	testVesting(t, tctx, cl, vests...)
 }
 

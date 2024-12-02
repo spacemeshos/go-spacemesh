@@ -36,7 +36,7 @@ func TestFallback(t *testing.T) {
 	last := first + limit
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
-	createdch := make(chan *pb.Proposal, cl.Total()*int(limit+1))
+	createdCh := make(chan *pb.Proposal, cl.Total()*int(limit+1))
 	eg, ctx := errgroup.WithContext(tctx)
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
@@ -49,26 +49,36 @@ func TestFallback(t *testing.T) {
 				return false, nil
 			}
 			if proposal.Status == pb.Proposal_Created {
-				createdch <- proposal
+				select {
+				case createdCh <- proposal:
+				case <-ctx.Done():
+					return false, ctx.Err()
+				default:
+					tctx.Log.Errorw("proposal channel is full",
+						"client", client.Name,
+						"layer", proposal.Layer.Number,
+					)
+					return false, errors.New("proposal channel is full")
+				}
 			}
 			return true, nil
 		})
 	}
 
 	require.NoError(t, eg.Wait())
-	close(createdch)
+	close(createdCh)
 
 	created := map[uint32][]*pb.Proposal{}
 	beacons := map[uint32]map[string]struct{}{}
 	beaconSet := map[string]struct{}{}
-	for proposal := range createdch {
+	for proposal := range createdCh {
 		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
-		if edata := proposal.GetData(); edata != nil {
+		if eData := proposal.GetData(); eData != nil {
 			if _, exist := beacons[proposal.Epoch.Number]; !exist {
 				beacons[proposal.Epoch.Number] = map[string]struct{}{}
 			}
-			beacons[proposal.Epoch.Number][prettyHex(edata.Beacon)] = struct{}{}
-			beaconSet[prettyHex(edata.Beacon)] = struct{}{}
+			beacons[proposal.Epoch.Number][prettyHex(eData.Beacon)] = struct{}{}
+			beaconSet[prettyHex(eData.Beacon)] = struct{}{}
 		}
 	}
 	for epoch, vals := range beacons {
@@ -95,12 +105,9 @@ func TestFallback(t *testing.T) {
 			require.NoError(t, err, "query actives from client", cl.Client(i).Name)
 			tctx.Log.Debugw(
 				"got activeset ids from client",
-				"epoch",
-				epoch,
-				"client",
-				cl.Client(i).Name,
-				"size",
-				len(actives),
+				"epoch", epoch,
+				"client", cl.Client(i).Name,
+				"size", len(actives),
 			)
 			require.ElementsMatchf(t, refActives[:cutoff], actives, "epoch=%v, client=%v", epoch, cl.Client(i).Name)
 		}

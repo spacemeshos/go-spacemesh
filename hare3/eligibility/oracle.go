@@ -122,10 +122,10 @@ func New(
 	vrfVerifier vrfVerifier,
 	layersPerEpoch uint32,
 	opts ...Opt,
-) *Oracle {
+) (*Oracle, error) {
 	activesCache, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
 	if err != nil {
-		panic("failed to create lru cache for active set" + err.Error())
+		return nil, fmt.Errorf("create lru cache for active set: %w", err)
 	}
 	oracle := &Oracle{
 		beacons:      beacons,
@@ -140,8 +140,16 @@ func New(
 	for _, opt := range opts {
 		opt(oracle)
 	}
+	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
+	if oracle.cfg.ConfidenceParam >= layersPerEpoch {
+		return nil, fmt.Errorf(
+			"hare eligibility confidence param (%d) larger than layers per epoch (%d)",
+			oracle.cfg.ConfidenceParam,
+			layersPerEpoch,
+		)
+	}
 	oracle.log.Info("hare oracle initialized", zap.Uint32("epoch size", layersPerEpoch), zap.Inline(&oracle.cfg))
-	return oracle
+	return oracle, nil
 }
 
 //go:generate scalegen -types VrfMessage
@@ -161,9 +169,6 @@ func (o *Oracle) SetSync(sync system.SyncStateProvider) {
 }
 
 func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
-	if o.sync == nil {
-		return
-	}
 	synced := o.synced
 	o.synced = o.sync.IsSynced(ctx)
 	if !synced && o.synced {

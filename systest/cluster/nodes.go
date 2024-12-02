@@ -878,8 +878,7 @@ func deployNode(
 			corev1.Volume().WithName("config").
 				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
 			corev1.Volume().WithName("data").
-				WithEmptyDir(corev1.EmptyDirVolumeSource().
-					WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
+				WithEmptyDir(corev1.EmptyDirVolumeSource().WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
 		).
 		WithDNSConfig(corev1.PodDNSConfig().WithOptions(
 			corev1.PodDNSConfigOption().WithName("timeout").WithValue("1"),
