@@ -973,7 +973,7 @@ func deployActivationNode(
 		"--log-encoder=json",
 		"--metrics",
 		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
-		"--node-service-address=", fmt.Sprintf("http://%s:9099", node),
+		"--node-service-address", fmt.Sprintf("http://%s:9099", node),
 		"--proxy-api-v2-address", fmt.Sprintf("http://%s:9070", node),
 		"--grpc-json-listener", "0.0.0.0:9071",
 		"--proxy-listener", "0.0.0.0:9072",

@@ -328,7 +328,7 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
 		corev1.ConfigMap(activationConfigMapName, ctx.Namespace).WithData(map[string]string{
-			attachedSmesherConfig: activationConfig.Get(ctx.Parameters),
+			attachedActivationConfig: activationConfig.Get(ctx.Parameters),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
