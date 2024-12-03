@@ -305,6 +305,7 @@ jobs:
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
+      - build-docker-images
     timeout-minutes: 70
     continue-on-error: true
     permissions:
