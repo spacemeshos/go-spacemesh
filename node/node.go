@@ -1717,7 +1717,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.SmeshingIdentities:
-		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates, app.poetClients)
+		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates, app.poetClients, app.Config.POET)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
