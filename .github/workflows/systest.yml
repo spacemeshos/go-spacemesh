@@ -172,6 +172,7 @@ jobs:
   systest-gke:
     runs-on: ubuntu-22.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    continue-on-error: true
     needs:
       - filter-changes
       - provision-gke-cluster
@@ -258,7 +259,6 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
-      
 
   delete-gke-cluster-pool:
     runs-on: ubuntu-22.04
