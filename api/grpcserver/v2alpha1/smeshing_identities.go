@@ -31,22 +31,6 @@ func NewSmeshingIdentitiesService(
 	}
 }
 
-var statusMap = map[identity.State]pb.IdentityState{
-	identity.StateNotSet:                           pb.IdentityState_UNSPECIFIED,
-	identity.StateWaitForATXSynced:                 pb.IdentityState_WAIT_FOR_ATX_SYNCED,
-	identity.StateRetrying:                         pb.IdentityState_RETRYING,
-	identity.StateWaitingForPoetRegistrationWindow: pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
-	identity.StatePoetChallengeReady:               pb.IdentityState_POET_CHALLENGE_READY,
-	identity.StatePoetRegistered:                   pb.IdentityState_POET_REGISTERED,
-	identity.StateWaitForPoetRoundEnd:              pb.IdentityState_WAIT_FOR_POET_ROUND_END,
-	identity.StatePoetProofReceived:                pb.IdentityState_POET_PROOF_RECEIVED,
-	identity.StateGeneratingPostProof:              pb.IdentityState_GENERATING_POST_PROOF,
-	identity.StatePostProofReady:                   pb.IdentityState_POST_PROOF_READY,
-	identity.StateATXReady:                         pb.IdentityState_ATX_READY,
-	identity.StateATXBroadcasted:                   pb.IdentityState_ATX_BROADCASTED,
-	identity.StateProposalPublished:                pb.IdentityState_PROPOSAL_PUBLISHED,
-}
-
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
 	pb.RegisterSmeshingIdentitiesServiceServer(server, s)
 }
@@ -74,62 +58,72 @@ func (s *SmeshingIdentitiesService) States(
 		for i := len(history) - 1; i >= 0; i-- {
 			info := history[i]
 			identityStateInfo := &pb.IdentityStateInfo{
-				State: statusMap[info.State],
-				Time:  timestamppb.New(info.Time),
+				Time: timestamppb.New(info.Time),
 			}
 			if info.PublishEpoch != nil {
 				epoch := info.PublishEpoch.Uint32()
 				identityStateInfo.PublishEpoch = &epoch
 			}
 
-			if info.State == identity.StateRetrying && info.RetryingState != nil {
+			switch s := info.State.(type) {
+			case *identity.WaitForATXSynced:
+				identityStateInfo.State = pb.IdentityState_WAIT_FOR_ATX_SYNCED
+			case *identity.Retrying:
+				identityStateInfo.State = pb.IdentityState_RETRYING
 				identityStateInfo.Metadata = &pb.IdentityStateInfo_Retrying{
 					Retrying: &pb.RetryingState{
-						Message: info.RetryingState.Error.Error(),
+						Message: s.Error.Error(),
 					},
 				}
-			}
-
-			if info.State == identity.StatePoetRegistered && info.PoetRegisteredState != nil {
+			case *identity.WaitingForPoetRegistrationWindow:
+				identityStateInfo.State = pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW
+			case *identity.PoetChallengeReady:
+				identityStateInfo.State = pb.IdentityState_POET_CHALLENGE_READY
+			case *identity.PoetRegistered:
+				identityStateInfo.State = pb.IdentityState_POET_REGISTERED
 				identityStateInfo.Metadata = &pb.IdentityStateInfo_PoetRegistered{
 					PoetRegistered: &pb.PoetRegisteredState{
-						Registrations: castRegistrations(info.PoetRegisteredState.Registrations),
+						Registrations: castRegistrations(s.Registrations),
 					},
 				}
-			}
-
-			if info.State == identity.StateWaitForPoetRoundEnd && info.WaitForPoetRoundEndState != nil {
+			case *identity.WaitForPoetRoundEnd:
+				identityStateInfo.State = pb.IdentityState_WAIT_FOR_POET_ROUND_END
 				identityStateInfo.Metadata = &pb.IdentityStateInfo_WaitForPoetRoundEnd{
 					WaitForPoetRoundEnd: &pb.WaitForPoetRoundEndState{
-						RoundEnd:        timestamppb.New(info.WaitForPoetRoundEndState.RoundEnd),
-						PublishEpochEnd: timestamppb.New(info.WaitForPoetRoundEndState.PublishEpochEnd),
+						RoundEnd:        timestamppb.New(s.RoundEnd),
+						PublishEpochEnd: timestamppb.New(s.PublishEpochEnd),
 					},
 				}
-			}
-
-			if info.State == identity.StatePoetProofReceived && info.PoetProofReceivedState != nil {
+			case *identity.PoetProofReceived:
+				identityStateInfo.State = pb.IdentityState_POET_PROOF_RECEIVED
 				identityStateInfo.Metadata = &pb.IdentityStateInfo_PoetProofReceived{
 					PoetProofReceived: &pb.PoetProofReceivedState{
-						PoetUrl: info.PoetProofReceivedState.PoetUrl,
+						PoetUrl: s.PoetUrl,
 					},
 				}
-			}
-
-			if info.State == identity.StateATXBroadcasted && info.AtxBroadcastedState != nil {
+			case *identity.GeneratingPostProof:
+				identityStateInfo.State = pb.IdentityState_GENERATING_POST_PROOF
+			case *identity.PostProofReady:
+				identityStateInfo.State = pb.IdentityState_POST_PROOF_READY
+			case *identity.ATXReady:
+				identityStateInfo.State = pb.IdentityState_ATX_READY
+			case *identity.ATXBroadcasted:
+				identityStateInfo.State = pb.IdentityState_ATX_BROADCASTED
 				identityStateInfo.Metadata = &pb.IdentityStateInfo_AtxBroadcasted{
 					AtxBroadcasted: &pb.AtxBroadcastedState{
-						AtxId: info.AtxBroadcastedState.AtxId.Bytes(),
+						AtxId: s.AtxId.Bytes(),
 					},
 				}
-			}
-
-			if info.State == identity.StateProposalPublished && info.ProposalPublishedState != nil {
+			case *identity.ProposalPublished:
+				identityStateInfo.State = pb.IdentityState_PROPOSAL_PUBLISHED
 				identityStateInfo.Metadata = &pb.IdentityStateInfo_ProposalPublished{
 					ProposalPublished: &pb.ProposalPublishedState{
-						Proposal: info.ProposalPublishedState.Proposal.Bytes(),
-						Layer:    info.ProposalPublishedState.Layer.Uint32(),
+						Proposal: s.Proposal.Bytes(),
+						Layer:    s.Layer.Uint32(),
 					},
 				}
+			default:
+				identityStateInfo.State = pb.IdentityState_UNSPECIFIED
 			}
 
 			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)

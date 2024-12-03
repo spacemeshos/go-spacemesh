@@ -2758,20 +2758,15 @@ func (m *MockIdentityStates) EXPECT() *MockIdentityStatesMockRecorder {
 }
 
 // Set mocks base method.
-func (m *MockIdentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State, metadata ...identity.StateInfoMetadata) {
+func (m *MockIdentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State) {
 	m.ctrl.T.Helper()
-	varargs := []any{id, publishEpoch, newState}
-	for _, a := range metadata {
-		varargs = append(varargs, a)
-	}
-	m.ctrl.Call(m, "Set", varargs...)
+	m.ctrl.Call(m, "Set", id, publishEpoch, newState)
 }
 
 // Set indicates an expected call of Set.
-func (mr *MockIdentityStatesMockRecorder) Set(id, publishEpoch, newState any, metadata ...any) *MockIdentityStatesSetCall {
+func (mr *MockIdentityStatesMockRecorder) Set(id, publishEpoch, newState any) *MockIdentityStatesSetCall {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{id, publishEpoch, newState}, metadata...)
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockIdentityStates)(nil).Set), varargs...)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockIdentityStates)(nil).Set), id, publishEpoch, newState)
 	return &MockIdentityStatesSetCall{Call: call}
 }
 
@@ -2787,13 +2782,13 @@ func (c *MockIdentityStatesSetCall) Return() *MockIdentityStatesSetCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, identity.State, ...identity.StateInfoMetadata)) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, identity.State)) *MockIdentityStatesSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, identity.State, ...identity.StateInfoMetadata)) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, identity.State)) *MockIdentityStatesSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

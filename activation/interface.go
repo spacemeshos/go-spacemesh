@@ -238,5 +238,5 @@ type PostStates interface {
 }
 
 type IdentityStates interface {
-	Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State, metadata ...identity.StateInfoMetadata)
+	Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State)
 }

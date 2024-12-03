@@ -259,8 +259,11 @@ func (nb *NIPostBuilder) BuildNIPost(
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
-	nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, identity.StatePoetRegistered,
-		identity.WithPoetRegisteredState(&identity.PoetRegisteredStateMetadata{Registrations: submittedRegistrations}))
+	nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
+		&identity.PoetRegistered{
+			Registrations: submittedRegistrations,
+		},
+	)
 	// Phase 1: query PoET services for proofs
 	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -285,11 +288,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 		nb.identityStates.Set(
 			signer.NodeID(),
 			&postChallenge.PublishEpoch,
-			identity.StateWaitForPoetRoundEnd,
-			identity.WithWaitForPoetRoundEndState(&identity.WaitForPoetRoundEndStateMetadata{
+			&identity.WaitForPoetRoundEnd{
 				RoundEnd:        curPoetRoundEnd,
 				PublishEpochEnd: publishEpochEnd,
-			}),
+			},
 		)
 
 		var poetUrl string
@@ -304,8 +306,11 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, identity.StatePoetProofReceived,
-			identity.WithPoetProofReceivedState(&identity.PoetProofReceivedStateMetadata{PoetUrl: poetUrl}))
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
+			&identity.PoetProofReceived{
+				PoetUrl: poetUrl,
+			},
+		)
 	}
 
 	// Phase 2: Post execution.
@@ -330,14 +335,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 		defer cancel()
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, identity.StateGeneratingPostProof)
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.GeneratingPostProof{})
 
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, identity.StatePostProofReady)
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.PostProofReady{})
 
 		postGenDuration := time.Since(startTime)
 
