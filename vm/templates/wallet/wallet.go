@@ -85,7 +85,7 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 	// Instantiate the VM
 	// Use a mock host to ensure that no state changes occur.
 	host := s.host.Clone()
-	vmhost, err := vmhost.NewHost(host)
+	vmhost, err := vmhost.NewHost(host, s.logger)
 	if err != nil {
 		return 0, fmt.Errorf("loading Athena VM: %w", err)
 	}
@@ -143,7 +143,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 	// Instantiate the VM
 	// Use a mock host to ensure that no state changes occur.
 	host := s.host.Clone()
-	vmhost, err := vmhost.NewHost(host)
+	vmhost, err := vmhost.NewHost(host, s.logger)
 	if err != nil {
 		return fmt.Errorf("creating new host: %w", err)
 	}

@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/economics/rewards"
 	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -46,6 +47,7 @@ type testAccount interface {
 	selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
 
 	spawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
+	deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte
 
 	baseGas() int
 	loadGas() int
@@ -62,6 +64,12 @@ func (a *singlesigAccount) getAddress() core.Address {
 
 func (a *singlesigAccount) getTemplate() core.Address {
 	return wallet.TemplateAddress
+}
+
+func (a *singlesigAccount) deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte {
+	tx, err := sdkwallet.Deploy(a.pk, nonce, blob, opts...)
+	require.NoError(t, err)
+	return tx
 }
 
 func (a *singlesigAccount) spend(t *tester, to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
@@ -1251,6 +1259,63 @@ func TestWallets(t *testing.T) {
 				addSingleSig(total - funded)
 		})
 	})
+}
+
+func TestSingleSigWalletDeploy(t *testing.T) {
+	t.Parallel()
+	tt := newTester(t).addWalletTemplate().
+		addSingleSig(100).
+		applyGenesisWithBalance().
+		addSingleSig(1000 - 100)
+
+	// 1. Spawn an account to pay for deploying
+	account := tt.accounts[0]
+	rawSpawnTx := types.NewRawTx(account.selfSpawn(tt, 0))
+	_, _, err := tt.Apply(types.GetEffectiveGenesis(), []types.Transaction{{RawTx: rawSpawnTx}}, nil)
+	require.NoError(t, err)
+
+	exists, err := tt.AccountExists(account.getAddress())
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	pAccount0, err := accounts.Latest(tt.db, account.getAddress())
+	require.NoError(t, err)
+
+	// 2. Deploy a new contract using it
+	code := []byte("this is bad code")
+	newTemplateAddress := core.TemplateAddress(code)
+
+	rawDeployTx := types.NewRawTx(account.deploy(tt, 1, code))
+	skipped, results, err := tt.Apply(types.GetEffectiveGenesis()+1, []types.Transaction{{RawTx: rawDeployTx}}, nil)
+	require.NoError(t, err)
+	require.Empty(t, skipped)
+	require.Empty(t, results[0].Message)
+	require.Equal(t, types.TransactionSuccess, results[0].Status)
+	require.Contains(t, results[0].Addresses, newTemplateAddress)
+
+	deployedAccount, err := accounts.Latest(tt.db, newTemplateAddress)
+	require.NoError(t, err)
+
+	logger := zaptest.NewLogger(t)
+	logger.Debug("new template", zap.Stringer("address", newTemplateAddress), zap.Inline(&deployedAccount))
+	require.Equal(t, code, deployedAccount.State)
+
+	pAccount1, err := accounts.Latest(tt.db, account.getAddress())
+	require.NoError(t, err)
+	require.Less(t, pAccount1.Balance, pAccount0.Balance)
+
+	// Try deploy again
+	rawDeployTx = types.NewRawTx(account.deploy(tt, 2, code))
+	skipped, results, err = tt.Apply(types.GetEffectiveGenesis()+2, []types.Transaction{{RawTx: rawDeployTx}}, nil)
+	logger.Debug("applied TX", zap.Any("results", results))
+	require.NoError(t, err)
+	require.Empty(t, skipped)
+
+	// TODO: should it fail?
+	// principial was charged
+	pAccount2, err := accounts.Latest(tt.db, account.getAddress())
+	require.NoError(t, err)
+	require.Less(t, pAccount2.Balance, pAccount1.Balance)
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {

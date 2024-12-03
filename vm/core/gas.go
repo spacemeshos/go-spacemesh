@@ -28,6 +28,7 @@ const (
 	// Hardcoded Athena gas costs
 	// TODO(lane): remove hardcoded gas costs.
 	ATHENA_GAS_SPAWN  = 4472
+	ATHENA_GAS_DEPLOY = 10000
 	ATHENA_GAS_SPEND  = 6184
 	ATHENA_GAS_VERIFY = 10488
 )

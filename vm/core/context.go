@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -180,6 +181,29 @@ func (c *Context) Spawn(template Address, blob []byte) (Address, error) {
 		zap.Int("state_size", len(blob)),
 	)
 	return principalAddress, nil
+}
+
+func (c *Context) Deploy(code []byte) (Address, error) {
+	address := TemplateAddress(code)
+	c.Logger.Info(
+		"deploying",
+		zap.Stringer("new template address", address),
+		zap.Stringer("principal", c.Principal()),
+		zap.Int("code size", len(code)),
+	)
+	account, err := c.Get(address)
+	if err != nil {
+		return types.Address{}, fmt.Errorf("checking if template is deployed: %w", err)
+	}
+	if len(account.State) > 0 {
+		return types.Address{}, errors.New("template is already deployed")
+	}
+	account.State = code
+
+	c.change(account)
+	c.Logger.Info("deployed template", zap.Object("account", account))
+
+	return address, nil
 }
 
 // SetStorage sets the storage value for the account.

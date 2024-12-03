@@ -9,6 +9,7 @@ import (
 
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
@@ -51,6 +52,7 @@ func AthenaLibPath() (string, error) {
 //go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host
 
 type Host struct {
+	logger         *zap.Logger
 	vm             *athcon.VM
 	host           core.Host
 	staticContext  core.StaticContext
@@ -60,7 +62,7 @@ type Host struct {
 // Load the VM from the shared library and returns an instance of a Host.
 // It is the caller's responsibility to call Destroy when it
 // is no longer needed.
-func NewHost(host core.Host) (*Host, error) {
+func NewHost(host core.Host, logger *zap.Logger) (*Host, error) {
 	libPath, err := AthenaLibPath()
 	if err != nil {
 		return nil, err
@@ -83,7 +85,7 @@ func NewHost(host core.Host) (*Host, error) {
 		Callee:   host.Principal(),
 	}
 
-	return &Host{vm, host, staticContext, dynamicContext}, nil
+	return &Host{logger, vm, host, staticContext, dynamicContext}, nil
 }
 
 func (h *Host) Destroy() {
@@ -103,6 +105,7 @@ func (h *Host) Execute(
 		h.staticContext,
 		h.dynamicContext,
 		h.vm,
+		h.logger,
 	}
 	r, err := h.vm.Execute(
 		hostCtx,
@@ -128,6 +131,7 @@ type hostContext struct {
 	staticContext  core.StaticContext
 	dynamicContext core.DynamicContext
 	vm             *athcon.VM
+	logger         *zap.Logger
 }
 
 var _ athcon.HostContext = (*hostContext)(nil)
@@ -318,7 +322,12 @@ func (h *hostContext) Call(
 }
 
 func (h *hostContext) Deploy(blob []byte) athcon.Address {
-	panic("not implemented")
+	if address, err := h.host.Deploy(blob); err != nil {
+		h.logger.Debug("failed to deploy", zap.Error(err))
+		return athcon.Address{}
+	} else {
+		return athcon.Address(address)
+	}
 }
 
 func (h *hostContext) Spawn(blob []byte) athcon.Address {
