@@ -141,3 +141,36 @@ func TestApply(t *testing.T) {
 		require.Equal(t, order, actual)
 	})
 }
+
+func TestDeploy(t *testing.T) {
+	var principal types.Address
+	code := []byte("some bad code")
+	templateAddress := core.TemplateAddress(code)
+	t.Run("deploying new contract", func(t *testing.T) {
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		require.NoError(t, err)
+
+		addr, err := ctx.Deploy(code)
+		require.NoError(t, err)
+		require.Equal(t, templateAddress, addr)
+
+		err = ctx.Apply(cache)
+		require.NoError(t, err)
+
+		account, err := cache.Get(addr)
+		require.NoError(t, err)
+		require.Equal(t, code, account.State)
+	})
+	t.Run("can't deploy twice", func(t *testing.T) {
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		require.NoError(t, err)
+
+		_, err = ctx.Deploy(code)
+		require.NoError(t, err)
+
+		_, err = ctx.Deploy(code)
+		require.ErrorContains(t, err, "already deployed")
+	})
+}

@@ -37,6 +37,8 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 			if stmt.ColumnLen(3) > 0 {
 				account.TemplateAddress = &types.Address{}
 				stmt.ColumnBytes(3, account.TemplateAddress[:])
+			}
+			if stmt.ColumnLen(4) > 0 {
 				account.State = make([]byte, stmt.ColumnLen(4))
 				stmt.ColumnBytes(4, account.State)
 			}
@@ -82,8 +84,12 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 			if stmt.ColumnLen(3) > 0 {
 				account.TemplateAddress = &types.Address{}
 				stmt.ColumnBytes(3, account.TemplateAddress[:])
+			}
+			if stmt.ColumnLen(4) > 0 {
 				account.State = make([]byte, stmt.ColumnLen(4))
 				stmt.ColumnBytes(4, account.State)
+			}
+			if stmt.ColumnLen(5) > 0 {
 				var err error
 				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(5))
 				if err != nil {
@@ -124,8 +130,12 @@ func All(db sql.Executor) ([]*types.Account, error) {
 				var template types.Address
 				stmt.ColumnBytes(4, template[:])
 				account.TemplateAddress = &template
+			}
+			if stmt.ColumnLen(5) > 0 {
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+			}
+			if stmt.ColumnLen(6) > 0 {
 				var err error
 				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
 				if err != nil {
@@ -160,8 +170,12 @@ func Snapshot(db sql.Executor, layer types.LayerID) ([]*types.Account, error) {
 				var template types.Address
 				stmt.ColumnBytes(4, template[:])
 				account.TemplateAddress = &template
+			}
+			if stmt.ColumnLen(5) > 0 {
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+			}
+			if stmt.ColumnLen(6) > 0 {
 				var err error
 				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
 				if err != nil {
@@ -191,14 +205,14 @@ func Update(db sql.Executor, to *types.Account) error {
 		stmt.BindInt64(2, int64(to.Balance))
 		stmt.BindInt64(3, int64(to.NextNonce))
 		stmt.BindInt64(4, int64(to.Layer))
-		if to.TemplateAddress == nil {
-			stmt.BindNull(5)
-			stmt.BindNull(6)
-			stmt.BindNull(7)
-		} else {
+		if to.TemplateAddress != nil {
 			stmt.BindBytes(5, to.TemplateAddress[:])
+		}
+		if len(to.State) > 0 {
 			stmt.BindBytes(6, to.State[:])
-			stmt.BindBytes(7, storage[:])
+		}
+		if len(to.Storage) > 0 {
+			stmt.BindBytes(7, storage)
 		}
 	}, nil)
 	if err != nil {
@@ -238,8 +252,12 @@ func IterateAccountsOps(
 				var template types.Address
 				stmt.ColumnBytes(4, template[:])
 				account.TemplateAddress = &template
+			}
+			if stmt.ColumnLen(5) > 0 {
 				account.State = make([]byte, stmt.ColumnLen(5))
 				stmt.ColumnBytes(5, account.State)
+			}
+			if stmt.ColumnLen(6) > 0 {
 				var err error
 				account.Storage, err = codec.DecodeSliceFromReader[types.StorageItem](stmt.ColumnReader(6))
 				if err != nil {

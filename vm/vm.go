@@ -401,7 +401,7 @@ func (v *VM) execute(
 			zap.Uint64("maxgas", ctx.Header.MaxGas),
 		)
 		if err == nil {
-			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload())
+			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload(), logger)
 		}
 		if err == nil {
 			// If tx succeeded, refund remaining gas
@@ -592,6 +592,11 @@ func parse(
 		}
 
 		ctx.Header.MaxGas = core.ATHENA_GAS_SPEND + core.ATHENA_GAS_VERIFY
+	case *wallet.DeployArgs:
+		if ctx.PrincipalAccount.TemplateAddress == nil {
+			return nil, nil, fmt.Errorf("%w: non-spawn tx with unspawned principal", core.ErrNotSpawned)
+		}
+		ctx.Header.MaxGas = core.ATHENA_GAS_DEPLOY + core.ATHENA_GAS_VERIFY
 	default:
 		panic("txArgs is guaranteed to be spawn or spend at this point")
 	}

@@ -17,7 +17,7 @@ func getHost(t *testing.T) (*Host, *core.StagedCache) {
 	cache := core.NewStagedCache(core.DBLoader{Executor: statesql.InMemoryTest(t)})
 	ctx, err := core.New(types.Hash20{}, 0, types.Address{}, cache, registry.New(), zaptest.NewLogger(t))
 	require.NoError(t, err)
-	host, err := NewHost(ctx)
+	host, err := NewHost(ctx, zaptest.NewLogger(t))
 	require.NoError(t, err)
 	t.Cleanup(host.Destroy)
 	return host, cache

@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"fmt"
 
+	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	"github.com/spacemeshos/go-scale"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
@@ -26,6 +28,39 @@ func encode(fields ...scale.Encodable) []byte {
 		}
 	}
 	return buf.Bytes()
+}
+
+func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Opt) ([]byte, error) {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+	meta := core.Metadata{
+		Nonce:    nonce,
+		GasPrice: options.GasPrice,
+	}
+
+	principal := wallet.ComputePrincipal(signing.Public(pk))
+	var blobEncoded bytes.Buffer
+	if _, err := codec.EncodeByteSlice(&blobEncoded, blob); err != nil {
+		return nil, fmt.Errorf("encoding code blob: %w", err)
+	}
+
+	athPayload := athcon.Payload{
+		Selector: &wallet.DeploySelector,
+		Input:    blobEncoded.Bytes(),
+	}
+	payload, err := gossamerScale.Marshal(athPayload)
+	if err != nil {
+		return nil, fmt.Errorf("encoding tx payload: %w", err)
+	}
+	cPayload := core.Payload(payload)
+	tx := encode(&sdk.TxVersion, &principal, &meta, &cPayload)
+
+	// FIXME: Prefix TX with genesis ID for signing.
+	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
+	return append(tx, sig...), nil
 }
 
 // Spawn creates a spawn transaction.

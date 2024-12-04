@@ -43,7 +43,7 @@ type Handler interface {
 	Parse(*scale.Decoder) (ParseOutput, error)
 
 	// Exec dispatches execution request based on the method selector.
-	Exec(Host, Payload) ([]byte, int64, error)
+	Exec(Host, Payload, *zap.Logger) ([]byte, int64, error)
 
 	// New instantiates Template from host context.
 	New(Host, *zap.Logger) (Template, error)
@@ -110,6 +110,7 @@ type Host interface {
 	SpendGas(uint64)
 	GasSpent() uint64
 	Handler() Handler
+	Deploy([]byte) (Address, error)
 	Spawn(Address, []byte) (Address, error)
 	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)
 	Has(Address) (bool, error)

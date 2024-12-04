@@ -115,7 +115,7 @@ func TestSpawn(t *testing.T) {
 	athenaPayload := vmLib.EncodeTxSpawn(athcon.Bytes32(pubkey))
 
 	// Execute the spawn and catch the result
-	output, gasLeft, err := (&handler{}).Exec(mockHost, athenaPayload)
+	output, gasLeft, err := (&handler{}).Exec(mockHost, athenaPayload, zaptest.NewLogger(t))
 	require.Equal(t, int64(maxGas-spendGas), gasLeft)
 	require.Len(t, output, 24)
 	require.Equal(t, expectedPrincipalAddress, types.Address(output))

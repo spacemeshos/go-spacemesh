@@ -155,6 +155,45 @@ func (c *MockHostConsumeCall) DoAndReturn(f func(uint64) error) *MockHostConsume
 	return c
 }
 
+// Deploy mocks base method.
+func (m *MockHost) Deploy(arg0 []byte) (types.Address, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Deploy", arg0)
+	ret0, _ := ret[0].(types.Address)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Deploy indicates an expected call of Deploy.
+func (mr *MockHostMockRecorder) Deploy(arg0 any) *MockHostDeployCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Deploy", reflect.TypeOf((*MockHost)(nil).Deploy), arg0)
+	return &MockHostDeployCall{Call: call}
+}
+
+// MockHostDeployCall wrap *gomock.Call
+type MockHostDeployCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockHostDeployCall) Return(arg0 types.Address, arg1 error) *MockHostDeployCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockHostDeployCall) Do(f func([]byte) (types.Address, error)) *MockHostDeployCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockHostDeployCall) DoAndReturn(f func([]byte) (types.Address, error)) *MockHostDeployCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // GasSpent mocks base method.
 func (m *MockHost) GasSpent() uint64 {
 	m.ctrl.T.Helper()

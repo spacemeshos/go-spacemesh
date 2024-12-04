@@ -55,7 +55,7 @@ func (*handler) New(host core.Host, logger *zap.Logger) (core.Template, error) {
 }
 
 // Pass the transaction into the VM for execution.
-func (*handler) Exec(host core.Host, payload core.Payload) ([]byte, int64, error) {
+func (*handler) Exec(host core.Host, payload core.Payload, logger *zap.Logger) ([]byte, int64, error) {
 	// Load the template code
 	templateAccount, err := host.Get(host.TemplateAddress())
 	if err != nil {
@@ -65,7 +65,7 @@ func (*handler) Exec(host core.Host, payload core.Payload) ([]byte, int64, error
 	}
 
 	// Instantiate the VM
-	vmhost, err := vmhost.NewHost(host)
+	vmhost, err := vmhost.NewHost(host, logger)
 	if err != nil {
 		return []byte{}, 0, fmt.Errorf("failed to instantiate VM: %w", err)
 	}

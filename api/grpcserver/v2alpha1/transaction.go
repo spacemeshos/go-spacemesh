@@ -471,8 +471,6 @@ func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
 			},
 		}
 		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SEND
-	default:
-		panic("txArgs is guaranteed to be spawn or spend at this point")
 	}
 
 	return res, txType, nil
