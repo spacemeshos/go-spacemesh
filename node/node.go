@@ -839,6 +839,7 @@ func (app *App) initServices(ctx context.Context) error {
 	malfeasance2Publisher := malfeasance2.NewPublisher(
 		app.addLogger(Malfeasance2Logger, lg).Zap(),
 		app.cachedDB,
+		syncer,
 		trtl,
 		app.host,
 	)

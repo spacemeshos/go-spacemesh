@@ -59,7 +59,7 @@ func (p *Publisher) PublishProof(ctx context.Context, smesherID types.NodeID, pr
 
 	// Only gossip the proof if we are synced (to not spam the network with proofs others probably already have).
 	if !p.sync.ListenToATXGossip() {
-		p.logger.Debug("not synced, not broadcasting malfeasance proof",
+		p.logger.Debug("not in sync, not broadcasting malfeasance proof",
 			zap.String("smesher_id", smesherID.ShortString()),
 		)
 		return nil
