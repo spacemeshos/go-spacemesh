@@ -57,6 +57,7 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	cPayload := core.Payload(payload)
 	tx := encode(&sdk.TxVersion, &principal, &meta, &cPayload)
 
+	// FIXME: Prefix TX with genesis ID for signing.
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
 	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
 	return append(tx, sig...), nil
