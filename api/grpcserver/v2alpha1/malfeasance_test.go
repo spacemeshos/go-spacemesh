@@ -44,7 +44,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(proofs[i].Proof).Return(proofs[i].Properties, nil).AnyTimes()
+			info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
 
 			require.NoError(t, identities.SetMalicious(db, proofs[i].ID, proofs[i].Proof, time.Now()))
 		}
@@ -121,7 +121,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(proofs[i].Proof).Return(proofs[i].Properties, nil).AnyTimes()
+			info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
 
 			require.NoError(t, identities.SetMalicious(db, proofs[i].ID, proofs[i].Proof, time.Now()))
 		}
@@ -182,7 +182,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(streamed[i].Proof).Return(properties, nil).AnyTimes()
+			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(properties, nil).AnyTimes()
 		}
 
 		request := &spacemeshv2alpha1.MalfeasanceStreamRequest{

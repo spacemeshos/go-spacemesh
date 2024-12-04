@@ -76,7 +76,6 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		ctxzap.Error(ctx, "failed to get malfeasance proof",
 			zap.Stringer("smesher", atx.SmesherID),
-			zap.Stringer("smesher", atx.SmesherID),
 			zap.Stringer("id", atxId),
 			zap.Error(err),
 		)

@@ -60,7 +60,7 @@ func (p *Publisher) PublishATXProof(
 		if err := malfeasance.AddProof(p.cdb, id, nil, proof, byte(InvalidActivation), time.Now()); err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
-		// TODO(mafa): cache proof
+		// TODO(mafa): cache proof, right now caching it would clash with legacy malfeasance proofs
 		// p.cdb.CacheMalfeasanceProof(id, proof)
 		p.tortoise.OnMalfeasance(id)
 	}

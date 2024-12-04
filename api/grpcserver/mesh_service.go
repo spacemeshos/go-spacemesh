@@ -614,6 +614,7 @@ func (s *MeshService) MalfeasanceQuery(
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+	// TODO(mafa): query malfeasance handler for data instead of extracting from proof bytes
 	return &pb.MalfeasanceResponse{
 		Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
 	}, nil
@@ -627,7 +628,7 @@ func (s *MeshService) MalfeasanceStream(
 	if sub == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
 	}
-	eventch, fullch := consumeEvents[events.EventMalfeasance](stream.Context(), sub)
+	eventCh, fullCh := consumeEvents[events.EventMalfeasance](stream.Context(), sub)
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
 		return status.Errorf(codes.Unavailable, "can't send header")
 	}
@@ -638,6 +639,7 @@ func (s *MeshService) MalfeasanceStream(
 		case <-stream.Context().Done():
 			return nil
 		default:
+			// TODO(mafa): query malfeasance handler for data instead of extracting from proof bytes
 			res := &pb.MalfeasanceStreamResponse{
 				Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
 			}
@@ -651,9 +653,10 @@ func (s *MeshService) MalfeasanceStream(
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case <-fullch:
+		case <-fullCh:
 			return status.Errorf(codes.Canceled, "buffer is full")
-		case ev := <-eventch:
+		case ev := <-eventCh:
+			// TODO(mafa): query malfeasance handler for data instead of extracting from proof bytes
 			if err := stream.Send(&pb.MalfeasanceStreamResponse{
 				Proof: events.ToMalfeasancePB(ev.Smesher, ev.Proof, req.IncludeProof),
 			}); err != nil {

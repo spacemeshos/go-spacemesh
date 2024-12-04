@@ -8,7 +8,7 @@ import (
 // EventMalfeasance includes the malfeasance proof.
 type EventMalfeasance struct {
 	Smesher types.NodeID
-	Proof   []byte
+	Proof   []byte // TODO(mafa): remove this field and fetch metadata via malfeasance handler
 }
 
 // SubscribeMalfeasance subscribes malfeasance events.

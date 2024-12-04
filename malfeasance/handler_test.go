@@ -374,11 +374,12 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 }
 
 func TestHandler_Info(t *testing.T) {
-	t.Run("malformed data", func(t *testing.T) {
+	t.Run("unknown identity", func(t *testing.T) {
 		h := newHandler(t)
 
-		info, err := h.Info(types.RandomBytes(32))
-		require.ErrorContains(t, err, "decode malfeasance proof:")
+		info, err := h.Info(context.Background(), types.RandomNodeID())
+		require.ErrorContains(t, err, "load malfeasance proof:")
+		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, info)
 	})
 
@@ -392,9 +393,11 @@ func TestHandler_Info(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
+		identities.SetMalicious(h.db, nodeID, proofBytes, time.Now())
 
-		info, err := h.Info(proofBytes)
+		info, err := h.Info(context.Background(), nodeID)
 		require.ErrorContains(t, err, fmt.Sprintf("unknown malfeasance type %d", wire.MultipleATXs))
 		require.Nil(t, info)
 	})
@@ -414,9 +417,11 @@ func TestHandler_Info(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
+		identities.SetMalicious(h.db, nodeID, proofBytes, time.Now())
 
-		info, err := h.Info(proofBytes)
+		info, err := h.Info(context.Background(), nodeID)
 		require.ErrorContains(t, err, "invalid proof")
 		require.Nil(t, info)
 	})
@@ -440,7 +445,10 @@ func TestHandler_Info(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
+		identities.SetMalicious(h.db, nodeID, proofBytes, time.Now())
+
 		expectedProperties := map[string]string{
 			"domain": "0",
 			"type":   strconv.FormatUint(uint64(wire.MultipleATXs), 10),
@@ -449,7 +457,7 @@ func TestHandler_Info(t *testing.T) {
 			expectedProperties[k] = v
 		}
 
-		info, err := h.Info(proofBytes)
+		info, err := h.Info(context.Background(), nodeID)
 		require.NoError(t, err)
 		require.Equal(t, expectedProperties, info)
 	})

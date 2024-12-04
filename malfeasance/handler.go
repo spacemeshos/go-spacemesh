@@ -93,9 +93,14 @@ func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
 	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
 }
 
-func (h *Handler) Info(data []byte) (map[string]string, error) {
+func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error) {
+	var blob sql.Blob
+	if err := identities.LoadMalfeasanceBlob(ctx, h.cdb, nodeID.Bytes(), &blob); err != nil {
+		return nil, fmt.Errorf("load malfeasance proof: %w", err)
+	}
+
 	var p wire.MalfeasanceProof
-	if err := codec.Decode(data, &p); err != nil {
+	if err := codec.Decode(blob.Bytes, &p); err != nil {
 		return nil, fmt.Errorf("decode malfeasance proof: %w", err)
 	}
 	mh, ok := h.handlers[MalfeasanceType(p.Proof.Type)]

@@ -71,8 +71,8 @@ func (s *MalfeasanceService) List(
 	}
 
 	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, request.Limit)
-	if err := identities.IterateOps(s.db, ops, func(id types.NodeID, proof []byte, received time.Time) bool {
-		rst := toProof(ctx, s.info, id, proof)
+	if err := identities.IterateOps(s.db, ops, func(id types.NodeID, _ []byte, _ time.Time) bool {
+		rst := toProof(ctx, s.info, id)
 		if rst == nil {
 			return true
 		}
@@ -149,7 +149,7 @@ func (s *MalfeasanceStreamService) Stream(
 		select {
 		// process events first
 		case rst := <-eventsOut:
-			proof := toProof(stream.Context(), s.info, rst.Smesher, rst.Proof)
+			proof := toProof(stream.Context(), s.info, rst.Smesher)
 			if proof == nil {
 				continue
 			}
@@ -163,7 +163,7 @@ func (s *MalfeasanceStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				proof := toProof(stream.Context(), s.info, rst.Smesher, rst.Proof)
+				proof := toProof(stream.Context(), s.info, rst.Smesher)
 				if proof == nil {
 					continue
 				}
@@ -209,22 +209,20 @@ func (s *MalfeasanceStreamService) fetchFromDB(
 
 	go func() {
 		defer close(dbChan)
-		if err := identities.IterateOps(s.db, ops,
-			func(id types.NodeID, proof []byte, received time.Time) bool {
-				rst := toProof(ctx, s.info, id, proof)
-				if rst == nil {
-					return true
-				}
+		if err := identities.IterateOps(s.db, ops, func(id types.NodeID, _ []byte, _ time.Time) bool {
+			rst := toProof(ctx, s.info, id)
+			if rst == nil {
+				return true
+			}
 
-				select {
-				case dbChan <- rst:
-					return true
-				case <-ctx.Done():
-					// exit if the context is canceled
-					return false
-				}
-			},
-		); err != nil {
+			select {
+			case dbChan <- rst:
+				return true
+			case <-ctx.Done():
+				// exit if the context is canceled
+				return false
+			}
+		}); err != nil {
 			errChan <- status.Error(codes.Internal, err.Error())
 		}
 	}()
@@ -235,9 +233,8 @@ func toProof(
 	ctx context.Context,
 	info malfeasanceInfo,
 	id types.NodeID,
-	proof []byte,
 ) *spacemeshv2alpha1.MalfeasanceProof {
-	properties, err := info.Info(proof)
+	properties, err := info.Info(ctx, id)
 	if err != nil {
 		ctxzap.Debug(ctx, "failed to get malfeasance info",
 			zap.String("smesher", id.String()),

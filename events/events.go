@@ -332,7 +332,7 @@ func EmitProposal(nodeID types.NodeID, layer types.LayerID, proposal types.Propo
 		&pb.Event_Proposal{
 			Proposal: &pb.EventProposal{
 				Layer:    layer.Uint32(),
-				Proposal: proposal[:],
+				Proposal: proposal.Bytes(),
 				Smesher:  nodeID.Bytes(),
 			},
 		},
@@ -340,6 +340,7 @@ func EmitProposal(nodeID types.NodeID, layer types.LayerID, proposal types.Propo
 }
 
 func EmitOwnMalfeasanceProof(nodeID types.NodeID, proof []byte) {
+	// TODO(mafa): query malfeasance handler for data instead of extracting from proof bytes
 	const help = "Node committed malicious behavior. Identity will be canceled."
 	emitUserEvent(
 		help,
@@ -367,6 +368,9 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 	}
 }
 
+// TODO (mafa): instead of passing along the proof bytes the API should query the malfeasance handler for the metadata
+// of the proof if needed.
+// The malfeasance handler should then take care of decoding the proof, caching if necessary and returning the metadata.
 func ToMalfeasancePB(nodeID types.NodeID, proof []byte, includeProof bool) *pb.MalfeasanceProof {
 	mp := &wire.MalfeasanceProof{}
 	if err := codec.Decode(proof, mp); err != nil {
