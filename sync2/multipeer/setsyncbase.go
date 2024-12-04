@@ -66,31 +66,32 @@ func (ssb *SetSyncBase) Count() (int, error) {
 	return info.Count, nil
 }
 
-// Derive implements SyncBase.
-func (ssb *SetSyncBase) Derive(p p2p.Peer) PeerSyncer {
-	ssb.mtx.Lock()
-	defer ssb.mtx.Unlock()
-	return &peerSetSyncer{
-		SetSyncBase: ssb,
-		OrderedSet:  ssb.os.Copy(true),
-		p:           p,
-		handler:     ssb.handler,
-	}
+// WithPeerSyncer implements SyncBase.
+func (ssb *SetSyncBase) WithPeerSyncer(ctx context.Context, p p2p.Peer, toCall func(PeerSyncer) error) error {
+	return ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
+		return toCall(&peerSetSyncer{
+			SetSyncBase: ssb,
+			OrderedSet:  os,
+			p:           p,
+			handler:     ssb.handler,
+		})
+	})
 }
 
 // Probe implements SyncBase.
-func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (rangesync.ProbeResult, error) {
+func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (pr rangesync.ProbeResult, err error) {
 	// Use a snapshot of the store to avoid holding the mutex for a long time
-	ssb.mtx.Lock()
-	os := ssb.os.Copy(true)
-	ssb.mtx.Unlock()
-
-	pr, err := ssb.ps.Probe(ctx, p, os, nil, nil)
-	if err != nil {
-		os.Release()
-		return rangesync.ProbeResult{}, fmt.Errorf("probing peer %s: %w", p, err)
+	if err := ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
+		pr, err = ssb.ps.Probe(ctx, p, os, nil, nil)
+		if err != nil {
+			return fmt.Errorf("probing peer %s: %w", p, err)
+		}
+		return nil
+	}); err != nil {
+		return rangesync.ProbeResult{}, fmt.Errorf("using set copy for probe: %w", err)
 	}
-	return pr, os.Release()
+
+	return pr, nil
 }
 
 func (ssb *SetSyncBase) receiveKey(k rangesync.KeyBytes, p p2p.Peer) error {
@@ -170,7 +171,7 @@ func (pss *peerSetSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) err
 	if err := pss.ps.Sync(ctx, pss.p, pss, x, y); err != nil {
 		return err
 	}
-	return pss.commit()
+	return pss.commit(ctx)
 }
 
 // Serve implements Syncer.
@@ -178,7 +179,7 @@ func (pss *peerSetSyncer) Serve(ctx context.Context, stream io.ReadWriter) error
 	if err := pss.ps.Serve(ctx, stream, pss); err != nil {
 		return err
 	}
-	return pss.commit()
+	return pss.commit(ctx)
 }
 
 // Receive implements OrderedSet.
@@ -189,8 +190,8 @@ func (pss *peerSetSyncer) Receive(k rangesync.KeyBytes) error {
 	return pss.OrderedSet.Receive(k)
 }
 
-func (pss *peerSetSyncer) commit() error {
-	if err := pss.handler.Commit(pss.p, pss.SetSyncBase.os, pss.OrderedSet); err != nil {
+func (pss *peerSetSyncer) commit(ctx context.Context) error {
+	if err := pss.handler.Commit(ctx, pss.p, pss.SetSyncBase.os, pss.OrderedSet); err != nil {
 		return err
 	}
 	return pss.SetSyncBase.advance()

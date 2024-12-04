@@ -1,6 +1,7 @@
 package rangesync
 
 import (
+	"context"
 	"crypto/md5"
 	"errors"
 	"slices"
@@ -306,11 +307,9 @@ func (ds *DumbSet) Items() SeqResult {
 	return ds.seq(0)
 }
 
-// Copy implements OrderedSet.
-func (ds *DumbSet) Copy(syncScope bool) OrderedSet {
-	return &DumbSet{
-		keys: slices.Clone(ds.keys),
-	}
+// WithCopy implements OrderedSet.
+func (ds *DumbSet) WithCopy(_ context.Context, toCall func(OrderedSet) error) error {
+	return toCall(&DumbSet{keys: slices.Clone(ds.keys)})
 }
 
 // Recent implements OrderedSet.
@@ -318,7 +317,12 @@ func (ds *DumbSet) Recent(since time.Time) (SeqResult, int) {
 	return EmptySeqResult(), 0
 }
 
-// Advance implements OrderedSet.
+// Loaded implements OrderedSet.
+func (ds *DumbSet) Loaded() bool {
+	return true
+}
+
+// EnsureLoaded implements OrderedSet.
 func (ds *DumbSet) EnsureLoaded() error {
 	return nil
 }
@@ -346,6 +350,4 @@ func (ds *DumbSet) Has(k KeyBytes) (bool, error) {
 }
 
 // Release implements OrderedSet.
-func (ds *DumbSet) Release() error {
-	return nil
-}
+func (ds *DumbSet) Release() {}

@@ -30,6 +30,7 @@ type SplitInfo struct {
 }
 
 // OrderedSet represents the set that can be synced against a remote peer.
+// OrderedSet methods are non-threadsafe except for WithCopy, Loaded and EnsureLoaded.
 type OrderedSet interface {
 	// Add adds a new key to the set.
 	// It should not perform any additional actions related to handling
@@ -58,17 +59,17 @@ type OrderedSet interface {
 	Items() SeqResult
 	// Empty returns true if the set is empty.
 	Empty() (bool, error)
-	// Copy makes a shallow copy of the OrderedSet.
-	// syncScope argument is a hint that can be used to optimize resource usage.
-	// If syncScope is true, then the copy is intended to be used for the duration of
-	// a synchronization run.
-	// If syncScope if false, then the lifetime of the copy is not clearly defined.
-	// The list of received items as returned by Received is also inherited by the copy.
-	Copy(syncScope bool) OrderedSet
+	// WithCopy runs the specified function, passing to it a temporary shallow copy of
+	// the OrderedSet. The copy is discarded after the function returns, releasing
+	// any resources associated with it.
+	// The list of received items as returned by Received is inherited by the copy.
+	WithCopy(ctx context.Context, toCall func(OrderedSet) error) error
 	// Recent returns an Iterator that yields the items added since the specified
 	// timestamp. Some OrderedSet implementations may not have Recent implemented, in
 	// which case it should return an empty sequence.
 	Recent(since time.Time) (SeqResult, int)
+	// Loaded returns true if the set is loaded and ready for use.
+	Loaded() bool
 	// EnsureLoaded ensures that the set is loaded and ready for use.
 	// It may do nothing in case of in-memory sets, but may trigger loading
 	// from database in case of database-backed sets.
@@ -78,9 +79,6 @@ type OrderedSet interface {
 	Advance() error
 	// Has returns true if the specified key is present in OrderedSet.
 	Has(KeyBytes) (bool, error)
-	// Release releases the resources associated with the set.
-	// Calling Release on a set that is already released is a no-op.
-	Release() error
 }
 
 type Requester interface {

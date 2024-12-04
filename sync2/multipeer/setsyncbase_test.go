@@ -69,17 +69,16 @@ func (st *setSyncBaseTester) getWaitCh(k rangesync.KeyBytes) chan error {
 
 func (st *setSyncBaseTester) expectCopy(addedKeys ...rangesync.KeyBytes) *mocks.MockOrderedSet {
 	copy := mocks.NewMockOrderedSet(st.ctrl)
-	st.os.EXPECT().Copy(true).DoAndReturn(func(bool) rangesync.OrderedSet {
-		copy.EXPECT().Items().DoAndReturn(func() rangesync.SeqResult {
-			return rangesync.EmptySeqResult()
-		}).AnyTimes()
-		for _, k := range addedKeys {
-			copy.EXPECT().Receive(k)
-		}
-		// TODO: do better job at tracking Release() calls
-		copy.EXPECT().Release().AnyTimes()
-		return copy
-	})
+	st.os.EXPECT().WithCopy(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, toCall func(rangesync.OrderedSet) error) error {
+			copy.EXPECT().Items().DoAndReturn(func() rangesync.SeqResult {
+				return rangesync.EmptySeqResult()
+			}).AnyTimes()
+			for _, k := range addedKeys {
+				copy.EXPECT().Receive(k)
+			}
+			return toCall(copy)
+		})
 	return copy
 }
 
@@ -138,23 +137,27 @@ func TestSetSyncBase(t *testing.T) {
 
 		addedKey := rangesync.RandomKeyBytes(32)
 		st.expectCopy(addedKey)
-		ss := st.ssb.Derive(p2p.Peer("p1"))
-		require.Equal(t, p2p.Peer("p1"), ss.Peer())
+		require.NoError(t, st.ssb.WithPeerSyncer(
+			context.Background(), p2p.Peer("p1"),
+			func(ps multipeer.PeerSyncer) error {
+				require.Equal(t, p2p.Peer("p1"), ps.Peer())
 
-		x := rangesync.RandomKeyBytes(32)
-		y := rangesync.RandomKeyBytes(32)
-		st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any())
-		st.os.EXPECT().Advance()
-		st.ps.EXPECT().Sync(gomock.Any(), p2p.Peer("p1"), ss, x, y)
-		require.NoError(t, ss.Sync(context.Background(), x, y))
+				x := rangesync.RandomKeyBytes(32)
+				y := rangesync.RandomKeyBytes(32)
+				st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+				st.os.EXPECT().Advance()
+				st.ps.EXPECT().Sync(gomock.Any(), p2p.Peer("p1"), ps, x, y)
+				require.NoError(t, ps.Sync(context.Background(), x, y))
 
-		st.os.EXPECT().Has(addedKey)
-		st.os.EXPECT().Receive(addedKey)
-		st.expectSync(p2p.Peer("p1"), ss, addedKey)
-		st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any())
-		st.os.EXPECT().Advance()
-		require.NoError(t, ss.Sync(context.Background(), nil, nil))
-		close(st.getWaitCh(addedKey))
+				st.os.EXPECT().Has(addedKey)
+				st.os.EXPECT().Receive(addedKey)
+				st.expectSync(p2p.Peer("p1"), ps, addedKey)
+				st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+				st.os.EXPECT().Advance()
+				require.NoError(t, ps.Sync(context.Background(), nil, nil))
+				close(st.getWaitCh(addedKey))
+				return nil
+			}))
 
 		handledKeys, err := st.wait(1)
 		require.NoError(t, err)
@@ -167,19 +170,22 @@ func TestSetSyncBase(t *testing.T) {
 
 		addedKey := rangesync.RandomKeyBytes(32)
 		st.expectCopy(addedKey, addedKey, addedKey)
-		ss := st.ssb.Derive(p2p.Peer("p1"))
-		require.Equal(t, p2p.Peer("p1"), ss.Peer())
-
-		// added just once
-		st.os.EXPECT().Receive(addedKey)
-		for i := 0; i < 3; i++ {
-			st.os.EXPECT().Has(addedKey)
-			st.expectSync(p2p.Peer("p1"), ss, addedKey)
-			st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any())
-			st.os.EXPECT().Advance()
-			require.NoError(t, ss.Sync(context.Background(), nil, nil))
-		}
-		close(st.getWaitCh(addedKey))
+		require.NoError(t, st.ssb.WithPeerSyncer(
+			context.Background(), p2p.Peer("p1"),
+			func(ps multipeer.PeerSyncer) error {
+				require.Equal(t, p2p.Peer("p1"), ps.Peer())
+				// added just once
+				st.os.EXPECT().Receive(addedKey)
+				for i := 0; i < 3; i++ {
+					st.os.EXPECT().Has(addedKey)
+					st.expectSync(p2p.Peer("p1"), ps, addedKey)
+					st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+					st.os.EXPECT().Advance()
+					require.NoError(t, ps.Sync(context.Background(), nil, nil))
+				}
+				close(st.getWaitCh(addedKey))
+				return nil
+			}))
 
 		handledKeys, err := st.wait(1)
 		require.NoError(t, err)
@@ -193,20 +199,23 @@ func TestSetSyncBase(t *testing.T) {
 		k1 := rangesync.RandomKeyBytes(32)
 		k2 := rangesync.RandomKeyBytes(32)
 		st.expectCopy(k1, k2)
-		ss := st.ssb.Derive(p2p.Peer("p1"))
-		require.Equal(t, p2p.Peer("p1"), ss.Peer())
+		require.NoError(t, st.ssb.WithPeerSyncer(
+			context.Background(), p2p.Peer("p1"),
+			func(ps multipeer.PeerSyncer) error {
+				require.Equal(t, p2p.Peer("p1"), ps.Peer())
 
-		st.os.EXPECT().Has(k1)
-		st.os.EXPECT().Has(k2)
-		st.os.EXPECT().Receive(k1)
-		st.os.EXPECT().Receive(k2)
-		st.expectSync(p2p.Peer("p1"), ss, k1, k2)
-		st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any())
-		st.os.EXPECT().Advance()
-		require.NoError(t, ss.Sync(context.Background(), nil, nil))
-		close(st.getWaitCh(k1))
-		close(st.getWaitCh(k2))
-
+				st.os.EXPECT().Has(k1)
+				st.os.EXPECT().Has(k2)
+				st.os.EXPECT().Receive(k1)
+				st.os.EXPECT().Receive(k2)
+				st.expectSync(p2p.Peer("p1"), ps, k1, k2)
+				st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+				st.os.EXPECT().Advance()
+				require.NoError(t, ps.Sync(context.Background(), nil, nil))
+				close(st.getWaitCh(k1))
+				close(st.getWaitCh(k2))
+				return nil
+			}))
 		handledKeys, err := st.wait(2)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []rangesync.KeyBytes{k1, k2}, handledKeys)
@@ -219,19 +228,23 @@ func TestSetSyncBase(t *testing.T) {
 		k1 := rangesync.RandomKeyBytes(32)
 		k2 := rangesync.RandomKeyBytes(32)
 		st.expectCopy(k1, k2)
-		ss := st.ssb.Derive(p2p.Peer("p1"))
-		require.Equal(t, p2p.Peer("p1"), ss.Peer())
+		require.NoError(t, st.ssb.WithPeerSyncer(
+			context.Background(), p2p.Peer("p1"),
+			func(ps multipeer.PeerSyncer) error {
+				require.Equal(t, p2p.Peer("p1"), ps.Peer())
 
-		st.os.EXPECT().Has(k1)
-		st.os.EXPECT().Has(k2)
-		// k1 is not propagated to syncBase due to the handler failure
-		st.os.EXPECT().Receive(k2)
-		st.expectSync(p2p.Peer("p1"), ss, k1, k2)
-		st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any())
-		st.os.EXPECT().Advance()
-		require.NoError(t, ss.Sync(context.Background(), nil, nil))
-		st.getWaitCh(k1) <- errors.New("fail")
-		close(st.getWaitCh(k2))
+				st.os.EXPECT().Has(k1)
+				st.os.EXPECT().Has(k2)
+				// k1 is not propagated to syncBase due to the handler failure
+				st.os.EXPECT().Receive(k2)
+				st.expectSync(p2p.Peer("p1"), ps, k1, k2)
+				st.handler.EXPECT().Commit(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any())
+				st.os.EXPECT().Advance()
+				require.NoError(t, ps.Sync(context.Background(), nil, nil))
+				st.getWaitCh(k1) <- errors.New("fail")
+				close(st.getWaitCh(k2))
+				return nil
+			}))
 
 		handledKeys, err := st.wait(2)
 		require.ErrorContains(t, err, "some key handlers failed")
@@ -248,18 +261,22 @@ func TestSetSyncBase(t *testing.T) {
 		os.AddUnchecked(hs[0])
 		os.AddUnchecked(hs[1])
 		st := newSetSyncBaseTester(t, &os)
-		ss := st.ssb.Derive(p2p.Peer("p1"))
-		ss.(rangesync.OrderedSet).Receive(hs[2])
-		ss.(rangesync.OrderedSet).Add(hs[2])
-		ss.(rangesync.OrderedSet).Receive(hs[3])
-		ss.(rangesync.OrderedSet).Add(hs[3])
-		// syncer's cloned set has new key immediately
-		has, err := ss.(rangesync.OrderedSet).Has(hs[2])
-		require.NoError(t, err)
-		require.True(t, has)
-		has, err = ss.(rangesync.OrderedSet).Has(hs[3])
-		require.NoError(t, err)
-		require.True(t, has)
+		require.NoError(t, st.ssb.WithPeerSyncer(
+			context.Background(), p2p.Peer("p1"),
+			func(ps multipeer.PeerSyncer) error {
+				ps.(rangesync.OrderedSet).Receive(hs[2])
+				ps.(rangesync.OrderedSet).Add(hs[2])
+				ps.(rangesync.OrderedSet).Receive(hs[3])
+				ps.(rangesync.OrderedSet).Add(hs[3])
+				// syncer's cloned set has new key immediately
+				has, err := ps.(rangesync.OrderedSet).Has(hs[2])
+				require.NoError(t, err)
+				require.True(t, has)
+				has, err = ps.(rangesync.OrderedSet).Has(hs[3])
+				require.NoError(t, err)
+				require.True(t, has)
+				return nil
+			}))
 		st.getWaitCh(hs[2]) <- errors.New("fail")
 		close(st.getWaitCh(hs[3]))
 		handledKeys, err := st.wait(2)

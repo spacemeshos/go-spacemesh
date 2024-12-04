@@ -149,21 +149,24 @@ func (mt *multiPeerSyncTester) expectFullSync(pl *peerList, times, numFails int)
 			// delegate to the real fullsync
 			return mt.reconciler.FullSync(ctx, peers)
 		})
-	mt.syncBase.EXPECT().Derive(gomock.Any()).DoAndReturn(func(p p2p.Peer) multipeer.PeerSyncer {
-		mt.mtx.Lock()
-		defer mt.mtx.Unlock()
-		require.Contains(mt, pl.get(), p)
-		s := NewMockPeerSyncer(mt.ctrl)
-		s.EXPECT().Peer().Return(p).AnyTimes()
-		// TODO: do better job at tracking Release() calls
-		s.EXPECT().Release().AnyTimes()
-		expSync := s.EXPECT().Sync(gomock.Any(), gomock.Nil(), gomock.Nil())
-		if numFails != 0 {
-			expSync.Return(errors.New("sync failed"))
-			numFails--
-		}
-		return s
-	}).Times(times)
+	mt.syncBase.EXPECT().WithPeerSyncer(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(
+			_ context.Context,
+			p p2p.Peer,
+			toCall func(multipeer.PeerSyncer) error,
+		) error {
+			mt.mtx.Lock()
+			defer mt.mtx.Unlock()
+			require.Contains(mt, pl.get(), p)
+			s := NewMockPeerSyncer(mt.ctrl)
+			s.EXPECT().Peer().Return(p).AnyTimes()
+			expSync := s.EXPECT().Sync(gomock.Any(), gomock.Nil(), gomock.Nil())
+			if numFails != 0 {
+				expSync.Return(errors.New("sync failed"))
+				numFails--
+			}
+			return toCall(s)
+		}).Times(times)
 }
 
 // satisfy waits until all the expected mocked calls are made.

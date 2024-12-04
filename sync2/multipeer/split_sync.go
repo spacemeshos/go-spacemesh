@@ -3,6 +3,7 @@ package multipeer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 )
 
 type syncResult struct {
-	s   PeerSyncer
+	ps  PeerSyncer
 	err error
 }
 
@@ -80,23 +81,24 @@ func (s *splitSync) nextPeer() p2p.Peer {
 	return p
 }
 
-func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange) {
-	syncer := s.syncBase.Derive(p)
+func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange) error {
 	sr.NumSyncers++
 	s.numRunning++
 	doneCh := make(chan struct{})
 	s.eg.Go(func() error {
-		defer func() {
-			syncer.Release()
+		if err := s.syncBase.WithPeerSyncer(ctx, p, func(ps PeerSyncer) error {
+			err := ps.Sync(ctx, sr.X, sr.Y)
 			close(doneCh)
-		}()
-		err := syncer.Sync(ctx, sr.X, sr.Y)
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case s.resCh <- syncResult{s: syncer, err: err}:
-			return syncer.Release()
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case s.resCh <- syncResult{ps: ps, err: err}:
+				return nil
+			}
+		}); err != nil {
+			return fmt.Errorf("sync peer %s: %w", p, err)
 		}
+		return nil
 	})
 	gpTimer := s.clock.After(s.gracePeriod)
 	s.eg.Go(func() error {
@@ -115,21 +117,22 @@ func (s *splitSync) startPeerSync(ctx context.Context, p p2p.Peer, sr *syncRange
 		}
 		return nil
 	})
+	return nil
 }
 
 func (s *splitSync) handleSyncResult(r syncResult) error {
-	sr, found := s.syncMap[r.s.Peer()]
+	sr, found := s.syncMap[r.ps.Peer()]
 	if !found {
 		panic("BUG: error in split sync syncMap handling")
 	}
 	s.numRunning--
-	delete(s.syncMap, r.s.Peer())
+	delete(s.syncMap, r.ps.Peer())
 	sr.NumSyncers--
 	if r.err != nil {
 		s.numPeers--
-		s.failedPeers[r.s.Peer()] = struct{}{}
+		s.failedPeers[r.ps.Peer()] = struct{}{}
 		s.logger.Debug("remove failed peer",
-			zap.Stringer("peer", r.s.Peer()),
+			zap.Stringer("peer", r.ps.Peer()),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
 			zap.Int("numRunning", s.numRunning),
@@ -144,10 +147,10 @@ func (s *splitSync) handleSyncResult(r syncResult) error {
 		}
 	} else {
 		sr.Done = true
-		s.syncPeers = append(s.syncPeers, r.s.Peer())
+		s.syncPeers = append(s.syncPeers, r.ps.Peer())
 		s.numRemaining--
 		s.logger.Debug("peer synced successfully",
-			zap.Stringer("peer", r.s.Peer()),
+			zap.Stringer("peer", r.ps.Peer()),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
 			zap.Int("numRunning", s.numRunning),
@@ -184,13 +187,15 @@ func (s *splitSync) Sync(ctx context.Context) error {
 			}
 			p := s.nextPeer()
 			s.syncMap[p] = sr
-			s.startPeerSync(syncCtx, p, sr)
+			if err := s.startPeerSync(syncCtx, p, sr); err != nil {
+				return err
+			}
 			break
 		}
 		s.clearDeadPeers()
 		for s.numRemaining > 0 && (s.sq.empty() || len(s.syncPeers) == 0) {
 			if s.numRunning == 0 && len(s.syncPeers) == 0 {
-				return errors.New("all peers dropped before full sync has completed")
+				return errors.New("all peers dropped before split sync has completed")
 			}
 			select {
 			case sr = <-s.slowRangeCh:

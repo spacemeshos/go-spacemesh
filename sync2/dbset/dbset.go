@@ -1,6 +1,7 @@
 package dbset
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"sync"
@@ -49,7 +50,16 @@ func (d *DBSet) handleIDfromDB(stmt *sql.Statement) bool {
 	return true
 }
 
+// Loaded returns true if the DBSet is loaded.
+// Implements rangesync.OrderedSet.
+func (d *DBSet) Loaded() bool {
+	d.loadMtx.Lock()
+	defer d.loadMtx.Unlock()
+	return d.ft != nil
+}
+
 // EnsureLoaded ensures that the DBSet is loaded and ready to be used.
+// Implements rangesync.OrderedSet.
 func (d *DBSet) EnsureLoaded() error {
 	d.loadMtx.Lock()
 	defer d.loadMtx.Unlock()
@@ -65,7 +75,7 @@ func (d *DBSet) EnsureLoaded() error {
 	if err != nil {
 		return fmt.Errorf("error loading count: %w", err)
 	}
-	d.dbStore = fptree.NewDBBackedStore(d.db, d.snapshot, count, d.keyLen)
+	d.dbStore = fptree.NewDBBackedStore(d.db, d.snapshot, d.keyLen)
 	d.ft = fptree.NewFPTree(count, d.dbStore, d.keyLen, d.maxDepth)
 	return d.snapshot.Load(d.db, d.handleIDfromDB)
 }
@@ -217,28 +227,39 @@ func (d *DBSet) Advance() error {
 	return d.snapshot.LoadSinceSnapshot(d.db, oldSnapshot, d.handleIDfromDB)
 }
 
-// Copy creates a copy of the DBSet.
+// WithCopy invokes the specified function, passing it a temporary copy of the DBSet.
 // Implements rangesync.OrderedSet.
-func (d *DBSet) Copy(syncScope bool) rangesync.OrderedSet {
-	d.loadMtx.Lock()
-	defer d.loadMtx.Unlock()
-	if d.ft == nil {
-		// FIXME
-		panic("BUG: can't copy the DBItemStore before it's loaded")
+func (d *DBSet) WithCopy(ctx context.Context, toCall func(rangesync.OrderedSet) error) error {
+	if err := d.EnsureLoaded(); err != nil {
+		return fmt.Errorf("loading DBSet: %w", err)
 	}
+	d.loadMtx.Lock()
 	ft := d.ft.Clone().(*fptree.FPTree)
-	return &DBSet{
+	ds := &DBSet{
 		db:       d.db,
 		ft:       ft,
 		st:       d.st,
+		snapshot: d.snapshot,
 		keyLen:   d.keyLen,
 		maxDepth: d.maxDepth,
 		dbStore:  d.dbStore,
 		received: maps.Clone(d.received),
 	}
+	d.loadMtx.Unlock()
+	defer ds.release()
+	db, ok := d.db.(sql.Database)
+	if ok {
+		return db.WithConnection(ctx, func(ex sql.Executor) error {
+			ds.db = ex
+			return toCall(ds)
+		})
+	} else {
+		return toCall(ds)
+	}
 }
 
 // Has returns true if the DBSet contains the given item.
+// Implements rangesync.OrderedSet.
 func (d *DBSet) Has(k rangesync.KeyBytes) (bool, error) {
 	if err := d.EnsureLoaded(); err != nil {
 		return false, err
@@ -258,17 +279,14 @@ func (d *DBSet) Has(k rangesync.KeyBytes) (bool, error) {
 }
 
 // Recent returns a sequence of items that have been added to the DBSet since the given time.
+// Implements rangesync.OrderedSet.
 func (d *DBSet) Recent(since time.Time) (rangesync.SeqResult, int) {
 	return d.dbStore.Since(make(rangesync.KeyBytes, d.keyLen), since.UnixNano())
 }
 
-// Release releases resources associated with the DBSet.
-func (d *DBSet) Release() error {
-	d.loadMtx.Lock()
-	defer d.loadMtx.Unlock()
+func (d *DBSet) release() {
 	if d.ft != nil {
 		d.ft.Release()
 		d.ft = nil
 	}
-	return nil
 }

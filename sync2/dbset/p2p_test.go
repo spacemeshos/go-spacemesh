@@ -185,70 +185,81 @@ func runSync(
 	cfg.MaxReconcDiff = 1 // always reconcile
 	pssA := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideA"), nil, "test", cfg, &tr, clock)
 	d := rangesync.NewDispatcher(log)
-	syncSetA := setA.Copy(false).(*dbset.DBSet)
-	pssA.Register(d, syncSetA)
-	srv := server.New(mesh.Hosts()[0], proto,
-		d.Dispatch,
-		server.WithTimeout(time.Minute),
-		server.WithLog(log))
+	require.NoError(t, setA.WithCopy(context.Background(), func(copyA rangesync.OrderedSet) error {
+		syncSetA := copyA.(*dbset.DBSet)
+		pssA.Register(d, syncSetA)
+		srv := server.New(mesh.Hosts()[0], proto,
+			d.Dispatch,
+			server.WithTimeout(time.Minute),
+			server.WithLog(log))
 
-	var eg errgroup.Group
+		var eg errgroup.Group
 
-	client := server.New(mesh.Hosts()[1], proto,
-		func(_ context.Context, _ p2p.Peer, _ []byte, _ io.ReadWriter) error {
-			return errors.New("client should not receive requests")
-		},
-		server.WithTimeout(time.Minute),
-		server.WithLog(log))
+		client := server.New(mesh.Hosts()[1], proto,
+			func(_ context.Context, _ p2p.Peer, _ []byte, _ io.ReadWriter) error {
+				return errors.New("client should not receive requests")
+			},
+			server.WithTimeout(time.Minute),
+			server.WithLog(log))
 
-	defer func() {
-		cancel()
-		eg.Wait()
-	}()
-	eg.Go(func() error {
-		return srv.Run(ctx)
-	})
+		defer func() {
+			cancel()
+			eg.Wait()
+		}()
+		eg.Go(func() error {
+			return srv.Run(ctx)
+		})
 
-	// Wait for the server to activate
-	require.Eventually(t, func() bool {
-		for _, h := range mesh.Hosts() {
-			if len(h.Mux().Protocols()) == 0 {
-				return false
+		// Wait for the server to activate
+		require.Eventually(t, func() bool {
+			for _, h := range mesh.Hosts() {
+				if len(h.Mux().Protocols()) == 0 {
+					return false
+				}
 			}
-		}
-		return true
-	}, time.Second, 10*time.Millisecond)
+			return true
+		}, time.Second, 10*time.Millisecond)
 
-	startTimer(t)
-	pssB := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideB"), client, "test", cfg, &tr, clock)
+		startTimer(t)
+		pssB := rangesync.NewPairwiseSetSyncerInternal(
+			syncLogger.Named("sideB"), client, "test", cfg, &tr, clock)
 
-	tStart := time.Now()
-	syncSetB := setB.Copy(false).(*dbset.DBSet)
-	require.NoError(t, pssB.Sync(ctx, srvPeerID, syncSetB, x, x))
-	stopTimer(t)
-	t.Logf("synced in %v, sent %d, recv %d", time.Since(tStart), pssB.Sent(), pssB.Received())
+		tStart := time.Now()
+		require.NoError(t, setB.WithCopy(context.Background(), func(copyB rangesync.OrderedSet) error {
+			syncSetB := copyB.(*dbset.DBSet)
+			require.NoError(t, pssB.Sync(ctx, srvPeerID, syncSetB, x, x))
+			stopTimer(t)
+			t.Logf("synced in %v, sent %d, recv %d", time.Since(tStart), pssB.Sent(), pssB.Received())
 
-	if verify {
-		// Check that the sets are equal after we add the received items
-		addReceived(t, dbA, setA, syncSetA)
-		addReceived(t, dbB, setB, syncSetB)
+			if !verify {
+				return nil
+			}
 
-		require.Equal(t, receivedRecent, tr.receivedItems > 0)
-		require.Equal(t, sentRecent, tr.sentItems > 0)
+			// Check that the sets are equal after we add the received items
+			addReceived(t, dbA, setA, syncSetA)
+			addReceived(t, dbB, setB, syncSetB)
 
-		if len(combined) == 0 {
-			return
-		}
+			require.Equal(t, receivedRecent, tr.receivedItems > 0)
+			require.Equal(t, sentRecent, tr.sentItems > 0)
 
-		actItemsA, err := setA.Items().Collect()
-		require.NoError(t, err)
+			if len(combined) == 0 {
+				return nil
+			}
 
-		actItemsB, err := setB.Items().Collect()
-		require.NoError(t, err)
+			actItemsA, err := setA.Items().Collect()
+			require.NoError(t, err)
 
-		assert.Equal(t, combined, actItemsA)
-		assert.Equal(t, actItemsA, actItemsB)
-	}
+			actItemsB, err := setB.Items().Collect()
+			require.NoError(t, err)
+
+			assert.Equal(t, combined, actItemsA)
+			assert.Equal(t, actItemsA, actItemsB)
+
+			return nil
+		}))
+
+		return nil
+	}))
 }
 
 func fooR(id string, seconds int) fooRow {

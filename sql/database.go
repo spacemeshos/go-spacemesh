@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math/rand/v2"
 	"net/url"
 	"os"
 	"strings"
@@ -223,8 +224,11 @@ type Opt func(c *conf)
 
 // OpenInMemory creates an in-memory database.
 func OpenInMemory(opts ...Opt) (*sqliteDatabase, error) {
-	opts = append(opts, WithConnections(1), withForceFresh())
-	return Open("file::memory:?mode=memory", opts...)
+	opts = append(opts, withForceFresh())
+	// Unique uri is needed to avoid sharing the same in-memory database,
+	// while allowing multiple connections to the same database.
+	uri := fmt.Sprintf("file:mem-%d?mode=memory&cache=shared", rand.Uint64())
+	return Open(uri, opts...)
 }
 
 // InMemory creates an in-memory database for testing and panics if
