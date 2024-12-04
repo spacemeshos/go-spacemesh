@@ -17,6 +17,7 @@ import (
 
 	wire "github.com/spacemeshos/go-spacemesh/activation/wire"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	identity "github.com/spacemeshos/go-spacemesh/identity"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	certifier "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -2757,15 +2758,15 @@ func (m *MockIdentityStates) EXPECT() *MockIdentityStatesMockRecorder {
 }
 
 // Set mocks base method.
-func (m *MockIdentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState IdentityState, message string) {
+func (m *MockIdentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Set", id, publishEpoch, newState, message)
+	m.ctrl.Call(m, "Set", id, publishEpoch, newState)
 }
 
 // Set indicates an expected call of Set.
-func (mr *MockIdentityStatesMockRecorder) Set(id, publishEpoch, newState, message any) *MockIdentityStatesSetCall {
+func (mr *MockIdentityStatesMockRecorder) Set(id, publishEpoch, newState any) *MockIdentityStatesSetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockIdentityStates)(nil).Set), id, publishEpoch, newState, message)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockIdentityStates)(nil).Set), id, publishEpoch, newState)
 	return &MockIdentityStatesSetCall{Call: call}
 }
 
@@ -2781,13 +2782,13 @@ func (c *MockIdentityStatesSetCall) Return() *MockIdentityStatesSetCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, IdentityState, string)) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, identity.State)) *MockIdentityStatesSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, IdentityState, string)) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, identity.State)) *MockIdentityStatesSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

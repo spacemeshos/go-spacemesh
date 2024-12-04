@@ -61,6 +61,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
@@ -429,7 +430,7 @@ type App struct {
 	postVerifier          activation.PostVerifier
 	postSupervisor        *activation.PostSupervisor
 	malfeasanceHandler    *malfeasance.Handler
-	idStates              *activation.IdentityStateStorage
+	idStates              *identity.StateStorage
 	apiProxy              *proxy.Server
 	poetClients           []activation.PoetService
 
@@ -629,7 +630,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 
-	app.idStates = activation.NewIdentityStateStorage()
+	app.idStates = identity.NewIdentityStateStorage()
 
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -1716,7 +1717,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.SmeshingIdentities:
-		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates, app.poetClients)
+		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates, app.poetClients, app.Config.POET)
 		app.grpcServices[svc] = service
 		return service, nil
 	}

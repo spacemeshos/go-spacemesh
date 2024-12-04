@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -100,7 +101,7 @@ func NewNIPostBuilder(
 		layerClock:     layerClock,
 		postStates:     NewPostStates(lg),
 		validator:      validator,
-		identityStates: NewIdentityStateStorage(),
+		identityStates: identity.NewIdentityStateStorage(),
 	}
 
 	for _, opt := range opts {
@@ -258,7 +259,11 @@ func (nb *NIPostBuilder) BuildNIPost(
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
-	nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetRegistered, "")
+	nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
+		&identity.PoetRegistered{
+			Registrations: submittedRegistrations,
+		},
+	)
 	// Phase 1: query PoET services for proofs
 	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -280,9 +285,18 @@ func (nb *NIPostBuilder) BuildNIPost(
 
 		events.EmitPoetWaitProof(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
 		events.EmitWaitingForPoETRoundEnd(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStateWaitForPoetRoundEnd, "")
+		nb.identityStates.Set(
+			signer.NodeID(),
+			&postChallenge.PublishEpoch,
+			&identity.WaitForPoetRoundEnd{
+				RoundEnd:        curPoetRoundEnd,
+				PublishEpochEnd: publishEpochEnd,
+			},
+		)
 
-		poetProofRef, membership, err = nb.getBestProof(ctx, signer.NodeID(), challenge, submittedRegistrations)
+		var poetUrl string
+		poetProofRef, membership, poetUrl, err = nb.getBestProof(ctx, signer.NodeID(),
+			challenge, submittedRegistrations)
 		if err != nil {
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
@@ -292,7 +306,11 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePoetProofReceived, "")
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
+			&identity.PoetProofReceived{
+				PoetUrl: poetUrl,
+			},
+		)
 	}
 
 	// Phase 2: Post execution.
@@ -317,14 +335,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 		defer cancel()
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStateGeneratingPostProof, "")
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.GeneratingPostProof{})
 
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, IdentityStatePostProofReady, "")
+		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.PostProofReady{})
 
 		postGenDuration := time.Since(startTime)
 
@@ -536,7 +554,7 @@ func (nb *NIPostBuilder) getBestProof(
 	nodeID types.NodeID,
 	challenge types.Hash32,
 	registrations []nipost.PoETRegistration,
-) (types.PoetProofRef, *types.MerkleProof, error) {
+) (types.PoetProofRef, *types.MerkleProof, string, error) {
 	type poetProof struct {
 		poet       *types.PoetProof
 		membership *types.MerkleProof
@@ -594,7 +612,7 @@ func (nb *NIPostBuilder) getBestProof(
 		})
 	}
 	if err := eg.Wait(); err != nil {
-		return types.PoetProofRef{}, nil, fmt.Errorf("querying for proofs: %w", err)
+		return types.PoetProofRef{}, nil, "", fmt.Errorf("querying for proofs: %w", err)
 	}
 	close(proofs)
 
@@ -613,7 +631,7 @@ func (nb *NIPostBuilder) getBestProof(
 	if bestProof != nil {
 		ref, err := bestProof.poet.Ref()
 		if err != nil {
-			return types.PoetProofRef{}, nil, err
+			return types.PoetProofRef{}, nil, "", err
 		}
 		nb.logger.Info(
 			"selected the best proof",
@@ -627,10 +645,10 @@ func (nb *NIPostBuilder) getBestProof(
 			bestProof.round,
 			bestProof.ticks,
 		)
-		return ref, bestProof.membership, nil
+		return ref, bestProof.membership, bestProof.url, nil
 	}
 
-	return types.PoetProofRef{}, nil, ErrPoetProofNotReceived
+	return types.PoetProofRef{}, nil, "", ErrPoetProofNotReceived
 }
 
 func constructMerkleProof(challenge types.Hash32, members []types.Hash32) (*types.MerkleProof, error) {

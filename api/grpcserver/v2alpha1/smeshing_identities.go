@@ -18,32 +18,19 @@ const SmeshingIdentities = "smeshing_identities_v2alpha1"
 type SmeshingIdentitiesService struct {
 	states      identityState
 	poetClients []activation.PoetService
+	poetConfig  activation.PoetConfig
 }
 
 func NewSmeshingIdentitiesService(
 	states identityState,
 	poetClients []activation.PoetService,
+	poetConfig activation.PoetConfig,
 ) *SmeshingIdentitiesService {
 	return &SmeshingIdentitiesService{
 		states:      states,
 		poetClients: poetClients,
+		poetConfig:  poetConfig,
 	}
-}
-
-var statusMap = map[activation.IdentityState]pb.IdentityState{
-	activation.IdentityStateNotSet:                           pb.IdentityState_UNSPECIFIED,
-	activation.IdentityStateWaitForATXSynced:                 pb.IdentityState_WAIT_FOR_ATX_SYNCED,
-	activation.IdentityStateRetrying:                         pb.IdentityState_RETRYING,
-	activation.IdentityStateWaitingForPoetRegistrationWindow: pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
-	activation.IdentityStatePoetChallengeReady:               pb.IdentityState_POET_CHALLENGE_READY,
-	activation.IdentityStatePoetRegistered:                   pb.IdentityState_POET_REGISTERED,
-	activation.IdentityStateWaitForPoetRoundEnd:              pb.IdentityState_WAIT_FOR_POET_ROUND_END,
-	activation.IdentityStatePoetProofReceived:                pb.IdentityState_POET_PROOF_RECEIVED,
-	activation.IdentityStateGeneratingPostProof:              pb.IdentityState_GENERATING_POST_PROOF,
-	activation.IdentityStatePostProofReady:                   pb.IdentityState_POST_PROOF_READY,
-	activation.IdentityStateATXReady:                         pb.IdentityState_ATX_READY,
-	activation.IdentityStateATXBroadcasted:                   pb.IdentityState_ATX_BROADCASTED,
-	activation.IdentityStateProposalPublished:                pb.IdentityState_PROPOSAL_PUBLISHED,
 }
 
 func (s *SmeshingIdentitiesService) RegisterService(server *grpc.Server) {
@@ -72,16 +59,14 @@ func (s *SmeshingIdentitiesService) States(
 
 		for i := len(history) - 1; i >= 0; i-- {
 			info := history[i]
-			ts := timestamppb.New(info.Time)
-			identityStateInfo := &pb.IdentityStateInfo{
-				State:   statusMap[info.State],
-				Time:    ts,
-				Message: info.Message,
-			}
+
+			identityStateInfo := info.State.APIStateInfo()
+			identityStateInfo.Time = timestamppb.New(info.Time)
 			if info.PublishEpoch != nil {
 				epoch := info.PublishEpoch.Uint32()
 				identityStateInfo.PublishEpoch = &epoch
 			}
+
 			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)
 		}
 	}
@@ -93,21 +78,18 @@ func (s *SmeshingIdentitiesService) PoetInfo(
 	ctx context.Context,
 	_ *pb.PoetInfoRequest,
 ) (*pb.PoetInfoResponse, error) {
-	poets := make(map[string]*pb.PoetInfo)
-	for _, poet := range s.poetClients {
-		info, err := poet.Info(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		poets[poet.Address()] = &pb.PoetInfo{
-			PhaseShift: durationpb.New(info.PhaseShift),
-			CycleGap:   durationpb.New(info.CycleGap),
-		}
+	resp := &pb.PoetInfoResponse{
+		Poets: []string{},
+		Config: &pb.PoetConfig{
+			CycleGap:   durationpb.New(s.poetConfig.CycleGap),
+			PhaseShift: durationpb.New(s.poetConfig.PhaseShift),
+		},
 	}
-	return &pb.PoetInfoResponse{
-		Poets: poets,
-	}, nil
+	for _, poet := range s.poetClients {
+		resp.Poets = append(resp.Poets, poet.Address())
+	}
+
+	return resp, nil
 }
 
 func (s *SmeshingIdentitiesService) Eligibilities(
@@ -116,20 +98,20 @@ func (s *SmeshingIdentitiesService) Eligibilities(
 ) (*pb.EligibilitiesResponse, error) {
 	eligibilities := s.states.AllEligibilities()
 
-	pbEligibilities := make(map[string]*pb.EpochEligibilities)
+	pbEpochEligibilities := make(map[string]*pb.EpochEligibilities)
 	for nodeId, epochMap := range eligibilities {
-		pbEligibilities[nodeId.String()] = &pb.EpochEligibilities{
+		pbEpochEligibilities[nodeId.String()] = &pb.EpochEligibilities{
 			Epochs: make(map[uint32]*pb.Eligibilities),
 		}
 		for epoch, eli := range epochMap {
-			pbEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
+			pbEpochEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
 				Eligibilities: castEligibilities(eli),
 			}
 		}
 	}
 
 	return &pb.EligibilitiesResponse{
-		Eligibilities: pbEligibilities,
+		Identities: pbEpochEligibilities,
 	}, nil
 }
 
