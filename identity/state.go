@@ -155,6 +155,25 @@ func (s *ATXBroadcasted) APIStateInfo() *pb.IdentityStateInfo {
 }
 
 // proposal.
+type ProposalPublishFailed struct {
+	Error    error
+	Proposal types.ProposalID
+	Layer    types.LayerID
+}
+
+func (s *ProposalPublishFailed) APIStateInfo() *pb.IdentityStateInfo {
+	return &pb.IdentityStateInfo{
+		State: pb.IdentityState_PROPOSAL_PUBLISH_FAILED,
+		Metadata: &pb.IdentityStateInfo_ProposalPublishFailed{
+			ProposalPublishFailed: &pb.ProposalPublishFailedState{
+				Message:  s.Error.Error(),
+				Proposal: s.Proposal.Bytes(),
+				Layer:    s.Layer.Uint32(),
+			},
+		},
+	}
+}
+
 type ProposalPublished struct {
 	Proposal types.ProposalID
 	Layer    types.LayerID
