@@ -173,5 +173,4 @@ func TestDeploy(t *testing.T) {
 		_, err = ctx.Deploy(code)
 		require.ErrorContains(t, err, "already deployed")
 	})
-
 }

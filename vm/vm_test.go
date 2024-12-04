@@ -1312,7 +1312,7 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	require.Empty(t, skipped)
 
 	// TODO: should it fail?
-	// principial was charged
+	// principal was charged
 	pAccount2, err := accounts.Latest(tt.db, account.getAddress())
 	require.NoError(t, err)
 	require.Less(t, pAccount2.Balance, pAccount1.Balance)
