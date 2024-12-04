@@ -390,7 +390,8 @@ func (mgr *PostSetupManager) commitmentAtx(ctx context.Context, dataDir string, 
 		}
 
 		// if this node has not published an ATX select the best ATX with `findCommitmentAtx`
-		return mgr.findCommitmentAtx(ctx)
+		// TODO: replace with highestATX api call
+		return mgr.goldenATXID, nil
 	default:
 		return types.EmptyATXID, fmt.Errorf("load metadata: %w", err)
 	}
