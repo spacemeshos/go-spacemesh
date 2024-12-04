@@ -2,8 +2,10 @@ package tests
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
@@ -16,8 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
-	require.Greater(t, cl.Bootnodes(), 1)
+func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, pct int, wait uint32) {
+	require.Greater(tb, cl.Bootnodes(), 1)
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 
 	var (
@@ -29,7 +31,11 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 	)
 
 	tctx.Log.Debug("scheduling chaos...")
-	eg, ctx := errgroup.WithContext(tctx)
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	deadline := cl.Genesis().Add(time.Duration(stop+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+	eg, ctx := errgroup.WithContext(ctx)
 	// make sure the first boot node is in the 2nd partition so the poet proof can be broadcast to both splits
 	split := pct*cl.Total()/100 + 1
 	scheduleChaos(ctx, eg, cl.Client(0), tctx.Log.Desugar(), startSplit, rejoin,
@@ -60,9 +66,14 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 
 	// start sending transactions
 	tctx.Log.Debug("sending transactions...")
-	eg2, ctx2 := errgroup.WithContext(tctx)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	require.NoError(t, sendTransactions(ctx2, eg2, tctx.Log, cl, first, stop, receiver, 10, 100))
+
+	ctx2, cancel := context.WithDeadline(tctx, deadline)
+	eg2, ctx2 := errgroup.WithContext(ctx2)
+	defer cancel()
+	eg2.Go(func() error {
+		return sendTransactions(ctx2, tctx.Log.Desugar(), cl, first, stop, receiver, 10, 100)
+	})
 
 	type stateUpdate struct {
 		layer  uint32
@@ -80,7 +91,7 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 			return stateHashStream(ctx, node, tctx.Log.Desugar(),
 				func(state *pb.GlobalStateStreamResponse) (bool, error) {
 					data := state.Datum.Datum
-					require.IsType(t, &pb.GlobalStateData_GlobalState{}, data)
+					require.IsType(tb, &pb.GlobalStateData_GlobalState{}, data)
 
 					resp := data.(*pb.GlobalStateData_GlobalState)
 					layer := resp.GlobalState.Layer.Number
@@ -92,11 +103,23 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 					tctx.Log.Debugw("state hash collected",
 						"client", node.Name,
 						"layer", layer,
-						"state", stateHash.ShortString())
-					stateCh <- &stateUpdate{
+						"state", stateHash.ShortString(),
+					)
+					select {
+					case stateCh <- &stateUpdate{
 						layer:  layer,
 						hash:   stateHash,
 						client: node.Name,
+					}: // continue
+					case <-ctx.Done():
+						return false, ctx.Err()
+					default:
+						tctx.Log.Errorw("state hash channel is full",
+							"client", node.Name,
+							"layer", layer,
+							"state", stateHash.ShortString(),
+						)
+						return false, errors.New("state hash channel is full")
 					}
 					return true, nil
 				},
@@ -154,7 +177,8 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 					"ref_client", cl.Client(0).Name,
 					"layer", layer,
 					"client_hash", clientState[layer],
-					"ref_hash", refState[layer])
+					"ref_hash", refState[layer],
+				)
 				agree = false
 				break
 			}
@@ -162,13 +186,14 @@ func testPartition(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster,
 		if agree {
 			tctx.Log.Debugw("client agreed with ref client on all layers",
 				"client", cl.Client(i).Name,
-				"ref_client", cl.Client(0).Name)
+				"ref_client", cl.Client(0).Name,
+			)
 		}
 		pass = pass && agree
 	}
-	require.NoError(t, finalErr)
-	require.True(t, pass)
-	eg2.Wait()
+	require.NoError(tb, finalErr)
+	require.True(tb, pass)
+	require.NoError(tb, eg2.Wait())
 }
 
 // TestPartition_30_70 tests the network partitioning with 30% and 70% of the nodes in each partition.
@@ -176,9 +201,9 @@ func TestPartition_30_70(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
-	if tctx.ClusterSize > 30 {
-		tctx.Log.Info("cluster size changed to 30")
-		tctx.ClusterSize = 30
+	if tctx.ClusterSize > 20 {
+		tctx.Log.Info("cluster size changed to 20")
+		tctx.ClusterSize = 20
 	}
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
@@ -191,9 +216,9 @@ func TestPartition_50_50(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
-	if tctx.ClusterSize > 30 {
-		tctx.Log.Info("cluster size changed to 30")
-		tctx.ClusterSize = 30
+	if tctx.ClusterSize > 20 {
+		tctx.Log.Info("cluster size changed to 20")
+		tctx.ClusterSize = 20
 	}
 	cl, err := cluster.ReuseWait(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)

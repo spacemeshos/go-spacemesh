@@ -15,6 +15,10 @@ type tortoise interface {
 	OnMalfeasance(types.NodeID)
 }
 
+type syncer interface {
+	ListenToATXGossip() bool
+}
+
 type MalfeasanceHandler interface {
 	Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error)
 	Info(data wire.ProofData) (map[string]string, error)

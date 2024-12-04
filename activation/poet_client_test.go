@@ -338,6 +338,45 @@ func TestPoetClient_Certify(t *testing.T) {
 		_, err = poet.Certify(context.Background(), sig.NodeID())
 		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
+	t.Run("poet does not support certificate (empty certifier URL)", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mCertifier := NewMockcertifierService(ctrl)
+		client := NewMockPoetClient(ctrl)
+		client.EXPECT().Info(gomock.Any()).Return(
+			&types.PoetInfo{
+				Certifier: &types.CertifierInfo{
+					Url:    &url.URL{},
+					Pubkey: []byte("key"),
+				},
+			},
+			nil,
+		).AnyTimes()
+
+		logger := zaptest.NewLogger(t)
+		poet := NewPoetServiceWithClient(nil, client, cfg, logger, testTickSize, WithCertifier(mCertifier))
+		_, err = poet.Certify(context.Background(), sig.NodeID())
+		require.ErrorIs(t, err, errCertificatesNotSupported)
+	})
+	t.Run("poet does not support certificate (empty certifier pubkey)", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mCertifier := NewMockcertifierService(ctrl)
+		client := NewMockPoetClient(ctrl)
+		url, err := url.Parse("http://poet.spacemesh")
+		require.NoError(t, err)
+		client.EXPECT().Info(gomock.Any()).Return(
+			&types.PoetInfo{
+				Certifier: &types.CertifierInfo{
+					Url: url,
+				},
+			},
+			nil,
+		).AnyTimes()
+
+		logger := zaptest.NewLogger(t)
+		poet := NewPoetServiceWithClient(nil, client, cfg, logger, testTickSize, WithCertifier(mCertifier))
+		_, err = poet.Certify(context.Background(), sig.NodeID())
+		require.ErrorIs(t, err, errCertificatesNotSupported)
+	})
 }
 
 func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {

@@ -754,48 +754,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
 	})
 
-	atxHandler := activation.NewHandler(
-		app.host.ID(),
-		app.cachedDB,
-		app.atxsdata,
-		app.edVerifier,
-		app.clock,
-		app.host,
-		fetcher,
-		goldenATXID,
-		validator,
-		beaconProtocol,
-		trtl,
-		app.addLogger(ATXHandlerLogger, lg).Zap(),
-		activation.WithTickSize(app.Config.TickSize),
-		activation.WithAtxVersions(app.Config.AtxVersions),
-	)
-	for _, sig := range app.signers {
-		atxHandler.Register(sig)
-	}
-
-	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-
-	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf(
-			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
-				"layers-per-epoch: %d",
-			app.Config.HareEligibility.ConfidenceParam,
-			app.Config.BaseConfig.LayersPerEpoch,
-		)
-	}
-
-	blockHandler := blocks.NewHandler(fetcher, app.db, trtl, msh,
-		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()),
-	)
-
-	app.txHandler = txs.NewTxHandler(
-		app.conState,
-		app.host.ID(),
-		app.addLogger(TxHandlerLogger, lg).Zap(),
-	)
-
-	app.hOracle = eligibility.New(
+	hOracle, err := eligibility.New(
 		beaconProtocol,
 		app.db,
 		app.atxsdata,
@@ -804,27 +763,22 @@ func (app *App) initServices(ctx context.Context) error {
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	)
-	// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
+	if err != nil {
+		return fmt.Errorf("create hare oracle: %w", err)
+	}
 
-	bscfg := app.Config.Bootstrap
-	bscfg.DataDir = app.Config.DataDir()
-	bscfg.Interval = app.Config.LayerDuration / 5
-	app.updater = bootstrap.New(
-		app.clock,
-		bootstrap.WithConfig(bscfg),
-		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
-	)
-	if app.Config.Certificate.CommitteeSize == 0 {
-		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
-			log.Uint16("size", app.Config.HARE3.Committee))
+	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
+		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee),
+		)
 		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
 	}
 	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
 	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
-	app.certifier = blocks.NewCertifier(
+	certifier := blocks.NewCertifier(
 		app.db,
-		app.hOracle,
+		hOracle,
 		app.edVerifier,
 		app.host,
 		app.clock,
@@ -834,7 +788,7 @@ func (app *App) initServices(ctx context.Context) error {
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
 	)
 	for _, sig := range app.signers {
-		app.certifier.Register(sig)
+		certifier.Register(sig)
 	}
 
 	patrol := layerpatrol.New()
@@ -847,14 +801,14 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
 	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
-	newSyncer := syncer.NewSyncer(
+	syncer := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
 		msh,
 		trtl,
 		fetcher,
 		patrol,
-		app.certifier,
+		certifier,
 		atxsync.New(fetcher, app.db, app.localDB,
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
@@ -868,8 +822,60 @@ func (app *App) initServices(ctx context.Context) error {
 		syncer.WithLogger(app.syncLogger.Zap()),
 	)
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	beaconProtocol.SetSyncState(newSyncer)
-	app.hOracle.SetSync(newSyncer)
+	beaconProtocol.SetSyncState(syncer)
+	hOracle.SetSync(syncer)
+
+	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	legacyMalPublisher := malfeasance.NewPublisher(
+		malfeasanceLogger,
+		app.cachedDB,
+		syncer,
+		trtl,
+		app.host,
+	)
+
+	atxHandler := activation.NewHandler(
+		app.host.ID(),
+		app.cachedDB,
+		app.atxsdata,
+		app.edVerifier,
+		app.clock,
+		fetcher,
+		goldenATXID,
+		validator,
+		legacyMalPublisher,
+		beaconProtocol,
+		trtl,
+		app.addLogger(ATXHandlerLogger, lg).Zap(),
+		activation.WithTickSize(app.Config.TickSize),
+		activation.WithAtxVersions(app.Config.AtxVersions),
+	)
+	for _, sig := range app.signers {
+		atxHandler.Register(sig)
+	}
+
+	blockHandler := blocks.NewHandler(
+		fetcher,
+		app.db,
+		trtl,
+		msh,
+		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()),
+	)
+
+	app.txHandler = txs.NewTxHandler(
+		app.conState,
+		app.host.ID(),
+		app.addLogger(TxHandlerLogger, lg).Zap(),
+	)
+
+	bscfg := app.Config.Bootstrap
+	bscfg.DataDir = app.Config.DataDir()
+	bscfg.Interval = app.Config.LayerDuration / 5
+	app.updater = bootstrap.New(
+		app.clock,
+		bootstrap.WithConfig(bscfg),
+		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
+	)
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
@@ -887,8 +893,8 @@ func (app *App) initServices(ctx context.Context) error {
 			app.atxsdata,
 			proposalsStore,
 			app.edVerifier,
-			app.hOracle,
-			newSyncer,
+			hOracle,
+			syncer,
 			patrol,
 			hare3.WithLogger(logger),
 			hare3.WithConfig(app.Config.HARE3),
@@ -917,8 +923,8 @@ func (app *App) initServices(ctx context.Context) error {
 			app.atxsdata,
 			proposalsStore,
 			app.edVerifier,
-			app.hOracle,
-			newSyncer,
+			hOracle,
+			syncer,
 			patrol,
 			app.host,
 			hare4.WithLogger(logger),
@@ -976,7 +982,7 @@ func (app *App) initServices(ctx context.Context) error {
 		executor,
 		msh,
 		fetcher,
-		app.certifier,
+		certifier,
 		patrol,
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
@@ -998,7 +1004,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.atxsdata,
 		app.host,
 		trtl,
-		newSyncer,
+		syncer,
 		app.conState,
 		miner.WithLayerSize(layerSize),
 		miner.WithLayerPerEpoch(layersPerEpoch),
@@ -1019,7 +1025,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.db,
 		app.atxsdata,
 		goldenATXID,
-		newSyncer,
+		syncer,
 		app.validator,
 		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
@@ -1039,7 +1045,7 @@ func (app *App) initServices(ctx context.Context) error {
 		nipostLogger,
 		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
 	)
-	certifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+	poetCertifier := activation.NewCertifier(app.localDB, nipostLogger, client)
 
 	poetClients := make([]activation.PoetService, 0, len(app.Config.PoetServers))
 	for _, server := range app.Config.PoetServers {
@@ -1049,7 +1055,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.Config.POET,
 			lg.Zap().Named("poet"),
 			app.Config.TickSize,
-			activation.WithCertifier(certifier),
+			activation.WithCertifier(poetCertifier),
 		)
 		if err != nil {
 			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
@@ -1083,7 +1089,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.host,
 		nipostBuilder,
 		app.clock,
-		newSyncer,
+		syncer,
 		app.addLogger(ATXBuilderLogger, lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
@@ -1118,7 +1124,6 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
-	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
 		malfeasanceLogger,
@@ -1208,14 +1213,14 @@ func (app *App) initServices(ctx context.Context) error {
 		),
 	)
 
-	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
-		if newSyncer.ListenToGossip() {
+	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+		if syncer.ListenToGossip() {
 			return nil
 		}
 		return errors.New("not synced for gossip")
 	}
-	atxSyncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) error {
-		if newSyncer.ListenToATXGossip() {
+	checkAtxSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+		if syncer.ListenToATXGossip() {
 			return nil
 		}
 		return errors.New("not synced for gossip")
@@ -1224,55 +1229,57 @@ func (app *App) initServices(ctx context.Context) error {
 	if app.Config.Beacon.RoundsNumber > 0 {
 		app.host.Register(
 			pubsub.BeaconWeakCoinProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleWeakCoinProposal),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconProposalProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleProposal),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconFirstVotesProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFirstVotes),
 			pubsub.WithValidatorInline(true),
 		)
 		app.host.Register(
 			pubsub.BeaconFollowingVotesProtocol,
-			pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes),
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFollowingVotes),
 			pubsub.WithValidatorInline(true),
 		)
 	}
 	app.host.Register(
 		pubsub.ProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal),
+		pubsub.ChainGossipHandler(checkSynced, proposalListener.HandleProposal),
 	)
 	app.host.Register(
 		pubsub.AtxProtocol,
-		pubsub.ChainGossipHandler(atxSyncHandler, atxHandler.HandleGossipAtx),
+		pubsub.ChainGossipHandler(checkAtxSynced, atxHandler.HandleGossipAtx),
 		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
 	)
 	app.host.Register(
 		pubsub.TxProtocol,
-		pubsub.ChainGossipHandler(syncHandler, app.txHandler.HandleGossipTransaction),
+		pubsub.ChainGossipHandler(checkSynced, app.txHandler.HandleGossipTransaction),
 	)
 	app.host.Register(
 		pubsub.BlockCertify,
-		pubsub.ChainGossipHandler(syncHandler, app.certifier.HandleCertifyMessage),
+		pubsub.ChainGossipHandler(checkSynced, certifier.HandleCertifyMessage),
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
-		pubsub.ChainGossipHandler(atxSyncHandler, app.malfeasanceHandler.HandleMalfeasanceProof),
+		pubsub.ChainGossipHandler(checkAtxSynced, app.malfeasanceHandler.HandleMalfeasanceProof),
 	)
 
 	app.proposalBuilder = proposalBuilder
 	app.mesh = msh
-	app.syncer = newSyncer
+	app.syncer = syncer
 	app.atxBuilder = atxBuilder
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
+	app.hOracle = hOracle
+	app.certifier = certifier
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,
