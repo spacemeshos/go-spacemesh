@@ -111,6 +111,9 @@ type Builder struct {
 	signers       map[types.NodeID]*signing.EdSigner
 	eg            errgroup.Group
 	stop          context.CancelFunc
+
+	// for node client
+	AlwaysSynced bool
 }
 
 type foundPosAtx struct {
@@ -511,17 +514,20 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
 
-	atxSyncedCh := b.syncer.RegisterForATXSynced()
-	select {
-	case <-atxSyncedCh:
-	default:
-		b.identitiesStates.Set(nodeID, nil, IdentityStateWaitForATXSynced, "")
-	}
+	// assuming node-service is always synced
+	if !b.AlwaysSynced {
+		atxSyncedCh := b.syncer.RegisterForATXSynced()
+		select {
+		case <-atxSyncedCh:
+		default:
+			b.identitiesStates.Set(nodeID, nil, IdentityStateWaitForATXSynced, "")
+		}
 
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-atxSyncedCh:
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-atxSyncedCh:
+		}
 	}
 
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()

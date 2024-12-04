@@ -709,8 +709,10 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 	c.clients = append(c.clients, clients...)
 	c.smeshers += len(clients)
 
-	node := clients[0].Name
-	if err := deployNodeSvc(tctx, node); err != nil {
+	nodeServer := clients[0]
+	c.Wait(tctx, len(c.clients)-1)
+
+	if err := deployNodeSvc(tctx, nodeServer.Name); err != nil {
 		return err
 	}
 
@@ -720,7 +722,8 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		WithFlags(StartSmeshing(true)),
 		WithSmeshers(keys[1:]),
 	}
-	clients, err = deployActivationNodes(tctx, node, c.nextSmesher(), c.nextSmesher()+n-1, dopts...)
+	clients, err = deployActivationNodes(
+		tctx, nodeServer.Name, c.nextSmesher(), c.nextSmesher()+n-1, dopts...)
 	if err != nil {
 		return err
 	}
