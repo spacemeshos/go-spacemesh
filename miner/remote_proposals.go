@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	smesherIdentity "github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -33,6 +34,7 @@ type identityStates interface {
 		epoch types.EpochID,
 		eligibilities map[types.LayerID][]types.VotingEligibility)
 	AddProposal(id types.NodeID, proposals *types.Proposal)
+	Set(id types.NodeID, publishEpoch *types.EpochID, newState smesherIdentity.State)
 }
 
 type RemoteProposalBuilder struct {
@@ -231,8 +233,14 @@ func (pb *RemoteProposalBuilder) build(
 				zap.Stringer("id", proposal.ID()),
 				zap.Error(err),
 			)
+			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalPublishFailed{
+				Error:    err,
+				Proposal: proposal.ID(),
+				Layer:    proposal.Layer,
+			})
+		} else {
+			pb.identityStates.AddProposal(nodeId, proposal)
 		}
-		pb.identityStates.AddProposal(nodeId, proposal)
 	}
 	return nil
 }

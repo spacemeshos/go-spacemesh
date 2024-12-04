@@ -14,6 +14,7 @@ import (
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	identity "github.com/spacemeshos/go-spacemesh/identity"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -200,6 +201,42 @@ func (c *MockidentityStatesAddProposalCall) Do(f func(types.NodeID, *types.Propo
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockidentityStatesAddProposalCall) DoAndReturn(f func(types.NodeID, *types.Proposal)) *MockidentityStatesAddProposalCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Set mocks base method.
+func (m *MockidentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Set", id, publishEpoch, newState)
+}
+
+// Set indicates an expected call of Set.
+func (mr *MockidentityStatesMockRecorder) Set(id, publishEpoch, newState any) *MockidentityStatesSetCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockidentityStates)(nil).Set), id, publishEpoch, newState)
+	return &MockidentityStatesSetCall{Call: call}
+}
+
+// MockidentityStatesSetCall wrap *gomock.Call
+type MockidentityStatesSetCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockidentityStatesSetCall) Return() *MockidentityStatesSetCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockidentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, identity.State)) *MockidentityStatesSetCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockidentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, identity.State)) *MockidentityStatesSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
