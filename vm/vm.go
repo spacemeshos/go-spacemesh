@@ -396,22 +396,13 @@ func (v *VM) execute(
 		rst.Layer = layer
 
 		err = ctx.Consume(ctx.Header.MaxGas)
-		logger.Debug("consumed max gas from principal",
-			zap.Stringer("account", ctx.Principal()),
-			zap.Uint64("maxgas", ctx.Header.MaxGas),
-		)
 		if err == nil {
 			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload(), logger)
 		}
 		if err == nil {
 			// If tx succeeded, refund remaining gas
 			// (We consume all remaining gas if the tx failed)
-			if err2 := ctx.Refund(); err2 != nil {
-				return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err2)
-			}
-			logger.Debug("refunded gas left to principal",
-				zap.Stringer("principal", ctx.Principal()),
-			)
+			ctx.Refund()
 		} else {
 			logger.Debug("skipping gas refund for failed tx")
 		}

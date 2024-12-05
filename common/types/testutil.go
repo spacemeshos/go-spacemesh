@@ -2,6 +2,9 @@ package types
 
 import (
 	"crypto/rand"
+	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 // RandomBytes generates random data in bytes for testing.
@@ -52,6 +55,13 @@ func RandomATXID() ATXID {
 		return EmptyATXID
 	}
 	return ATXID(b)
+}
+
+func RandomAddress(tb testing.TB) Address {
+	var a Address
+	_, err := rand.Read(a[:])
+	require.NoError(tb, err)
+	return a
 }
 
 // RandomNodeID generates a random NodeID for testing.
