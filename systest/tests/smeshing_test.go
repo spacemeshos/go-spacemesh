@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,14 +66,15 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
 	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
-	includedAll := make([]map[uint32][]*pb.Proposal, cl.Total())
-	for i := range cl.Total() {
-		includedAll[i] = map[uint32][]*pb.Proposal{}
-	}
+	includedAll := make(map[string]map[uint32][]*pb.Proposal, cl.Total())
 
+	m := sync.Mutex{}
 	eg, ctx := errgroup.WithContext(tctx)
-	for i := range cl.Total() {
-		client := cl.Client(i)
+	clients := cl.Clients()
+	if cl.NodeService() != nil {
+		clients = append(clients, cl.NodeService())
+	}
+	for i, client := range clients {
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
 		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
@@ -91,7 +93,12 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			if proposal.Status == pb.Proposal_Created {
 				createdCh <- proposal
 			} else {
-				includedAll[i][proposal.Layer.Number] = append(includedAll[i][proposal.Layer.Number], proposal)
+				m.Lock()
+				if includedAll[client.Name] == nil {
+					includedAll[client.Name] = map[uint32][]*pb.Proposal{}
+				}
+				includedAll[client.Name][proposal.Layer.Number] = append(includedAll[client.Name][proposal.Layer.Number], proposal)
+				m.Unlock()
 			}
 			return true, nil
 		})
@@ -122,23 +129,23 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	require.Len(t, beaconSet, len(beacons), "beacons=%v", beaconSet)
 }
 
-func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received []map[uint32][]*pb.Proposal) {
+func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received map[string]map[uint32][]*pb.Proposal) {
 	tb.Helper()
 	for layer := range reference {
 		sort.Slice(reference[layer], func(i, j int) bool {
 			return bytes.Compare(reference[layer][i].Smesher.Id, reference[layer][j].Smesher.Id) == -1
 		})
 	}
-	for i, included := range received {
+	for client, included := range received {
 		for layer := range included {
 			sort.Slice(included[layer], func(i, j int) bool {
 				return bytes.Compare(included[layer][i].Smesher.Id, included[layer][j].Smesher.Id) == -1
 			})
 		}
 		for layer, proposals := range reference {
-			require.Lenf(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
+			require.Lenf(tb, included[layer], len(proposals), "client=%s layer=%d", client, layer)
 			for j := range proposals {
-				assert.Equalf(tb, proposals[j].Id, included[layer][j].Id, "client=%d layer=%d", i, layer)
+				assert.Equalf(tb, proposals[j].Id, included[layer][j].Id, "client=%s layer=%d", client, layer)
 			}
 		}
 	}

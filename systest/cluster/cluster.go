@@ -38,6 +38,7 @@ const (
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
+	nodeServiceApp   = "node-service"
 	activationApp    = "activation"
 	postServiceApp   = "postservice"
 	bootstrapperApp  = "bootstrapper"
@@ -262,6 +263,7 @@ type Cluster struct {
 	bootnodes     int
 	smeshers      int
 	clients       []*NodeClient
+	nodeService   *NodeClient
 	certifiers    []*NodeClient
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
@@ -415,9 +417,7 @@ func (c *Cluster) addBootstrapperFlag(flag DeploymentFlag) {
 
 func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	clients, err := discoverNodes(cctx, bootnodeApp)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	if len(clients) == 0 {
 		return errNotInitialized
 	}
@@ -428,9 +428,7 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	c.bootnodes = len(clients)
 
 	clients, err = discoverNodes(cctx, smesherApp)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	for _, node := range clients {
 		cctx.Log.Debugw("discovered existing smesher", "name", node.Name)
 	}
@@ -438,14 +436,20 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	c.smeshers = len(clients)
 
 	clients, err = discoverNodes(cctx, activationApp)
-	if err != nil {
-		return err
-	}
+	if err != nil { return err }
 	for _, node := range clients {
 		cctx.Log.Debugw("discovered existing activation nodes", "name", node.Name)
 	}
 	c.clients = append(c.clients, clients...)
 	c.smeshers += len(clients)
+
+	clients, err = discoverNodes(cctx, nodeServiceApp)
+	if err != nil { return err }
+	if len(clients) == 1 {
+		service := clients[0]
+		cctx.Log.Debugw("discovered existing node service node", "name", service.Name)
+		c.nodeService = service
+	}
 
 	c.poets, err = discoverNodes(cctx, poetApp)
 	if err != nil {
@@ -702,17 +706,14 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		WithFlags(Bootnodes(endpoints...), StartSmeshing(false)),
 		WithSmeshers(keys[:1]),
 	}
-	clients, err := deployNodes(tctx, smesherApp, c.nextSmesher(), c.nextSmesher()+1, dopts...)
-	if err != nil {
-		return err
-	}
-	c.clients = append(c.clients, clients...)
-	c.smeshers += len(clients)
+	clients, err := deployNodes(tctx, nodeServiceApp, 0, 1, dopts...)
+	if err != nil { return err }
 
-	nodeServer := clients[0]
-	c.Wait(tctx, len(c.clients)-1)
+	c.nodeService = clients[0]
+	_, err = waitPod(tctx, c.nodeService.Name)
+	if err != nil { return err }
 
-	if err := deployNodeSvc(tctx, nodeServer.Name); err != nil {
+	if err := deployNodeServiceSvc(tctx, c.nodeService.Name); err != nil {
 		return err
 	}
 
@@ -723,10 +724,8 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		WithSmeshers(keys[1:]),
 	}
 	clients, err = deployActivationNodes(
-		tctx, nodeServer.Name, c.nextSmesher(), c.nextSmesher()+n-1, dopts...)
-	if err != nil {
-		return err
-	}
+		tctx, c.nodeService.Name, c.nextSmesher(), c.nextSmesher()+n-1, dopts...)
+	if err != nil { return err }
 	c.clients = append(c.clients, clients...)
 	c.smeshers += len(clients)
 	return nil
@@ -835,6 +834,14 @@ func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
 }
 
+func (c *Cluster) Clients() []*NodeClient {
+	return c.clients
+}
+
+func (c *Cluster) NodeService() *NodeClient {
+	return c.nodeService
+}
+
 func (c *Cluster) Bootstrapper(i int) *NodeClient {
 	return c.bootstrappers[i]
 }
@@ -860,6 +867,7 @@ func (c *Cluster) WaitAll(ctx context.Context) error {
 	wait(c.clients)
 	wait(c.poets)
 	wait(c.bootstrappers)
+	wait([]*NodeClient{c.nodeService})
 	return eg.Wait()
 }
 

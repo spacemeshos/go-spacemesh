@@ -513,6 +513,27 @@ func deployNodeSvc(ctx *testcontext.Context, id string) error {
 				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
 				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
 				corev1.ServicePort().WithName("grpc-post").WithPort(9094).WithProtocol("TCP"),
+			).
+			WithClusterIP("None"),
+		)
+	_, err := ctx.Client.CoreV1().Services(ctx.Namespace).Apply(ctx, svc, apimetav1.ApplyOptions{FieldManager: "test"})
+	if err != nil {
+		return fmt.Errorf("apply headless service: %w", err)
+	}
+	return nil
+}
+
+func deployNodeServiceSvc(ctx *testcontext.Context, id string) error {
+	labels := nodeLabels(nodeServiceApp, id)
+	svc := corev1.Service(id, ctx.Namespace).
+		WithLabels(labels).
+		WithSpec(corev1.ServiceSpec().
+			WithSelector(labels).
+			WithPorts(
+				corev1.ServicePort().WithName("p2p").WithPort(7513).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-pub").WithPort(9092).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-priv").WithPort(9093).WithProtocol("TCP"),
+				corev1.ServicePort().WithName("grpc-post").WithPort(9094).WithProtocol("TCP"),
 				corev1.ServicePort().WithName("node-service-listener").WithPort(9099).WithProtocol("TCP"),
 			).
 			WithClusterIP("None"),
