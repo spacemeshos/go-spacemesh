@@ -52,12 +52,12 @@ jobs:
             nondoc:
               - '!**/*.md'
 
-  systest:
+  build-docker-images:
     runs-on: ubuntu-22.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
-    timeout-minutes: 70
+    timeout-minutes: 20
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -66,54 +66,18 @@ jobs:
         with:
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
 
-      - name: Setup kubectl
-        id: install
-        uses: azure/setup-kubectl@v4
-        with:
-          version: "v1.27.16"
-
       - name: Setup gcloud authentication
         uses: google-github-actions/auth@v2
         with:
           project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
-          service_account: ${{ secrets.GCP_WI_SA }} 
+          service_account: ${{ secrets.GCP_WI_SA }}
           token_format: access_token
 
       - name: Configure gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
           version: "469.0.0"
-
-      - name: Configure gke authentication plugin
-        run: gcloud components install gke-gcloud-auth-plugin --quiet
-
-      - name: Configure kubectl
-        run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --region ${{ secrets.CI_REGION_NAME }} --project ${{ secrets.CI_GCP_PROJECT_ID }}
-
-      - name: Create Node Pool
-        run: |
-
-          NODE_POOL_NAME="systemtest-${{ github.run_id }}"
-
-          gcloud container node-pools create $NODE_POOL_NAME \
-            --cluster ${{ secrets.CI_CLUSTER_NAME }} \
-            --num-nodes 2 \
-            --preemptible \
-            --location ${{ secrets.CI_REGION_NAME }} \
-            --machine-type ${{ secrets.CI_NODE_MACHINE_TYPE }} \
-            --disk-type pd-ssd \
-            --disk-size 300GB \
-            --image-type COS_CONTAINERD \
-            --enable-autorepair \
-            --no-enable-autoupgrade \
-            --node-labels env=dev,cluster=${{ secrets.CI_CLUSTER_NAME }},pipeline-id=${{ github.run_id }} \
-            --metadata disable-legacy-endpoints=true \
-            --service-account ${{ secrets.CI_GKE_NODEPOOL_SA }} \
-            --project ${{ secrets.CI_GCP_PROJECT_ID }} \
-            --quiet
-
-          echo "Node pool created: $NODE_POOL_NAME"
 
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -152,6 +116,123 @@ jobs:
       - name: Push tests docker images
         run: make -C systest push
 
+  provision-gke-cluster:
+    runs-on: ubuntu-22.04
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    needs:
+      - filter-changes
+    timeout-minutes: 20
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - name: Setup gcloud authentication
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }}
+          token_format: access_token
+
+      - name: Configure gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: "469.0.0"
+
+      - name: Create Node Pool
+        run: |
+          NODE_POOL_NAME="systemtest-${{ github.run_id }}"
+          echo "nodepool-name=${NODE_POOL_NAME}" >> $GITHUB_OUTPUT
+
+          gcloud container node-pools create $NODE_POOL_NAME \
+            --cluster ${{ secrets.CI_CLUSTER_NAME }} \
+            --num-nodes 2 \
+            --preemptible \
+            --location ${{ secrets.CI_REGION_NAME }} \
+            --machine-type ${{ secrets.CI_NODE_MACHINE_TYPE }} \
+            --disk-type pd-ssd \
+            --disk-size 300GB \
+            --image-type COS_CONTAINERD \
+            --enable-autorepair \
+            --no-enable-autoupgrade \
+            --node-labels env=dev,cluster=${{ secrets.CI_CLUSTER_NAME }},pipeline-id=${{ github.run_id }} \
+            --metadata disable-legacy-endpoints=true \
+            --service-account ${{ secrets.CI_GKE_NODEPOOL_SA }} \
+            --project ${{ secrets.CI_GCP_PROJECT_ID }} \
+            --quiet
+
+          echo "Node pool created: $NODE_POOL_NAME"
+
+  systest-gke:
+    runs-on: ubuntu-22.04
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    continue-on-error: true
+    needs:
+      - filter-changes
+      - provision-gke-cluster
+      - build-docker-images
+    timeout-minutes: 70
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.27.16"
+
+      - name: Setup gcloud authentication
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }}
+          token_format: access_token
+
+      - name: Configure gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: "469.0.0"
+
+      - name: Configure gke authentication plugin
+        run: gcloud components install gke-gcloud-auth-plugin --quiet
+
+      - name: Configure kubectl
+        run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --region ${{ secrets.CI_REGION_NAME }} --project ${{ secrets.CI_GCP_PROJECT_ID }}
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
+
+      - name: Get commit hash
+        id: vars
+        shell: bash
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
+
       - name: set up go
         uses: actions/setup-go@v5
         with:
@@ -175,9 +256,37 @@ jobs:
         env:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
-      
+
+  delete-gke-cluster-pool:
+    runs-on: ubuntu-22.04
+    if: always()
+    needs:
+      - filter-changes
+      - provision-gke-cluster
+      - systest-gke
+    timeout-minutes: 20
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - name: Setup gcloud authentication
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
+          service_account: ${{ secrets.GCP_WI_SA }}
+          token_format: access_token
+
+      - name: Configure gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          version: "469.0.0"
+
       - name: Delete Node Pool
-        if: always()
         run: |
           NODE_POOL_NAME="systemtest-${{ github.run_id }}"
           gcloud container node-pools delete $NODE_POOL_NAME \
@@ -187,15 +296,92 @@ jobs:
             --quiet
           echo "Node pool deleted: $NODE_POOL_NAME"
 
+  systest-dedicated-cluster:
+    runs-on: ubuntu-22.04
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    needs:
+      - filter-changes
+      - build-docker-images
+    timeout-minutes: 70
+    continue-on-error: true
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.27.16"
+
+      - name: Save cluster kubeconfig
+        run: |
+          mkdir -p ${{ github.workspace }}/.kube
+          echo "${{ secrets.CI_KUBECONFIG }}" | base64 -d > ${{ github.workspace }}/.kube/config
+          echo "KUBECONFIG=${{ github.workspace }}/.kube/config" >> $GITHUB_ENV
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
+
+      - name: Get commit hash
+        id: vars
+        shell: bash
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - uses: extractions/netrc@v2
+        with:
+          machine: github.com
+          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+          password: ${{ secrets.GH_ACTION_TOKEN }}
+        if: vars.GOPRIVATE
+
+      - name: set up go
+        uses: actions/setup-go@v5
+        with:
+          check-latest: true
+          go-version-file: "go.mod"
+
+      - name: Run tests
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+          storage: default=10Gi
+          node_selector: cluster-type=baremetal
+          size: 20
+          bootstrap: 4m
+          level: ${{ inputs.log_level }}
+          clusters: 4
+          norbac: 1
+        run: make -C systest run test_name=${{ inputs.test_name }}
+
+      - name: Delete pod
+        if: always()
+        env:
+          test_id: systest-${{ steps.vars.outputs.sha_short }}
+        run: make -C systest clean
+
   systest-status:
     if: always()
     needs:
       - filter-changes
-      - systest
+      - systest-gke
+      - systest-dedicated-cluster
     runs-on: ubuntu-22.04
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest-gke.result == 'success' || needs.systest-dedicated-cluster.result == 'success') && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v2

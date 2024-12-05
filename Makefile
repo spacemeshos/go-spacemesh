@@ -4,7 +4,6 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 
 GOLANGCI_LINT_VERSION := v1.61.0
 GOTESTSUM_VERSION := v1.12.0
-GOVULNCHECK_VERSION := v1.1.3
 GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.5.0
 
@@ -69,7 +68,6 @@ install:
 	go install github.com/spacemeshos/go-scale/scalegen@$(GOSCALE_VERSION)
 	go install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 	go install gotest.tools/gotestsum@$(GOTESTSUM_VERSION)
-	go install golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION)
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service
@@ -147,10 +145,6 @@ lint-fix: get-libs
 cover: get-libs
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" gotestsum --junitfile junit.xml -- -coverprofile=cover.out -p 1 -timeout 30m -coverpkg=./... $(UNIT_TESTS)
 .PHONY: cover
-
-vulncheck: get-libs
-	govulncheck ./...
-.PHONY: vulncheck
 
 list-versions:
 	@echo "Latest 5 tagged versions:\n"

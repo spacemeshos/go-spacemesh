@@ -306,7 +306,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 				malIDs, err := s.fetcher.GetMaliciousIDs(ctx, peer)
 				if err != nil {
 					if errors.Is(err, context.Canceled) {
-						return ctx.Err()
+						return nil
 					}
 					s.peerErrMetric.Inc()
 					s.logger.Warn("failed to download malfeasant node IDs",

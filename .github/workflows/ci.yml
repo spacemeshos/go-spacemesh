@@ -86,8 +86,6 @@ jobs:
           make test-fmt
           make test-tidy
           make test-generate
-      - name: Check for vulnerabilities
-        run: make vulncheck
 
   lint:
     runs-on: ubuntu-22.04

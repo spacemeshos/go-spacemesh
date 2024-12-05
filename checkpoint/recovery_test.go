@@ -249,10 +249,11 @@ func validateAndPreserveData(
 	lg := zaptest.NewLogger(tb)
 	ctrl := gomock.NewController(tb)
 	mclock := activation.NewMocklayerClock(ctrl)
-	mfetch := smocks.NewMockFetcher(ctrl)
-	mvalidator := activation.NewMocknipostValidator(ctrl)
-	mreceiver := activation.NewMockAtxReceiver(ctrl)
-	mtrtl := smocks.NewMockTortoise(ctrl)
+	mFetch := smocks.NewMockFetcher(ctrl)
+	mValidator := activation.NewMocknipostValidator(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
+	mBeacon := activation.NewMockatxReceiver(ctrl)
+	mTortoise := smocks.NewMockTortoise(ctrl)
 	cdb := datastore.NewCachedDB(db, lg)
 	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	atxHandler := activation.NewHandler(
@@ -261,26 +262,26 @@ func validateAndPreserveData(
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		mclock,
-		nil,
-		mfetch,
+		mFetch,
 		goldenAtx,
-		mvalidator,
-		mreceiver,
-		mtrtl,
+		mValidator,
+		mLegacyPublish,
+		mBeacon,
+		mTortoise,
 		lg,
 	)
-	mfetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for _, dep := range deps {
 		var atx wire.ActivationTxV1
 		require.NoError(tb, codec.Decode(dep.Blob, &atx))
 		mclock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
-		mfetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
-		mfetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
+		mFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
+		mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 		if atx.PrevATXID == types.EmptyATXID {
-			mvalidator.EXPECT().
+			mValidator.EXPECT().
 				InitialNIPostChallengeV1(&atx.NIPostChallengeV1, gomock.Any(), goldenAtx).
 				AnyTimes()
-			mvalidator.EXPECT().Post(
+			mValidator.EXPECT().Post(
 				gomock.Any(),
 				atx.SmesherID,
 				*atx.CommitmentATXID,
@@ -289,7 +290,7 @@ func validateAndPreserveData(
 				atx.NumUnits,
 				gomock.Any(),
 			)
-			mvalidator.EXPECT().VRFNonce(
+			mValidator.EXPECT().VRFNonce(
 				atx.SmesherID,
 				*atx.CommitmentATXID,
 				*atx.VRFNonce,
@@ -297,7 +298,7 @@ func validateAndPreserveData(
 				atx.NumUnits,
 			)
 		} else {
-			mvalidator.EXPECT().NIPostChallengeV1(
+			mValidator.EXPECT().NIPostChallengeV1(
 				&atx.NIPostChallengeV1,
 				gomock.Cond(func(prev *types.ActivationTx) bool {
 					return prev.ID() == atx.PrevATXID
@@ -306,13 +307,13 @@ func validateAndPreserveData(
 			)
 		}
 
-		mvalidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, atx.PublishEpoch)
-		mvalidator.EXPECT().
+		mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, cdb, goldenAtx, atx.PublishEpoch)
+		mValidator.EXPECT().
 			NIPost(gomock.Any(), atx.SmesherID, gomock.Any(), gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			Return(uint64(1111111), nil)
-		mvalidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
-		mreceiver.EXPECT().OnAtx(gomock.Any())
-		mtrtl.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
+		mValidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
+		mBeacon.EXPECT().OnAtx(gomock.Any())
+		mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
 		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), "self", dep.Blob))
 	}
 }

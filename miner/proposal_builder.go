@@ -483,7 +483,9 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	//
 	// Additionally all activesets that are older than 2 epochs are deleted at the beginning of an epoch anyway, but
 	// maybe we should revisit this when activesets are no longer bootstrapped.
-	return pb.db.WithTx(ctx, func(tx sql.Transaction) error {
+	//
+	// TODO(mafa): I'm still seeing SQL_BUSY errors in the logs, so for now I change this back to TxImmediate.
+	return pb.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		yes, err := activesets.Has(tx, pb.shared.active.id)
 		if err != nil {
 			return err

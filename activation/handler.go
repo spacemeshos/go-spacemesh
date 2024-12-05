@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
-	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -67,10 +66,9 @@ func (v AtxVersions) Validate() error {
 
 // Handler processes the atxs received from all nodes and their validity status.
 type Handler struct {
-	local     p2p.Peer
-	publisher pubsub.Publisher
-	logger    *zap.Logger
-	versions  []atxVersion
+	local    p2p.Peer
+	logger   *zap.Logger
+	versions []atxVersion
 
 	// inProgress is used to avoid processing the same ATX multiple times in parallel.
 	inProgress singleflight.Group
@@ -102,20 +100,19 @@ func NewHandler(
 	atxsdata *atxsdata.Data,
 	edVerifier *signing.EdVerifier,
 	c layerClock,
-	pub pubsub.Publisher,
 	fetcher system.Fetcher,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
-	beacon AtxReceiver,
+	legacyMalPublisher legacyMalfeasancePublisher,
+	beacon atxReceiver,
 	tortoise system.Tortoise,
 	lg *zap.Logger,
 	opts ...HandlerOption,
 ) *Handler {
 	h := &Handler{
-		local:     local,
-		publisher: pub,
-		logger:    lg,
-		versions:  []atxVersion{{0, types.AtxV1}},
+		local:    local,
+		logger:   lg,
+		versions: []atxVersion{{0, types.AtxV1}},
 
 		v1: &HandlerV1{
 			local:           local,
@@ -130,6 +127,7 @@ func NewHandler(
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
+			malPublisher:    legacyMalPublisher,
 			signers:         make(map[types.NodeID]*signing.EdSigner),
 		},
 
@@ -171,48 +169,52 @@ func (h *Handler) Register(sig *signing.EdSigner) {
 
 // HandleSyncedAtx handles atxs received by sync.
 func (h *Handler) HandleSyncedAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, data []byte) error {
-	_, err := h.handleAtx(ctx, expHash, peer, data)
-	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
+	err := h.handleAtx(ctx, expHash, peer, data)
+	switch {
+	case errors.Is(err, errKnownAtx):
+		return nil
+	case errors.Is(err, errMalformedData):
+		h.logger.Debug("malformed atx",
+			log.ZContext(ctx),
+			zap.Stringer("sender", peer),
+			zap.Error(err),
+		)
+		return err
+	case err != nil:
 		h.logger.Warn("failed to process synced atx",
 			log.ZContext(ctx),
 			zap.Stringer("sender", peer),
 			zap.Error(err),
 		)
+		return err
 	}
-	if errors.Is(err, errKnownAtx) {
-		return nil
-	}
-	return err
+	return nil
 }
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (h *Handler) HandleGossipAtx(ctx context.Context, peer p2p.Peer, msg []byte) error {
-	proof, err := h.handleAtx(ctx, types.EmptyHash32, peer, msg)
-	if err != nil && !errors.Is(err, errMalformedData) && !errors.Is(err, errKnownAtx) {
+	err := h.handleAtx(ctx, types.EmptyHash32, peer, msg)
+	switch {
+	case errors.Is(err, errKnownAtx) && peer == h.local:
+		return nil
+	case errors.Is(err, errKnownAtx):
+		return errKnownAtx
+	case errors.Is(err, errMalformedData):
+		h.logger.Debug("malformed atx gossip",
+			log.ZContext(ctx),
+			zap.Stringer("sender", peer),
+			zap.Error(err),
+		)
+		return err
+	case err != nil:
 		h.logger.Warn("failed to process atx gossip",
 			log.ZContext(ctx),
 			zap.Stringer("sender", peer),
 			zap.Error(err),
 		)
+		return err
 	}
-	if errors.Is(err, errKnownAtx) && peer == h.local {
-		return nil
-	}
-
-	// broadcast malfeasance proof last as the verification of the proof will take place
-	// in the same goroutine
-	if proof != nil {
-		gossip := mwire.MalfeasanceGossip{
-			MalfeasanceProof: *proof,
-		}
-		encodedProof := codec.MustEncode(&gossip)
-		if err = h.publisher.Publish(ctx, pubsub.MalfeasanceProof, encodedProof); err != nil {
-			h.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
-			return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
-		}
-		return errMaliciousATX
-	}
-	return err
+	return nil
 }
 
 func (h *Handler) determineVersion(msg []byte) (*types.AtxVersion, error) {
@@ -256,26 +258,21 @@ func (h *Handler) decodeATX(msg []byte) (atx opaqueAtx, err error) {
 	return atx, nil
 }
 
-func (h *Handler) handleAtx(
-	ctx context.Context,
-	expHash types.Hash32,
-	peer p2p.Peer,
-	msg []byte,
-) (*mwire.MalfeasanceProof, error) {
+func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.Peer, msg []byte) error {
 	receivedTime := time.Now()
 
 	opaqueAtx, err := h.decodeATX(msg)
 	if err != nil {
-		return nil, fmt.Errorf("%w: decoding ATX: %w", pubsub.ErrValidationReject, err)
+		return fmt.Errorf("%w: decoding ATX: %w", pubsub.ErrValidationReject, err)
 	}
 	id := opaqueAtx.ID()
 
-	if (expHash != types.Hash32{}) && id.Hash32() != expHash {
-		return nil, fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), id.ShortString())
+	if expHash != types.EmptyHash32 && id.Hash32() != expHash {
+		return fmt.Errorf("%w: atx want %s, got %s", errWrongHash, expHash.ShortString(), id.ShortString())
 	}
 
 	key := string(id.Bytes())
-	proof, err, _ := h.inProgress.Do(key, func() (any, error) {
+	_, err, _ = h.inProgress.Do(key, func() (any, error) {
 		h.logger.Debug("handling incoming atx",
 			log.ZContext(ctx),
 			zap.Stringer("atx_id", id),
@@ -284,16 +281,15 @@ func (h *Handler) handleAtx(
 
 		switch atx := opaqueAtx.(type) {
 		case *wire.ActivationTxV1:
-			return h.v1.processATX(ctx, peer, atx, receivedTime)
+			return nil, h.v1.processATX(ctx, peer, atx, receivedTime)
 		case *wire.ActivationTxV2:
-			return (*mwire.MalfeasanceProof)(nil), h.v2.processATX(ctx, peer, atx, receivedTime)
+			return nil, h.v2.processATX(ctx, peer, atx, receivedTime)
 		default:
 			panic("unreachable")
 		}
 	})
 	h.inProgress.Forget(key)
-
-	return proof.(*mwire.MalfeasanceProof), err
+	return err
 }
 
 // Obtain the atxSignature of the given ATX.

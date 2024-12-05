@@ -55,14 +55,14 @@ func NewHandler(
 	cdb *datastore.CachedDB,
 	lg *zap.Logger,
 	self p2p.Peer,
-	nodeID []types.NodeID,
+	nodeIDs []types.NodeID,
 	tortoise tortoise,
 ) *Handler {
 	return &Handler{
 		logger:   lg,
 		cdb:      cdb,
 		self:     self,
-		nodeIDs:  nodeID,
+		nodeIDs:  nodeIDs,
 		tortoise: tortoise,
 
 		handlers: make(map[MalfeasanceType]MalfeasanceHandler),
@@ -130,9 +130,9 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 		// but only log "validation ignored" instead of the error we return
 		h.logger.Warn("malfeasance proof for wrong identity",
 			log.ZContext(ctx),
+			zap.Stringer("peer", peer),
 			log.ZShortStringer("expected", expHash),
 			log.ZShortStringer("got", nodeID),
-			zap.Stringer("peer", peer),
 		)
 		return fmt.Errorf(
 			"%w: malfeasance proof want %s, got %s",
