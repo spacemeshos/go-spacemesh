@@ -3,11 +3,13 @@ package tests
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"testing"
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -60,19 +62,28 @@ func testTransactions(
 	for i := range cl.Total() {
 		client := cl.Client(i)
 		eg.Go(func() error {
-			return watchTransactionResults(ctx, client, tctx.Log.Desugar(),
+			err := watchTransactionResults(ctx, client, tctx.Log.Desugar(),
 				func(rst *pb.TransactionResult) (bool, error) {
 					txs[i] = append(txs[i], rst.Tx)
 					count := len(txs[i])
-					tctx.Log.Debugw("received transaction client",
-						"layer", rst.Layer,
-						"client", client.Name,
-						"tx", "0x"+hex.EncodeToString(rst.Tx.Id),
-						"count", count,
+					tctx.Log.Desugar().Debug("received transaction client",
+						zap.Uint32("layer", rst.Layer),
+						zap.String("client", client.Name),
+						zap.String("tx", "0x"+hex.EncodeToString(rst.Tx.Id)),
+						zap.Int("count", count),
 					)
 					return len(txs[i]) < expectedCount, nil
 				},
 			)
+			if err != nil {
+				tctx.Log.Desugar().Error("watching transaction results",
+					zap.String("client", client.Name),
+					zap.Error(err),
+				)
+				return fmt.Errorf("watching transaction results for %s: %w", client.Name, err)
+			}
+			tctx.Log.Desugar().Debug("finished watching transaction results", zap.String("client", client.Name))
+			return nil
 		})
 	}
 	require.NoError(tb, eg.Wait())
