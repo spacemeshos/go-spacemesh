@@ -2,7 +2,7 @@ package core
 
 // IntrinsicGas computes intrinsic gas from base gas and storage cost.
 func IntrinsicGas(baseGas uint64, tx []byte) uint64 {
-	return ATHENA_GAS_SPAWN - 1
+	return 10_000
 	// TODO(lane): fix gas calculation
 	// return baseGas + TxDataGas(len(tx))
 }
@@ -27,10 +27,11 @@ const (
 
 	// Hardcoded Athena gas costs
 	// TODO(lane): remove hardcoded gas costs.
+	ATHENA_MAX_GAS    = 20_000
 	ATHENA_GAS_SPAWN  = 4472
 	ATHENA_GAS_DEPLOY = 10000
 	ATHENA_GAS_SPEND  = 6184
-	ATHENA_GAS_VERIFY = 10488
+	ATHENA_GAS_VERIFY = 10_000
 )
 
 const (

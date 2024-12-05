@@ -7,7 +7,6 @@ import (
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,29 +17,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
-func encode(fields ...scale.Encodable) []byte {
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	for _, field := range fields {
-		_, err := field.EncodeScale(encoder)
-		if err != nil {
-			panic(err)
-		}
-	}
-	return buf.Bytes()
-}
-
 func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Opt) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
-	meta := core.Metadata{
-		Nonce:    nonce,
-		GasPrice: options.GasPrice,
-	}
-
-	principal := wallet.ComputePrincipal(signing.Public(pk))
+	principal := Address(signing.Public(pk))
 	var blobEncoded bytes.Buffer
 	if _, err := codec.EncodeByteSlice(&blobEncoded, blob); err != nil {
 		return nil, fmt.Errorf("encoding code blob: %w", err)
@@ -54,13 +36,24 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	if err != nil {
 		return nil, fmt.Errorf("encoding tx payload: %w", err)
 	}
-	cPayload := core.Payload(payload)
-	tx := encode(&sdk.TxVersion, &principal, &meta, &cPayload)
+	tx := core.Tx{
+		Version:   uint8(sdk.TxVersion),
+		Principal: principal,
+		Metadata: core.Metadata{
+			Nonce:    nonce,
+			GasPrice: options.GasPrice,
+		},
+		Payload: payload,
+	}
+	rawTx, err := codec.Encode(&tx)
+	if err != nil {
+		return nil, fmt.Errorf("encoding deploy TX: %w", err)
+	}
 
 	// FIXME: Prefix TX with genesis ID for signing.
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
-	return append(tx, sig...), nil
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), rawTx)
+	return append(rawTx, sig...), nil
 }
 
 // Spawn creates a spawn transaction.
@@ -77,34 +70,32 @@ func Spawn(
 	// Encode using the VM
 	libPath, err := host.AthenaLibPath()
 	if err != nil {
-		panic(fmt.Errorf("loading Athena VM: %w", err))
+		return nil, fmt.Errorf("looking up Athena VM library path: %w", err)
 	}
 	vmlib, err := athcon.LoadLibrary(libPath)
 	if err != nil {
-		panic(fmt.Errorf("loading Athena VM: %w", err))
+		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}
 	defer vmlib.Close()
 
-	meta := core.Metadata{}
-	meta.Nonce = nonce
-	meta.GasPrice = options.GasPrice
-
-	// note that principal is computed from pk
-	athenaPayload := vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk)))
-	principal := wallet.ComputePrincipal(signing.Public(pk))
-	payload := core.Payload(athenaPayload)
-
-	// The payload is already encoded. Why, might you ask, are we encoding it again?
-	// Short answer: because, when decoding txs, go-spacemesh can only decode SCALE-encoded data.
-	// Fixing this, and allowing a tx to be partially SCALE-encoded, partially raw bytes,
-	// is a lot of work for a tiny bit of gain.
-	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
-	// tx := encode(&sdk.TxVersion, &principal, &meta)
-	// tx = append(tx, payload...)
+	tx := core.Tx{
+		Version:   uint8(sdk.TxVersion),
+		Principal: Address(signing.Public(pk)),
+		Template:  &wallet.TemplateAddress,
+		Metadata: core.Metadata{
+			Nonce:    nonce,
+			GasPrice: options.GasPrice,
+		},
+		Payload: vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk))),
+	}
+	rawTx, err := codec.Encode(&tx)
+	if err != nil {
+		return nil, fmt.Errorf("encoding spawn TX: %w", err)
+	}
 
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
-	return append(tx, sig...), nil
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), rawTx)
+	return append(rawTx, sig...), nil
 }
 
 // Spend creates a spend transaction.
@@ -125,18 +116,21 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	}
 	defer vmlib.Close()
 
-	principal := wallet.ComputePrincipal(signing.Public(pk))
-	payload := core.Payload(vmlib.EncodeTxSpend(athcon.Address(to), amount))
-
-	meta := core.Metadata{}
-	meta.GasPrice = options.GasPrice
-	meta.Nonce = nonce
-
-	tx := encode(&sdk.TxVersion, &principal, &meta, &payload)
-	// tx := encode(&sdk.TxVersion, &principal, &meta)
-	// tx = append(tx, payload...)
+	tx := core.Tx{
+		Version:   uint8(sdk.TxVersion),
+		Principal: Address(signing.Public(pk)),
+		Metadata: core.Metadata{
+			Nonce:    nonce,
+			GasPrice: options.GasPrice,
+		},
+		Payload: vmlib.EncodeTxSpend(athcon.Address(to), amount),
+	}
+	rawTx, err := codec.Encode(&tx)
+	if err != nil {
+		return nil, fmt.Errorf("encoding spend TX: %w", err)
+	}
 
 	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), tx)
-	return append(tx, sig...), nil
+	sig := ed25519.Sign(ed25519.PrivateKey(pk), rawTx)
+	return append(rawTx, sig...), nil
 }

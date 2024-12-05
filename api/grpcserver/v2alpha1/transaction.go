@@ -27,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/registry"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -405,33 +404,14 @@ func (s *TransactionService) convertTxState(
 }
 
 func decodeTxArgs(decoder *scale.Decoder) (any, *core.Address, error) {
-	reg := registry.New()
-	wallet.Register(reg)
-	// multisig.Register(reg)
-	// vesting.Register(reg)
-	// vault.Register(reg)
-
-	_, _, err := scale.DecodeCompact8(decoder)
+	var tx core.Tx
+	_, err := tx.DecodeScale(decoder)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
-	}
-
-	var principal core.Address
-	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
-	}
-
-	handler := reg.Get(wallet.TemplateAddress)
-	if handler == nil {
-		return nil, nil, fmt.Errorf("%w: wallet template not found", core.ErrMalformed)
-	}
-	output, err := handler.Parse(decoder)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: failed to parse transaction %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w: decoding TX: %w", core.ErrMalformed, err)
 	}
 
 	var payload athcon.Payload
-	err = gossamerScale.Unmarshal(output.Payload, &payload)
+	err = gossamerScale.Unmarshal(tx.Payload, &payload)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: tx payload: %w", core.ErrMalformed, err)
 	}

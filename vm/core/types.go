@@ -142,7 +142,7 @@ type VMHost interface {
 	Execute(types.LayerID, int64, types.Address, types.Address, []byte, uint64, []byte) ([]byte, int64, error)
 }
 
-//go:generate scalegen -types Metadata
+//go:generate scalegen -types Metadata,Tx
 
 // Metadata contains generic metadata for all transactions.
 type Metadata struct {
@@ -170,4 +170,14 @@ func (t *Payload) DecodeScale(dec *scale.Decoder) (int, error) {
 	}
 	*t = field
 	return n, nil
+}
+
+type Tx struct {
+	Version   uint8
+	Principal types.Address
+	// Template is needed for a spawning the prinipal account.
+	// It is only allowed to be set when principal is not spawned yet.
+	Template *types.Address
+	Metadata Metadata
+	Payload  []byte `scale:"max=1048576"`
 }

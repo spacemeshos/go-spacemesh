@@ -335,7 +335,9 @@ func (v *VM) execute(
 			continue
 		}
 		balance := ctx.Balance()
-		if intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw); balance < intrinsic {
+		intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw)
+		logger.Info("intrinsic gas check", zap.Uint64("balance", balance), zap.Uint64("intrinsic gas", intrinsic))
+		if balance < intrinsic {
 			logger.Warn("ineffective transaction. intrinsic gas not covered",
 				zap.Object("header", header),
 				zap.Stringer("account", ctx.Principal()),
@@ -347,6 +349,7 @@ func (v *VM) execute(
 		}
 		if limit < ctx.Header.MaxGas {
 			logger.Warn("ineffective transaction. out of block gas",
+				zap.Uint64("max gas", ctx.Header.MaxGas),
 				zap.Uint64("block gas limit", v.cfg.GasLimit),
 				zap.Uint64("current limit", limit),
 				zap.Object("header", header),
@@ -365,7 +368,7 @@ func (v *VM) execute(
 					zap.Stringer("txid", tx.GetRaw().ID),
 					zap.Object("header", header),
 					zap.Stringer("account", ctx.Principal()),
-					zap.Object("payload", ctx.Payload()),
+					zap.Int("payload size", len(ctx.Payload())),
 					zap.Error(err),
 				)
 				ineffective = append(ineffective, types.Transaction{RawTx: tx.GetRaw()})
@@ -389,7 +392,7 @@ func (v *VM) execute(
 			zap.Stringer("txid", tx.GetRaw().ID),
 			zap.Object("header", header),
 			zap.Stringer("account", ctx.Principal()),
-			zap.Object("payload", ctx.Payload()),
+			zap.Int("payload size", len(ctx.Payload())),
 		)
 
 		rst := types.TransactionWithResult{}
@@ -477,6 +480,11 @@ func (r *Request) Verify() error {
 	return rst
 }
 
+var (
+	errWrongVersion    = errors.New("wrong version")
+	errUnknownTemplate = errors.New("unknown template")
+)
+
 func parse(
 	logger *zap.Logger,
 	lid types.LayerID,
@@ -486,20 +494,17 @@ func parse(
 	raw []byte,
 	decoder *scale.Decoder,
 ) (*core.Header, *core.Context, error) {
-	version, _, err := scale.DecodeCompact8(decoder)
+	var tx core.Tx
+	_, err := tx.DecodeScale(decoder)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: failed to decode version %w", core.ErrMalformed, err)
+		return nil, nil, fmt.Errorf("%w: decoding TX: %w", core.ErrMalformed, err)
 	}
 	// v1 is athena compatible tx
-	if version != 1 {
-		return nil, nil, fmt.Errorf("%w: unsupported version %d", core.ErrMalformed, version)
+	if tx.Version != 1 {
+		return nil, nil, fmt.Errorf("%w: %d", errWrongVersion, tx.Version)
 	}
 
-	var principal core.Address
-	if _, err := principal.DecodeScale(decoder); err != nil {
-		return nil, nil, fmt.Errorf("%w failed to decode principal: %w", core.ErrMalformed, err)
-	}
-	ctx, err := core.New(cfg.GenesisID, lid, principal, loader, reg, logger)
+	ctx, err := core.New(cfg.GenesisID, lid, tx.Principal, loader, reg, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating new context: %w", err)
 	}
@@ -507,84 +512,50 @@ func parse(
 	// There are two cases to consider:
 	// 1. Principal account exists, and is spawned. In this case, we use the principal account
 	// template.
-	// 2. Principal account exists as a stub with a nonzero balance, but has not been spawned. In
-	// this case, we assume the tx is a self-spawn for the principal, and check that the calculated
-	// principal matches.
+	// 2. Principal account exists as a stub, but has not been spawned. Account is not spawned if it
+	// doesn't have a template addressassigned. In this case, we assume the tx is a self-spawn for
+	// the principal, and check that the calculated principal matches.
 
 	// NOTE: Athena currently does not allow a tx with principal A to directly call a method on
 	// template B where A != B. That will be handled by "proxied calls", where the target template
 	// is passed not explicitly as part of the tx, but implicitly in the args. This simplifies the
 	// logic here considerably.
 
-	// TODO: a spawn TX should carry the template address from TX
-	// For now, we assume a single-sig wallet template if the principal is not
-	// spawned yet.
-	ctx.Header.TemplateAddress = wallet.TemplateAddress
-	if addr := ctx.PrincipalAccount.TemplateAddress; addr != nil {
-		ctx.Header.TemplateAddress = *addr
+	if ctx.PrincipalAccount.TemplateAddress == nil {
+		if tx.Template == nil {
+			return nil, nil, core.ErrNotSpawned
+		}
+		ctx.SpawnTx = true
+		ctx.Header.TemplateAddress = *tx.Template
+		// in case of a self-spawn, we need to check that the calculated principal matches.
+		// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
+		// NOTE: this check isn't strictly necessary. this tx will fail verify later, since the
+		// account will be spawned to the wrong location, but it's much cheaper to perform this check
+		// now and fail fast.
+		var payload athcon.Payload
+		err = gossamerScale.Unmarshal(tx.Payload, &payload)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%w: decoding TX payload: %w", core.ErrMalformed, err)
+		}
+		computedPrincipal := core.ComputePrincipalFromBlob(*tx.Template, payload.Input)
+		if computedPrincipal != tx.Principal {
+			return nil, nil, fmt.Errorf("computed spawn principal %q doesn't match %q", computedPrincipal, tx.Principal)
+		}
+	} else {
+		if tx.Template != nil {
+			return nil, nil, fmt.Errorf("%w: principal account already spawned", core.ErrMalformed)
+		}
+		ctx.Header.TemplateAddress = *ctx.PrincipalAccount.TemplateAddress
 	}
 	handler := reg.Get(ctx.Header.TemplateAddress)
 	if handler == nil {
-		return nil, nil, fmt.Errorf("%w: unknown template %s", core.ErrMalformed, ctx.Header.TemplateAddress)
+		return nil, nil, fmt.Errorf("%w: %s", errUnknownTemplate, ctx.Header.TemplateAddress)
 	}
 	ctx.PrincipalHandler = handler
-	// now that we have a template handler, go ahead and parse the tx
-	output, err := ctx.PrincipalHandler.Parse(decoder)
-	if err != nil {
-		return nil, nil, err
-	}
-	ctx.ParseOutput = output
-
-	// in case of a self-spawn, we need to check that the calculated principal matches.
-	// only check this in case of spawn, because otherwise the payload may be for spend not spawn.
-
-	// note: this check isn't strictly necessary. this tx will fail verify later, since the
-	// account will be spawned to the wrong location, but it's much cheaper to perform this check
-	// now and fail fast.
-
-	var payload athcon.Payload
-	err = gossamerScale.Unmarshal(output.Payload, &payload)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: malformed TX payload: %w", core.ErrMalformed, err)
-	}
-	args, err := wallet.ParseArgs(payload)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: parsing TX arguments: %w", core.ErrMalformed, err)
-	}
-
-	// now that the tx has been parsed, we can perform some more sanity checks.
-	// if this is a spawn for an account that was already spawned, we may
-	// have assumed above that it was not a spawn. now we can make sure.
-	// that this will also catch a non-spawn tx with an unspawned principal, which we
-	// provisionally assumed was a spawn tx.
-
-	switch args := args.(type) {
-	case *wallet.SpawnArgs:
-		if ctx.PrincipalAccount.TemplateAddress != nil {
-			return nil, nil, fmt.Errorf("%w: principal account already spawned", core.ErrMalformed)
-		}
-		ctx.SpawnTx = true
-		ctx.Header.MaxGas = core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
-
-		computedPrincipal := wallet.ComputePrincipal(args.Pubkey[:])
-		if computedPrincipal != principal {
-			return nil, nil, fmt.Errorf("%w: computed spawn principal %q does not match %q",
-				core.ErrMalformed, computedPrincipal.String(), principal.String())
-		}
-	case *wallet.SpendArgs:
-		if ctx.PrincipalAccount.TemplateAddress == nil {
-			return nil, nil, fmt.Errorf("%w: non-spawn tx with unspawned principal", core.ErrNotSpawned)
-		}
-
-		ctx.Header.MaxGas = core.ATHENA_GAS_SPEND + core.ATHENA_GAS_VERIFY
-	case *wallet.DeployArgs:
-		if ctx.PrincipalAccount.TemplateAddress == nil {
-			return nil, nil, fmt.Errorf("%w: non-spawn tx with unspawned principal", core.ErrNotSpawned)
-		}
-		ctx.Header.MaxGas = core.ATHENA_GAS_DEPLOY + core.ATHENA_GAS_VERIFY
-	default:
-		panic("txArgs is guaranteed to be spawn or spend at this point")
-	}
+	ctx.Metadata = tx.Metadata
+	ctx.TxPayload = tx.Payload
+	// FIXME: How to obtain a max gas? Should it be returned from Verify()?
+	ctx.Header.MaxGas = core.ATHENA_MAX_GAS
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
@@ -596,11 +567,11 @@ func parse(
 	ctx.Gas.FixedGas = ctx.PrincipalTemplate.LoadGas()
 	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
 
-	ctx.Header.Principal = principal
-	ctx.Header.GasPrice = output.GasPrice
-	ctx.Header.Nonce = output.Nonce
+	ctx.Header.Principal = tx.Principal
+	ctx.Header.GasPrice = tx.Metadata.GasPrice
+	ctx.Header.Nonce = tx.Metadata.Nonce
 
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(output.Payload)
+	maxspend, err := ctx.PrincipalTemplate.MaxSpend(tx.Payload)
 	if err != nil {
 		return nil, nil, err
 	}

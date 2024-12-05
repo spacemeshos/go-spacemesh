@@ -35,8 +35,10 @@ type Context struct {
 	PrincipalHandler  Handler
 	PrincipalTemplate Template
 
-	ParseOutput ParseOutput
-	Gas         struct {
+	Metadata  Metadata
+	TxPayload []byte
+
+	Gas struct {
 		BaseGas  uint64
 		FixedGas uint64
 	}
@@ -110,12 +112,11 @@ func (c *Context) NextNonce() uint64 {
 
 // Nonce returns the transaction nonce.
 func (c *Context) Nonce() uint64 {
-	return c.ParseOutput.Nonce
+	return c.Metadata.Nonce
 }
 
-// Nonce returns the transaction nonce.
 func (c *Context) Payload() Payload {
-	return c.ParseOutput.Payload
+	return c.TxPayload
 }
 
 // TemplateAddress returns the address of the principal account template.
