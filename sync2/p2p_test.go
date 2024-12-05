@@ -96,8 +96,8 @@ func TestP2P(t *testing.T) {
 			}
 		}
 		cfg := sync2.DefaultConfig()
-		cfg.EnableActiveSync = true
 		cfg.SyncInterval = 100 * time.Millisecond
+		cfg.MaxDepth = maxDepth
 		host := mesh.Hosts()[n]
 		handlers[n] = &fakeHandler{
 			mtx:         &mtx,
@@ -113,7 +113,7 @@ func TestP2P(t *testing.T) {
 		eg.Go(func() error { return srv.Run(ctx) })
 		hs[n] = sync2.NewP2PHashSync(
 			logger.Named(fmt.Sprintf("node%d", n)),
-			d, "test", &os, keyLen, maxDepth, ps, handlers[n], cfg, srv)
+			d, "test", &os, keyLen, ps, handlers[n], cfg, true)
 		require.NoError(t, hs[n].Load())
 		is := hs[n].Set().(*rangesync.DumbSet)
 		is.SetAllowMultiReceive(true)

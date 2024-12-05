@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -150,6 +151,8 @@ func (s *splitSync) handleSyncResult(r syncResult) error {
 		s.syncPeers = append(s.syncPeers, r.ps.Peer())
 		s.numRemaining--
 		s.logger.Debug("peer synced successfully",
+			log.ZShortStringer("x", sr.X),
+			log.ZShortStringer("y", sr.Y),
 			zap.Stringer("peer", r.ps.Peer()),
 			zap.Int("numPeers", s.numPeers),
 			zap.Int("numRemaining", s.numRemaining),
@@ -199,8 +202,18 @@ func (s *splitSync) Sync(ctx context.Context) error {
 			}
 			select {
 			case sr = <-s.slowRangeCh:
-				// push this syncRange to the back of the queue
-				s.sq.Update(sr, s.clock.Now())
+				// Push this syncRange to the back of the queue.
+				// There's some chance that the peer managed to complete
+				// the sync while the range was still sitting in the
+				// channel, so we double-check if it's done.
+				if !sr.Done {
+					s.logger.Debug("slow peer, reassigning the range",
+						log.ZShortStringer("x", sr.X), log.ZShortStringer("y", sr.Y))
+					s.sq.Update(sr, s.clock.Now())
+				} else {
+					s.logger.Debug("slow peer, NOT reassigning the range: DONE",
+						log.ZShortStringer("x", sr.X), log.ZShortStringer("y", sr.Y))
+				}
 			case <-syncCtx.Done():
 				return syncCtx.Err()
 			case r := <-s.resCh:
@@ -210,5 +223,16 @@ func (s *splitSync) Sync(ctx context.Context) error {
 			}
 		}
 	}
-	return s.eg.Wait()
+	// Stop late peers that didn't manage to sync their ranges in time.
+	// The ranges were already reassigned to other peers and successfully
+	// synced by this point.
+	cancel()
+	err := s.eg.Wait()
+	if s.numRemaining == 0 {
+		// If all the ranges are synced, the split sync is considered successful
+		// even if some peers failed to sync their ranges, so that these ranges
+		// got synced by other peers.
+		return nil
+	}
+	return err
 }

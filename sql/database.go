@@ -227,7 +227,8 @@ func OpenInMemory(opts ...Opt) (*sqliteDatabase, error) {
 	opts = append(opts, withForceFresh())
 	// Unique uri is needed to avoid sharing the same in-memory database,
 	// while allowing multiple connections to the same database.
-	uri := fmt.Sprintf("file:mem-%d?mode=memory&cache=shared", rand.Uint64())
+	uri := fmt.Sprintf("file:mem-%d-%d?mode=memory&cache=shared",
+		rand.Uint64(), rand.Uint64())
 	return Open(uri, opts...)
 }
 

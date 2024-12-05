@@ -22,9 +22,13 @@ import (
 type Config struct {
 	rangesync.RangeSetReconcilerConfig  `mapstructure:",squash"`
 	multipeer.MultiPeerReconcilerConfig `mapstructure:",squash"`
-	EnableActiveSync                    bool `mapstructure:"enable-active-sync"`
-	TrafficLimit                        int  `mapstructure:"traffic-limit"`
-	MessageLimit                        int  `mapstructure:"message-limit"`
+	TrafficLimit                        int           `mapstructure:"traffic-limit"`
+	MessageLimit                        int           `mapstructure:"message-limit"`
+	MaxDepth                            int           `mapstructure:"max-depth"`
+	BatchSize                           int           `mapstructure:"batch-size"`
+	MaxAttempts                         int           `mapstructure:"max-attempts"`
+	MaxBatchRetries                     int           `mapstructure:"max-batch-retries"`
+	FailedBatchDelay                    time.Duration `mapstructure:"failed-batch-delay"`
 }
 
 // DefaultConfig returns the default configuration for the P2PHashSync.
@@ -34,20 +38,27 @@ func DefaultConfig() Config {
 		MultiPeerReconcilerConfig: multipeer.DefaultConfig(),
 		TrafficLimit:              200_000_000,
 		MessageLimit:              20_000_000,
+		MaxDepth:                  24,
+		BatchSize:                 1000,
+		MaxAttempts:               3,
+		MaxBatchRetries:           3,
+		FailedBatchDelay:          10 * time.Second,
 	}
 }
 
 // P2PHashSync is handles the synchronization of a local OrderedSet against other peers.
 type P2PHashSync struct {
-	logger     *zap.Logger
-	cfg        Config
-	os         rangesync.OrderedSet
-	syncBase   multipeer.SyncBase
-	reconciler *multipeer.MultiPeerReconciler
-	cancel     context.CancelFunc
-	eg         errgroup.Group
-	start      sync.Once
-	running    atomic.Bool
+	logger           *zap.Logger
+	cfg              Config
+	enableActiveSync bool
+	os               rangesync.OrderedSet
+	syncBase         multipeer.SyncBase
+	reconciler       *multipeer.MultiPeerReconciler
+	cancel           context.CancelFunc
+	eg               errgroup.Group
+	startOnce        sync.Once
+	running          atomic.Bool
+	kickCh           chan struct{}
 }
 
 // NewP2PHashSync creates a new P2PHashSync.
@@ -56,23 +67,24 @@ func NewP2PHashSync(
 	d *rangesync.Dispatcher,
 	name string,
 	os rangesync.OrderedSet,
-	keyLen, maxDepth int,
+	keyLen int,
 	peers *peers.Peers,
 	handler multipeer.SyncKeyHandler,
 	cfg Config,
-	requester rangesync.Requester,
+	enableActiveSync bool,
 ) *P2PHashSync {
 	s := &P2PHashSync{
-		logger: logger,
-		os:     os,
-		cfg:    cfg,
+		logger:           logger,
+		os:               os,
+		cfg:              cfg,
+		kickCh:           make(chan struct{}, 1),
+		enableActiveSync: enableActiveSync,
 	}
-	// var ps multipeer.PairwiseSyncer
-	ps := rangesync.NewPairwiseSetSyncer(logger, requester, name, cfg.RangeSetReconcilerConfig)
+	ps := rangesync.NewPairwiseSetSyncer(logger, d, name, cfg.RangeSetReconcilerConfig)
 	s.syncBase = multipeer.NewSetSyncBase(logger, ps, s.os, handler)
 	s.reconciler = multipeer.NewMultiPeerReconciler(
 		logger, cfg.MultiPeerReconcilerConfig,
-		s.syncBase, peers, keyLen, maxDepth)
+		s.syncBase, peers, keyLen, cfg.MaxDepth)
 	d.Register(name, s.serve)
 	return s
 }
@@ -92,6 +104,9 @@ func (s *P2PHashSync) Set() rangesync.OrderedSet {
 
 // Load loads the OrderedSet from the underlying storage.
 func (s *P2PHashSync) Load() error {
+	if s.os.Loaded() {
+		return nil
+	}
 	s.logger.Info("loading the set")
 	start := time.Now()
 	// We pre-load the set to avoid waiting for it to load during a
@@ -106,30 +121,51 @@ func (s *P2PHashSync) Load() error {
 	s.logger.Info("done loading the set",
 		zap.Duration("elapsed", time.Since(start)),
 		zap.Int("count", info.Count),
-		zap.Stringer("fingerprint", info.Fingerprint))
+		zap.Stringer("fingerprint", info.Fingerprint),
+		zap.Int("maxDepth", s.cfg.MaxDepth))
 	return nil
 }
 
-// Start starts the multi-peer reconciler.
-func (s *P2PHashSync) Start() {
-	if !s.cfg.EnableActiveSync {
-		s.logger.Info("active sync is disabled")
-		return
-	}
+func (s *P2PHashSync) start() (isWaiting bool) {
 	s.running.Store(true)
-	s.start.Do(func() {
-		s.eg.Go(func() error {
-			defer s.running.Store(false)
-			var ctx context.Context
-			ctx, s.cancel = context.WithCancel(context.Background())
-			return s.reconciler.Run(ctx)
-		})
+	isWaiting = true
+	s.startOnce.Do(func() {
+		isWaiting = false
+		if s.enableActiveSync {
+			s.eg.Go(func() error {
+				defer s.running.Store(false)
+				var ctx context.Context
+				ctx, s.cancel = context.WithCancel(context.Background())
+				return s.reconciler.Run(ctx, s.kickCh)
+			})
+			return
+		} else {
+			s.logger.Info("active syncv2 is disabled")
+			return
+		}
 	})
+	return isWaiting
+}
+
+// Start starts the multi-peer reconciler if it is not already running.
+func (s *P2PHashSync) Start() {
+	s.start()
+}
+
+// StartAndSync starts the multi-peer reconciler if it is not already running, and waits
+// until the local OrderedSet is in sync with the peers.
+func (s *P2PHashSync) StartAndSync(ctx context.Context) error {
+	if s.start() {
+		// If the multipeer reconciler is waiting for sync, we kick it to start
+		// the sync so as not to wait for the next scheduled sync interval.
+		s.kickCh <- struct{}{}
+	}
+	return s.WaitForSync(ctx)
 }
 
 // Stop stops the multi-peer reconciler.
 func (s *P2PHashSync) Stop() {
-	if !s.cfg.EnableActiveSync || !s.running.Load() {
+	if !s.enableActiveSync || !s.running.Load() {
 		return
 	}
 	if s.cancel != nil {
