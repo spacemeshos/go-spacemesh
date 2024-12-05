@@ -396,27 +396,16 @@ func (v *VM) execute(
 		rst.Layer = layer
 
 		err = ctx.Consume(ctx.Header.MaxGas)
-		logger.Debug("consumed max gas from principal",
-			zap.Stringer("account", ctx.Principal()),
-			zap.Uint64("maxgas", ctx.Header.MaxGas),
-		)
 		if err == nil {
 			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload(), logger)
 		}
 		if err == nil {
 			// If tx succeeded, refund remaining gas
 			// (We consume all remaining gas if the tx failed)
-			if err2 := ctx.Refund(); err2 != nil {
-				return nil, nil, 0, fmt.Errorf("%w: refunding gas %w", core.ErrInternal, err2)
-			}
-			logger.Debug("refunded gas left to principal",
-				zap.Stringer("principal", ctx.Principal()),
-			)
+			rst.Status = types.TransactionSuccess
+			ctx.Refund()
 		} else {
-			logger.Debug("skipping gas refund for failed tx")
-		}
-		if err != nil {
-			logger.Debug("transaction failed",
+			logger.Debug("transaction failed, skipping gas refund",
 				zap.Object("header", header),
 				zap.Stringer("account", ctx.Principal()),
 				zap.Error(err),
@@ -424,22 +413,18 @@ func (v *VM) execute(
 			if errors.Is(err, core.ErrInternal) {
 				return nil, nil, 0, err
 			}
+			rst.Status = types.TransactionFailure
+			rst.Message = err.Error()
 		}
 		transactionDurationExecute.Observe(float64(time.Since(t2)))
 
 		rst.RawTx = txs[i].GetRaw()
 		rst.TxHeader = &ctx.Header
-		rst.Status = types.TransactionSuccess
-		if err != nil {
-			rst.Status = types.TransactionFailure
-			rst.Message = err.Error()
-		}
 		rst.Gas = ctx.Consumed()
 		rst.Fee = ctx.Fee()
 		rst.Addresses = ctx.Updated()
 
-		err = ctx.Apply(ss)
-		if err != nil {
+		if err := ctx.Apply(ss); err != nil {
 			return nil, nil, 0, fmt.Errorf("%w: %w", core.ErrInternal, err)
 		}
 		fees += ctx.Fee()

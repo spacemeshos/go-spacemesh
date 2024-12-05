@@ -80,6 +80,86 @@ func TestConsume(t *testing.T) {
 	})
 }
 
+func TestRefund(t *testing.T) {
+	account := types.Account{
+		Address: types.RandomAddress(t),
+		Balance: 100,
+	}
+	t.Run("empty refund", func(t *testing.T) {
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
+		cache.Update(account)
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+
+		require.NoError(t, err)
+		ctx.Header.GasPrice = 1
+
+		ctx.Refund()
+		require.EqualValues(t, 0, ctx.Consumed())
+		require.EqualValues(t, 0, ctx.Fee())
+		ctx.Apply(cache)
+		updatedA, err := cache.Get(account.Address)
+		require.NoError(t, err)
+		require.Equal(t, account.Balance, updatedA.Balance)
+	})
+	t.Run("nothing spent - refund all", func(t *testing.T) {
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
+		cache.Update(account)
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+
+		require.NoError(t, err)
+		ctx.Header.MaxGas = 100
+		ctx.Header.GasPrice = 1
+		require.NoError(t, ctx.Consume(60))
+		require.EqualValues(t, 60, ctx.Consumed())
+
+		ctx.Refund()
+		require.EqualValues(t, 0, ctx.Consumed())
+		require.EqualValues(t, 0, ctx.Fee())
+		ctx.Apply(cache)
+		updatedA, err := cache.Get(account.Address)
+		require.NoError(t, err)
+		require.Equal(t, account.Balance, updatedA.Balance)
+	})
+	t.Run("spent some - refund remaining", func(t *testing.T) {
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
+		cache.Update(account)
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+
+		require.NoError(t, err)
+		ctx.Header.MaxGas = 100
+		ctx.Header.GasPrice = 1
+		require.NoError(t, ctx.Consume(60))
+		require.EqualValues(t, 60, ctx.Consumed())
+		ctx.SpendGas(20)
+		ctx.Refund()
+		require.EqualValues(t, 20, ctx.Consumed())
+		require.EqualValues(t, 20, ctx.Fee())
+		ctx.Apply(cache)
+		updatedA, err := cache.Get(account.Address)
+		require.NoError(t, err)
+		require.Equal(t, account.Balance-20, updatedA.Balance)
+	})
+	t.Run("spent over consumed - no refund", func(t *testing.T) {
+		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
+		cache.Update(account)
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+
+		require.NoError(t, err)
+		ctx.Header.MaxGas = 100
+		ctx.Header.GasPrice = 1
+		require.NoError(t, ctx.Consume(60))
+		require.EqualValues(t, 60, ctx.Consumed())
+		ctx.SpendGas(200)
+		ctx.Refund()
+		require.EqualValues(t, 60, ctx.Consumed())
+		require.EqualValues(t, 60, ctx.Fee())
+		ctx.Apply(cache)
+		updatedA, err := cache.Get(account.Address)
+		require.NoError(t, err)
+		require.Equal(t, account.Balance-60, updatedA.Balance)
+	})
+}
+
 func TestApply(t *testing.T) {
 	var principal types.Address
 	t.Run("UpdatesNonce", func(t *testing.T) {

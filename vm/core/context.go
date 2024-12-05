@@ -316,17 +316,24 @@ func (c *Context) Consume(gas uint64) (err error) {
 
 	c.Logger.Debug(
 		"consume",
+		zap.Error(err),
 		zap.Stringer("principal", c.Principal()),
+		zap.Uint64("new balance", c.Balance()),
 		zap.Uint64("gas", gas),
 		zap.Uint64("fee", amount),
 		zap.Uint64("consumed", c.consumed),
+		zap.Uint64("maxgas", c.Header.MaxGas),
 	)
 
 	return err
 }
 
 // Refund refunds gas remaining after execution.
-func (c *Context) Refund() (err error) {
+func (c *Context) Refund() {
+	if c.gasSpent >= c.consumed {
+		c.Logger.Debug("spent more than consumed - nothing to refund")
+		return
+	}
 	// TODO(lane): safe math
 	unspent := c.consumed - c.gasSpent
 	amount := unspent * c.Header.GasPrice
@@ -343,8 +350,6 @@ func (c *Context) Refund() (err error) {
 		zap.Uint64("unspent gas", unspent),
 		zap.Uint64("fee", amount),
 	)
-
-	return nil
 }
 
 // Apply is executed if transaction was consumed.
