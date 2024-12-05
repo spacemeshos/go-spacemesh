@@ -24,15 +24,13 @@ const (
 // - maintains changes to the system state, that will be applied only after successful execution
 // - accumulates set of reusable objects and data.
 type Context struct {
-	Registry HandlerRegistry
-	Loader   AccountLoader
+	Loader AccountLoader
 
 	// LayerID of the block.
 	LayerID   LayerID
 	GenesisID types.Hash20
 
 	PrincipalAccount  types.Account
-	PrincipalHandler  Handler
 	PrincipalTemplate Template
 
 	Metadata  Metadata
@@ -67,7 +65,6 @@ func New(
 	layer types.LayerID,
 	principal types.Address,
 	loader AccountLoader,
-	registry HandlerRegistry,
 	logger *zap.Logger,
 ) (*Context, error) {
 	principalAccount, err := loader.Get(principal)
@@ -83,7 +80,6 @@ func New(
 
 	return &Context{
 		GenesisID:        genesisID,
-		Registry:         registry,
 		Loader:           loader,
 		LayerID:          layer,
 		Logger:           logger,
@@ -115,7 +111,7 @@ func (c *Context) Nonce() uint64 {
 	return c.Metadata.Nonce
 }
 
-func (c *Context) Payload() Payload {
+func (c *Context) Payload() []byte {
 	return c.TxPayload
 }
 
@@ -147,11 +143,6 @@ func (c *Context) Balance() uint64 {
 // Template of the principal account.
 func (c *Context) Template() Template {
 	return c.PrincipalTemplate
-}
-
-// Handler of the principal account.
-func (c *Context) Handler() Handler {
-	return c.PrincipalHandler
 }
 
 // Spawn account.
@@ -291,6 +282,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 
 // SpendGas marks gas as consumed.
 func (c *Context) SpendGas(gas uint64) {
+	c.Logger.Debug("spent gas", zap.Uint64("gas", gas))
 	c.gasSpent += gas
 }
 

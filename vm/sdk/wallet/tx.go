@@ -56,7 +56,6 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	return append(rawTx, sig...), nil
 }
 
-// Spawn creates a spawn transaction.
 func Spawn(
 	pk signing.PrivateKey,
 	nonce core.Nonce,
@@ -78,10 +77,15 @@ func Spawn(
 	}
 	defer vmlib.Close()
 
+	template := options.Template
+	if template == nil {
+		template = &wallet.TemplateAddress
+	}
+
 	tx := core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: Address(signing.Public(pk)),
-		Template:  &wallet.TemplateAddress,
+		Principal: core.ComputePrincipalFromBlob(*template, signing.Public(pk)),
+		Template:  template,
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,

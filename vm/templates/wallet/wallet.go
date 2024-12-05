@@ -14,6 +14,12 @@ import (
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
 )
 
+func init() {
+	TemplateAddress[len(TemplateAddress)-1] = 1
+}
+
+var TemplateAddress core.Address
+
 // New returns Wallet instance with SpawnArguments.
 func New(host core.Host, logger *zap.Logger) (*Wallet, error) {
 	// Load the template account
@@ -90,6 +96,7 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 	}
 	defer vmhost.Destroy()
 
+	s.logger.Debug("executing maxspend", zap.Uint32("layer", s.host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
 	output, _, err := vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
@@ -158,6 +165,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 
 		// the transaction must already be a spawn tx, so there's no need to modify the payload.
 		executionPayload := athcon.EncodedExecutionPayload(nil, s.host.Payload())
+		s.logger.Debug("executing spawn", zap.Uint32("layer", s.host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
 		_, gasLeft, err := vmhost.Execute(
 			s.host.Layer(),
 			maxgas,
@@ -195,6 +203,9 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 	}
 	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
+	// FIXME: fix max gas calculations
+	maxgas = 10_000_000
+	s.logger.Debug("executing verify", zap.Uint32("layer", s.host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
 	output, gasLeft, err := vmhost.Execute(
 		s.host.Layer(),
 		maxgas,

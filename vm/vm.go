@@ -23,7 +23,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/registry"
+	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
+	// FIXME: move Wallet methods New, MaxSpend and Verify out of 'templates/wallet'
+	// as they are generic.
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -60,12 +62,10 @@ func WithConfig(cfg Config) Opt {
 // New returns VM instance.
 func New(db sql.StateDatabase, opts ...Opt) *VM {
 	vm := &VM{
-		logger:   zap.NewNop(),
-		db:       db,
-		cfg:      DefaultConfig(),
-		registry: registry.New(),
+		logger: zap.NewNop(),
+		db:     db,
+		cfg:    DefaultConfig(),
 	}
-	wallet.Register(vm.registry)
 	for _, opt := range opts {
 		opt(vm)
 	}
@@ -74,10 +74,9 @@ func New(db sql.StateDatabase, opts ...Opt) *VM {
 
 // VM handles modifications to the account state.
 type VM struct {
-	logger   *zap.Logger
-	db       sql.StateDatabase
-	cfg      Config
-	registry *registry.Registry
+	logger *zap.Logger
+	db     sql.StateDatabase
+	cfg    Config
 }
 
 // Validation initializes validation request.
@@ -400,7 +399,7 @@ func (v *VM) execute(
 
 		err = ctx.Consume(ctx.Header.MaxGas)
 		if err == nil {
-			_, _, err = ctx.PrincipalHandler.Exec(ctx, ctx.Payload(), logger)
+			err = v.execInVm(ctx, ctx.Payload())
 		}
 		if err == nil {
 			// If tx succeeded, refund remaining gas
@@ -439,6 +438,54 @@ func (v *VM) execute(
 	return executed, ineffective, fees, nil
 }
 
+func (v *VM) execInVm(host *core.Context, payload []byte) error {
+	templateAccount, err := host.Get(host.Header.TemplateAddress)
+	if err != nil {
+		return fmt.Errorf("failed to load template account: %w", err)
+	} else if len(templateAccount.State) == 0 {
+		return errors.New("template account state is empty")
+	}
+
+	vmhost, err := vmhost.NewHost(host, v.logger)
+	if err != nil {
+		return fmt.Errorf("failed to instantiate VM: %w", err)
+	}
+	defer vmhost.Destroy()
+
+	// sanity check - verify should have failed for this tx
+	if host.IsSpawn() && len(host.PrincipalAccount.State) > 0 {
+		return errors.New("wallet account state is not empty for spawn")
+	}
+	executionPayload := athcon.EncodedExecutionPayload(host.PrincipalAccount.State, payload)
+
+	// Execute the transaction in the VM
+	// Note: at this point, maxgas was already consumed from the principal account, so we don't
+	// need to check the account balance, but we still need to communicate the amount to the VM
+	// so it can short-circuit execution if the amount is exceeded.
+	maxgas := int64(host.MaxGas() - host.GasSpent())
+	if maxgas < 0 {
+		return errors.New("gas limit exceeds maximum int64 value")
+	}
+	// FIXME: fix max gas calculations
+	maxgas = 10_000_000
+	v.logger.Debug("executing", zap.Uint32("layer", host.LayerID.Uint32()), zap.Int64("maxgas", maxgas))
+	_, gasLeft, err := vmhost.Execute(
+		host.Layer(),
+		maxgas,
+		host.Principal(),
+		host.Principal(),
+		executionPayload,
+		// note: value here is zero because this is unused at the top-level. any amount actually being
+		// transferred is encoded in the args to a wallet.Spend() method inside the payload; in other
+		// words, it's abstracted inside the VM as part of our account abstraction.
+		// note that this field is used for lower-level calls triggered by Call.
+		0,
+		templateAccount.State,
+	)
+	host.SpendGas(uint64(maxgas) - uint64(gasLeft))
+	return err
+}
+
 // Request used to implement 2-step validation flow.
 // After Parse is executed - conservative cache may do validation and skip Verify
 // if transaction can't be executed.
@@ -460,7 +507,7 @@ func (r *Request) Parse() (*core.Header, error) {
 	if len(r.raw.Raw) > core.TxSizeLimit {
 		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
 	}
-	header, ctx, err := parse(r.vm.logger, r.lid, r.vm.registry, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
+	header, ctx, err := parse(r.vm.logger, r.lid, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +535,6 @@ var (
 func parse(
 	logger *zap.Logger,
 	lid types.LayerID,
-	reg *registry.Registry,
 	loader core.AccountLoader,
 	cfg Config,
 	raw []byte,
@@ -504,7 +550,7 @@ func parse(
 		return nil, nil, fmt.Errorf("%w: %d", errWrongVersion, tx.Version)
 	}
 
-	ctx, err := core.New(cfg.GenesisID, lid, tx.Principal, loader, reg, logger)
+	ctx, err := core.New(cfg.GenesisID, lid, tx.Principal, loader, logger)
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating new context: %w", err)
 	}
@@ -547,11 +593,14 @@ func parse(
 		}
 		ctx.Header.TemplateAddress = *ctx.PrincipalAccount.TemplateAddress
 	}
-	handler := reg.Get(ctx.Header.TemplateAddress)
-	if handler == nil {
+
+	has, err := loader.Has(ctx.Header.TemplateAddress)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: checking if template exists: %w", core.ErrInternal, err)
+	}
+	if !has {
 		return nil, nil, fmt.Errorf("%w: %s", errUnknownTemplate, ctx.Header.TemplateAddress)
 	}
-	ctx.PrincipalHandler = handler
 	ctx.Metadata = tx.Metadata
 	ctx.TxPayload = tx.Payload
 	// FIXME: How to obtain a max gas? Should it be returned from Verify()?
@@ -559,7 +608,8 @@ func parse(
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
-	ctx.PrincipalTemplate, err = ctx.PrincipalHandler.New(ctx, logger.Named("template"))
+	// FIXME: move New, Verify and MaxSpend methods out of `templates/wallet` package.
+	ctx.PrincipalTemplate, err = wallet.New(ctx, logger.Named("template"))
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
 	}

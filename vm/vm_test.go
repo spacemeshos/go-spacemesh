@@ -42,7 +42,6 @@ func newTester(tb testing.TB) *tester {
 
 type testAccount interface {
 	getAddress() core.Address
-	getTemplate() core.Address
 	spend(t *tester, to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte
 	selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
 
@@ -60,10 +59,6 @@ type singlesigAccount struct {
 
 func (a *singlesigAccount) getAddress() core.Address {
 	return a.address
-}
-
-func (a *singlesigAccount) getTemplate() core.Address {
-	return wallet.TemplateAddress
 }
 
 func (a *singlesigAccount) deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte {
@@ -768,7 +763,9 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{10},
 						&spendTx{0, 11, 100},
 					},
-					gasLimit:    uint64(ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 10, 80_000, 1)) + core.ATHENA_MAX_GAS,
+					gasLimit: uint64(
+						ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 10, 80_000, 1),
+					) + core.ATHENA_MAX_GAS,
 					failed:      map[int]error{2: core.ErrOutOfGas},
 					ineffective: []int{3},
 					expected: map[int]change{
@@ -947,7 +944,17 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					failed: map[int]error{2: core.ErrOutOfGas},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateSpawnGas(11, 11) - 1 + ref.estimateSpendGas(0, 11, core.ATHENA_MAX_GAS, 1) + core.ATHENA_MAX_GAS},
+						0: spent{
+							amount: ref.estimateSpawnGas(
+								11,
+								11,
+							) - 1 + ref.estimateSpendGas(
+								0,
+								11,
+								core.ATHENA_MAX_GAS,
+								1,
+							) + core.ATHENA_MAX_GAS,
+						},
 						11: nonce{increased: 1},
 					},
 				},
@@ -1244,16 +1251,24 @@ func TestWallets(t *testing.T) {
 }
 
 func TestSingleSigWalletDeploy(t *testing.T) {
-	t.Parallel()
-	tt := newTester(t).addWalletTemplate().
-		addSingleSig(100).
-		applyGenesisWithBalance().
-		addSingleSig(1000 - 100)
+	tt := newTester(t).addWalletTemplate().addSingleSig(1)
+
+	// FIXME: The test will deploy singleSig wallet template again at a different address
+	// (`wallet.TemplateAddress` is hardcoded), because we don't have another template yet.
+	// Fix this test once we have more than 1 program.
+	code := wallet.PROGRAM
+	newTemplateAddress := core.TemplateAddress(code)
+	require.NotEqual(t, wallet.TemplateAddress, newTemplateAddress, "update the test to use another template")
+	pub, pk, err := ed25519.GenerateKey(tt.rng)
+	require.NoError(t, err)
+	principal := core.ComputePrincipalFromBlob(newTemplateAddress, pub)
+	tt.addAccount(&singlesigAccount{pk, principal}, 1_000_000_000)
+
+	tt.applyGenesisWithBalance()
 
 	// 1. Spawn an account to pay for deploying
 	account := tt.accounts[0]
-	rawSpawnTx := types.NewRawTx(account.selfSpawn(tt, 0))
-	_, _, err := tt.Apply(types.GetEffectiveGenesis(), []types.Transaction{{RawTx: rawSpawnTx}}, nil)
+	_, _, err = tt.Apply(types.GetEffectiveGenesis(), []types.Transaction{{RawTx: tt.selfSpawn(0)}}, nil)
 	require.NoError(t, err)
 
 	exists, err := tt.AccountExists(account.getAddress())
@@ -1264,9 +1279,6 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Deploy a new contract using it
-	code := []byte("this is bad code")
-	newTemplateAddress := core.TemplateAddress(code)
-
 	rawDeployTx := types.NewRawTx(account.deploy(tt, 1, code))
 	skipped, results, err := tt.Apply(types.GetEffectiveGenesis()+1, []types.Transaction{{RawTx: rawDeployTx}}, nil)
 	require.NoError(t, err)
@@ -1289,15 +1301,31 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	// Try deploy again
 	rawDeployTx = types.NewRawTx(account.deploy(tt, 2, code))
 	skipped, results, err = tt.Apply(types.GetEffectiveGenesis()+2, []types.Transaction{{RawTx: rawDeployTx}}, nil)
-	logger.Debug("applied TX", zap.Any("results", results))
 	require.NoError(t, err)
 	require.Empty(t, skipped)
+	logger.Debug("applied TX", zap.Any("results", results[0].TransactionResult))
 
 	// TODO: should it fail?
 	// principal was charged
 	pAccount2, err := accounts.Latest(tt.db, account.getAddress())
 	require.NoError(t, err)
 	require.Less(t, pAccount2.Balance, pAccount1.Balance)
+
+	// 3. Spawn the new template using the 2nd prefunded account
+	_, _, err = tt.Apply(
+		types.GetEffectiveGenesis(),
+		[]types.Transaction{{RawTx: tt.selfSpawn(1, sdk.WithTemplate(newTemplateAddress))}},
+		nil,
+	)
+	require.NoError(t, err)
+
+	exists, err = tt.AccountExists(tt.accounts[1].getAddress())
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	a, err := accounts.Latest(tt.db, tt.accounts[1].getAddress())
+	require.NoError(t, err)
+	require.Equal(t, &newTemplateAddress, a.TemplateAddress)
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {

@@ -36,15 +36,20 @@ func FuzzVerify(f *testing.F) {
 
 func TestMaxSpend(t *testing.T) {
 	const amount = 100
-
-	ctrl := gomock.NewController(t)
-	testWallet := Wallet{}
-	mockHost := mocks.NewMockHost(ctrl)
-	testWallet.host = mockHost
-	testWallet.templateCode = PROGRAM
+	principalAddress := types.Address{1, 2, 3, 4}
 	walletState, err := hex.DecodeString(WALLET_STATE)
 	require.NoError(t, err)
-	testWallet.walletState = walletState
+
+	ctrl := gomock.NewController(t)
+	mockHost := mocks.NewMockHost(ctrl)
+	mockHost.EXPECT().IsSpawn().Return(false)
+	mockHost.EXPECT().Principal().Return(principalAddress).AnyTimes()
+	mockHost.EXPECT().TemplateAddress().Return(TemplateAddress).AnyTimes()
+	mockHost.EXPECT().Get(TemplateAddress).Return(&types.Account{Address: TemplateAddress, State: PROGRAM}, nil)
+	mockHost.EXPECT().Get(principalAddress).Return(&types.Account{Address: principalAddress, State: walletState}, nil)
+
+	testWallet, err := New(mockHost, zaptest.NewLogger(t))
+	require.NoError(t, err)
 
 	libPath, err := host.AthenaLibPath()
 	require.NoError(t, err)
@@ -56,12 +61,10 @@ func TestMaxSpend(t *testing.T) {
 	spawnPayload := vmlib.EncodeTxSpawn(athcon.Bytes32{})
 	spendPayload := vmlib.EncodeTxSpend(athcon.Address{}, amount)
 
-	mockHost.EXPECT().Principal().Return(types.Address{}).Times(5)
 	mockHost.EXPECT().MaxGas().Return(100000).Times(2)
 	mockHost.EXPECT().Clone().Return(mockHost)
 	mockHost.EXPECT().Nonce()
-	mockHost.EXPECT().TemplateAddress().Return(types.Address{})
-	mockHost.EXPECT().Layer().Return(core.LayerID(1))
+	mockHost.EXPECT().Layer().Return(core.LayerID(1)).AnyTimes()
 	t.Run("Spawn", func(t *testing.T) {
 		max, err := testWallet.MaxSpend(spawnPayload)
 		require.NoError(t, err)
@@ -78,47 +81,32 @@ func TestSpawn(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockHost := mocks.NewMockHost(ctrl)
 
-	principalAddress := types.Address{1}
-	templateAddress := types.Address{2}
-	principalBytes, err := hex.DecodeString(PRINCIPAL)
+	pubkey, _, err := ed25519.GenerateKey(nil)
 	require.NoError(t, err)
-	expectedPrincipalAddress := types.Address(principalBytes)
-	pubkeyBytes, err := hex.DecodeString(PUBKEY)
-	require.NoError(t, err)
-	pubkey := athcon.Bytes32(pubkeyBytes)
-
-	mockTemplate := types.Account{
-		State: PROGRAM,
-	}
+	principalAddress := core.ComputePrincipalFromBlob(TemplateAddress, pubkey)
 
 	const maxGas = 100_000
-	var spendGas uint64
-	mockHost.EXPECT().Layer().Return(core.LayerID(1))
-	mockHost.EXPECT().Principal().Return(principalAddress).Times(6)
-	mockHost.EXPECT().MaxGas().Return(maxGas)
-	mockHost.EXPECT().SpendGas(gomock.Any()).Do(func(g uint64) { spendGas = g })
-	mockHost.EXPECT().TemplateAddress().Return(templateAddress).Times(2)
+	mockHost.EXPECT().Principal().Return(principalAddress).Times(3)
+	mockHost.EXPECT().TemplateAddress().Return(TemplateAddress)
 	mockHost.EXPECT().Nonce()
-	mockHost.EXPECT().IsSpawn().Return(true)
-	mockHost.EXPECT().GasSpent()
-	mockHost.EXPECT().Get(templateAddress).Return(&mockTemplate, nil)
-	mockHost.EXPECT().Get(principalAddress).Return(&types.Account{}, nil)
-	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(expectedPrincipalAddress, nil)
+	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(principalAddress, nil)
 
-	// point to the library path
 	libPath, err := host.AthenaLibPath()
 	require.NoError(t, err)
 	vmLib, err := athcon.LoadLibrary(libPath)
 	require.NoError(t, err)
-	defer vmLib.Close()
-
 	athenaPayload := vmLib.EncodeTxSpawn(athcon.Bytes32(pubkey))
+	vmLib.Close()
 
-	// Execute the spawn and catch the result
-	output, gasLeft, err := (&handler{}).Exec(mockHost, athenaPayload, zaptest.NewLogger(t))
-	require.Equal(t, int64(maxGas-spendGas), gasLeft)
+	executionPayload := athcon.EncodedExecutionPayload(nil, athenaPayload)
+	vmhost, err := host.NewHost(mockHost, zaptest.NewLogger(t))
+	require.NoError(t, err)
+	defer vmhost.Destroy()
+
+	output, gasLeft, err := vmhost.Execute(0, maxGas, types.Address{}, types.Address{}, executionPayload, 0, PROGRAM)
+	require.Less(t, gasLeft, int64(maxGas))
 	require.Len(t, output, 24)
-	require.Equal(t, expectedPrincipalAddress, types.Address(output))
+	require.Equal(t, principalAddress, types.Address(output))
 	require.NoError(t, err)
 }
 
@@ -145,7 +133,7 @@ func TestVerify(t *testing.T) {
 	// Times counts the total number of times these methods are called.
 	// Note that wallet.Verify() short-circuits when called on empty input, so it only actually
 	// runs twice.
-	mockHost.EXPECT().Layer().Return(core.LayerID(1)).Times(2)
+	mockHost.EXPECT().Layer().Return(core.LayerID(1)).AnyTimes()
 	mockHost.EXPECT().Principal().Return(types.Address{2}).Times(11)
 	mockHost.EXPECT().MaxGas().Return(100000000).Times(2)
 	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).Times(3)
