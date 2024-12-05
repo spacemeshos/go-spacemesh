@@ -38,6 +38,8 @@ const (
 	poetApp          = "poet"
 	bootnodeApp      = "boot"
 	smesherApp       = "smesher"
+	nodeServiceApp   = "node-service"
+	activationApp    = "activation"
 	postServiceApp   = "postservice"
 	bootstrapperApp  = "bootstrapper"
 	bootstrapperPort = 80
@@ -161,13 +163,14 @@ func ReuseWait(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl := New(cctx, opts...)
 
-	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.OldSize - cctx.RemoteSize
+	smeshers := cctx.ClusterSize - cctx.BootnodeSize - cctx.OldSize - cctx.RemoteSize - cctx.NodeSplitSize
 
 	cctx.Log.Desugar().Info("Using the following nodes",
 		zap.Int("total", cctx.ClusterSize),
 		zap.Int("bootnodes", cctx.BootnodeSize),
 		zap.Int("smeshers", smeshers),
 		zap.Int("old smeshers", cctx.OldSize),
+		zap.Int("node split setup", cctx.NodeSplitSize),
 		zap.Int("remote", cctx.RemoteSize),
 	)
 
@@ -196,18 +199,26 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		return nil, err
 	}
 
-	smesherKeys := keys[cctx.BootnodeSize : cctx.BootnodeSize+smeshers]
+	oldOffset := cctx.BootnodeSize + smeshers
+	smesherKeys := keys[cctx.BootnodeSize:oldOffset]
 	if err := cl.AddSmeshers(cctx, smeshers, WithSmeshers(smesherKeys)); err != nil {
 		return nil, err
 	}
 
-	oldKeys := keys[cctx.BootnodeSize+smeshers : cctx.BootnodeSize+smeshers+cctx.OldSize]
+	remoteOffset := oldOffset + cctx.OldSize
+	oldKeys := keys[oldOffset:remoteOffset]
 	if err := cl.AddSmeshers(cctx, cctx.OldSize, WithSmeshers(oldKeys), WithImage(cctx.OldImage)); err != nil {
 		return nil, err
 	}
 
-	remoteKeys := keys[cctx.BootnodeSize+smeshers+cctx.OldSize:]
+	splitNodeOffset := remoteOffset + cctx.NodeSplitSize
+	remoteKeys := keys[remoteOffset:splitNodeOffset]
 	if err := cl.AddRemoteSmeshers(cctx, cctx.RemoteSize, WithSmeshers(remoteKeys)); err != nil {
+		return nil, err
+	}
+
+	splitNodeKeys := keys[splitNodeOffset:]
+	if err := cl.AddSplitNodes(cctx, cctx.NodeSplitSize, WithSmeshers(splitNodeKeys)); err != nil {
 		return nil, err
 	}
 	return cl, nil
@@ -252,6 +263,7 @@ type Cluster struct {
 	bootnodes     int
 	smeshers      int
 	clients       []*NodeClient
+	nodeService   *NodeClient
 	certifiers    []*NodeClient
 	poets         []*NodeClient
 	bootstrappers []*NodeClient
@@ -309,6 +321,16 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 		ctx,
 		corev1.ConfigMap(spacemeshConfigMapName, ctx.Namespace).WithData(map[string]string{
 			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
+		}),
+		apimetav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+	}
+	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(activationConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedActivationConfig: activationConfig.Get(ctx.Parameters),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
@@ -416,6 +438,26 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	}
 	c.clients = append(c.clients, clients...)
 	c.smeshers = len(clients)
+
+	clients, err = discoverNodes(cctx, activationApp)
+	if err != nil {
+		return err
+	}
+	for _, node := range clients {
+		cctx.Log.Debugw("discovered existing activation nodes", "name", node.Name)
+	}
+	c.clients = append(c.clients, clients...)
+	c.smeshers += len(clients)
+
+	clients, err = discoverNodes(cctx, nodeServiceApp)
+	if err != nil {
+		return err
+	}
+	if len(clients) == 1 {
+		service := clients[0]
+		cctx.Log.Debugw("discovered existing node service node", "name", service.Name)
+		c.nodeService = service
+	}
 
 	c.poets, err = discoverNodes(cctx, poetApp)
 	if err != nil {
@@ -641,6 +683,68 @@ func (c *Cluster) AddRemoteSmeshers(tctx *testcontext.Context, n int, opts ...De
 	return nil
 }
 
+func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...DeploymentOpt) error {
+	if n == 0 {
+		return nil
+	}
+	if n == 1 {
+		return errors.New("split nodes size has to be at least 2 while provided size is 1")
+	}
+	if err := c.resourceControl(tctx, n); err != nil {
+		return err
+	}
+	if err := c.persist(tctx); err != nil {
+		return err
+	}
+	flags := maps.Values(c.smesherFlags)
+	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootnodes])
+	if err != nil {
+		return fmt.Errorf("extracting p2p endpoints %w", err)
+	}
+
+	cfg := SmesherDeploymentConfig{}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	keys := cfg.keys
+
+	// deploy a single node-service
+	dopts := []DeploymentOpt{
+		WithFlags(flags...),
+		WithFlags(Bootnodes(endpoints...), StartSmeshing(false)),
+		WithSmeshers(keys[:1]),
+	}
+	clients, err := deployNodes(tctx, nodeServiceApp, 0, 1, dopts...)
+	if err != nil {
+		return err
+	}
+
+	c.nodeService = clients[0]
+	_, err = waitPod(tctx, c.nodeService.Name)
+	if err != nil {
+		return err
+	}
+
+	if err := deployNodeServiceSvc(tctx, c.nodeService.Name); err != nil {
+		return err
+	}
+
+	// deploy client services
+	dopts = []DeploymentOpt{
+		WithFlags(flags...),
+		WithFlags(StartSmeshing(true)),
+		WithSmeshers(keys[1:]),
+	}
+	clients, err = deployActivationNodes(
+		tctx, c.nodeService.Name, c.nextSmesher(), c.nextSmesher()+n-1, dopts...)
+	if err != nil {
+		return err
+	}
+	c.clients = append(c.clients, clients...)
+	c.smeshers += len(clients)
+	return nil
+}
+
 func (c *Cluster) AddBootstrapper(cctx *testcontext.Context, i int) error {
 	if err := c.persist(cctx); err != nil {
 		return err
@@ -744,6 +848,14 @@ func (c *Cluster) Client(i int) *NodeClient {
 	return c.clients[i]
 }
 
+func (c *Cluster) Clients() []*NodeClient {
+	return c.clients
+}
+
+func (c *Cluster) NodeService() *NodeClient {
+	return c.nodeService
+}
+
 func (c *Cluster) Bootstrapper(i int) *NodeClient {
 	return c.bootstrappers[i]
 }
@@ -769,6 +881,7 @@ func (c *Cluster) WaitAll(ctx context.Context) error {
 	wait(c.clients)
 	wait(c.poets)
 	wait(c.bootstrappers)
+	wait([]*NodeClient{c.nodeService})
 	return eg.Wait()
 }
 
