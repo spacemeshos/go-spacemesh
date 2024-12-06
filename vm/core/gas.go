@@ -1,29 +1,19 @@
 package core
 
 // IntrinsicGas computes intrinsic gas from base gas and storage cost.
-func IntrinsicGas(baseGas uint64, tx []byte) uint64 {
-	return 10_000
-	// TODO(lane): fix gas calculation
-	// return baseGas + TxDataGas(len(tx))
+func IntrinsicGas(baseGas uint64, txSize int) uint64 {
+	return baseGas + TxDataGas(txSize)
 }
 
 const (
 	// TXDATA is a cost for storing transaction data included into the block. Charged per 8 byte.
 	TXDATA uint64 = 128
 	// TX is an intrinsic cost for every transaction.
-	TX uint64 = 20000
-	// SPAWN is an intrinsic cost for every spawn, on top of TX cost.
-	SPAWN uint64 = 30000
-	// STORE is a cost for storing new data, in precompiles charged only for SPAWN.
-	STORE uint64 = 5000
-	// UPDATE is a cost of updating mutable state (nonce, amount of coins, precompile specific state).
-	UPDATE uint64 = 725
+	TX uint64 = 0
 	// LOAD is a cost for loading immutable and mutable state from disk.
 	LOAD uint64 = 182
 	// ACCOUNT_ACCESS is a cost of the account access.
 	ACCOUNT_ACCESS uint64 = 2500
-	// EDVERIFY is a cost for running ed25519 single signature verification.
-	EDVERIFY uint64 = 3000
 
 	// Hardcoded Athena gas costs
 	// TODO(lane): remove hardcoded gas costs.
@@ -54,4 +44,8 @@ func SizeGas(gas uint64, size int) uint64 {
 
 func TxDataGas(size int) uint64 {
 	return SizeGas(TXDATA, size)
+}
+
+func MaxGas(inputSize int) uint64 {
+	return ATHENA_MAX_GAS + uint64(inputSize)*100
 }

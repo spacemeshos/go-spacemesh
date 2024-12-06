@@ -334,7 +334,7 @@ func (v *VM) execute(
 			continue
 		}
 		balance := ctx.Balance()
-		intrinsic := core.IntrinsicGas(ctx.Gas.BaseGas, tx.GetRaw().Raw)
+		intrinsic := core.IntrinsicGas(ctx.PrincipalTemplate.BaseGas(), len(tx.GetRaw().Raw))
 		logger.Info("intrinsic gas check", zap.Uint64("balance", balance), zap.Uint64("intrinsic gas", intrinsic))
 		if balance < intrinsic {
 			logger.Warn("ineffective transaction. intrinsic gas not covered",
@@ -466,8 +466,6 @@ func (v *VM) execInVm(host *core.Context, payload []byte) error {
 	if maxgas < 0 {
 		return errors.New("gas limit exceeds maximum int64 value")
 	}
-	// FIXME: fix max gas calculations
-	maxgas = 10_000_000
 	v.logger.Debug("executing", zap.Uint32("layer", host.LayerID.Uint32()), zap.Int64("maxgas", maxgas))
 	_, gasLeft, err := vmhost.Execute(
 		host.Layer(),
@@ -601,10 +599,7 @@ func parse(
 	if !has {
 		return nil, nil, fmt.Errorf("%w: %s", errUnknownTemplate, ctx.Header.TemplateAddress)
 	}
-	ctx.Metadata = tx.Metadata
 	ctx.TxPayload = tx.Payload
-	// FIXME: How to obtain a max gas? Should it be returned from Verify()?
-	ctx.Header.MaxGas = core.ATHENA_MAX_GAS
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
@@ -614,9 +609,8 @@ func parse(
 		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
 	}
 
-	ctx.Gas.FixedGas = ctx.PrincipalTemplate.LoadGas()
-	ctx.Gas.BaseGas = ctx.PrincipalTemplate.BaseGas()
-
+	// FIXME: How to obtain a max gas? Should it be returned from Verify()?
+	ctx.Header.MaxGas = core.MaxGas(max(len(tx.Payload), 6) - 6) // skip bytes for method selector
 	ctx.Header.Principal = tx.Principal
 	ctx.Header.GasPrice = tx.Metadata.GasPrice
 	ctx.Header.Nonce = tx.Metadata.Nonce

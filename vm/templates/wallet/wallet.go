@@ -203,8 +203,6 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 	}
 	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
-	// FIXME: fix max gas calculations
-	maxgas = 10_000_000
 	s.logger.Debug("executing verify", zap.Uint32("layer", s.host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
 	output, gasLeft, err := vmhost.Execute(
 		s.host.Layer(),
@@ -218,8 +216,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 
 	// consume verify gas
 	// TODO(lane): safe arithmetic/assumption checking
-	gasCost := core.ATHENA_GAS_VERIFY
-	s.host.SpendGas(uint64(gasCost))
+	s.host.SpendGas(uint64(maxgas - gasLeft))
 	if err != nil {
 		return fmt.Errorf("verifying TX: %w", err)
 	}
@@ -227,7 +224,6 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 		return errors.New("empty verify output")
 	}
 	s.logger.Debug("verify finished",
-		zap.Int("gas spent", gasCost),
 		zap.Int64("actual gas", maxgas-gasLeft),
 		zap.Bool("valid", output[0] == 1),
 	)

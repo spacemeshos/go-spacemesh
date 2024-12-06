@@ -252,7 +252,7 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 
 func (t *tester) estimateSpawnGas(principal, target int) int {
 	// TODO(lane): improve gas arithmetic and gas estimation
-	return core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
+	return core.ATHENA_GAS_SPAWN + 11_156
 	// tx := t.accounts[principal].spawn(t, 0)
 	// gas := t.accounts[principal].baseGas() +
 	// 	int(core.TxDataGas(len(tx)))
@@ -264,7 +264,7 @@ func (t *tester) estimateSpawnGas(principal, target int) int {
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
 	// TODO(lane): improve gas arithmetic and gas estimation
-	return core.ATHENA_GAS_SPEND + core.ATHENA_GAS_VERIFY
+	return core.ATHENA_GAS_SPEND + 10_820
 	// tx := t.accounts[principal].spend(t, t.accounts[to].getAddress(), uint64(amount), nonce)
 	// return t.accounts[principal].baseGas() +
 	// 	t.accounts[principal].loadGas() +
@@ -422,6 +422,24 @@ func (ch spent) verify(tb testing.TB, prev, current *core.Account) {
 	}
 }
 
+type spentEpsilon struct {
+	amount  int
+	epsilon float64
+	change  change
+}
+
+func (ch spentEpsilon) verify(tb testing.TB, prev, current *core.Account) {
+	tb.Helper()
+	change := prev.Balance - current.Balance
+	require.InEpsilon(tb, ch.amount, int(change), ch.epsilon,
+		"expected spend amount %d to be in (%f - %f)", ch.amount, float64(change)-ch.epsilon, float64(change)+ch.epsilon)
+
+	prev.Balance = current.Balance
+	if ch.change != nil {
+		ch.change.verify(tb, prev, current)
+	}
+}
+
 type nonce struct {
 	increased int
 	change    change
@@ -467,12 +485,22 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 10, 100},
+						&spendTx{0, 10, 100_000},
 					},
 					expected: map[int]change{
-						0:  spent{amount: 100 + defaultGasPrice*ref.estimateSpendGas(0, 10, 100, 1)},
+						0:  spent{amount: 100_000 + defaultGasPrice*ref.estimateSpendGas(0, 10, 100, 1)},
 						1:  same{},
-						10: earned{amount: 100},
+						10: earned{amount: 100_000},
+					},
+				},
+				{
+					txs: []testTx{
+						&selfSpawnTx{10},
+					},
+					expected: map[int]change{
+						0:  same{},
+						1:  same{},
+						10: spent{amount: ref.estimateSpawnGas(10, 10)},
 					},
 				},
 			},
@@ -689,7 +717,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
+						// cover intrinsic gas but not execution gas
+						&spendTx{0, 11, core.IntrinsicGas(core.ATHENA_MAX_GAS, 0)},
 						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrOutOfGas},
@@ -707,8 +736,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						// the account needs to have 'max gas' to start execution
-						&spendTx{0, 11, 20_000},
+						// the account needs to have 'max gas + gas for TX data' to start execution
+						&spendTx{0, 11, core.MaxGas(32)},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, core.ATHENA_MAX_GAS},
 					},
@@ -720,7 +749,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, 10_000},
+						&spendTx{0, 11, 12_000},
 						// send enough funds to cover spawn, but no spend
 						&spendTx{11, 12, 1},
 					},
@@ -741,7 +770,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, 100},
 						&spendTx{0, 12, 100},
 					},
-					gasLimit:    uint64(ref.estimateSpawnGas(0, 0)) + core.ATHENA_MAX_GAS,
+					gasLimit:    uint64(ref.estimateSpawnGas(0, 0)) + uint64(ref.estimateSpendGas(0, 10, 100, 0))*2,
 					ineffective: []int{2, 3},
 					expected: map[int]change{
 						0:  spent{amount: 100 + ref.estimateSpawnGas(0, 0) + ref.estimateSpendGas(0, 10, 100, 1)},
@@ -764,8 +793,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, 100},
 					},
 					gasLimit: uint64(
-						ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 10, 80_000, 1),
-					) + core.ATHENA_MAX_GAS,
+						ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 10, 100, 1),
+					) + core.MaxGas(32),
 					failed:      map[int]error{2: core.ErrOutOfGas},
 					ineffective: []int{3},
 					expected: map[int]change{
@@ -907,7 +936,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) + core.ATHENA_MAX_GAS},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)+ref.estimateSpendGas(11, 12, 0, 0)) + core.ATHENA_MAX_GAS},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, 1_000_000},
 					},
@@ -960,11 +989,11 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, core.ATHENA_MAX_GAS},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) + core.ATHENA_MAX_GAS},
 						&selfSpawnTx{11},
 					},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateSpendGas(0, 11, core.ATHENA_MAX_GAS, 2) + core.ATHENA_MAX_GAS},
+						0:  spent{amount: ref.estimateSpendGas(0, 11, 0, 0) + ref.estimateSpawnGas(11, 11) + core.ATHENA_MAX_GAS},
 						11: spawned{template: template, change: nonce{increased: 1}},
 					},
 				},
@@ -1348,7 +1377,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				Principal:       tt.accounts[1].getAddress(),
 				TemplateAddress: template,
 				GasPrice:        1,
-				MaxGas:          core.ATHENA_MAX_GAS,
+				MaxGas:          core.MaxGas(32),
 			},
 			verified: true,
 		},
@@ -1366,7 +1395,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				GasPrice:        1,
 				Nonce:           1,
 				MaxSpend:        100,
-				MaxGas:          core.ATHENA_MAX_GAS,
+				MaxGas:          core.MaxGas(32),
 			},
 			verified: true,
 		},

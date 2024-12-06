@@ -33,13 +33,8 @@ type Context struct {
 	PrincipalAccount  types.Account
 	PrincipalTemplate Template
 
-	Metadata  Metadata
 	TxPayload []byte
 
-	Gas struct {
-		BaseGas  uint64
-		FixedGas uint64
-	}
 	Header  Header
 	Args    scale.Encodable
 	SpawnTx bool
@@ -108,7 +103,7 @@ func (c *Context) NextNonce() uint64 {
 
 // Nonce returns the transaction nonce.
 func (c *Context) Nonce() uint64 {
-	return c.Metadata.Nonce
+	return c.Header.Nonce
 }
 
 func (c *Context) Payload() []byte {
@@ -293,9 +288,10 @@ func (c *Context) GasSpent() uint64 {
 
 // Consume gas from the account after validation passes.
 func (c *Context) Consume(gas uint64) (err error) {
+	balance := c.Balance()
 	amount := gas * c.Header.GasPrice
-	if amount > c.Balance() {
-		amount = c.Balance()
+	if amount > balance {
+		amount = balance
 		err = ErrOutOfGas
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
@@ -311,6 +307,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 		"consume",
 		zap.Error(err),
 		zap.Stringer("principal", c.Principal()),
+		zap.Uint64("starting balance", balance),
 		zap.Uint64("new balance", c.Balance()),
 		zap.Uint64("gas", gas),
 		zap.Uint64("fee", amount),

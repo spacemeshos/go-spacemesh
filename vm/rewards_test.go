@@ -5,8 +5,6 @@ import (
 
 	"github.com/spacemeshos/economics/rewards"
 	"github.com/stretchr/testify/require"
-
-	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
 
 func TestRewards(t *testing.T) {
@@ -18,8 +16,7 @@ func TestRewards(t *testing.T) {
 			applyGenesis()
 	}
 	ref := genTester(t)
-	const spawnFee = core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
-	require.Equal(t, int(spawnFee), ref.estimateSpawnGas(0, 0))
+	spawnFee := ref.estimateSpawnGas(0, 0)
 	// this is hardcoded so that you can see which number is divided without reminder
 	// and pick correct fractions for tests
 	expected := []int{
