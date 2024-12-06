@@ -26,8 +26,6 @@ import (
 func atxSeqResult(atxs []types.ATXID) rangesync.SeqResult {
 	return rangesync.SeqResult{
 		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			// Received sequence may be cyclic and the handler should stop
-			// when it sees the first key again.
 			for _, atx := range atxs {
 				if !yield(atx.Bytes()) {
 					return
@@ -281,13 +279,9 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 	}
 	sr := rangesync.SeqResult{
 		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			// Received sequence may be cyclic and the handler should stop
-			// when it sees the first key again.
-			for {
-				for _, atx := range allAtxs {
-					if !yield(atx.Bytes()) {
-						return
-					}
+			for _, atx := range allAtxs {
+				if !yield(atx.Bytes()) {
+					return
 				}
 			}
 		},

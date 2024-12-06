@@ -198,7 +198,7 @@ func (d *DBSet) Items() rangesync.SeqResult {
 	if err := d.EnsureLoaded(); err != nil {
 		return rangesync.ErrorSeqResult(err)
 	}
-	return d.ft.All()
+	return d.ft.All().Limit(d.ft.Count())
 }
 
 // Empty returns true if the DBSet is empty.
@@ -281,7 +281,8 @@ func (d *DBSet) Has(k rangesync.KeyBytes) (bool, error) {
 // Recent returns a sequence of items that have been added to the DBSet since the given time.
 // Implements rangesync.OrderedSet.
 func (d *DBSet) Recent(since time.Time) (rangesync.SeqResult, int) {
-	return d.dbStore.Since(make(rangesync.KeyBytes, d.keyLen), since.UnixNano())
+	sr, n := d.dbStore.Since(make(rangesync.KeyBytes, d.keyLen), since.UnixNano())
+	return sr.Limit(n), n
 }
 
 func (d *DBSet) release() {

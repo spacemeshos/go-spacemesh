@@ -70,15 +70,9 @@ func (h *ATXHandler) Commit(
 ) error {
 	h.logger.Debug("begin atx commit")
 	defer h.logger.Debug("end atx commit")
-	var firstK rangesync.KeyBytes
 	numDownloaded := 0
 	state := make(map[types.ATXID]int)
 	for k := range received.Seq {
-		if firstK == nil {
-			firstK = k
-		} else if firstK.Compare(k) == 0 {
-			break
-		}
 		found, err := base.Has(k)
 		if err != nil {
 			return fmt.Errorf("check if ATX exists: %w", err)

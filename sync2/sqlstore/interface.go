@@ -14,8 +14,10 @@ type IDStore interface {
 	// RegisterKey registers the key with the store.
 	RegisterKey(k rangesync.KeyBytes) error
 	// All returns all keys in the store.
+	// The sequence in SeqResult returned by All is either empty or infinite.
 	All() rangesync.SeqResult
 	// From returns all keys in the store starting from the given key.
 	// sizeHint is a hint for the expected number of keys to be returned.
+	// The sequence in SeqResult returned by From is either empty or infinite.
 	From(from rangesync.KeyBytes, sizeHint int) rangesync.SeqResult
 }

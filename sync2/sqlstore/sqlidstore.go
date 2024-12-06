@@ -41,12 +41,14 @@ func (s *SQLIDStore) RegisterKey(k rangesync.KeyBytes) error {
 }
 
 // All returns all IDs in the store.
+// The sequence in SeqResult returned by All is either empty or infinite.
 // Implements IDStore.
 func (s *SQLIDStore) All() rangesync.SeqResult {
 	return s.From(make(rangesync.KeyBytes, s.keyLen), 1)
 }
 
 // From returns IDs in the store starting from the given key.
+// The sequence in SeqResult returned by From is either empty or infinite.
 // Implements IDStore.
 func (s *SQLIDStore) From(from rangesync.KeyBytes, sizeHint int) rangesync.SeqResult {
 	if len(from) != s.keyLen {
@@ -56,6 +58,7 @@ func (s *SQLIDStore) From(from rangesync.KeyBytes, sizeHint int) rangesync.SeqRe
 }
 
 // Since returns IDs in the store starting from the given key and timestamp.
+// The sequence in SeqResult returned by Since is either empty or infinite.
 func (s *SQLIDStore) Since(from rangesync.KeyBytes, since int64) (rangesync.SeqResult, int) {
 	if len(from) != s.keyLen {
 		panic("BUG: invalid key length")
