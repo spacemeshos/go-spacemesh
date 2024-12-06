@@ -422,24 +422,6 @@ func (ch spent) verify(tb testing.TB, prev, current *core.Account) {
 	}
 }
 
-type spentEpsilon struct {
-	amount  int
-	epsilon float64
-	change  change
-}
-
-func (ch spentEpsilon) verify(tb testing.TB, prev, current *core.Account) {
-	tb.Helper()
-	change := prev.Balance - current.Balance
-	require.InEpsilon(tb, ch.amount, int(change), ch.epsilon,
-		"expected spend amount %d to be in (%f - %f)", ch.amount, float64(change)-ch.epsilon, float64(change)+ch.epsilon)
-
-	prev.Balance = current.Balance
-	if ch.change != nil {
-		ch.change.verify(tb, prev, current)
-	}
-}
-
 type nonce struct {
 	increased int
 	change    change
@@ -936,7 +918,11 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)+ref.estimateSpendGas(11, 12, 0, 0)) + core.ATHENA_MAX_GAS},
+						&spendTx{
+							0,
+							11,
+							uint64(ref.estimateSpawnGas(11, 11)) + core.MaxGas(32),
+						},
 						&selfSpawnTx{11},
 						&spendTx{11, 12, 1_000_000},
 					},
@@ -993,7 +979,17 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{11},
 					},
 					expected: map[int]change{
-						0:  spent{amount: ref.estimateSpendGas(0, 11, 0, 0) + ref.estimateSpawnGas(11, 11) + core.ATHENA_MAX_GAS},
+						0: spent{
+							amount: ref.estimateSpendGas(
+								0,
+								11,
+								0,
+								0,
+							) + ref.estimateSpawnGas(
+								11,
+								11,
+							) + core.ATHENA_MAX_GAS,
+						},
 						11: spawned{template: template, change: nonce{increased: 1}},
 					},
 				},
