@@ -138,7 +138,6 @@ func (h *ATXHandler) Commit(
 ) error {
 	h.logger.Debug("begin atx commit")
 	defer h.logger.Debug("end atx commit")
-	numDownloaded := 0
 	cs, err := h.setupState(peer, base, received)
 	if err != nil {
 		return err
@@ -174,8 +173,8 @@ func (h *ATXHandler) Commit(
 		elapsed := h.clock.Since(startTime)
 		h.logger.Debug("fetched atxs",
 			zap.Int("total", cs.total),
-			zap.Int("downloaded", numDownloaded),
-			zap.Float64("rate per sec", float64(numDownloaded)/elapsed.Seconds()))
+			zap.Int("downloaded", cs.numDownloaded),
+			zap.Float64("rate per sec", float64(cs.numDownloaded)/elapsed.Seconds()))
 	}
 	return nil
 }
