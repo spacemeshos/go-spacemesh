@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"bytes"
 	"math"
 	"math/big"
 	"math/rand"
@@ -18,6 +17,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
@@ -42,7 +42,6 @@ func newTester(tb testing.TB) *tester {
 
 type testAccount interface {
 	getAddress() core.Address
-	getTemplate() core.Address
 	spend(t *tester, to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte
 	selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
 
@@ -60,10 +59,6 @@ type singlesigAccount struct {
 
 func (a *singlesigAccount) getAddress() core.Address {
 	return a.address
-}
-
-func (a *singlesigAccount) getTemplate() core.Address {
-	return wallet.TemplateAddress
 }
 
 func (a *singlesigAccount) deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte {
@@ -257,7 +252,7 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 
 func (t *tester) estimateSpawnGas(principal, target int) int {
 	// TODO(lane): improve gas arithmetic and gas estimation
-	return core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
+	return core.ATHENA_GAS_SPAWN + 11_156
 	// tx := t.accounts[principal].spawn(t, 0)
 	// gas := t.accounts[principal].baseGas() +
 	// 	int(core.TxDataGas(len(tx)))
@@ -269,23 +264,17 @@ func (t *tester) estimateSpawnGas(principal, target int) int {
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
 	// TODO(lane): improve gas arithmetic and gas estimation
-	return core.ATHENA_GAS_SPEND + core.ATHENA_GAS_VERIFY
+	return core.ATHENA_GAS_SPEND + 10_820
 	// tx := t.accounts[principal].spend(t, t.accounts[to].getAddress(), uint64(amount), nonce)
 	// return t.accounts[principal].baseGas() +
 	// 	t.accounts[principal].loadGas() +
 	// 	int(core.TxDataGas(len(tx)))
 }
 
-func encodeFields(tb testing.TB, fields ...scale.Encodable) types.RawTx {
-	tb.Helper()
-
-	buf := bytes.NewBuffer(nil)
-	encoder := scale.NewEncoder(buf)
-	for _, field := range fields {
-		_, err := field.EncodeScale(encoder)
-		require.NoError(tb, err)
-	}
-	return types.NewRawTx(buf.Bytes())
+func encodeTx(tb testing.TB, tx core.Tx) types.RawTx {
+	raw, err := codec.Encode(&tx)
+	require.NoError(tb, err)
+	return types.NewRawTx(raw)
 }
 
 type testTx interface {
@@ -478,12 +467,22 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 10, 100},
+						&spendTx{0, 10, 100_000},
 					},
 					expected: map[int]change{
-						0:  spent{amount: 100 + defaultGasPrice*ref.estimateSpendGas(0, 10, 100, 1)},
+						0:  spent{amount: 100_000 + defaultGasPrice*ref.estimateSpendGas(0, 10, 100, 1)},
 						1:  same{},
-						10: earned{amount: 100},
+						10: earned{amount: 100_000},
+					},
+				},
+				{
+					txs: []testTx{
+						&selfSpawnTx{10},
+					},
+					expected: map[int]change{
+						0:  same{},
+						1:  same{},
+						10: spent{amount: ref.estimateSpawnGas(10, 10)},
 					},
 				},
 			},
@@ -700,7 +699,8 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
+						// cover intrinsic gas but not execution gas
+						&spendTx{0, 11, core.IntrinsicGas(core.ATHENA_MAX_GAS, 0)},
 						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrOutOfGas},
@@ -718,9 +718,10 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(0, 0) * defaultGasPrice)},
+						// the account needs to have 'max gas + gas for TX data' to start execution
+						&spendTx{0, 11, core.MaxGas(32)},
 						&selfSpawnTx{11},
-						&spendTx{11, 12, 1},
+						&spendTx{11, 12, core.ATHENA_MAX_GAS},
 					},
 					ineffective: []int{3},
 					expected: map[int]change{
@@ -730,7 +731,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64((ref.estimateSpendGas(11, 12, 1, 1) - 1) * defaultGasPrice)},
+						&spendTx{0, 11, 12_000},
 						// send enough funds to cover spawn, but no spend
 						&spendTx{11, 12, 1},
 					},
@@ -751,8 +752,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, 100},
 						&spendTx{0, 12, 100},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
-						ref.estimateSpendGas(0, 10, 100, 1)),
+					gasLimit:    uint64(ref.estimateSpawnGas(0, 0)) + uint64(ref.estimateSpendGas(0, 10, 100, 0))*2,
 					ineffective: []int{2, 3},
 					expected: map[int]change{
 						0:  spent{amount: 100 + ref.estimateSpawnGas(0, 0) + ref.estimateSpendGas(0, 10, 100, 1)},
@@ -774,9 +774,9 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{10},
 						&spendTx{0, 11, 100},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
-						ref.estimateSpendGas(0, 10, 80_000, 1) +
-						ref.estimateSpawnGas(10, 10)),
+					gasLimit: uint64(
+						ref.estimateSpawnGas(0, 0)+ref.estimateSpendGas(0, 10, 100, 1),
+					) + core.MaxGas(32),
 					failed:      map[int]error{2: core.ErrOutOfGas},
 					ineffective: []int{3},
 					expected: map[int]change{
@@ -918,9 +918,13 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11) + ref.estimateSpendGas(11, 12, 1_000, 1))},
+						&spendTx{
+							0,
+							11,
+							uint64(ref.estimateSpawnGas(11, 11)) + core.MaxGas(32),
+						},
 						&selfSpawnTx{11},
-						&spendTx{11, 12, 1_000},
+						&spendTx{11, 12, 1_000_000},
 					},
 					failed: map[int]error{3: athcon.InsufficientBalance},
 					expected: map[int]change{
@@ -950,25 +954,42 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 				{
 					txs: []testTx{
 						&selfSpawnTx{0},
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) - 1},
+						&spendTx{0, 11, core.ATHENA_MAX_GAS - 1},
 						&selfSpawnTx{11},
 					},
 					failed: map[int]error{2: core.ErrOutOfGas},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(11, 11) - 1 +
-							ref.estimateSpawnGas(0, 0) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1)},
+						0: spent{
+							amount: ref.estimateSpawnGas(
+								11,
+								11,
+							) - 1 + ref.estimateSpendGas(
+								0,
+								11,
+								core.ATHENA_MAX_GAS,
+								1,
+							) + core.ATHENA_MAX_GAS,
+						},
 						11: nonce{increased: 1},
 					},
 				},
 				{
 					txs: []testTx{
-						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11))},
+						&spendTx{0, 11, uint64(ref.estimateSpawnGas(11, 11)) + core.ATHENA_MAX_GAS},
 						&selfSpawnTx{11},
 					},
 					expected: map[int]change{
-						0: spent{amount: ref.estimateSpawnGas(11, 11) +
-							ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11), 2)},
+						0: spent{
+							amount: ref.estimateSpendGas(
+								0,
+								11,
+								0,
+								0,
+							) + ref.estimateSpawnGas(
+								11,
+								11,
+							) + core.ATHENA_MAX_GAS,
+						},
 						11: spawned{template: template, change: nonce{increased: 1}},
 					},
 				},
@@ -1011,9 +1032,6 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						// it will cause this transaction to fail
 						&selfSpawnTx{11},
 					},
-					gasLimit: uint64(ref.estimateSpawnGas(0, 0) +
-						ref.estimateSpendGas(0, 11, ref.estimateSpawnGas(11, 11)-1, 1) +
-						ref.estimateSpawnGas(11, 11)),
 					failed:  map[int]error{2: core.ErrOutOfGas},
 					rewards: []reward{{address: 20, share: 1}},
 					expected: map[int]change{
@@ -1182,18 +1200,14 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 				}
 				ineffective, results, err := tt.Apply(lid, notVerified(txs...), tt.rewards(layer.rewards...))
 				require.NoError(tt, err)
-				if layer.ineffective == nil {
-					require.Empty(tt, ineffective)
-				} else {
-					require.Len(tt, ineffective, len(layer.ineffective))
-					for i, pos := range layer.ineffective {
-						require.Equal(t, txs[pos].ID, ineffective[i].ID)
-						_, exist := layer.headers[pos]
-						if exist {
-							require.NotNil(t, ineffective[i].TxHeader)
-						} else {
-							require.Nil(t, ineffective[i].TxHeader)
-						}
+				require.Len(tt, ineffective, len(layer.ineffective))
+				for i, pos := range layer.ineffective {
+					require.Equal(t, txs[pos].ID, ineffective[i].ID, "pos: %d, i: %d", pos, i)
+					_, exist := layer.headers[pos]
+					if exist {
+						require.NotNil(t, ineffective[i].TxHeader)
+					} else {
+						require.Nil(t, ineffective[i].TxHeader)
 					}
 				}
 				for i, rst := range results {
@@ -1262,16 +1276,24 @@ func TestWallets(t *testing.T) {
 }
 
 func TestSingleSigWalletDeploy(t *testing.T) {
-	t.Parallel()
-	tt := newTester(t).addWalletTemplate().
-		addSingleSig(100).
-		applyGenesisWithBalance().
-		addSingleSig(1000 - 100)
+	tt := newTester(t).addWalletTemplate().addSingleSig(1)
+
+	// FIXME: The test will deploy singleSig wallet template again at a different address
+	// (`wallet.TemplateAddress` is hardcoded), because we don't have another template yet.
+	// Fix this test once we have more than 1 program.
+	code := wallet.PROGRAM
+	newTemplateAddress := core.TemplateAddress(code)
+	require.NotEqual(t, wallet.TemplateAddress, newTemplateAddress, "update the test to use another template")
+	pub, pk, err := ed25519.GenerateKey(tt.rng)
+	require.NoError(t, err)
+	principal := core.ComputePrincipalFromBlob(newTemplateAddress, pub)
+	tt.addAccount(&singlesigAccount{pk, principal}, 1_000_000_000)
+
+	tt.applyGenesisWithBalance()
 
 	// 1. Spawn an account to pay for deploying
 	account := tt.accounts[0]
-	rawSpawnTx := types.NewRawTx(account.selfSpawn(tt, 0))
-	_, _, err := tt.Apply(types.GetEffectiveGenesis(), []types.Transaction{{RawTx: rawSpawnTx}}, nil)
+	_, _, err = tt.Apply(types.GetEffectiveGenesis(), []types.Transaction{{RawTx: tt.selfSpawn(0)}}, nil)
 	require.NoError(t, err)
 
 	exists, err := tt.AccountExists(account.getAddress())
@@ -1282,9 +1304,6 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Deploy a new contract using it
-	code := []byte("this is bad code")
-	newTemplateAddress := core.TemplateAddress(code)
-
 	rawDeployTx := types.NewRawTx(account.deploy(tt, 1, code))
 	skipped, results, err := tt.Apply(types.GetEffectiveGenesis()+1, []types.Transaction{{RawTx: rawDeployTx}}, nil)
 	require.NoError(t, err)
@@ -1307,15 +1326,31 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	// Try deploy again
 	rawDeployTx = types.NewRawTx(account.deploy(tt, 2, code))
 	skipped, results, err = tt.Apply(types.GetEffectiveGenesis()+2, []types.Transaction{{RawTx: rawDeployTx}}, nil)
-	logger.Debug("applied TX", zap.Any("results", results))
 	require.NoError(t, err)
 	require.Empty(t, skipped)
+	logger.Debug("applied TX", zap.Any("results", results[0].TransactionResult))
 
 	// TODO: should it fail?
 	// principal was charged
 	pAccount2, err := accounts.Latest(tt.db, account.getAddress())
 	require.NoError(t, err)
 	require.Less(t, pAccount2.Balance, pAccount1.Balance)
+
+	// 3. Spawn the new template using the 2nd prefunded account
+	_, _, err = tt.Apply(
+		types.GetEffectiveGenesis(),
+		[]types.Transaction{{RawTx: tt.selfSpawn(1, sdk.WithTemplate(newTemplateAddress))}},
+		nil,
+	)
+	require.NoError(t, err)
+
+	exists, err = tt.AccountExists(tt.accounts[1].getAddress())
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	a, err := accounts.Latest(tt.db, tt.accounts[1].getAddress())
+	require.NoError(t, err)
+	require.Equal(t, &newTemplateAddress, a.TemplateAddress)
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {
@@ -1323,11 +1358,6 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 	skipped, _, err := tt.Apply(types.GetEffectiveGenesis(), notVerified(tt.selfSpawn(0)), nil)
 	require.NoError(tt, err)
 	require.Empty(tt, skipped)
-
-	firstAddress := tt.accounts[0].getAddress()
-	zero := scale.U8(0)
-	one := scale.U8(1)
-	two := scale.U8(2)
 
 	for _, tc := range []struct {
 		desc     string
@@ -1343,7 +1373,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				Principal:       tt.accounts[1].getAddress(),
 				TemplateAddress: template,
 				GasPrice:        1,
-				MaxGas:          uint64(tt.estimateSpawnGas(1, 1)),
+				MaxGas:          core.MaxGas(32),
 			},
 			verified: true,
 		},
@@ -1361,7 +1391,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 				GasPrice:        1,
 				Nonce:           1,
 				MaxSpend:        100,
-				MaxGas:          uint64(tt.estimateSpendGas(0, 1, 100, 1)),
+				MaxGas:          core.MaxGas(32),
 			},
 			verified: true,
 		},
@@ -1372,27 +1402,12 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 		// },
 		{
 			desc: "WrongVersion",
-			tx:   encodeFields(tt, &one),
-			err:  core.ErrMalformed,
-		},
-		{
-			desc: "InvalidPrincipal",
-			tx:   encodeFields(tt, &one, &one),
-			err:  core.ErrMalformed,
-		},
-		{
-			desc: "InvalidTemplate",
-			tx:   encodeFields(tt, &zero, &firstAddress, &zero, &one),
-			err:  core.ErrMalformed,
+			tx:   encodeTx(tt, core.Tx{Version: 0}),
+			err:  errWrongVersion,
 		},
 		{
 			desc: "UnknownTemplate",
-			tx:   encodeFields(tt, &zero, &firstAddress, &zero, &firstAddress),
-			err:  core.ErrMalformed,
-		},
-		{
-			desc: "UnknownMethod",
-			tx:   encodeFields(tt, &zero, &firstAddress, &two),
+			tx:   encodeTx(tt, core.Tx{Version: 1, Template: new(types.Address)}),
 			err:  core.ErrMalformed,
 		},
 		{

@@ -1,16 +1,12 @@
 package core
 
 import (
-	"encoding/hex"
-
 	"github.com/spacemeshos/go-scale"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-const TxSizeLimit = 1024
+const TxSizeLimit = 1024 * 1024
 
 type (
 	// PublicKey is an alias to Hash32.
@@ -34,20 +30,6 @@ type (
 	// LayerID is a layer type.
 	LayerID = types.LayerID
 )
-
-//go:generate mockgen -typed -package=mocks -destination=./mocks/handler.go github.com/spacemeshos/go-spacemesh/vm/core Handler
-
-// Handler provides set of static templates method that are not directly attached to the state.
-type Handler interface {
-	// Parse header from the payload.
-	Parse(*scale.Decoder) (ParseOutput, error)
-
-	// Exec dispatches execution request based on the method selector.
-	Exec(Host, Payload, *zap.Logger) ([]byte, int64, error)
-
-	// New instantiates Template from host context.
-	New(Host, *zap.Logger) (Template, error)
-}
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
 
@@ -81,18 +63,6 @@ type AccountUpdater interface {
 	Update(Account) error
 }
 
-// ParseOutput contains all fields that are returned by Parse call.
-type ParseOutput struct {
-	Nonce    Nonce
-	GasPrice uint64
-	Payload  Payload
-}
-
-// HandlerRegistry stores handlers for templates.
-type HandlerRegistry interface {
-	Get(Address) Handler
-}
-
 //go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host
 
 // Host API with methods and data that are required by templates.
@@ -104,12 +74,11 @@ type Host interface {
 
 	Principal() Address
 	Nonce() uint64
-	Payload() Payload
+	Payload() []byte
 	TemplateAddress() Address
 	MaxGas() uint64
 	SpendGas(uint64)
 	GasSpent() uint64
-	Handler() Handler
 	Deploy([]byte) (Address, error)
 	Spawn(Address, []byte) (Address, error)
 	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)
@@ -142,7 +111,7 @@ type VMHost interface {
 	Execute(types.LayerID, int64, types.Address, types.Address, []byte, uint64, []byte) ([]byte, int64, error)
 }
 
-//go:generate scalegen -types Metadata
+//go:generate scalegen -types Metadata,Tx
 
 // Metadata contains generic metadata for all transactions.
 type Metadata struct {
@@ -150,24 +119,12 @@ type Metadata struct {
 	GasPrice uint64
 }
 
-// Payload contains the opaque, Athena-encoded transaction payload including the method selector
-// and method args.
-type Payload []byte
-
-func (t Payload) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
-	encoder.AddString("payload", hex.EncodeToString(t))
-	return nil
-}
-
-func (t *Payload) EncodeScale(enc *scale.Encoder) (int, error) {
-	return scale.EncodeByteSlice(enc, *t)
-}
-
-func (t *Payload) DecodeScale(dec *scale.Decoder) (int, error) {
-	field, n, err := scale.DecodeByteSlice(dec)
-	if err != nil {
-		return 0, err
-	}
-	*t = field
-	return n, nil
+type Tx struct {
+	Version   uint8
+	Principal types.Address
+	// Template is needed for a spawning the prinipal account.
+	// It is only allowed to be set when principal is not spawned yet.
+	Template *types.Address
+	Metadata Metadata
+	Payload  []byte `scale:"max=1048576"`
 }

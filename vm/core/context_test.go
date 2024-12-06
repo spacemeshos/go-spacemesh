@@ -11,20 +11,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/core/mocks"
-	"github.com/spacemeshos/go-spacemesh/vm/registry"
 )
 
 func TestTransfer(t *testing.T) {
 	var principal types.Address
 	t.Run("NoBalance", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		require.ErrorIs(t, ctx.Transfer(principal, 100), core.ErrNoBalance)
 	})
 	t.Run("MaxSpend", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 100
@@ -33,7 +32,7 @@ func TestTransfer(t *testing.T) {
 	})
 	t.Run("ReducesBalance", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.MaxSpend = 1000
@@ -50,14 +49,14 @@ func TestConsume(t *testing.T) {
 	var principal types.Address
 	t.Run("OutOfGas", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		ctx.Header.GasPrice = 1
 		require.ErrorIs(t, ctx.Consume(100), core.ErrOutOfGas)
 	})
 	t.Run("MaxGas", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		ctx.PrincipalAccount.Balance = 200
 		ctx.Header.GasPrice = 2
@@ -66,7 +65,7 @@ func TestConsume(t *testing.T) {
 	})
 	t.Run("ReducesBalance", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		ctx.PrincipalAccount.Balance = 1000
 		ctx.Header.GasPrice = 1
@@ -88,7 +87,7 @@ func TestRefund(t *testing.T) {
 	t.Run("empty refund", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
 		cache.Update(account)
-		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, zaptest.NewLogger(t))
 
 		require.NoError(t, err)
 		ctx.Header.GasPrice = 1
@@ -104,7 +103,7 @@ func TestRefund(t *testing.T) {
 	t.Run("nothing spent - refund all", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
 		cache.Update(account)
-		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, zaptest.NewLogger(t))
 
 		require.NoError(t, err)
 		ctx.Header.MaxGas = 100
@@ -123,7 +122,7 @@ func TestRefund(t *testing.T) {
 	t.Run("spent some - refund remaining", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
 		cache.Update(account)
-		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, zaptest.NewLogger(t))
 
 		require.NoError(t, err)
 		ctx.Header.MaxGas = 100
@@ -142,7 +141,7 @@ func TestRefund(t *testing.T) {
 	t.Run("spent over consumed - no refund", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
 		cache.Update(account)
-		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, account.Address, cache, zaptest.NewLogger(t))
 
 		require.NoError(t, err)
 		ctx.Header.MaxGas = 100
@@ -164,7 +163,7 @@ func TestApply(t *testing.T) {
 	var principal types.Address
 	t.Run("UpdatesNonce", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.Header.Nonce = 10
@@ -178,7 +177,7 @@ func TestApply(t *testing.T) {
 	})
 	t.Run("ConsumeMaxGas", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 
 		ctx.PrincipalAccount.Balance = 1000
@@ -196,7 +195,7 @@ func TestApply(t *testing.T) {
 	})
 	t.Run("PreserveTransferOrder", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		ctx.PrincipalAccount.Address = core.Address{1}
 		ctx.PrincipalAccount.Balance = 1000
@@ -228,7 +227,7 @@ func TestDeploy(t *testing.T) {
 	templateAddress := core.TemplateAddress(code)
 	t.Run("deploying new contract", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 
 		addr, err := ctx.Deploy(code)
@@ -244,7 +243,7 @@ func TestDeploy(t *testing.T) {
 	})
 	t.Run("can't deploy twice", func(t *testing.T) {
 		cache := core.NewStagedCache(core.DBLoader{statesql.InMemoryTest(t)})
-		ctx, err := core.New(types.Hash20{}, 0, principal, cache, registry.New(), zaptest.NewLogger(t))
+		ctx, err := core.New(types.Hash20{}, 0, principal, cache, zaptest.NewLogger(t))
 		require.NoError(t, err)
 
 		_, err = ctx.Deploy(code)

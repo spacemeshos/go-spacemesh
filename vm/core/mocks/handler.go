@@ -12,7 +12,6 @@ package mocks
 import (
 	reflect "reflect"
 
-	scale "github.com/spacemeshos/go-scale"
 	core "github.com/spacemeshos/go-spacemesh/vm/core"
 	gomock "go.uber.org/mock/gomock"
 	zap "go.uber.org/zap"
@@ -43,7 +42,7 @@ func (m *MockHandler) EXPECT() *MockHandlerMockRecorder {
 }
 
 // Exec mocks base method.
-func (m *MockHandler) Exec(arg0 core.Host, arg1 core.Payload, arg2 *zap.Logger) ([]byte, int64, error) {
+func (m *MockHandler) Exec(arg0 core.Host, arg1 []byte, arg2 *zap.Logger) ([]byte, int64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Exec", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]byte)
@@ -71,13 +70,13 @@ func (c *MockHandlerExecCall) Return(arg0 []byte, arg1 int64, arg2 error) *MockH
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHandlerExecCall) Do(f func(core.Host, core.Payload, *zap.Logger) ([]byte, int64, error)) *MockHandlerExecCall {
+func (c *MockHandlerExecCall) Do(f func(core.Host, []byte, *zap.Logger) ([]byte, int64, error)) *MockHandlerExecCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, core.Payload, *zap.Logger) ([]byte, int64, error)) *MockHandlerExecCall {
+func (c *MockHandlerExecCall) DoAndReturn(f func(core.Host, []byte, *zap.Logger) ([]byte, int64, error)) *MockHandlerExecCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -117,45 +116,6 @@ func (c *MockHandlerNewCall) Do(f func(core.Host, *zap.Logger) (core.Template, e
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockHandlerNewCall) DoAndReturn(f func(core.Host, *zap.Logger) (core.Template, error)) *MockHandlerNewCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Parse mocks base method.
-func (m *MockHandler) Parse(arg0 *scale.Decoder) (core.ParseOutput, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Parse", arg0)
-	ret0, _ := ret[0].(core.ParseOutput)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Parse indicates an expected call of Parse.
-func (mr *MockHandlerMockRecorder) Parse(arg0 any) *MockHandlerParseCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Parse", reflect.TypeOf((*MockHandler)(nil).Parse), arg0)
-	return &MockHandlerParseCall{Call: call}
-}
-
-// MockHandlerParseCall wrap *gomock.Call
-type MockHandlerParseCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockHandlerParseCall) Return(arg0 core.ParseOutput, arg1 error) *MockHandlerParseCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockHandlerParseCall) Do(f func(*scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHandlerParseCall) DoAndReturn(f func(*scale.Decoder) (core.ParseOutput, error)) *MockHandlerParseCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -18,6 +18,7 @@ func Defaults() *Options {
 type Options struct {
 	GasPrice  uint64
 	GenesisID types.Hash20
+	Template  *types.Address
 }
 
 // WithGasPrice modifies GasPrice.
@@ -31,6 +32,12 @@ func WithGasPrice(price uint64) Opt {
 func WithGenesisID(id types.Hash20) Opt {
 	return func(opts *Options) {
 		opts.GenesisID = id
+	}
+}
+
+func WithTemplate(t types.Address) Opt {
+	return func(opts *Options) {
+		opts.Template = &t
 	}
 }
 

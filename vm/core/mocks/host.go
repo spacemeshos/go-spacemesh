@@ -309,44 +309,6 @@ func (c *MockHostGetGenesisIDCall) DoAndReturn(f func() types.Hash20) *MockHostG
 	return c
 }
 
-// Handler mocks base method.
-func (m *MockHost) Handler() core.Handler {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Handler")
-	ret0, _ := ret[0].(core.Handler)
-	return ret0
-}
-
-// Handler indicates an expected call of Handler.
-func (mr *MockHostMockRecorder) Handler() *MockHostHandlerCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Handler", reflect.TypeOf((*MockHost)(nil).Handler))
-	return &MockHostHandlerCall{Call: call}
-}
-
-// MockHostHandlerCall wrap *gomock.Call
-type MockHostHandlerCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockHostHandlerCall) Return(arg0 core.Handler) *MockHostHandlerCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockHostHandlerCall) Do(f func() core.Handler) *MockHostHandlerCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostHandlerCall) DoAndReturn(f func() core.Handler) *MockHostHandlerCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Has mocks base method.
 func (m *MockHost) Has(arg0 types.Address) (bool, error) {
 	m.ctrl.T.Helper()
@@ -539,10 +501,10 @@ func (c *MockHostNonceCall) DoAndReturn(f func() uint64) *MockHostNonceCall {
 }
 
 // Payload mocks base method.
-func (m *MockHost) Payload() core.Payload {
+func (m *MockHost) Payload() []byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Payload")
-	ret0, _ := ret[0].(core.Payload)
+	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
@@ -559,19 +521,19 @@ type MockHostPayloadCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHostPayloadCall) Return(arg0 core.Payload) *MockHostPayloadCall {
+func (c *MockHostPayloadCall) Return(arg0 []byte) *MockHostPayloadCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHostPayloadCall) Do(f func() core.Payload) *MockHostPayloadCall {
+func (c *MockHostPayloadCall) Do(f func() []byte) *MockHostPayloadCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostPayloadCall) DoAndReturn(f func() core.Payload) *MockHostPayloadCall {
+func (c *MockHostPayloadCall) DoAndReturn(f func() []byte) *MockHostPayloadCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

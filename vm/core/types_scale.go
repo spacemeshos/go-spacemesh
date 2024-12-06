@@ -5,6 +5,7 @@ package core
 
 import (
 	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func (t *Metadata) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -41,6 +42,87 @@ func (t *Metadata) DecodeScale(dec *scale.Decoder) (total int, err error) {
 		}
 		total += n
 		t.GasPrice = uint64(field)
+	}
+	return total, nil
+}
+
+func (t *Tx) EncodeScale(enc *scale.Encoder) (total int, err error) {
+	{
+		n, err := scale.EncodeCompact8(enc, uint8(t.Version))
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteArray(enc, t.Principal[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeOption(enc, t.Template)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := t.Metadata.EncodeScale(enc)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		n, err := scale.EncodeByteSliceWithLimit(enc, t.Payload, 1048576)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	return total, nil
+}
+
+func (t *Tx) DecodeScale(dec *scale.Decoder) (total int, err error) {
+	{
+		field, n, err := scale.DecodeCompact8(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Version = uint8(field)
+	}
+	{
+		n, err := scale.DecodeByteArray(dec, t.Principal[:])
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeOption[types.Address](dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Template = field
+	}
+	{
+		n, err := t.Metadata.DecodeScale(dec)
+		if err != nil {
+			return total, err
+		}
+		total += n
+	}
+	{
+		field, n, err := scale.DecodeByteSliceWithLimit(dec, 1048576)
+		if err != nil {
+			return total, err
+		}
+		total += n
+		t.Payload = field
 	}
 	return total, nil
 }

@@ -24,22 +24,17 @@ const (
 // - maintains changes to the system state, that will be applied only after successful execution
 // - accumulates set of reusable objects and data.
 type Context struct {
-	Registry HandlerRegistry
-	Loader   AccountLoader
+	Loader AccountLoader
 
 	// LayerID of the block.
 	LayerID   LayerID
 	GenesisID types.Hash20
 
 	PrincipalAccount  types.Account
-	PrincipalHandler  Handler
 	PrincipalTemplate Template
 
-	ParseOutput ParseOutput
-	Gas         struct {
-		BaseGas  uint64
-		FixedGas uint64
-	}
+	TxPayload []byte
+
 	Header  Header
 	Args    scale.Encodable
 	SpawnTx bool
@@ -65,7 +60,6 @@ func New(
 	layer types.LayerID,
 	principal types.Address,
 	loader AccountLoader,
-	registry HandlerRegistry,
 	logger *zap.Logger,
 ) (*Context, error) {
 	principalAccount, err := loader.Get(principal)
@@ -81,7 +75,6 @@ func New(
 
 	return &Context{
 		GenesisID:        genesisID,
-		Registry:         registry,
 		Loader:           loader,
 		LayerID:          layer,
 		Logger:           logger,
@@ -110,12 +103,11 @@ func (c *Context) NextNonce() uint64 {
 
 // Nonce returns the transaction nonce.
 func (c *Context) Nonce() uint64 {
-	return c.ParseOutput.Nonce
+	return c.Header.Nonce
 }
 
-// Nonce returns the transaction nonce.
-func (c *Context) Payload() Payload {
-	return c.ParseOutput.Payload
+func (c *Context) Payload() []byte {
+	return c.TxPayload
 }
 
 // TemplateAddress returns the address of the principal account template.
@@ -146,11 +138,6 @@ func (c *Context) Balance() uint64 {
 // Template of the principal account.
 func (c *Context) Template() Template {
 	return c.PrincipalTemplate
-}
-
-// Handler of the principal account.
-func (c *Context) Handler() Handler {
-	return c.PrincipalHandler
 }
 
 // Spawn account.
@@ -290,6 +277,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 
 // SpendGas marks gas as consumed.
 func (c *Context) SpendGas(gas uint64) {
+	c.Logger.Debug("spent gas", zap.Uint64("gas", gas))
 	c.gasSpent += gas
 }
 
@@ -300,9 +288,10 @@ func (c *Context) GasSpent() uint64 {
 
 // Consume gas from the account after validation passes.
 func (c *Context) Consume(gas uint64) (err error) {
+	balance := c.Balance()
 	amount := gas * c.Header.GasPrice
-	if amount > c.Balance() {
-		amount = c.Balance()
+	if amount > balance {
+		amount = balance
 		err = ErrOutOfGas
 	} else if total := c.consumed + gas; total > c.Header.MaxGas {
 		gas = c.Header.MaxGas - c.consumed
@@ -318,6 +307,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 		"consume",
 		zap.Error(err),
 		zap.Stringer("principal", c.Principal()),
+		zap.Uint64("starting balance", balance),
 		zap.Uint64("new balance", c.Balance()),
 		zap.Uint64("gas", gas),
 		zap.Uint64("fee", amount),

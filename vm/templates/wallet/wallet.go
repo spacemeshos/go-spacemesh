@@ -10,10 +10,15 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
 )
+
+func init() {
+	TemplateAddress[len(TemplateAddress)-1] = 1
+}
+
+var TemplateAddress core.Address
 
 // New returns Wallet instance with SpawnArguments.
 func New(host core.Host, logger *zap.Logger) (*Wallet, error) {
@@ -91,6 +96,7 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 	}
 	defer vmhost.Destroy()
 
+	s.logger.Debug("executing maxspend", zap.Uint32("layer", s.host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
 	output, _, err := vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
@@ -159,7 +165,8 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 
 		// the transaction must already be a spawn tx, so there's no need to modify the payload.
 		executionPayload := athcon.EncodedExecutionPayload(nil, s.host.Payload())
-		_, _, err = vmhost.Execute(
+		s.logger.Debug("executing spawn", zap.Uint32("layer", s.host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
+		_, gasLeft, err := vmhost.Execute(
 			s.host.Layer(),
 			maxgas,
 			s.host.Principal(),
@@ -171,6 +178,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 		if err != nil {
 			return fmt.Errorf("executing auto-spawn: %w", err)
 		}
+		s.logger.Debug("auto-spawn finished", zap.Int64("gas", maxgas-gasLeft))
 
 		// the account should've been spawned
 		walletAccount, err := host.Get(s.host.Principal())
@@ -195,6 +203,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 	}
 	executionPayload := athcon.EncodedExecutionPayload(s.walletState, payloadEncoded)
 
+	s.logger.Debug("executing verify", zap.Uint32("layer", s.host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
 	output, gasLeft, err := vmhost.Execute(
 		s.host.Layer(),
 		maxgas,
@@ -207,13 +216,17 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 
 	// consume verify gas
 	// TODO(lane): safe arithmetic/assumption checking
-	s.host.SpendGas(uint64(maxgas) - uint64(gasLeft))
+	s.host.SpendGas(uint64(maxgas - gasLeft))
 	if err != nil {
 		return fmt.Errorf("verifying TX: %w", err)
 	}
 	if len(output) == 0 {
 		return errors.New("empty verify output")
 	}
+	s.logger.Debug("verify finished",
+		zap.Int64("actual gas", maxgas-gasLeft),
+		zap.Bool("valid", output[0] == 1),
+	)
 	if output[0] != 1 {
 		return errors.New("TX didn't pass verification")
 	}
@@ -226,15 +239,4 @@ func (s *Wallet) BaseGas() uint64 {
 
 func (s *Wallet) LoadGas() uint64 {
 	return LoadGas()
-}
-
-// ComputePrincipal computes the principal address of the wallet for the given
-// public key. The key must be 32B.
-func ComputePrincipal(pub []byte) types.Address {
-	if len(pub) != 32 {
-		panic("invalid public key length")
-	}
-
-	// NOTE: the spawn arguments are just a [32]byte, which scale encodes "as is".
-	return core.ComputePrincipalFromBlob(TemplateAddress, pub)
 }
