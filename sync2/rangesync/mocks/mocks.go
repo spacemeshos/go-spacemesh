@@ -388,12 +388,11 @@ func (c *MockOrderedSetReceiveCall) DoAndReturn(f func(rangesync.KeyBytes) error
 }
 
 // Received mocks base method.
-func (m *MockOrderedSet) Received() (rangesync.SeqResult, int) {
+func (m *MockOrderedSet) Received() rangesync.SeqResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Received")
 	ret0, _ := ret[0].(rangesync.SeqResult)
-	ret1, _ := ret[1].(int)
-	return ret0, ret1
+	return ret0
 }
 
 // Received indicates an expected call of Received.
@@ -409,19 +408,19 @@ type MockOrderedSetReceivedCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetReceivedCall) Return(arg0 rangesync.SeqResult, arg1 int) *MockOrderedSetReceivedCall {
-	c.Call = c.Call.Return(arg0, arg1)
+func (c *MockOrderedSetReceivedCall) Return(arg0 rangesync.SeqResult) *MockOrderedSetReceivedCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetReceivedCall) Do(f func() (rangesync.SeqResult, int)) *MockOrderedSetReceivedCall {
+func (c *MockOrderedSetReceivedCall) Do(f func() rangesync.SeqResult) *MockOrderedSetReceivedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetReceivedCall) DoAndReturn(f func() (rangesync.SeqResult, int)) *MockOrderedSetReceivedCall {
+func (c *MockOrderedSetReceivedCall) DoAndReturn(f func() rangesync.SeqResult) *MockOrderedSetReceivedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

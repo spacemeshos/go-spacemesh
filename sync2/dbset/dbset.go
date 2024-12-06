@@ -80,10 +80,9 @@ func (d *DBSet) EnsureLoaded() error {
 	return d.snapshot.Load(d.db, d.handleIDfromDB)
 }
 
-// Received returns a sequence of all items that have been received and the number of
-// these items.
+// Received returns a sequence of all items that have been received.
 // Implements rangesync.OrderedSet.
-func (d *DBSet) Received() (rangesync.SeqResult, int) {
+func (d *DBSet) Received() rangesync.SeqResult {
 	return rangesync.SeqResult{
 		Seq: func(yield func(k rangesync.KeyBytes) bool) {
 			for k := range d.received {
@@ -93,7 +92,7 @@ func (d *DBSet) Received() (rangesync.SeqResult, int) {
 			}
 		},
 		Error: rangesync.NoSeqError,
-	}, len(d.received)
+	}
 }
 
 // Add adds an item to the DBSet.

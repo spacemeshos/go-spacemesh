@@ -63,17 +63,20 @@ func (ssb *SetSyncBase) syncPeer(
 	toCall func(rangesync.OrderedSet) error,
 ) error {
 	sr := rangesync.EmptySeqResult()
-	var n int
 	if err := ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
 		if err := toCall(os); err != nil {
 			return err
 		}
-		sr, n = os.Received()
+		sr = os.Received()
 		return nil
 	}); err != nil {
 		return fmt.Errorf("sync: %w", err)
 	}
-	if n > 0 {
+	empty, err := sr.IsEmpty()
+	if err != nil {
+		return fmt.Errorf("check if the sequence result is empty: %w", err)
+	}
+	if !empty {
 		if err := ssb.handler.Commit(ctx, p, ssb.os, sr); err != nil {
 			return fmt.Errorf("commit: %w", err)
 		}

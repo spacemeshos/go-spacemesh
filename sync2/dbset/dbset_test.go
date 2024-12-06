@@ -42,9 +42,7 @@ func TestDBSet_Empty(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, empty)
 	requireEmpty(t, s.Items())
-	sr, n := s.Received()
-	requireEmpty(t, sr)
-	require.Zero(t, n)
+	requireEmpty(t, s.Received())
 
 	info, err := s.GetRangeInfo(nil, nil)
 	require.NoError(t, err)
@@ -192,12 +190,10 @@ func TestDBSet_Receive(t *testing.T) {
 	newID := rangesync.MustParseHexKeyBytes("abcdef1234567890000000000000000000000000000000000000000000000000")
 	require.NoError(t, s.Receive(newID))
 
-	recvd, n := s.Received()
-	items, err := recvd.FirstN(1)
+	items, err := s.Received().FirstN(1)
 	require.NoError(t, err)
 	require.NoError(t, err)
 	require.Equal(t, []rangesync.KeyBytes{newID}, items)
-	require.Equal(t, 1, n)
 
 	info, err := s.GetRangeInfo(ids[2], ids[0])
 	require.NoError(t, err)
@@ -238,9 +234,7 @@ func TestDBSet_Copy(t *testing.T) {
 		require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.String())
 		require.Equal(t, ids[2], firstKey(t, info.Items))
 
-		sr, n := s.Received()
-		requireEmpty(t, sr)
-		require.Zero(t, n)
+		requireEmpty(t, s.Received())
 
 		info, err = s.GetRangeInfo(ids[2], ids[0])
 		require.NoError(t, err)
@@ -248,9 +242,7 @@ func TestDBSet_Copy(t *testing.T) {
 		require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.String())
 		require.Equal(t, ids[2], firstKey(t, info.Items))
 
-		sr, n = copy.(*dbset.DBSet).Received()
-		require.Equal(t, 1, n)
-		items, err := sr.FirstN(100)
+		items, err := copy.(*dbset.DBSet).Received().FirstN(100)
 		require.NoError(t, err)
 		require.Equal(t, []rangesync.KeyBytes{newID}, items)
 
@@ -361,9 +353,7 @@ func TestDBSet_Added(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
-	sr, n := s.Received()
-	requireEmpty(t, sr)
-	require.Zero(t, n)
+	requireEmpty(t, s.Received())
 
 	recv := []rangesync.KeyBytes{
 		rangesync.MustParseHexKeyBytes("3333333333333333333333333333333333333333333333333333333333333333"),
@@ -375,9 +365,7 @@ func TestDBSet_Added(t *testing.T) {
 
 	require.NoError(t, s.EnsureLoaded())
 
-	sr, n = s.Received()
-	require.Equal(t, 2, n)
-	recvd, err := sr.FirstN(3)
+	recvd, err := s.Received().FirstN(3)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []rangesync.KeyBytes{
 		rangesync.MustParseHexKeyBytes("3333333333333333333333333333333333333333333333333333333333333333"),
@@ -385,9 +373,7 @@ func TestDBSet_Added(t *testing.T) {
 	}, recvd)
 
 	require.NoError(t, s.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
-		sr, n := copy.(*dbset.DBSet).Received()
-		require.Equal(t, 2, n)
-		recvd1, err := sr.FirstN(3)
+		recvd1, err := copy.(*dbset.DBSet).Received().FirstN(3)
 		require.NoError(t, err)
 		require.ElementsMatch(t, recvd, recvd1)
 		return nil

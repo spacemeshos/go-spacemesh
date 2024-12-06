@@ -68,6 +68,7 @@ func idsFromTable(
 				chunk:        make([]rangesync.KeyBytes, 1),
 				singleChunk:  false,
 			}
+			// QQQQQ: do not load eagerly
 			if err = s.load(); err != nil {
 				return
 			}

@@ -99,13 +99,7 @@ func (h *ATXHandler) Commit(
 	batchAttemptsRemaining := h.maxBatchRetries
 	for len(state) > 0 {
 		items = items[:0]
-		for id, n := range state {
-			if n >= h.maxAttempts {
-				h.logger.Debug("failed to download ATX: max attempts reached",
-					zap.String("atx", id.ShortString()))
-				delete(state, id)
-				continue
-			}
+		for id, _ := range state {
 			items = append(items, id)
 			if len(items) == h.batchSize {
 				break
@@ -126,11 +120,17 @@ func (h *ATXHandler) Commit(
 				someSucceeded = true
 				delete(state, id)
 			case errors.Is(err, pubsub.ErrValidationReject):
-				// if the atx invalid there's no point downloading it again
-				state[id] = h.maxAttempts
+				h.logger.Debug("failed to download ATX",
+					zap.String("atx", id.ShortString()), zap.Error(err))
+				delete(state, id)
+			case state[id] >= h.maxAttempts-1:
+				h.logger.Debug("failed to download ATX: max attempts reached",
+					zap.String("atx", id.ShortString()))
+				delete(state, id)
 			default:
 				state[id]++
 			}
+
 		}))
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -152,15 +152,16 @@ func (h *ATXHandler) Commit(
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-h.clock.After(h.failedBatchDelay):
+				continue
 			}
-		} else {
-			batchAttemptsRemaining = h.maxBatchRetries
-			elapsed := h.clock.Since(startTime)
-			h.logger.Debug("fetched atxs",
-				zap.Int("total", total),
-				zap.Int("downloaded", numDownloaded),
-				zap.Float64("rate per sec", float64(numDownloaded)/elapsed.Seconds()))
 		}
+
+		batchAttemptsRemaining = h.maxBatchRetries
+		elapsed := h.clock.Since(startTime)
+		h.logger.Debug("fetched atxs",
+			zap.Int("total", total),
+			zap.Int("downloaded", numDownloaded),
+			zap.Float64("rate per sec", float64(numDownloaded)/elapsed.Seconds()))
 	}
 	return nil
 }

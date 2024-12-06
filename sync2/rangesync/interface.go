@@ -43,12 +43,11 @@ type OrderedSet interface {
 	// Receive handles a new key received from the peer.
 	// It should not add the key to the set.
 	Receive(k KeyBytes) error
-	// Received returns the sequence containing all the items received from the peer,
-	// and the total number of received items.
+	// Received returns the sequence containing all the items received from the peer.
 	// Unlike other methods, SeqResult returned by Received called on a copy of the
 	// OrderedSet passed to WithCopy callback is expected to be valid outside of the
 	// callback as well.
-	Received() (SeqResult, int)
+	Received() SeqResult
 	// GetRangeInfo returns RangeInfo for the item range in the ordered set,
 	// bounded by [x, y).
 	// x == y indicates the whole set.

@@ -125,6 +125,15 @@ func (s SeqResult) Collect() ([]KeyBytes, error) {
 	return s.Seq.Collect(), s.Error()
 }
 
+// IsEmpty returns true if the sequence in SeqResult is empty.
+// It also checks for errors.
+func (s SeqResult) IsEmpty() (bool, error) {
+	for range s.Seq {
+		return false, s.Error()
+	}
+	return true, s.Error()
+}
+
 // EmptySeqResult returns an empty sequence result.
 func EmptySeqResult() SeqResult {
 	return SeqResult{

@@ -73,7 +73,7 @@ func TestSetSyncBase(t *testing.T) {
 		st.ps.EXPECT().Sync(gomock.Any(), p2p.Peer("p1"), os, x, y)
 		addedKeys := []rangesync.KeyBytes{rangesync.RandomKeyBytes(32)}
 		sr := rangesync.MakeSeqResult(addedKeys)
-		os.EXPECT().Received().Return(sr, 1)
+		os.EXPECT().Received().Return(sr)
 		st.handler.EXPECT().Commit(gomock.Any(), p2p.Peer("p1"), st.os, gomock.Any()).
 			DoAndReturn(func(
 				_ context.Context,
