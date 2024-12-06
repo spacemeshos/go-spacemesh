@@ -12,7 +12,7 @@ func SigningBody(genesis, tx []byte) []byte {
 	return full
 }
 
-// ComputePrincipal address as the last 24 bytes of Hash(template || blob).
+// ComputePrincipal address as the first 24 bytes of Hash(template || blob).
 // See https://github.com/spacemeshos/go-spacemesh/issues/6420 for more details.
 func ComputePrincipalFromBlob(template types.Address, blob []byte) types.Address {
 	hasher := hash.GetHasher()
@@ -20,7 +20,9 @@ func ComputePrincipalFromBlob(template types.Address, blob []byte) types.Address
 	hasher.Write(template[:])
 	hasher.Write(blob)
 	sum := hasher.Sum(nil)
-	return types.GenerateAddress(sum)
+	var address types.Address
+	copy(address[:], sum)
+	return address
 }
 
 func TemplateAddress(code []byte) types.Address {
