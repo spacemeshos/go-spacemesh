@@ -573,7 +573,6 @@ func startWithSyncedState_SyncV2(tb testing.TB, ts *testSyncer) types.LayerID {
 	ts.mTicker.advanceToLayer(gLayer)
 	ts.expectMalEnsureInSync(gLayer)
 	ts.mASV2.EXPECT().EnsureSync(gomock.Any(), types.EpochID(0), types.EpochID(1)).MinTimes(1)
-	// ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gLayer.GetEpoch(), gomock.Any())
 	require.True(tb, ts.syncer.synchronize(context.Background()))
 	ts.syncer.waitBackgroundSync()
 	require.True(tb, ts.syncer.ListenToATXGossip())

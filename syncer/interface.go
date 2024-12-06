@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -47,7 +48,7 @@ type fetcher interface {
 	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
-	system.AtxFetcher
+	sync2.Fetcher
 	system.MalfeasanceProofFetcher
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error

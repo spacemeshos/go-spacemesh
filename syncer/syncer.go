@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
@@ -252,9 +251,8 @@ func NewSyncer(
 			s.cfg.ReconcSync.ServerConfig.ToOpts(),
 			server.WithHardTimeout(s.cfg.ReconcSync.HardTimeout))
 		s.dispatcher = sync2.NewDispatcher(s.logger, fetcher.(sync2.Fetcher), serverOpts)
-		hss := sync2.NewATXSyncSource(
-			s.logger, s.dispatcher, cdb.Database.(sql.StateDatabase),
-			fetcher.(sync2.Fetcher), s.cfg.ReconcSync.EnableActiveSync)
+		hss := sync2.NewATXSyncSource(s.logger, s.dispatcher, cdb.Database, fetcher,
+			s.cfg.ReconcSync.EnableActiveSync)
 		s.asv2 = sync2.NewMultiEpochATXSyncer(
 			s.logger, hss, s.cfg.ReconcSync.OldAtxSyncCfg, s.cfg.ReconcSync.NewAtxSyncCfg,
 			s.cfg.ReconcSync.ParallelLoadLimit)
@@ -561,7 +559,6 @@ func (s *Syncer) ensureATXsInSync(ctx context.Context) error {
 		s.backgroundSync.epoch.Store(0)
 	}
 	if s.backgroundSync.epoch.Load() == 0 && publish.Uint32() != 0 {
-		// TODO: syncv2
 		s.logger.Debug("download atx for epoch in background", zap.Stringer("publish", publish), log.ZContext(ctx))
 		s.backgroundSync.epoch.Store(publish.Uint32())
 		ctx, cancel := context.WithCancel(ctx)

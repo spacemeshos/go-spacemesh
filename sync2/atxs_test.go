@@ -145,6 +145,7 @@ func TestAtxHandler_Retry(t *testing.T) {
 	// If it so happens that a full batch fails, we need to advance the clock to
 	// trigger the retry.
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		for {
@@ -161,13 +162,11 @@ func TestAtxHandler_Retry(t *testing.T) {
 			clock.Advance(batchRetryDelay)
 		}
 	})
-	defer func() {
-		cancel()
-		eg.Wait()
-	}()
 
 	require.NoError(t, h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs)))
 	require.ElementsMatch(t, allAtxs[1:], fetched)
+	cancel()
+	require.NoError(t, eg.Wait())
 }
 
 func TestAtxHandler_Cancel(t *testing.T) {

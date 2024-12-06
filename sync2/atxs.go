@@ -92,15 +92,15 @@ func (h *ATXHandler) Commit(
 	startTime := h.clock.Now()
 	batchAttemptsRemaining := h.maxBatchRetries
 	for len(state) > 0 {
+		if len(state) == 0 {
+			break
+		}
 		items = items[:0]
-		for id, _ := range state {
+		for id := range state {
 			items = append(items, id)
 			if len(items) == h.batchSize {
 				break
 			}
-		}
-		if len(items) == 0 {
-			break
 		}
 
 		someSucceeded := false
@@ -124,7 +124,6 @@ func (h *ATXHandler) Commit(
 			default:
 				state[id]++
 			}
-
 		}))
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -236,15 +235,16 @@ func (s *MultiEpochATXSyncer) EnsureSync(
 	}
 	for epoch := types.EpochID(1); epoch <= newEpoch; epoch++ {
 		syncer := s.atxSyncers[epoch-1]
-		if epoch <= lastWaitEpoch {
-			s.logger.Info("waiting for epoch to sync", zap.Uint32("epoch", epoch.Uint32()))
-			if err := syncer.StartAndSync(ctx); err != nil {
-				return lastSynced, fmt.Errorf("error syncing old ATXs: %w", err)
-			}
-			lastSynced = epoch
-		} else {
+		if epoch > lastWaitEpoch {
 			syncer.Start()
+			continue
 		}
+
+		s.logger.Info("waiting for epoch to sync", zap.Uint32("epoch", epoch.Uint32()))
+		if err := syncer.StartAndSync(ctx); err != nil {
+			return lastSynced, fmt.Errorf("error syncing old ATXs: %w", err)
+		}
+		lastSynced = epoch
 	}
 	return lastSynced, nil
 }
@@ -275,18 +275,15 @@ func NewATXSyncer(
 	d *rangesync.Dispatcher,
 	name string,
 	cfg Config,
-	db sql.StateDatabase,
+	db sql.Database,
 	f Fetcher,
 	epoch types.EpochID,
 	enableActiveSync bool,
 ) *P2PHashSync {
 	curSet := dbset.NewDBSet(db, atxsTable(epoch), 32, cfg.MaxDepth)
-	return NewP2PHashSync(
-		logger, d, name, curSet, 32, f.Peers(),
-		NewATXHandler(
-			logger, f, cfg.BatchSize, cfg.MaxAttempts,
-			cfg.MaxBatchRetries, cfg.FailedBatchDelay, nil),
-		cfg, enableActiveSync)
+	handler := NewATXHandler(logger, f, cfg.BatchSize, cfg.MaxAttempts,
+		cfg.MaxBatchRetries, cfg.FailedBatchDelay, nil)
+	return NewP2PHashSync(logger, d, name, curSet, 32, f.Peers(), handler, cfg, enableActiveSync)
 }
 
 func NewDispatcher(logger *zap.Logger, f Fetcher, opts []server.Opt) *rangesync.Dispatcher {
@@ -298,7 +295,7 @@ func NewDispatcher(logger *zap.Logger, f Fetcher, opts []server.Opt) *rangesync.
 type ATXSyncSource struct {
 	logger           *zap.Logger
 	d                *rangesync.Dispatcher
-	db               sql.StateDatabase
+	db               sql.Database
 	f                Fetcher
 	enableActiveSync bool
 }
@@ -308,7 +305,7 @@ var _ HashSyncSource = &ATXSyncSource{}
 func NewATXSyncSource(
 	logger *zap.Logger,
 	d *rangesync.Dispatcher,
-	db sql.StateDatabase,
+	db sql.Database,
 	f Fetcher,
 	enableActiveSync bool,
 ) *ATXSyncSource {
