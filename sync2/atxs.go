@@ -62,20 +62,23 @@ func NewATXHandler(
 	}
 }
 
-func (h *ATXHandler) Commit(
-	ctx context.Context,
+type commitState struct {
+	state         map[types.ATXID]int
+	total         int
+	numDownloaded int
+	items         []types.ATXID
+}
+
+func (h *ATXHandler) setupState(
 	peer p2p.Peer,
 	base rangesync.OrderedSet,
 	received rangesync.SeqResult,
-) error {
-	h.logger.Debug("begin atx commit")
-	defer h.logger.Debug("end atx commit")
-	numDownloaded := 0
+) (*commitState, error) {
 	state := make(map[types.ATXID]int)
 	for k := range received.Seq {
 		found, err := base.Has(k)
 		if err != nil {
-			return fmt.Errorf("check if ATX exists: %w", err)
+			return nil, fmt.Errorf("check if ATX exists: %w", err)
 		}
 		if found {
 			continue
@@ -85,53 +88,71 @@ func (h *ATXHandler) Commit(
 		state[id] = 0
 	}
 	if err := received.Error(); err != nil {
-		return fmt.Errorf("get item: %w", err)
+		return nil, fmt.Errorf("get item: %w", err)
 	}
-	total := len(state)
-	items := make([]types.ATXID, 0, h.batchSize)
-	startTime := h.clock.Now()
-	batchAttemptsRemaining := h.maxBatchRetries
-	for len(state) > 0 {
-		if len(state) == 0 {
+	return &commitState{
+		state: state,
+		total: len(state),
+		items: make([]types.ATXID, 0, h.batchSize),
+	}, nil
+}
+
+func (h *ATXHandler) getAtxs(ctx context.Context, cs *commitState) (bool, error) {
+	cs.items = cs.items[:0] // reuse the slice to reduce allocations
+	for id := range cs.state {
+		cs.items = append(cs.items, id)
+		if len(cs.items) == h.batchSize {
 			break
 		}
-		items = items[:0]
-		for id := range state {
-			items = append(items, id)
-			if len(items) == h.batchSize {
-				break
-			}
+	}
+	someSucceeded := false
+	var mtx sync.Mutex
+	err := h.f.GetAtxs(ctx, cs.items, system.WithATXCallback(func(id types.ATXID, err error) {
+		mtx.Lock()
+		defer mtx.Unlock()
+		switch {
+		case err == nil:
+			cs.numDownloaded++
+			someSucceeded = true
+			delete(cs.state, id)
+		case errors.Is(err, pubsub.ErrValidationReject):
+			h.logger.Debug("failed to download ATX",
+				zap.String("atx", id.ShortString()), zap.Error(err))
+			delete(cs.state, id)
+		case cs.state[id] >= h.maxAttempts-1:
+			h.logger.Debug("failed to download ATX: max attempts reached",
+				zap.String("atx", id.ShortString()))
+			delete(cs.state, id)
+		default:
+			cs.state[id]++
 		}
+	}))
+	return someSucceeded, err
+}
 
-		someSucceeded := false
-		var mtx sync.Mutex
-		err := h.f.GetAtxs(ctx, items, system.WithATXCallback(func(id types.ATXID, err error) {
-			mtx.Lock()
-			defer mtx.Unlock()
-			switch {
-			case err == nil:
-				numDownloaded++
-				someSucceeded = true
-				delete(state, id)
-			case errors.Is(err, pubsub.ErrValidationReject):
-				h.logger.Debug("failed to download ATX",
-					zap.String("atx", id.ShortString()), zap.Error(err))
-				delete(state, id)
-			case state[id] >= h.maxAttempts-1:
-				h.logger.Debug("failed to download ATX: max attempts reached",
-					zap.String("atx", id.ShortString()))
-				delete(state, id)
-			default:
-				state[id]++
-			}
-		}))
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				return err
-			}
-			if !errors.Is(err, &fetch.BatchError{}) {
-				h.logger.Debug("failed to download ATXs", zap.Error(err))
-			}
+func (h *ATXHandler) Commit(
+	ctx context.Context,
+	peer p2p.Peer,
+	base rangesync.OrderedSet,
+	received rangesync.SeqResult,
+) error {
+	h.logger.Debug("begin atx commit")
+	defer h.logger.Debug("end atx commit")
+	numDownloaded := 0
+	cs, err := h.setupState(peer, base, received)
+	if err != nil {
+		return err
+	}
+	startTime := h.clock.Now()
+	batchAttemptsRemaining := h.maxBatchRetries
+	for len(cs.state) > 0 {
+		someSucceeded, err := h.getAtxs(ctx, cs)
+		switch {
+		case err == nil:
+		case errors.Is(err, context.Canceled):
+			return err
+		case !errors.Is(err, &fetch.BatchError{}):
+			h.logger.Debug("failed to download ATXs", zap.Error(err))
 		}
 		if !someSucceeded {
 			if batchAttemptsRemaining == 0 {
@@ -152,7 +173,7 @@ func (h *ATXHandler) Commit(
 		batchAttemptsRemaining = h.maxBatchRetries
 		elapsed := h.clock.Since(startTime)
 		h.logger.Debug("fetched atxs",
-			zap.Int("total", total),
+			zap.Int("total", cs.total),
 			zap.Int("downloaded", numDownloaded),
 			zap.Float64("rate per sec", float64(numDownloaded)/elapsed.Seconds()))
 	}
