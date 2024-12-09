@@ -65,41 +65,50 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	last := first + limit
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
-	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
-	includedAll := make(map[string]map[uint32][]*pb.Proposal, cl.Total())
-
-	m := sync.Mutex{}
+	var m sync.Mutex
 	eg, ctx := errgroup.WithContext(tctx)
 	clients := cl.Clients()
 	if cl.NodeService() != nil {
 		clients = append(clients, cl.NodeService())
 	}
+	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
+	includedAll := make(map[string]map[uint32][]*pb.Proposal, cl.Total())
+
 	for i, client := range clients {
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
 		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
-			tctx.Log.Debugw("received proposal event",
+			if proposal.Layer.Number > last {
+				return false, nil
+			}
+			if proposal.Status == pb.Proposal_Created {
+				createdCh <- proposal
+				tctx.Log.Debugw("received proposal event",
+					"client", client.Name,
+					"layer", proposal.Layer.Number,
+					"smesher", prettyHex(proposal.Smesher.Id),
+					"eligibilities", len(proposal.Eligibilities),
+				)
+				return true, nil
+			}
+
+			tctx.Log.Debugw("received other proposal event",
 				"client", client.Name,
 				"layer", proposal.Layer.Number,
 				"smesher", prettyHex(proposal.Smesher.Id),
 				"eligibilities", len(proposal.Eligibilities),
 				"status", pb.Proposal_Status_name[int32(proposal.Status)],
 			)
-			if proposal.Layer.Number > last {
-				return false, nil
+			m.Lock()
+			defer m.Unlock()
+			if includedAll[client.Name] == nil {
+
+				includedAll[client.Name] = map[uint32][]*pb.Proposal{}
 			}
-			if proposal.Status == pb.Proposal_Created {
-				createdCh <- proposal
-			} else {
-				m.Lock()
-				if includedAll[client.Name] == nil {
-					includedAll[client.Name] = map[uint32][]*pb.Proposal{}
-				}
-				includedAll[client.Name][proposal.Layer.Number] = append(includedAll[client.Name][proposal.Layer.Number], proposal)
-				m.Unlock()
-			}
+			includedAll[client.Name][proposal.Layer.Number] =
+				append(includedAll[client.Name][proposal.Layer.Number], proposal)
 			return true, nil
 		})
 	}

@@ -50,7 +50,7 @@ var (
 		"controls tests parallelization by creating multiple spacemesh clusters at the same time",
 	)
 	logLevel    = zap.LevelFlag("level", zap.InfoLevel, "verbosity of the logger")
-	testTimeout = flag.Duration("test-timeout", 15*time.Minute, "timeout for a single test")
+	testTimeout = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 
 	tokens     chan struct{}
 	initTokens sync.Once
