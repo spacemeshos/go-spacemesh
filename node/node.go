@@ -827,28 +827,32 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(syncer)
 	hOracle.SetSync(syncer)
 
-	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	legacyMalLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
+		legacyMalLogger,
+		app.cachedDB,
+		syncer,
+		trtl,
+		app.host,
+	)
+
+	malfeasanceLogger := app.addLogger(Malfeasance2Logger, lg).Zap()
+	malfeasancePublisher := malfeasance2.NewPublisher(
 		malfeasanceLogger,
 		app.cachedDB,
 		syncer,
 		trtl,
 		app.host,
 	)
-
-	malfeasance2Publisher := malfeasance2.NewPublisher(
-		app.addLogger(Malfeasance2Logger, lg).Zap(),
-		app.cachedDB,
-		syncer,
-		trtl,
-		app.host,
-	)
-
-	atxMalPublisher := activation.NewMalfeasanceHandlerV2(
-		malfeasance2Publisher,
+	atxMalHandler := activation.NewMalfeasanceHandlerV2(
+		malfeasanceLogger,
+		malfeasancePublisher,
 		app.edVerifier,
 		validator,
 	)
+	for _, sig := range app.signers {
+		atxMalHandler.Register(sig)
+	}
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -858,7 +862,7 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcher,
 		goldenATXID,
 		validator,
-		atxMalPublisher,
+		atxMalHandler,
 		legacyMalPublisher,
 		beaconProtocol,
 		trtl,
@@ -1142,18 +1146,18 @@ func (app *App) initServices(ctx context.Context) error {
 
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
-		malfeasanceLogger,
+		legacyMalLogger,
 		app.edVerifier,
 	)
 	meshMH := mesh.NewMalfeasanceHandler(
 		app.cachedDB,
 		app.edVerifier,
-		mesh.WithMalfeasanceLogger(malfeasanceLogger),
+		mesh.WithMalfeasanceLogger(legacyMalLogger),
 	)
 	hareMH := hare3.NewMalfeasanceHandler(
 		app.cachedDB,
 		app.edVerifier,
-		hare3.WithMalfeasanceLogger(malfeasanceLogger),
+		hare3.WithMalfeasanceLogger(legacyMalLogger),
 	)
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
@@ -1168,7 +1172,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	app.malfeasanceHandler = malfeasance.NewHandler(
 		app.cachedDB,
-		malfeasanceLogger,
+		legacyMalLogger,
 		app.host.ID(),
 		nodeIDs,
 		trtl,

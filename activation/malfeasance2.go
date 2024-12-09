@@ -3,20 +3,30 @@ package activation
 import (
 	"context"
 	"fmt"
+	"sync"
+
+	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type MalfeasanceHandlerV2 struct {
+	logger *zap.Logger
+
 	malPublisher malfeasancePublisher
 	edVerifier   *signing.EdVerifier
 	validator    nipostValidatorV2
+
+	smeshingMutex sync.Mutex
+	signers       map[types.NodeID]*signing.EdSigner
 }
 
 func NewMalfeasanceHandlerV2(
+	logger *zap.Logger,
 	malPublisher malfeasancePublisher,
 	edVerifier *signing.EdVerifier,
 	validator nipostValidatorV2,
@@ -28,38 +38,46 @@ func NewMalfeasanceHandlerV2(
 	}
 }
 
+func (p *MalfeasanceHandlerV2) Register(sig *signing.EdSigner) {
+	p.smeshingMutex.Lock()
+	defer p.smeshingMutex.Unlock()
+	if _, exists := p.signers[sig.NodeID()]; exists {
+		p.logger.Error("signing key already registered", log.ZShortStringer("id", sig.NodeID()))
+		return
+	}
+
+	p.logger.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
+	p.signers[sig.NodeID()] = sig
+}
+
 // Publish publishes an ATX proof by encoding it and sending it to the malfeasance publisher.
 func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error {
+	proofNodeID, err := proof.Valid(ctx, p)
+	if err != nil {
+		return fmt.Errorf("publish ATX malfeasance proof: proof not valid: %w", err)
+	}
+	if proofNodeID != nodeID {
+		return fmt.Errorf("publish ATX malfeasance proof: proof for %s does not match node ID %s", proofNodeID, nodeID)
+	}
+
+	p.smeshingMutex.Lock()
+	_, exists := p.signers[nodeID]
+	p.smeshingMutex.Unlock()
+
+	if exists {
+		// do not publish proofs against one self
+		return fmt.Errorf("publish ATX malfeasance proof: node %s is managed by node", nodeID)
+	}
+
 	atxProof := &wire.ATXProof{
 		Version:   0x01, // for now we only have one version
 		ProofType: proof.Type(),
 
 		Proof: codec.MustEncode(proof),
 	}
-
 	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof))
 }
 
-func (mh *MalfeasanceHandlerV2) PostIndex(
-	ctx context.Context,
-	smesherID types.NodeID,
-	commitment types.ATXID,
-	post *types.Post,
-	challenge []byte,
-	numUnits uint32,
-	idx int,
-) error {
-	return mh.validator.PostV2(ctx, smesherID, commitment, post, challenge, numUnits, PostIndex(idx))
-}
-
-func (mh *MalfeasanceHandlerV2) Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-	return mh.edVerifier.Verify(d, nodeID, m, sig)
-}
-
-// TODO(mafa): call this validate in the malfeasance handler in `malfeasance` package for publish/gossip:
-//   - do not publishing proofs for identities managed by node
-//   - validate and persist before publishing
-//   - do not handle incoming proofs from peer == `self`
 func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) (types.NodeID, error) {
 	var atxProof wire.ATXProof
 	if err := codec.Decode(data, &atxProof); err != nil {
@@ -78,37 +96,18 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) (type
 	return id, nil
 }
 
-// TODO(mafa): this roughly how the general publisher looks like
-//
-// func Publish(ctx context.Context, smesherID types.NodeID, data []byte) error {
-// 	// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
-// 	set, err := identities.EquivocationSet(mh.cdb, nodeID)
-// 	if err != nil {
-// 		return fmt.Errorf("getting equivocation set: %w", err)
-// 	}
-// 	for _, id := range set {
-// 		if err := identities.SetMalicious(mh.cdb, id, encoded, time.Now()); err != nil {
-// 			return fmt.Errorf("adding malfeasance proof: %w", err)
-// 		}
+func (mh *MalfeasanceHandlerV2) PostIndex(
+	ctx context.Context,
+	smesherID types.NodeID,
+	commitment types.ATXID,
+	post *types.Post,
+	challenge []byte,
+	numUnits uint32,
+	idx int,
+) error {
+	return mh.validator.PostV2(ctx, smesherID, commitment, post, challenge, numUnits, PostIndex(idx))
+}
 
-// 		mh.cdb.CacheMalfeasanceProof(id, proof)
-// 		mh.tortoise.OnMalfeasance(id)
-// 	}
-
-// 	if !mh.syncer.ListenToATXGossip() {
-//      // we are not gossiping proofs when we are not listening to ATX gossip
-// 		return nil
-// 	}
-
-// 	gossip := mwire.MalfeasanceProofV2{
-// 		Layer:     mh.clock.CurrentLayer(),
-// 		ProofType: mwire.InvalidActivation,
-// 		Proof:     data,
-// 	}
-
-// 	if err := mh.publisher.Publish(ctx, pubsub.MalfeasanceProof, codec.MustEncode(&gossip)); err != nil {
-// 		mh.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
-// 		return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
-// 	}
-// 	return nil
-// }
+func (mh *MalfeasanceHandlerV2) Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+	return mh.edVerifier.Verify(d, nodeID, m, sig)
+}
