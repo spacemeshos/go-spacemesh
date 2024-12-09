@@ -20,12 +20,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hash"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	sdkmultisig "github.com/spacemeshos/go-spacemesh/vm/sdk/multisig"
 	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -47,9 +50,6 @@ type testAccount interface {
 
 	spawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
 	deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte
-
-	baseGas() int
-	loadGas() int
 }
 
 type singlesigAccount struct {
@@ -97,6 +97,55 @@ func (a *singlesigAccount) loadGas() int {
 	return int(wallet.LoadGas())
 }
 
+type multisigAccount struct {
+	required uint8
+	pks      []ed25519.PrivateKey
+	address  core.Address
+	template core.Address
+}
+
+func (a *multisigAccount) getAddress() core.Address {
+	return a.address
+}
+
+func (a *multisigAccount) getTemplate() core.Address {
+	return a.template
+}
+
+func (a *multisigAccount) spend(t *tester, to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	panic("not implemented")
+}
+
+func (a *multisigAccount) spawn(
+	t *tester,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) []byte {
+	panic("not implemented")
+}
+
+func (a *multisigAccount) selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte {
+	var pubs [][32]byte
+	for _, pk := range a.pks {
+		pubs = append(pubs, [32]byte(signing.Public(signing.PrivateKey(pk))))
+	}
+	tx, err := sdkmultisig.Spawn(a.template, a.required, pubs, nonce)
+	if err != nil {
+		panic(err)
+	}
+	agg := sdkmultisig.NewAggregator(tx)
+	for i := range a.required {
+		pk := a.pks[i]
+		sig := ed25519.Sign(pk, tx)
+		agg.Add(uint8(i), core.Signature(sig))
+	}
+	return agg.Raw()
+}
+
+func (a *multisigAccount) deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte {
+	panic("not implemented")
+}
+
 type testTemplate struct {
 	address core.Address
 	state   []byte
@@ -134,9 +183,18 @@ func (t *tester) addAccount(account testAccount, balance uint64) {
 	t.balances = append(t.balances, balance)
 }
 
-func (t *tester) addWalletTemplate() *tester {
-	t.templates = append(t.templates, testTemplate{address: wallet.TemplateAddress, state: wallet.PROGRAM})
+func (t *tester) addTemplate(address types.Address, code []byte) *tester {
+	t.templates = append(t.templates, testTemplate{address: address, state: code})
 	return t
+}
+func (t *tester) addWalletTemplate() *tester {
+	return t.addTemplate(wallet.TemplateAddress, wallet.PROGRAM)
+}
+
+var multiSigWalletTemplateAddress = types.Address{2}
+
+func (t *tester) addMultiSigWalletTemplate() *tester {
+	return t.addTemplate(multiSigWalletTemplateAddress, multisig.PROGRAM)
 }
 
 func (t *tester) addSingleSig(n int) *tester {
@@ -145,6 +203,30 @@ func (t *tester) addSingleSig(n int) *tester {
 		require.NoError(t, err)
 		address := sdkwallet.Address(pub)
 		t.addAccount(&singlesigAccount{pk, address}, 1_000_000_000)
+	}
+	return t
+}
+
+func (t *tester) createMultisig(required, total uint8, template core.Address) *multisigAccount {
+	var pks []ed25519.PrivateKey
+	var pubs []core.PublicKey
+	for range total {
+		pub, pk, err := ed25519.GenerateKey(t.rng)
+		require.NoError(t, err)
+		pks = append(pks, pk)
+		pubs = append(pubs, core.PublicKey(pub))
+	}
+	return &multisigAccount{
+		required: required,
+		pks:      pks,
+		address:  sdkmultisig.Address(required, pubs),
+		template: template,
+	}
+}
+
+func (t *tester) addMultisig(template types.Address, total int, required, numKeys uint8) *tester {
+	for range total {
+		t.addAccount(t.createMultisig(required, numKeys, template), 1_000_000_000)
 	}
 	return t
 }
@@ -1259,7 +1341,7 @@ func testWallet(t *testing.T, defaultGasPrice int, template core.Address, genTes
 func TestWallets(t *testing.T) {
 	t.Parallel()
 	const (
-		funded = 10  // number of funded accounts, included in genesis
+		funded = 1   // number of funded accounts, included in genesis
 		total  = 100 // total number of accounts
 
 		defaultGasPrice = 1
@@ -1273,15 +1355,23 @@ func TestWallets(t *testing.T) {
 				addSingleSig(total - funded)
 		})
 	})
+	t.Run("MultiSig13", func(t *testing.T) {
+		const n = 3
+		testWallet(t, defaultGasPrice, multiSigWalletTemplateAddress, func(t *testing.T) *tester {
+			return newTester(t).
+				addMultiSigWalletTemplate().
+				addMultisig(multiSigWalletTemplateAddress, funded, 1, n).
+				applyGenesisWithBalance().
+				addMultisig(multiSigWalletTemplateAddress, total-funded, 1, n)
+		})
+	})
+
 }
 
 func TestSingleSigWalletDeploy(t *testing.T) {
 	tt := newTester(t).addWalletTemplate().addSingleSig(1)
 
-	// FIXME: The test will deploy singleSig wallet template again at a different address
-	// (`wallet.TemplateAddress` is hardcoded), because we don't have another template yet.
-	// Fix this test once we have more than 1 program.
-	code := wallet.PROGRAM
+	code := multisig.PROGRAM
 	newTemplateAddress := core.TemplateAddress(code)
 	require.NotEqual(t, wallet.TemplateAddress, newTemplateAddress, "update the test to use another template")
 	pub, pk, err := ed25519.GenerateKey(tt.rng)

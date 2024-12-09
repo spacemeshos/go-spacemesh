@@ -1,0 +1,83 @@
+//! The Spacemesh standard multi-signature wallet template.
+extern crate alloc;
+
+use athena_interface::Address;
+use athena_vm_declare::{callable, template};
+use athena_vm_sdk::wallet::SpendArguments;
+use athena_vm_sdk::{call, spawn, Pubkey};
+use parity_scale_codec::{Decode, Encode, IoReader};
+
+#[derive(Encode, Decode)]
+struct Contract {
+    required: u8,
+    keys: alloc::vec::Vec<Pubkey>,
+}
+
+#[derive(Encode, Decode)]
+struct SpawnArguments {
+    required: u8,
+    keys: alloc::vec::Vec<Pubkey>,
+}
+
+#[derive(Encode, Decode)]
+struct Signature {
+    id: u8,
+    sig: [u8; 64],
+}
+
+#[template]
+impl Contract {
+    #[callable]
+    fn spawn(args: SpawnArguments) -> Address {
+        let wallet = Contract {
+            required: args.required,
+            keys: args.keys,
+        };
+        let serialized = wallet.encode();
+        spawn(&serialized)
+    }
+
+    #[callable]
+    fn spend(&self, args: SpendArguments) {
+        call(args.recipient, None, None, args.amount);
+    }
+
+    #[callable]
+    fn deploy(&self, code: alloc::vec::Vec<u8>) -> Address {
+        athena_vm_sdk::deploy(&code)
+    }
+
+    #[callable]
+    fn max_spend(&self, args: SpendArguments) -> u64 {
+        args.amount
+    }
+
+    #[callable]
+    fn verify(&self, tx: alloc::vec::Vec<u8>) -> bool {
+        let mut io = IoReader(athena_vm::io::Io::default());
+        let mut last_id = None;
+        for _ in 0..self.required {
+            let sig = if let Ok(s) = Signature::decode(&mut io) {
+                s
+            } else {
+                return false;
+            };
+
+            if self.keys.len() < sig.id as usize {
+                return false;
+            }
+            if let Some(last) = last_id {
+                if sig.id <= last {
+                    return false;
+                }
+            }
+            last_id = Some(sig.id);
+            let pubkey = &self.keys[sig.id as usize];
+
+            if !athena_vm_sdk::precompiles::ed25519::verify(&tx, &pubkey.0, &sig.sig) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
