@@ -3,6 +3,7 @@ package tests
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -74,7 +75,12 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		includedAll[i] = map[uint32][]*pb.Proposal{}
 	}
 
-	eg, ctx := errgroup.WithContext(tctx)
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	deadline := cl.Genesis().Add(time.Duration(last+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+
+	eg, ctx := errgroup.WithContext(ctx)
 	for i := range cl.Total() {
 		client := cl.Client(i)
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
@@ -82,21 +88,38 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			if proposal.Layer.Number < first {
 				return true, nil
 			}
-			tctx.Log.Debugw("received proposal event",
+			if proposal.Layer.Number > last {
+				return false, nil
+			}
+			if proposal.Status == pb.Proposal_Created {
+				tctx.Log.Debugw("received proposal created event",
+					"client", client.Name,
+					"layer", proposal.Layer.Number,
+					"smesher", prettyHex(proposal.Smesher.Id),
+					"eligibilities", len(proposal.Eligibilities),
+				)
+				select {
+				case createdCh <- proposal:
+				case <-ctx.Done():
+					return false, ctx.Err()
+				default:
+					tctx.Log.Errorw("proposal channel is full",
+						"client", client.Name,
+						"layer", proposal.Layer.Number,
+					)
+					return false, errors.New("proposal channel is full")
+				}
+				return true, nil
+			}
+
+			tctx.Log.Debugw("received other proposal event",
 				"client", client.Name,
 				"layer", proposal.Layer.Number,
 				"smesher", prettyHex(proposal.Smesher.Id),
 				"eligibilities", len(proposal.Eligibilities),
 				"status", pb.Proposal_Status_name[int32(proposal.Status)],
 			)
-			if proposal.Layer.Number > last {
-				return false, nil
-			}
-			if proposal.Status == pb.Proposal_Created {
-				createdCh <- proposal
-			} else {
-				includedAll[i][proposal.Layer.Number] = append(includedAll[i][proposal.Layer.Number], proposal)
-			}
+			includedAll[i][proposal.Layer.Number] = append(includedAll[i][proposal.Layer.Number], proposal)
 			return true, nil
 		})
 	}
