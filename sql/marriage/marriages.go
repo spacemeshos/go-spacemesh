@@ -138,7 +138,7 @@ func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 		s.BindInt64(1, int64(id))
 	}, func(s *sql.Statement) bool {
 		var nodeID types.NodeID
-		s.ColumnBytes(0, nodeID.Bytes())
+		s.ColumnBytes(0, nodeID[:])
 		nodeIDs = append(nodeIDs, nodeID)
 		return true
 	})
