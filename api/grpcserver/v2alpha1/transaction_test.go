@@ -412,20 +412,30 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 
 	t.Run("transaction contents for spawn tx", func(t *testing.T) {
 		var publicKey core.PublicKey
-		copy(publicKey[:], signing.Public(keys[0]))
-		tx, err := wallet.Spawn(keys[0], 0)
+		copy(publicKey[:], signing.Public(keys[1]))
+		tx, err := wallet.Spawn(keys[1], 0)
 		require.NoError(t, err)
 		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
 			Transaction: tx,
 			Verify:      true,
 		})
 
-		// in Spacemesh you can parse a spawn tx for an account that's already spawned.
-		// Athena doesn't allow this.
-		// require.NoError(t, err)
-		// require.Equal(t, publicKey.String(), resp.Tx.Contents.GetSingleSigSpawn().Pubkey)
-		require.Equal(t, codes.InvalidArgument, status.Code(err))
-		require.Nil(t, resp)
+		require.NoError(t, err)
+		require.Equal(t, publicKey.String(), resp.Tx.Contents.GetSingleSigSpawn().Pubkey)
+	})
+	t.Run("transaction contents for deploy tx", func(t *testing.T) {
+		code := []byte("contract template code")
+		tx, err := wallet.Deploy(keys[0], 0, code)
+		require.NoError(t, err)
+		resp, err := client.ParseTransaction(ctx, &spacemeshv2alpha1.ParseTransactionRequest{
+			Transaction: tx,
+			Verify:      true,
+		})
+		require.NoError(t, err)
+		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DEPLOY, resp.Tx.GetType())
+		deployContents := resp.Tx.Contents.GetDeploy()
+		require.NotNil(t, deployContents)
+		require.Equal(t, core.TemplateAddress(code).String(), deployContents.Template)
 	})
 }
 
