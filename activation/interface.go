@@ -206,7 +206,7 @@ var (
 	ErrPostClientNotConnected = errors.New("post service not registered")
 )
 
-type AtxBuilder interface {
+type atxBuilder interface {
 	Register(sig *signing.EdSigner)
 }
 

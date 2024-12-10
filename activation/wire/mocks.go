@@ -13,6 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
+	scale "github.com/spacemeshos/go-scale"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	gomock "go.uber.org/mock/gomock"
@@ -114,6 +115,223 @@ func (c *MockMalfeasanceValidatorSignatureCall) Do(f func(signing.Domain, types.
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockMalfeasanceValidatorSignatureCall) DoAndReturn(f func(signing.Domain, types.NodeID, []byte, types.EdSignature) bool) *MockMalfeasanceValidatorSignatureCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockProof is a mock of Proof interface.
+type MockProof struct {
+	ctrl     *gomock.Controller
+	recorder *MockProofMockRecorder
+	isgomock struct{}
+}
+
+// MockProofMockRecorder is the mock recorder for MockProof.
+type MockProofMockRecorder struct {
+	mock *MockProof
+}
+
+// NewMockProof creates a new mock instance.
+func NewMockProof(ctrl *gomock.Controller) *MockProof {
+	mock := &MockProof{ctrl: ctrl}
+	mock.recorder = &MockProofMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockProof) EXPECT() *MockProofMockRecorder {
+	return m.recorder
+}
+
+// DecodeScale mocks base method.
+func (m *MockProof) DecodeScale(dec *scale.Decoder) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DecodeScale", dec)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// DecodeScale indicates an expected call of DecodeScale.
+func (mr *MockProofMockRecorder) DecodeScale(dec any) *MockProofDecodeScaleCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DecodeScale", reflect.TypeOf((*MockProof)(nil).DecodeScale), dec)
+	return &MockProofDecodeScaleCall{Call: call}
+}
+
+// MockProofDecodeScaleCall wrap *gomock.Call
+type MockProofDecodeScaleCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofDecodeScaleCall) Return(arg0 int, arg1 error) *MockProofDecodeScaleCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofDecodeScaleCall) Do(f func(*scale.Decoder) (int, error)) *MockProofDecodeScaleCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofDecodeScaleCall) DoAndReturn(f func(*scale.Decoder) (int, error)) *MockProofDecodeScaleCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// EncodeScale mocks base method.
+func (m *MockProof) EncodeScale(enc *scale.Encoder) (int, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EncodeScale", enc)
+	ret0, _ := ret[0].(int)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EncodeScale indicates an expected call of EncodeScale.
+func (mr *MockProofMockRecorder) EncodeScale(enc any) *MockProofEncodeScaleCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeScale", reflect.TypeOf((*MockProof)(nil).EncodeScale), enc)
+	return &MockProofEncodeScaleCall{Call: call}
+}
+
+// MockProofEncodeScaleCall wrap *gomock.Call
+type MockProofEncodeScaleCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofEncodeScaleCall) Return(arg0 int, arg1 error) *MockProofEncodeScaleCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofEncodeScaleCall) Do(f func(*scale.Encoder) (int, error)) *MockProofEncodeScaleCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofEncodeScaleCall) DoAndReturn(f func(*scale.Encoder) (int, error)) *MockProofEncodeScaleCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// String mocks base method.
+func (m *MockProof) String() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "String")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// String indicates an expected call of String.
+func (mr *MockProofMockRecorder) String() *MockProofStringCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockProof)(nil).String))
+	return &MockProofStringCall{Call: call}
+}
+
+// MockProofStringCall wrap *gomock.Call
+type MockProofStringCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofStringCall) Return(arg0 string) *MockProofStringCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofStringCall) Do(f func() string) *MockProofStringCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofStringCall) DoAndReturn(f func() string) *MockProofStringCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Type mocks base method.
+func (m *MockProof) Type() ProofType {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Type")
+	ret0, _ := ret[0].(ProofType)
+	return ret0
+}
+
+// Type indicates an expected call of Type.
+func (mr *MockProofMockRecorder) Type() *MockProofTypeCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Type", reflect.TypeOf((*MockProof)(nil).Type))
+	return &MockProofTypeCall{Call: call}
+}
+
+// MockProofTypeCall wrap *gomock.Call
+type MockProofTypeCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofTypeCall) Return(arg0 ProofType) *MockProofTypeCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofTypeCall) Do(f func() ProofType) *MockProofTypeCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofTypeCall) DoAndReturn(f func() ProofType) *MockProofTypeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Valid mocks base method.
+func (m *MockProof) Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Valid", ctx, malHandler)
+	ret0, _ := ret[0].(types.NodeID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Valid indicates an expected call of Valid.
+func (mr *MockProofMockRecorder) Valid(ctx, malHandler any) *MockProofValidCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Valid", reflect.TypeOf((*MockProof)(nil).Valid), ctx, malHandler)
+	return &MockProofValidCall{Call: call}
+}
+
+// MockProofValidCall wrap *gomock.Call
+type MockProofValidCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofValidCall) Return(arg0 types.NodeID, arg1 error) *MockProofValidCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofValidCall) Do(f func(context.Context, MalfeasanceValidator) (types.NodeID, error)) *MockProofValidCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofValidCall) DoAndReturn(f func(context.Context, MalfeasanceValidator) (types.NodeID, error)) *MockProofValidCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

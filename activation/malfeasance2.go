@@ -32,9 +32,12 @@ func NewMalfeasanceHandlerV2(
 	validator nipostValidatorV2,
 ) *MalfeasanceHandlerV2 {
 	return &MalfeasanceHandlerV2{
+		logger:       logger,
 		malPublisher: malPublisher,
 		edVerifier:   edVerifier,
 		validator:    validator,
+
+		signers: make(map[types.NodeID]*signing.EdSigner),
 	}
 }
 
@@ -46,27 +49,29 @@ func (p *MalfeasanceHandlerV2) Register(sig *signing.EdSigner) {
 		return
 	}
 
-	p.logger.Info("registered signing key", log.ZShortStringer("id", sig.NodeID()))
+	p.logger.Debug("registered signing key", log.ZShortStringer("id", sig.NodeID()))
 	p.signers[sig.NodeID()] = sig
 }
 
 // Publish publishes an ATX proof by encoding it and sending it to the malfeasance publisher.
 func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error {
-	proofNodeID, err := proof.Valid(ctx, p)
-	if err != nil {
-		return fmt.Errorf("publish ATX malfeasance proof: proof not valid: %w", err)
-	}
-	if proofNodeID != nodeID {
-		return fmt.Errorf("publish ATX malfeasance proof: proof for %s does not match node ID %s", proofNodeID, nodeID)
-	}
-
 	p.smeshingMutex.Lock()
 	_, exists := p.signers[nodeID]
 	p.smeshingMutex.Unlock()
 
 	if exists {
 		// do not publish proofs against one self
-		return fmt.Errorf("publish ATX malfeasance proof: node %s is managed by node", nodeID)
+		return fmt.Errorf("publish ATX malfeasance proof: identity %s is managed by node", nodeID)
+	}
+
+	proofNodeID, err := proof.Valid(ctx, p)
+	if err != nil {
+		return fmt.Errorf("publish ATX malfeasance proof: proof not valid: %w", err)
+	}
+	if proofNodeID != nodeID {
+		return fmt.Errorf("publish ATX malfeasance proof: proof for %s does not match node ID %s",
+			proofNodeID.ShortString(), nodeID.ShortString(),
+		)
 	}
 
 	atxProof := &wire.ATXProof{

@@ -37,8 +37,8 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		db sql.Executor,
 		prevATX types.ATXID,
 	) *ActivationTxV2 {
-		wInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wInitialAtx := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx.Sign(sig)
 		initialAtx := &types.ActivationTx{
@@ -48,8 +48,8 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		initialAtx.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, initialAtx, wInitialAtx.Blob()))
 
-		wPubInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wPubInitialAtx := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wPubInitialAtx.Sign(pubSig)
 		pubInitialAtx := &types.ActivationTx{}
@@ -59,10 +59,10 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 
 		marryInitialAtx := types.RandomATXID()
 
-		wMarriageAtx := newActivationTxV2(
-			withMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
-			withMarriageCertificate(sig, wInitialAtx.ID(), marrySig.NodeID()),
-			withMarriageCertificate(pubSig, wPubInitialAtx.ID(), marrySig.NodeID()),
+		wMarriageAtx := NewTestActivationTxV2(
+			WithMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
+			WithMarriageCertificate(sig, wInitialAtx.ID(), marrySig.NodeID()),
+			WithMarriageCertificate(pubSig, wPubInitialAtx.ID(), marrySig.NodeID()),
 		)
 		wMarriageAtx.Sign(marrySig)
 
@@ -71,20 +71,20 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		marriageAtx.SmesherID = marrySig.NodeID()
 		require.NoError(t, atxs.Add(db, marriageAtx, wMarriageAtx.Blob()))
 
-		atx := newActivationTxV2(
-			withPreviousATXs(marryInitialAtx, wPubInitialAtx.ID(), prevATX),
-			withMarriageATX(wMarriageAtx.ID()),
-			withNIPost(
-				withNIPostMembershipProof(MerkleProofV2{}),
-				withNIPostSubPost(SubPostV2{
+		atx := NewTestActivationTxV2(
+			WithPreviousATXs(marryInitialAtx, wPubInitialAtx.ID(), prevATX),
+			WithMarriageATX(wMarriageAtx.ID()),
+			WithNIPost(
+				WithNIPostMembershipProof(MerkleProofV2{}),
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 0,
 					PrevATXIndex:  0,
 				}),
-				withNIPostSubPost(SubPostV2{
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 1,
 					PrevATXIndex:  2,
 				}),
-				withNIPostSubPost(SubPostV2{
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 2,
 					PrevATXIndex:  1,
 				}),
@@ -99,14 +99,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 
 		prevATXID := types.RandomATXID()
-		atx1 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(5),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(5),
 		)
 		atx1.Sign(sig)
-		atx2 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(7),
+		atx2 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(7),
 		)
 		atx2.Sign(sig)
 
@@ -135,9 +135,9 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		prevAtx.SetID(prevATXID)
 		prevAtx.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, prevAtx, types.AtxBlob{}))
-		atx1 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(5),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(5),
 		)
 		atx1.Sign(sig)
 		atx2 := newMergedATXv2(db, prevATXID)
@@ -164,8 +164,8 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
-		atx1 := newActivationTxV2(
-			withPreviousATXs(types.RandomATXID()),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(types.RandomATXID()),
 		)
 		atx1.Sign(sig)
 
@@ -179,12 +179,12 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 
 		prevATX := types.RandomATXID()
-		atx1 := newActivationTxV2(
-			withPreviousATXs(prevATX),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATX),
 		)
 		atx1.Sign(sig)
-		atx2 := newActivationTxV2(
-			withPreviousATXs(prevATX),
+		atx2 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATX),
 		)
 		atx2.Sign(pubSig)
 
@@ -209,9 +209,9 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		prevAtx.SetID(prevATXID)
 		prevAtx.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, prevAtx, types.AtxBlob{}))
-		atx1 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(5),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(5),
 		)
 		atx1.Sign(invalidSig)
 		atx2 := newMergedATXv2(db, prevATXID)
@@ -238,9 +238,9 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		prevAtx.SetID(prevATXID)
 		prevAtx.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, prevAtx, types.AtxBlob{}))
-		atx1 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(5),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(5),
 		)
 		atx1.Sign(sig)
 		atx2 := newMergedATXv2(db, prevATXID)
@@ -267,14 +267,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
-		atx1 := newActivationTxV2(
-			withPreviousATXs(types.RandomATXID()),
-			withPublishEpoch(5),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(types.RandomATXID()),
+			WithPublishEpoch(5),
 		)
 		atx1.Sign(sig)
-		atx2 := newActivationTxV2(
-			withPreviousATXs(types.RandomATXID()),
-			withPublishEpoch(7),
+		atx2 := NewTestActivationTxV2(
+			WithPreviousATXs(types.RandomATXID()),
+			WithPublishEpoch(7),
 		)
 		atx2.Sign(sig)
 
@@ -288,14 +288,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 
 		prevATXID := types.RandomATXID()
-		atx1 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(5),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(5),
 		)
 		atx1.Sign(sig)
-		atx2 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(7),
+		atx2 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(7),
 		)
 		atx2.Sign(sig)
 
@@ -540,9 +540,9 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		prevAtx.SetID(prevATXID)
 		prevAtx.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, prevAtx, types.AtxBlob{}))
-		atx1 := newActivationTxV2(
-			withPreviousATXs(prevATXID),
-			withPublishEpoch(5),
+		atx1 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(5),
 		)
 		atx1.Sign(sig)
 		atx2 := newMergedATXv2(db, prevATXID)
@@ -657,8 +657,8 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		db sql.Executor,
 		prevATX types.ATXID,
 	) *ActivationTxV2 {
-		wInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wInitialAtx := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx.Sign(sig)
 		initialAtx := &types.ActivationTx{
@@ -668,8 +668,8 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		initialAtx.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, initialAtx, wInitialAtx.Blob()))
 
-		wPubInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wPubInitialAtx := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wPubInitialAtx.Sign(pubSig)
 		pubInitialAtx := &types.ActivationTx{}
@@ -679,10 +679,10 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 
 		marryInitialAtx := types.RandomATXID()
 
-		wMarriageAtx := newActivationTxV2(
-			withMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
-			withMarriageCertificate(sig, wInitialAtx.ID(), marrySig.NodeID()),
-			withMarriageCertificate(pubSig, wPubInitialAtx.ID(), marrySig.NodeID()),
+		wMarriageAtx := NewTestActivationTxV2(
+			WithMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
+			WithMarriageCertificate(sig, wInitialAtx.ID(), marrySig.NodeID()),
+			WithMarriageCertificate(pubSig, wPubInitialAtx.ID(), marrySig.NodeID()),
 		)
 		wMarriageAtx.Sign(marrySig)
 
@@ -691,20 +691,20 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		marriageAtx.SmesherID = marrySig.NodeID()
 		require.NoError(t, atxs.Add(db, marriageAtx, wMarriageAtx.Blob()))
 
-		atx := newActivationTxV2(
-			withPreviousATXs(marryInitialAtx, wPubInitialAtx.ID(), prevATX),
-			withMarriageATX(wMarriageAtx.ID()),
-			withNIPost(
-				withNIPostMembershipProof(MerkleProofV2{}),
-				withNIPostSubPost(SubPostV2{
+		atx := NewTestActivationTxV2(
+			WithPreviousATXs(marryInitialAtx, wPubInitialAtx.ID(), prevATX),
+			WithMarriageATX(wMarriageAtx.ID()),
+			WithNIPost(
+				WithNIPostMembershipProof(MerkleProofV2{}),
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 0,
 					PrevATXIndex:  0,
 				}),
-				withNIPostSubPost(SubPostV2{
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 1,
 					PrevATXIndex:  2,
 				}),
-				withNIPostSubPost(SubPostV2{
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 2,
 					PrevATXIndex:  1,
 				}),
@@ -730,9 +730,9 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		}
 		atxv1.Sign(sig)
 
-		atxv2 := newActivationTxV2(
-			withPreviousATXs(prevATX),
-			withPublishEpoch(7),
+		atxv2 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATX),
+			WithPublishEpoch(7),
 		)
 		atxv2.Sign(sig)
 
@@ -802,9 +802,9 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		}
 		atxv1.Sign(sig)
 
-		atxv2 := newActivationTxV2(
-			withPreviousATXs(prevATX),
-			withPublishEpoch(7),
+		atxv2 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATX),
+			WithPublishEpoch(7),
 		)
 		atxv2.Sign(pubSig)
 
@@ -891,9 +891,9 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		}
 		atxv1.Sign(sig)
 
-		atxv2 := newActivationTxV2(
-			withPreviousATXs(types.RandomATXID()),
-			withPublishEpoch(7),
+		atxv2 := NewTestActivationTxV2(
+			WithPreviousATXs(types.RandomATXID()),
+			WithPublishEpoch(7),
 		)
 		atxv2.Sign(sig)
 
@@ -918,9 +918,9 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		}
 		atxv1.Sign(sig)
 
-		atxv2 := newActivationTxV2(
-			withPreviousATXs(prevATX),
-			withPublishEpoch(7),
+		atxv2 := NewTestActivationTxV2(
+			WithPreviousATXs(prevATX),
+			WithPublishEpoch(7),
 		)
 		atxv2.Sign(sig)
 

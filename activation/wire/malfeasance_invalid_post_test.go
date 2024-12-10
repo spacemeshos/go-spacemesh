@@ -42,10 +42,10 @@ func Test_InvalidPostProof(t *testing.T) {
 		post PostV1,
 		numUnits uint32,
 	) *ActivationTxV2 {
-		atx := newActivationTxV2(
-			withNIPost(
-				withNIPostChallenge(nipostChallenge),
-				withNIPostSubPost(SubPostV2{
+		atx := NewTestActivationTxV2(
+			WithNIPost(
+				WithNIPostChallenge(nipostChallenge),
+				WithNIPostSubPost(SubPostV2{
 					Post:     post,
 					NumUnits: numUnits,
 				}),
@@ -61,8 +61,8 @@ func Test_InvalidPostProof(t *testing.T) {
 		post PostV1,
 		numUnits uint32,
 	) *ActivationTxV2 {
-		wInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wInitialAtx := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx.Sign(sig)
 		initialAtx := &types.ActivationTx{
@@ -72,8 +72,8 @@ func Test_InvalidPostProof(t *testing.T) {
 		initialAtx.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, initialAtx, wInitialAtx.Blob()))
 
-		wPubInitialAtx := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wPubInitialAtx := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wPubInitialAtx.Sign(pubSig)
 		pubInitialAtx := &types.ActivationTx{}
@@ -83,10 +83,10 @@ func Test_InvalidPostProof(t *testing.T) {
 
 		marryInitialAtx := types.RandomATXID()
 
-		wMarriageAtx := newActivationTxV2(
-			withMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
-			withMarriageCertificate(sig, wInitialAtx.ID(), marrySig.NodeID()),
-			withMarriageCertificate(pubSig, wPubInitialAtx.ID(), marrySig.NodeID()),
+		wMarriageAtx := NewTestActivationTxV2(
+			WithMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
+			WithMarriageCertificate(sig, wInitialAtx.ID(), marrySig.NodeID()),
+			WithMarriageCertificate(pubSig, wPubInitialAtx.ID(), marrySig.NodeID()),
 		)
 		wMarriageAtx.Sign(marrySig)
 
@@ -95,24 +95,24 @@ func Test_InvalidPostProof(t *testing.T) {
 		marriageAtx.SmesherID = marrySig.NodeID()
 		require.NoError(t, atxs.Add(db, marriageAtx, wMarriageAtx.Blob()))
 
-		atx := newActivationTxV2(
-			withPreviousATXs(marryInitialAtx, wInitialAtx.ID(), wPubInitialAtx.ID()),
-			withMarriageATX(wMarriageAtx.ID()),
-			withNIPost(
-				withNIPostChallenge(nipostChallenge),
-				withNIPostMembershipProof(MerkleProofV2{}),
-				withNIPostSubPost(SubPostV2{
+		atx := NewTestActivationTxV2(
+			WithPreviousATXs(marryInitialAtx, wInitialAtx.ID(), wPubInitialAtx.ID()),
+			WithMarriageATX(wMarriageAtx.ID()),
+			WithNIPost(
+				WithNIPostChallenge(nipostChallenge),
+				WithNIPostMembershipProof(MerkleProofV2{}),
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 0,
 					PrevATXIndex:  0,
 					Post:          PostV1{},
 				}),
-				withNIPostSubPost(SubPostV2{
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 1,
 					PrevATXIndex:  1,
 					Post:          post,
 					NumUnits:      numUnits,
 				}),
-				withNIPostSubPost(SubPostV2{
+				WithNIPostSubPost(SubPostV2{
 					MarriageIndex: 2,
 					PrevATXIndex:  2,
 					Post:          PostV1{},

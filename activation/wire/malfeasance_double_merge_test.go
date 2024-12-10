@@ -29,8 +29,8 @@ func Test_DoubleMergeProof(t *testing.T) {
 	edVerifier := signing.NewEdVerifier()
 
 	setupMarriage := func(db sql.Executor) *ActivationTxV2 {
-		wInitialAtx1 := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wInitialAtx1 := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx1.Sign(sig)
 		initialAtx1 := &types.ActivationTx{
@@ -40,8 +40,8 @@ func Test_DoubleMergeProof(t *testing.T) {
 		initialAtx1.SmesherID = sig.NodeID()
 		require.NoError(t, atxs.Add(db, initialAtx1, wInitialAtx1.Blob()))
 
-		wInitialAtx2 := newActivationTxV2(
-			withInitial(types.RandomATXID(), PostV1{}),
+		wInitialAtx2 := NewTestActivationTxV2(
+			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx2.Sign(otherSig)
 		initialAtx2 := &types.ActivationTx{}
@@ -49,10 +49,10 @@ func Test_DoubleMergeProof(t *testing.T) {
 		initialAtx2.SmesherID = otherSig.NodeID()
 		require.NoError(t, atxs.Add(db, initialAtx2, wInitialAtx2.Blob()))
 
-		wMarriageAtx := newActivationTxV2(
-			withMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
-			withMarriageCertificate(sig, wInitialAtx1.ID(), marrySig.NodeID()),
-			withMarriageCertificate(otherSig, wInitialAtx2.ID(), marrySig.NodeID()),
+		wMarriageAtx := NewTestActivationTxV2(
+			WithMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
+			WithMarriageCertificate(sig, wInitialAtx1.ID(), marrySig.NodeID()),
+			WithMarriageCertificate(otherSig, wInitialAtx2.ID(), marrySig.NodeID()),
 		)
 		wMarriageAtx.Sign(marrySig)
 
@@ -76,15 +76,15 @@ func Test_DoubleMergeProof(t *testing.T) {
 
 		marriageAtx := setupMarriage(db)
 
-		atx1 := newActivationTxV2(
-			withMarriageATX(marriageAtx.ID()),
-			withPublishEpoch(marriageAtx.PublishEpoch+1),
+		atx1 := NewTestActivationTxV2(
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageATX(marriageAtx.ID()),
-			withPublishEpoch(marriageAtx.PublishEpoch+1),
+		atx2 := NewTestActivationTxV2(
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
 		atx2.Sign(otherSig)
 
@@ -108,9 +108,9 @@ func Test_DoubleMergeProof(t *testing.T) {
 
 		marriageAtx := setupMarriage(db)
 
-		atx1 := newActivationTxV2(
-			withMarriageATX(marriageAtx.ID()),
-			withPublishEpoch(marriageAtx.PublishEpoch+1),
+		atx1 := NewTestActivationTxV2(
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
 		atx1.Sign(sig)
 
@@ -130,10 +130,10 @@ func Test_DoubleMergeProof(t *testing.T) {
 	t.Run("ATXs must have different signers", func(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
-		atx1 := newActivationTxV2()
+		atx1 := NewTestActivationTxV2()
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2()
+		atx2 := NewTestActivationTxV2()
 		atx2.Sign(sig)
 
 		proof, err := NewDoubleMergeProof(db, atx1, atx2)
@@ -144,13 +144,13 @@ func Test_DoubleMergeProof(t *testing.T) {
 	t.Run("ATXs must be published in the same epoch", func(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
-		atx := newActivationTxV2(
-			withPublishEpoch(1),
+		atx := NewTestActivationTxV2(
+			WithPublishEpoch(1),
 		)
 		atx.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withPublishEpoch(2),
+		atx2 := NewTestActivationTxV2(
+			WithPublishEpoch(2),
 		)
 		atx2.Sign(otherSig)
 		proof, err := NewDoubleMergeProof(db, atx, atx2)
@@ -162,13 +162,13 @@ func Test_DoubleMergeProof(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
-		atx := newActivationTxV2(
-			withPublishEpoch(1),
+		atx := NewTestActivationTxV2(
+			WithPublishEpoch(1),
 		)
 		atx.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withPublishEpoch(1),
+		atx2 := NewTestActivationTxV2(
+			WithPublishEpoch(1),
 		)
 		atx2.Sign(otherSig)
 
@@ -211,15 +211,15 @@ func Test_DoubleMergeProof(t *testing.T) {
 
 		marriageAtx := setupMarriage(db)
 
-		atx1 := newActivationTxV2(
-			withMarriageATX(marriageAtx.ID()),
-			withPublishEpoch(marriageAtx.PublishEpoch+1),
+		atx1 := NewTestActivationTxV2(
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageATX(marriageAtx.ID()),
-			withPublishEpoch(marriageAtx.PublishEpoch+1),
+		atx2 := NewTestActivationTxV2(
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
 		atx2.Sign(otherSig)
 

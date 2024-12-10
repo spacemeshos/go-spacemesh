@@ -1,16 +1,10 @@
 package wire
 
 import (
-	"context"
 	"fmt"
 
-	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
-
-//go:generate scalegen
 
 // MerkleTreeIndex is the index of the leaf containing the given field in the merkle tree.
 type MerkleTreeIndex uint64
@@ -107,15 +101,4 @@ func (p *ATXProof) Decode() (Proof, error) {
 		return nil, fmt.Errorf("decoding ATX malfeasance proof of type 0x%x: %w", p.ProofType, err)
 	}
 	return rst, nil
-}
-
-// Proof is an interface for all types of proofs that can be provided in an ATXProof.
-// Generally the proof should be able to validate itself and be scale encoded.
-type Proof interface {
-	scale.Encodable
-	scale.Decodable
-	fmt.Stringer
-
-	Type() ProofType
-	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
 }

@@ -2291,62 +2291,62 @@ func (c *MockpoetDbAPIValidateAndStoreCall) DoAndReturn(f func(context.Context, 
 	return c
 }
 
-// MockAtxBuilder is a mock of AtxBuilder interface.
-type MockAtxBuilder struct {
+// MockatxBuilder is a mock of atxBuilder interface.
+type MockatxBuilder struct {
 	ctrl     *gomock.Controller
-	recorder *MockAtxBuilderMockRecorder
+	recorder *MockatxBuilderMockRecorder
 	isgomock struct{}
 }
 
-// MockAtxBuilderMockRecorder is the mock recorder for MockAtxBuilder.
-type MockAtxBuilderMockRecorder struct {
-	mock *MockAtxBuilder
+// MockatxBuilderMockRecorder is the mock recorder for MockatxBuilder.
+type MockatxBuilderMockRecorder struct {
+	mock *MockatxBuilder
 }
 
-// NewMockAtxBuilder creates a new mock instance.
-func NewMockAtxBuilder(ctrl *gomock.Controller) *MockAtxBuilder {
-	mock := &MockAtxBuilder{ctrl: ctrl}
-	mock.recorder = &MockAtxBuilderMockRecorder{mock}
+// NewMockatxBuilder creates a new mock instance.
+func NewMockatxBuilder(ctrl *gomock.Controller) *MockatxBuilder {
+	mock := &MockatxBuilder{ctrl: ctrl}
+	mock.recorder = &MockatxBuilderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockAtxBuilder) EXPECT() *MockAtxBuilderMockRecorder {
+func (m *MockatxBuilder) EXPECT() *MockatxBuilderMockRecorder {
 	return m.recorder
 }
 
 // Register mocks base method.
-func (m *MockAtxBuilder) Register(sig *signing.EdSigner) {
+func (m *MockatxBuilder) Register(sig *signing.EdSigner) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Register", sig)
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockAtxBuilderMockRecorder) Register(sig any) *MockAtxBuilderRegisterCall {
+func (mr *MockatxBuilderMockRecorder) Register(sig any) *MockatxBuilderRegisterCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockAtxBuilder)(nil).Register), sig)
-	return &MockAtxBuilderRegisterCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockatxBuilder)(nil).Register), sig)
+	return &MockatxBuilderRegisterCall{Call: call}
 }
 
-// MockAtxBuilderRegisterCall wrap *gomock.Call
-type MockAtxBuilderRegisterCall struct {
+// MockatxBuilderRegisterCall wrap *gomock.Call
+type MockatxBuilderRegisterCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockAtxBuilderRegisterCall) Return() *MockAtxBuilderRegisterCall {
+func (c *MockatxBuilderRegisterCall) Return() *MockatxBuilderRegisterCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockAtxBuilderRegisterCall) Do(f func(*signing.EdSigner)) *MockAtxBuilderRegisterCall {
+func (c *MockatxBuilderRegisterCall) Do(f func(*signing.EdSigner)) *MockatxBuilderRegisterCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockAtxBuilderRegisterCall) DoAndReturn(f func(*signing.EdSigner)) *MockAtxBuilderRegisterCall {
+func (c *MockatxBuilderRegisterCall) DoAndReturn(f func(*signing.EdSigner)) *MockatxBuilderRegisterCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

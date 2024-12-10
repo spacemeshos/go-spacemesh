@@ -32,6 +32,8 @@ type testHandler struct {
 
 func newTestHandler(tb testing.TB) *testHandler {
 	db := statesql.InMemory()
+	edVerifier := signing.NewEdVerifier()
+
 	observer, observedLogs := observer.New(zap.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
@@ -41,8 +43,6 @@ func newTestHandler(tb testing.TB) *testHandler {
 
 	ctrl := gomock.NewController(tb)
 	mockTrt := malfeasance2.NewMocktortoise(ctrl)
-
-	edVerifier := signing.NewEdVerifier()
 
 	h := malfeasance2.NewHandler(
 		db,

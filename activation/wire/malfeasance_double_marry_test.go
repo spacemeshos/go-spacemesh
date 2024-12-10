@@ -34,15 +34,15 @@ func Test_DoubleMarryProof(t *testing.T) {
 		otherAtx.SmesherID = otherSig.NodeID()
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+		atx1 := NewTestActivationTxV2(
+			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
+		atx2 := NewTestActivationTxV2(
+			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -71,15 +71,15 @@ func Test_DoubleMarryProof(t *testing.T) {
 		otherAtx.SmesherID = otherSig.NodeID()
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+		atx1 := NewTestActivationTxV2(
+			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
+		atx2 := NewTestActivationTxV2(
+			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -108,7 +108,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
-		atx1 := newActivationTxV2()
+		atx1 := NewTestActivationTxV2()
 		atx1.Sign(sig)
 
 		proof, err := NewDoubleMarryProof(db, atx1, atx1, sig.NodeID())
@@ -138,15 +138,15 @@ func Test_DoubleMarryProof(t *testing.T) {
 		otherAtx.SmesherID = otherSig.NodeID()
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+		atx1 := NewTestActivationTxV2(
+			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
+		atx2 := NewTestActivationTxV2(
+			WithMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
