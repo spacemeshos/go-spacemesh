@@ -431,7 +431,7 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 				require.NoError(t, identities.SetMalicious(th.cdb, nid, types.RandomBytes(11), time.Now()))
 			}
 
-			out, err := th.handleMaliciousIDsReq(context.TODO(), p2p.Peer(""), []byte{})
+			out, err := th.handleMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
 			require.NoError(t, err)
 			var got MaliciousIDs
 			require.NoError(t, codec.Decode(out, &got))
