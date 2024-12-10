@@ -451,6 +451,13 @@ func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
 			},
 		}
 		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SEND
+	case *wallet.DeployArgs:
+		res.Contents = &spacemeshv2alpha1.TransactionContents_Deploy{
+			Deploy: &spacemeshv2alpha1.ContentsDeploy{
+				Template: core.TemplateAddress(args.Code).String(),
+			},
+		}
+		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DEPLOY
 	}
 
 	return res, txType, nil

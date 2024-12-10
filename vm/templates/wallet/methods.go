@@ -28,7 +28,9 @@ func init() {
 	}
 }
 
-type DeployArgs struct{}
+type DeployArgs struct {
+	Code []byte
+}
 
 type SpawnArgs struct {
 	Pubkey [32]byte
@@ -43,23 +45,19 @@ func ParseArgs(payload athcon.Payload) (any, error) {
 	if payload.Selector == nil {
 		return nil, errors.New("nil method selector")
 	}
-	var (
-		txArgs any
-		err    error
-	)
+	var txArgs any
+
 	switch *payload.Selector {
 	case DeploySelector:
 		txArgs = new(DeployArgs)
-		// decoding deploy isn't interesting
 	case spawnSelector:
 		txArgs = new(SpawnArgs)
-		err = gossamerScale.Unmarshal(payload.Input, txArgs)
 	case spendSelector:
 		txArgs = new(SpendArgs)
-		err = gossamerScale.Unmarshal(payload.Input, txArgs)
 	default:
 		return nil, fmt.Errorf("unknown method selector %q", payload.Selector.String())
 	}
+	err := gossamerScale.Unmarshal(payload.Input, txArgs)
 	if err != nil {
 		return nil, fmt.Errorf("malformed tx arguments payload: %w", err)
 	}
