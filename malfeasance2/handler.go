@@ -2,6 +2,7 @@ package malfeasance2
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -65,11 +66,13 @@ func (h *Handler) RegisterHandler(malfeasanceType ProofDomain, handler Malfeasan
 }
 
 func (h *Handler) countProof(mp MalfeasanceProof) {
-	h.handlers[mp.Domain].ReportProof(numProofs)
+	label := h.handlers[mp.Domain].ReportLabel()
+	numProofs.WithLabelValues(label).Inc()
 }
 
 func (h *Handler) countInvalidProof(mp MalfeasanceProof) {
-	h.handlers[mp.Domain].ReportInvalidProof(numInvalidProofs)
+	label := h.handlers[mp.Domain].ReportLabel()
+	numInvalidProofs.WithLabelValues(label).Inc()
 }
 
 func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
@@ -106,7 +109,7 @@ func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, peer p
 
 	nodeIDs, err := h.handleProof(ctx, proof)
 	if err != nil {
-		return err
+		return errors.Join(err, pubsub.ErrValidationReject)
 	}
 	if !slices.Contains(nodeIDs, types.NodeID(expHash)) {
 		// we log & return because libp2p will ignore the message if we return an error,

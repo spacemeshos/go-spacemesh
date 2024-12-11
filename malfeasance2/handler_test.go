@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -16,8 +17,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance2"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -74,6 +77,7 @@ func TestHandler_HandleSync(t *testing.T) {
 
 		err := h.HandleSynced(context.Background(), types.EmptyHash32, "peer", []byte("malformed"))
 		require.ErrorIs(t, err, malfeasance2.ErrMalformedData)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
 	t.Run("unknown version", func(t *testing.T) {
@@ -85,6 +89,7 @@ func TestHandler_HandleSync(t *testing.T) {
 
 		err := h.HandleSynced(context.Background(), types.EmptyHash32, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, malfeasance2.ErrUnknownVersion)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
 	t.Run("unknown domain", func(t *testing.T) {
@@ -97,6 +102,7 @@ func TestHandler_HandleSync(t *testing.T) {
 
 		err := h.HandleSynced(context.Background(), types.EmptyHash32, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, malfeasance2.ErrUnknownDomain)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -105,7 +111,7 @@ func TestHandler_HandleSync(t *testing.T) {
 		handlerError := errors.New("invalid proof")
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), invalidProof).Return(types.EmptyNodeID, handlerError)
-		mockHandler.EXPECT().ReportInvalidProof(gomock.Any())
+		mockHandler.EXPECT().ReportLabel().Return("invalidPost")
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -116,6 +122,7 @@ func TestHandler_HandleSync(t *testing.T) {
 
 		err := h.HandleSynced(context.Background(), types.EmptyHash32, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, handlerError)
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -124,7 +131,7 @@ func TestHandler_HandleSync(t *testing.T) {
 		nodeID := types.RandomNodeID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
-		mockHandler.EXPECT().ReportProof(gomock.Any())
+		mockHandler.EXPECT().ReportLabel().Return("invalidPost")
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 
@@ -136,6 +143,10 @@ func TestHandler_HandleSync(t *testing.T) {
 
 		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
+
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.True(t, malicious)
 	})
 
 	t.Run("valid proof, wrong hash", func(t *testing.T) {
@@ -144,7 +155,7 @@ func TestHandler_HandleSync(t *testing.T) {
 		nodeID := types.RandomNodeID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
-		mockHandler.EXPECT().ReportInvalidProof(gomock.Any())
+		mockHandler.EXPECT().ReportLabel().Return("invalidPost")
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -203,7 +214,7 @@ func TestHandler_HandleGossip(t *testing.T) {
 		handlerError := errors.New("invalid proof")
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), invalidProof).Return(types.EmptyNodeID, handlerError)
-		mockHandler.EXPECT().ReportInvalidProof(gomock.Any())
+		mockHandler.EXPECT().ReportLabel().Return("invalidPost")
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -222,7 +233,7 @@ func TestHandler_HandleGossip(t *testing.T) {
 		nodeID := types.RandomNodeID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
-		mockHandler.EXPECT().ReportProof(gomock.Any())
+		mockHandler.EXPECT().ReportLabel().Return("invalidPost")
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 
@@ -233,6 +244,30 @@ func TestHandler_HandleGossip(t *testing.T) {
 		}
 
 		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		require.NoError(t, err)
+	})
+
+	t.Run("valid proof for known malicious identity", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeID := types.RandomNodeID()
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		mockHandler.EXPECT().ReportLabel().Return("invalidPost")
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   validProof,
+		}
+		proofBytes := codec.MustEncode(proof)
+
+		err := malfeasance.AddProof(h.db, nodeID, nil, proofBytes, byte(malfeasance2.InvalidActivation), time.Now())
+		require.NoError(t, err)
+
+		err = h.HandleGossip(context.Background(), "peer", proofBytes)
 		require.NoError(t, err)
 	})
 }

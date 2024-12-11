@@ -3,8 +3,6 @@ package malfeasance2
 import (
 	"context"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -19,8 +17,12 @@ type tortoise interface {
 }
 
 type MalfeasanceHandler interface {
+	// Validate the proof and return the node ID of the malicious node if the proof is valid
 	Validate(ctx context.Context, data []byte) (types.NodeID, error)
+
+	// Info returns a map of key-value pairs that serve as metadata for the proof
 	Info(data []byte) (map[string]string, error)
-	ReportProof(vec *prometheus.CounterVec)        // TODO(mafa): don't pass vectors along, use one defined in package
-	ReportInvalidProof(vec *prometheus.CounterVec) // TODO(mafa): don't pass vectors along, use one defined in package
+
+	// ReportLabel returns the label for the prometheus counter of the given proof type
+	ReportLabel() string
 }
