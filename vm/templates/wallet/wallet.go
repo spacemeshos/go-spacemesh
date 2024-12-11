@@ -104,7 +104,6 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 		s.host.Principal(),
 		s.host.Principal(),
 		executionPayload,
-		0,
 		s.templateCode,
 	)
 	var maxspend uint64
@@ -165,7 +164,6 @@ func (s *Wallet) Verify(tx, witnessData []byte) error {
 			s.host.Principal(),
 			s.host.Principal(),
 			executionPayload,
-			0,
 			s.templateCode,
 		)
 		if err != nil {
@@ -203,7 +201,6 @@ func (s *Wallet) Verify(tx, witnessData []byte) error {
 		s.host.Principal(),
 		s.host.Principal(),
 		executionPayload,
-		0,
 		s.templateCode,
 	)
 

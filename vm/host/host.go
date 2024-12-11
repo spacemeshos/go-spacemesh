@@ -52,11 +52,9 @@ func AthenaLibPath() (string, error) {
 //go:generate mockgen -typed -package=mocks -destination=./mocks/host.go github.com/spacemeshos/go-spacemesh/vm/core Host
 
 type Host struct {
-	logger         *zap.Logger
-	vm             *athcon.VM
-	host           core.Host
-	staticContext  core.StaticContext
-	dynamicContext core.DynamicContext
+	logger *zap.Logger
+	vm     *athcon.VM
+	host   core.Host
 }
 
 // Load the VM from the shared library and returns an instance of a Host.
@@ -72,19 +70,7 @@ func NewHost(host core.Host, logger *zap.Logger) (*Host, error) {
 		return nil, fmt.Errorf("loading Athena VM: %w", err)
 	}
 
-	// Construct the context
-	staticContext := core.StaticContext{
-		// Athena does not currently allow proxied calls, so by definition the principal is the
-		// same as the destination, for now. See https://github.com/athenavm/athena/issues/174.
-		Principal:   host.Principal(),
-		Destination: host.Principal(),
-	}
-	dynamicContext := core.DynamicContext{
-		Template: host.TemplateAddress(),
-		Callee:   host.Principal(),
-	}
-
-	return &Host{logger, vm, host, staticContext, dynamicContext}, nil
+	return &Host{logger, vm, host}, nil
 }
 
 func (h *Host) Destroy() {
@@ -96,13 +82,23 @@ func (h *Host) Execute(
 	gas int64,
 	recipient, sender types.Address,
 	input []byte,
-	value uint64,
 	code []byte,
 ) (output []byte, gasLeft int64, err error) {
+	principal := h.host.Principal()
+	staticContext := core.StaticContext{
+		// Athena does not currently allow proxied calls, so by definition the principal is the
+		// same as the destination, for now. See https://github.com/athenavm/athena/issues/174.
+		Principal:   principal,
+		Destination: principal,
+	}
+	dynamicContext := core.DynamicContext{
+		Template: h.host.TemplateAddress(),
+		Callee:   h.host.Principal(),
+	}
 	hostCtx := &hostContext{
 		h.host,
-		h.staticContext,
-		h.dynamicContext,
+		staticContext,
+		dynamicContext,
 		h.vm,
 		h.logger,
 	}
@@ -115,7 +111,7 @@ func (h *Host) Execute(
 		athcon.Address(recipient),
 		athcon.Address(sender),
 		input,
-		value,
+		0,
 		code,
 	)
 	if err != nil {

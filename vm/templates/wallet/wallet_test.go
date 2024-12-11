@@ -98,7 +98,7 @@ func TestSpawn(t *testing.T) {
 	require.NoError(t, err)
 	defer vmhost.Destroy()
 
-	output, gasLeft, err := vmhost.Execute(0, maxGas, types.Address{}, types.Address{}, executionPayload, 0, PROGRAM)
+	output, gasLeft, err := vmhost.Execute(0, maxGas, types.Address{}, types.Address{}, executionPayload, PROGRAM)
 	require.Less(t, gasLeft, int64(maxGas))
 	require.Len(t, output, 24)
 	require.Equal(t, principalAddress, types.Address(output))

@@ -469,11 +469,6 @@ func (v *VM) execInVm(host *core.Context, payload []byte) error {
 		host.Principal(),
 		host.Principal(),
 		executionPayload,
-		// note: value here is zero because this is unused at the top-level. any amount actually being
-		// transferred is encoded in the args to a wallet.Spend() method inside the payload; in other
-		// words, it's abstracted inside the VM as part of our account abstraction.
-		// note that this field is used for lower-level calls triggered by Call.
-		0,
 		templateAccount.State,
 	)
 	host.SpendGas(uint64(maxgas) - uint64(gasLeft))
