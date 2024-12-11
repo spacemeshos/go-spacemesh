@@ -33,7 +33,7 @@ type ProofInvalidPrevAtxV2 struct {
 }
 
 func (p ProofInvalidPrevAtxV2) String() string {
-	return "Invalid Previous ATX Proof V2"
+	return "InvalidPreviousATXProofV2"
 }
 
 func (p ProofInvalidPrevAtxV2) Type() ProofType {
@@ -199,7 +199,7 @@ type ProofInvalidPrevAtxV1 struct {
 }
 
 func (p ProofInvalidPrevAtxV1) String() string {
-	return "Invalid Previous ATX Proof V1"
+	return "InvalidPreviousATXProofV1"
 }
 
 func (p ProofInvalidPrevAtxV1) Type() ProofType {

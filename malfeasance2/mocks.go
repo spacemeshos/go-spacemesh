@@ -202,40 +202,40 @@ func (c *MockMalfeasanceHandlerInfoCall) DoAndReturn(f func([]byte) (map[string]
 	return c
 }
 
-// ReportLabel mocks base method.
-func (m *MockMalfeasanceHandler) ReportLabel() string {
+// ReportLabels mocks base method.
+func (m *MockMalfeasanceHandler) ReportLabels(data []byte) []string {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReportLabel")
-	ret0, _ := ret[0].(string)
+	ret := m.ctrl.Call(m, "ReportLabels", data)
+	ret0, _ := ret[0].([]string)
 	return ret0
 }
 
-// ReportLabel indicates an expected call of ReportLabel.
-func (mr *MockMalfeasanceHandlerMockRecorder) ReportLabel() *MockMalfeasanceHandlerReportLabelCall {
+// ReportLabels indicates an expected call of ReportLabels.
+func (mr *MockMalfeasanceHandlerMockRecorder) ReportLabels(data any) *MockMalfeasanceHandlerReportLabelsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportLabel", reflect.TypeOf((*MockMalfeasanceHandler)(nil).ReportLabel))
-	return &MockMalfeasanceHandlerReportLabelCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportLabels", reflect.TypeOf((*MockMalfeasanceHandler)(nil).ReportLabels), data)
+	return &MockMalfeasanceHandlerReportLabelsCall{Call: call}
 }
 
-// MockMalfeasanceHandlerReportLabelCall wrap *gomock.Call
-type MockMalfeasanceHandlerReportLabelCall struct {
+// MockMalfeasanceHandlerReportLabelsCall wrap *gomock.Call
+type MockMalfeasanceHandlerReportLabelsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockMalfeasanceHandlerReportLabelCall) Return(arg0 string) *MockMalfeasanceHandlerReportLabelCall {
+func (c *MockMalfeasanceHandlerReportLabelsCall) Return(arg0 []string) *MockMalfeasanceHandlerReportLabelsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockMalfeasanceHandlerReportLabelCall) Do(f func() string) *MockMalfeasanceHandlerReportLabelCall {
+func (c *MockMalfeasanceHandlerReportLabelsCall) Do(f func([]byte) []string) *MockMalfeasanceHandlerReportLabelsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockMalfeasanceHandlerReportLabelCall) DoAndReturn(f func() string) *MockMalfeasanceHandlerReportLabelCall {
+func (c *MockMalfeasanceHandlerReportLabelsCall) DoAndReturn(f func([]byte) []string) *MockMalfeasanceHandlerReportLabelsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -5,7 +5,8 @@ import "github.com/spacemeshos/go-spacemesh/metrics"
 const (
 	namespace = "malfeasance2"
 
-	typeLabel = "type"
+	domainLabel = "domain"
+	typeLabel   = "type"
 )
 
 var (
@@ -14,6 +15,7 @@ var (
 		namespace,
 		"number of malfeasance proofs",
 		[]string{
+			domainLabel,
 			typeLabel,
 		},
 	)
@@ -23,9 +25,10 @@ var (
 		namespace,
 		"number of invalid malfeasance proofs",
 		[]string{
+			domainLabel,
 			typeLabel,
 		},
 	)
 
-	numMalformed = numInvalidProofs.WithLabelValues("mal")
+	numMalformed = numInvalidProofs.WithLabelValues("mal", "unknown")
 )

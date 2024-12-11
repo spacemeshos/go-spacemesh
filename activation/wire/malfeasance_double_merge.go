@@ -60,7 +60,7 @@ type ProofDoubleMerge struct {
 }
 
 func (p ProofDoubleMerge) String() string {
-	return "Double Merge Proof"
+	return "DoubleMergeProof"
 }
 
 func (p ProofDoubleMerge) Type() ProofType {

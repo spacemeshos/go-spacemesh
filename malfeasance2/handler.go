@@ -66,13 +66,13 @@ func (h *Handler) RegisterHandler(malfeasanceType ProofDomain, handler Malfeasan
 }
 
 func (h *Handler) countProof(mp MalfeasanceProof) {
-	label := h.handlers[mp.Domain].ReportLabel()
-	numProofs.WithLabelValues(label).Inc()
+	labels := h.handlers[mp.Domain].ReportLabels(mp.Proof)
+	numProofs.WithLabelValues(labels...).Inc()
 }
 
 func (h *Handler) countInvalidProof(mp MalfeasanceProof) {
-	label := h.handlers[mp.Domain].ReportLabel()
-	numInvalidProofs.WithLabelValues(label).Inc()
+	labels := h.handlers[mp.Domain].ReportLabels(mp.Proof)
+	numInvalidProofs.WithLabelValues(labels...).Inc()
 }
 
 func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
@@ -168,7 +168,7 @@ func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, msg []byte) e
 
 	nodeIDs, err := h.handleProof(ctx, proof)
 	if err != nil {
-		return err
+		return errors.Join(err, pubsub.ErrValidationReject)
 	}
 
 	if err := h.storeProof(ctx, proof.Domain, msg); err != nil {

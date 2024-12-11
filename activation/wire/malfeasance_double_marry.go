@@ -43,7 +43,7 @@ type ProofDoubleMarry struct {
 }
 
 func (p ProofDoubleMarry) String() string {
-	return "Double Marry Proof"
+	return "DoubleMarryProof"
 }
 
 func (p ProofDoubleMarry) Type() ProofType {

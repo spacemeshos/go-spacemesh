@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -29,13 +30,14 @@ import (
 type testMalfeasanceHandler struct {
 	*Handler
 
-	db      sql.StateDatabase
-	mockTrt *Mocktortoise
+	observedLogs *observer.ObservedLogs
+	db           sql.StateDatabase
+	mockTrt      *Mocktortoise
 }
 
 func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	db := statesql.InMemoryTest(tb)
-	observer, _ := observer.New(zapcore.WarnLevel)
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -58,8 +60,9 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	return &testMalfeasanceHandler{
 		Handler: h,
 
-		db:      db,
-		mockTrt: trt,
+		observedLogs: observedLogs,
+		db:           db,
+		mockTrt:      trt,
 	}
 }
 
@@ -253,15 +256,23 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			},
 		}
 
+		expectedHash := types.RandomHash()
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		err := h.HandleSyncedMalfeasanceProof(
 			context.Background(),
-			types.RandomHash(),
+			expectedHash,
 			"peer",
 			codec.MustEncode(proof),
 		)
 		require.ErrorIs(t, err, errWrongHash)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		require.Equal(t, 1, h.observedLogs.Len())
+		log := h.observedLogs.All()[0]
+		require.Equal(t, zap.WarnLevel, log.Level)
+		require.Contains(t, log.Message, "malfeasance proof for wrong identity")
+		require.Equal(t, expectedHash.ShortString(), log.ContextMap()["expected"])
+		require.Equal(t, p2p.Peer("peer").String(), log.ContextMap()["peer"])
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {

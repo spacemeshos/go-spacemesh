@@ -39,7 +39,7 @@ type ProofInvalidPost struct {
 }
 
 func (p ProofInvalidPost) String() string {
-	return "Invalid PoST Proof"
+	return "InvalidPoSTProof"
 }
 
 func (p ProofInvalidPost) Type() ProofType {

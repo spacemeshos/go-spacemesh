@@ -24,5 +24,5 @@ type MalfeasanceHandler interface {
 	Info(data []byte) (map[string]string, error)
 
 	// ReportLabel returns the label for the prometheus counter of the given proof type
-	ReportLabel() string
+	ReportLabels(data []byte) []string
 }

@@ -1183,6 +1183,16 @@ func (app *App) initServices(ctx context.Context) error {
 	malHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
 	malHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
+	malHandler2 := malfeasance2.NewHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.host.ID(),
+		nodeIDs,
+		app.edVerifier,
+		trtl,
+	)
+	malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
+
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg.Zap()),
@@ -1231,6 +1241,14 @@ func (app *App) initServices(ctx context.Context) error {
 				lg.Zap(),
 			),
 		),
+		// TODO(mafa): add malfeasance2 handler to fetcher
+		// fetch.ValidatorFunc(
+		// 	pubsub.DropPeerOnSyncValidationReject(
+		// 		malHandler2.HandleSyncedMalfeasanceProof,
+		// 		app.host,
+		// 		lg.Zap(),
+		// 	),
+		// ),
 	)
 
 	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {

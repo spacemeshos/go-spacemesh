@@ -83,13 +83,21 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID,
 	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof))
 }
 
-func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) (types.NodeID, error) {
+func (mh *MalfeasanceHandlerV2) decodeProof(data []byte) (wire.Proof, error) {
 	var atxProof wire.ATXProof
 	if err := codec.Decode(data, &atxProof); err != nil {
-		return types.EmptyNodeID, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
+		return nil, err
 	}
 
 	proof, err := atxProof.Decode()
+	if err != nil {
+		return nil, err
+	}
+	return proof, nil
+}
+
+func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) (types.NodeID, error) {
+	proof, err := mh.decodeProof(data)
 	if err != nil {
 		return types.EmptyNodeID, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
 	}
@@ -99,6 +107,19 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) (type
 		return types.EmptyNodeID, fmt.Errorf("validating ATX malfeasance proof: %w", err)
 	}
 	return id, nil
+}
+
+func (mh *MalfeasanceHandlerV2) Info(data []byte) (map[string]string, error) {
+	// TODO(mafa): implement me
+	return nil, nil
+}
+
+func (mh *MalfeasanceHandlerV2) ReportLabels(data []byte) []string {
+	proof, err := mh.decodeProof(data)
+	if err != nil {
+		return nil
+	}
+	return []string{"ATX", proof.String()}
 }
 
 func (mh *MalfeasanceHandlerV2) PostIndex(
