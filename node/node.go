@@ -379,50 +379,51 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock           *flock.Flock
-	signers            []*signing.EdSigner
-	Config             *config.Config
-	db                 sql.StateDatabase
-	apiDB              sql.StateDatabase
-	cachedDB           *datastore.CachedDB
-	dbMetrics          *dbmetrics.DBMetricsCollector
-	localDB            sql.LocalDatabase
-	grpcPublicServer   *grpcserver.Server
-	grpcPrivateServer  *grpcserver.Server
-	grpcPostServer     *grpcserver.Server
-	grpcTLSServer      *grpcserver.Server
-	jsonAPIServer      *grpcserver.JSONHTTPServer
-	grpcServices       map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService       *http.Server
-	profilerService    *pyroscope.Profiler
-	syncer             *syncer.Syncer
-	proposalBuilder    *miner.ProposalBuilder
-	mesh               *mesh.Mesh
-	atxsdata           *atxsdata.Data
-	clock              *timesync.NodeClock
-	hare3              *hare3.Hare
-	hare4              *hare4.Hare
-	hareResultsChan    chan hare4.ConsensusOutput
-	hOracle            *eligibility.Oracle
-	blockGen           *blocks.Generator
-	certifier          *blocks.Certifier
-	atxBuilder         *activation.Builder
-	atxHandler         *activation.Handler
-	txHandler          *txs.TxHandler
-	validator          *activation.Validator
-	edVerifier         *signing.EdVerifier
-	beaconProtocol     *beacon.ProtocolDriver
-	log                log.Log
-	syncLogger         log.Log
-	conState           *txs.ConservativeState
-	fetcher            *fetch.Fetch
-	ptimesync          *peersync.Sync
-	updater            *bootstrap.Updater
-	poetDb             *activation.PoetDb
-	postVerifier       activation.PostVerifier
-	postSupervisor     *activation.PostSupervisor
-	malfeasanceHandler *malfeasance.Handler
-	errCh              chan error
+	fileLock            *flock.Flock
+	signers             []*signing.EdSigner
+	Config              *config.Config
+	db                  sql.StateDatabase
+	apiDB               sql.StateDatabase
+	cachedDB            *datastore.CachedDB
+	dbMetrics           *dbmetrics.DBMetricsCollector
+	localDB             sql.LocalDatabase
+	grpcPublicServer    *grpcserver.Server
+	grpcPrivateServer   *grpcserver.Server
+	grpcPostServer      *grpcserver.Server
+	grpcTLSServer       *grpcserver.Server
+	jsonAPIServer       *grpcserver.JSONHTTPServer
+	grpcServices        map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService        *http.Server
+	profilerService     *pyroscope.Profiler
+	syncer              *syncer.Syncer
+	proposalBuilder     *miner.ProposalBuilder
+	mesh                *mesh.Mesh
+	atxsdata            *atxsdata.Data
+	clock               *timesync.NodeClock
+	hare3               *hare3.Hare
+	hare4               *hare4.Hare
+	hareResultsChan     chan hare4.ConsensusOutput
+	hOracle             *eligibility.Oracle
+	blockGen            *blocks.Generator
+	certifier           *blocks.Certifier
+	atxBuilder          *activation.Builder
+	atxHandler          *activation.Handler
+	txHandler           *txs.TxHandler
+	validator           *activation.Validator
+	edVerifier          *signing.EdVerifier
+	beaconProtocol      *beacon.ProtocolDriver
+	log                 log.Log
+	syncLogger          log.Log
+	conState            *txs.ConservativeState
+	fetcher             *fetch.Fetch
+	ptimesync           *peersync.Sync
+	updater             *bootstrap.Updater
+	poetDb              *activation.PoetDb
+	postVerifier        activation.PostVerifier
+	postSupervisor      *activation.PostSupervisor
+	malfeasanceHandler  *malfeasance.Handler
+	malfeasance2Handler *malfeasance2.Handler
+	errCh               chan error
 
 	host *p2p.Host
 
@@ -1305,11 +1306,11 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
-		pubsub.ChainGossipHandler(checkAtxSynced, app.malfeasanceHandler.HandleMalfeasanceProof),
+		pubsub.ChainGossipHandler(checkAtxSynced, malHandler.HandleMalfeasanceProof),
 	)
 	app.host.Register(
-		pubsub.MalfeasanceProof2, // TODO(mafa): pass correct handler
-		pubsub.ChainGossipHandler(checkAtxSynced, app.malfeasanceHandler.HandleMalfeasanceProof),
+		pubsub.MalfeasanceProof2,
+		pubsub.ChainGossipHandler(checkAtxSynced, malHandler2.HandleGossip),
 	)
 
 	app.proposalBuilder = proposalBuilder
@@ -1318,6 +1319,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.atxBuilder = atxBuilder
 	app.atxHandler = atxHandler
 	app.malfeasanceHandler = malHandler
+	app.malfeasance2Handler = malHandler2
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
@@ -1605,10 +1607,14 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Malfeasance:
+		// TODO(mafa): update to also use malfeasance2 handler
+		_ = app.malfeasance2Handler
 		service := v2alpha1.NewMalfeasanceService(app.apiDB, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.MalfeasanceStream:
+		// TODO(mafa): update to also use malfeasance2 handler
+		_ = app.malfeasance2Handler
 		service := v2alpha1.NewMalfeasanceStreamService(app.apiDB, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
