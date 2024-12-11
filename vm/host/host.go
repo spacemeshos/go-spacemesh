@@ -78,7 +78,6 @@ func NewHost(host core.Host, logger *zap.Logger) (*Host, error) {
 		// same as the destination, for now. See https://github.com/athenavm/athena/issues/174.
 		Principal:   host.Principal(),
 		Destination: host.Principal(),
-		Nonce:       host.Nonce(),
 	}
 	dynamicContext := core.DynamicContext{
 		Template: host.TemplateAddress(),

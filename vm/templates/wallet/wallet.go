@@ -1,6 +1,7 @@
 package wallet
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -117,29 +118,21 @@ func (s *Wallet) MaxSpend(payload []byte) (uint64, error) {
 }
 
 // Verify the transaction signature using the VM.
-func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
-	sig := core.Signature{}
-	n, err := sig.DecodeScale(dec)
-	if err != nil {
-		return fmt.Errorf("decoding signature: %w", err)
-	}
-
-	// deconstruct the tx, temporarily removing the signature, and add the genesis ID
+func (s *Wallet) Verify(tx, witnessData []byte) error {
+	hash := core.HashTx(tx)
 	// TODO(lane): re-add support for genesisID
 	// see https://github.com/athenavm/athena/issues/178
-	// rawTx := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
-	rawTx := raw[:len(raw)-n]
-	// reconstruct, with the signature
-	// methodArgs := append(rawTx, sig[:]...)
+	// signedData := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
+	signedData := hash[:]
 
 	// The input to the verify method must be SCALE-encoded.
-	verifyArgsEncoded, err := gossamerScale.Marshal(struct {
-		RawTx []byte
-		Sig   [64]byte
-	}{rawTx, sig})
+	var verifyArgsEncoded bytes.Buffer
+	encoder := scale.NewEncoder(&verifyArgsEncoded)
+	_, err := scale.EncodeByteSlice(encoder, signedData)
 	if err != nil {
 		return fmt.Errorf("marshalling verify args: %w", err)
 	}
+	verifyArgsEncoded.Write(witnessData)
 
 	maxgas := int64(s.host.MaxGas())
 	if maxgas < 0 {
@@ -195,7 +188,7 @@ func (s *Wallet) Verify(raw []byte, dec *scale.Decoder) error {
 	verifySelector, _ := athcon.FromString("athexp_verify")
 	payload := athcon.Payload{
 		Selector: &verifySelector,
-		Input:    verifyArgsEncoded,
+		Input:    verifyArgsEncoded.Bytes(),
 	}
 	payloadEncoded, err := gossamerScale.Marshal(payload)
 	if err != nil {

@@ -1,13 +1,11 @@
 package wallet
 
 import (
-	"bytes"
 	"encoding/hex"
 	"testing"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	"github.com/spacemeshos/go-scale"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -27,10 +25,9 @@ const (
 )
 
 func FuzzVerify(f *testing.F) {
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(t *testing.T, data, witnessData []byte) {
 		wallet := Wallet{}
-		dec := scale.NewDecoder(bytes.NewReader(data))
-		wallet.Verify(data, dec)
+		wallet.Verify(data, witnessData)
 	})
 }
 
@@ -63,7 +60,6 @@ func TestMaxSpend(t *testing.T) {
 
 	mockHost.EXPECT().MaxGas().Return(100000).Times(2)
 	mockHost.EXPECT().Clone().Return(mockHost)
-	mockHost.EXPECT().Nonce()
 	mockHost.EXPECT().Layer().Return(core.LayerID(1)).AnyTimes()
 	t.Run("Spawn", func(t *testing.T) {
 		max, err := testWallet.MaxSpend(spawnPayload)
@@ -88,7 +84,6 @@ func TestSpawn(t *testing.T) {
 	const maxGas = 100_000
 	mockHost.EXPECT().Principal().Return(principalAddress).Times(3)
 	mockHost.EXPECT().TemplateAddress().Return(TemplateAddress)
-	mockHost.EXPECT().Nonce()
 	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(principalAddress, nil)
 
 	libPath, err := host.AthenaLibPath()
@@ -130,20 +125,15 @@ func TestVerify(t *testing.T) {
 		State: walletState,
 	}
 
-	// Times counts the total number of times these methods are called.
-	// Note that wallet.Verify() short-circuits when called on empty input, so it only actually
-	// runs twice.
-	mockHost.EXPECT().Layer().Return(core.LayerID(1)).AnyTimes()
-	mockHost.EXPECT().Principal().Return(types.Address{2}).Times(11)
-	mockHost.EXPECT().MaxGas().Return(100000000).Times(2)
-	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).Times(3)
 	mockHost.EXPECT().Get(types.Address{1}).Return(&mockTemplate, nil)
 	mockHost.EXPECT().Get(types.Address{2}).Return(&mockWallet, nil)
-	mockHost.EXPECT().IsSpawn().Return(false).Times(3)
-	mockHost.EXPECT().Clone().Return(mockHost).Times(2)
-	mockHost.EXPECT().Nonce().Times(2)
-	mockHost.EXPECT().SpendGas(gomock.Any())
-	mockHost.EXPECT().SpendGas(gomock.Any())
+
+	mockHost.EXPECT().Layer().Return(core.LayerID(1)).AnyTimes()
+	mockHost.EXPECT().Principal().Return(types.Address{2}).AnyTimes()
+	mockHost.EXPECT().MaxGas().Return(100000000).AnyTimes()
+	mockHost.EXPECT().TemplateAddress().Return(types.Address{1}).AnyTimes()
+	mockHost.EXPECT().IsSpawn().Return(false).AnyTimes()
+	mockHost.EXPECT().Clone().Return(mockHost).AnyTimes()
 
 	// for now, don't include GenesisID
 	// empty := types.Hash20{}
@@ -154,17 +144,18 @@ func TestVerify(t *testing.T) {
 
 	t.Run("Invalid", func(t *testing.T) {
 		buf64 := types.EdSignature{}
-		require.Error(t, wallet.Verify(buf64[:], scale.NewDecoder(bytes.NewReader(buf64[:]))))
+		mockHost.EXPECT().SpendGas(gomock.Any())
+		require.Error(t, wallet.Verify(buf64[:], buf64[:]))
 	})
 	t.Run("Empty", func(t *testing.T) {
-		require.Error(t, wallet.Verify(nil, scale.NewDecoder(bytes.NewBuffer(nil))))
+		mockHost.EXPECT().SpendGas(gomock.Any())
+		require.Error(t, wallet.Verify(nil, nil))
 	})
 	t.Run("Valid", func(t *testing.T) {
 		msg := []byte{1, 2, 3}
-		sig := ed25519.Sign(privkeyBytes, msg)
-		require.NoError(
-			t,
-			wallet.Verify(append(msg, sig...), scale.NewDecoder(bytes.NewReader(sig))),
-		)
+		sig := core.SignRawTx(msg, types.RandomHash().ToHash20(), privkeyBytes)
+
+		mockHost.EXPECT().SpendGas(gomock.Any())
+		require.NoError(t, wallet.Verify(msg, sig))
 	})
 }

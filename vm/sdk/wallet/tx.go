@@ -6,7 +6,6 @@ import (
 
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
-	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -45,15 +44,8 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 		},
 		Payload: payload,
 	}
-	rawTx, err := codec.Encode(&tx)
-	if err != nil {
-		return nil, fmt.Errorf("encoding deploy TX: %w", err)
-	}
 
-	// FIXME: Prefix TX with genesis ID for signing.
-	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), rawTx)
-	return append(rawTx, sig...), nil
+	return core.SignedTx(&tx, options.GenesisID, pk)
 }
 
 func Spawn(
@@ -92,14 +84,7 @@ func Spawn(
 		},
 		Payload: vmlib.EncodeTxSpawn(athcon.Bytes32(signing.Public(pk))),
 	}
-	rawTx, err := codec.Encode(&tx)
-	if err != nil {
-		return nil, fmt.Errorf("encoding spawn TX: %w", err)
-	}
-
-	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), rawTx)
-	return append(rawTx, sig...), nil
+	return core.SignedTx(&tx, options.GenesisID, pk)
 }
 
 // Spend creates a spend transaction.
@@ -129,12 +114,5 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 		},
 		Payload: vmlib.EncodeTxSpend(athcon.Address(to), amount),
 	}
-	rawTx, err := codec.Encode(&tx)
-	if err != nil {
-		return nil, fmt.Errorf("encoding spend TX: %w", err)
-	}
-
-	// sig := ed25519.Sign(ed25519.PrivateKey(pk), core.SigningBody(options.GenesisID[:], tx))
-	sig := ed25519.Sign(ed25519.PrivateKey(pk), rawTx)
-	return append(rawTx, sig...), nil
+	return core.SignedTx(&tx, options.GenesisID, pk)
 }
