@@ -1170,18 +1170,18 @@ func (app *App) initServices(ctx context.Context) error {
 	for _, s := range app.signers {
 		nodeIDs = append(nodeIDs, s.NodeID())
 	}
-	app.malfeasanceHandler = malfeasance.NewHandler(
+	malHandler := malfeasance.NewHandler(
 		app.cachedDB,
 		legacyMalLogger,
 		app.host.ID(),
 		nodeIDs,
 		trtl,
 	)
-	app.malfeasanceHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
-	app.malfeasanceHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
-	app.malfeasanceHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
-	app.malfeasanceHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
-	app.malfeasanceHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
+	malHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
+	malHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
+	malHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
+	malHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
+	malHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
@@ -1226,7 +1226,7 @@ func (app *App) initServices(ctx context.Context) error {
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(
-				app.malfeasanceHandler.HandleSyncedMalfeasanceProof,
+				malHandler.HandleSyncedMalfeasanceProof,
 				app.host,
 				lg.Zap(),
 			),
@@ -1299,6 +1299,7 @@ func (app *App) initServices(ctx context.Context) error {
 	app.syncer = syncer
 	app.atxBuilder = atxBuilder
 	app.atxHandler = atxHandler
+	app.malfeasanceHandler = malHandler
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol

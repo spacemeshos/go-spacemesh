@@ -3,8 +3,6 @@ package malfeasance
 import (
 	"context"
 
-	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
@@ -20,8 +18,12 @@ type syncer interface {
 }
 
 type MalfeasanceHandler interface {
+	// Validate the proof and return the node ID of the malicious node if the proof is valid
 	Validate(ctx context.Context, data wire.ProofData) (types.NodeID, error)
+
+	// Info returns a map of key-value pairs that serve as metadata for the proof
 	Info(data wire.ProofData) (map[string]string, error)
-	ReportProof(vec *prometheus.CounterVec)
-	ReportInvalidProof(vec *prometheus.CounterVec)
+
+	// ReportLabel returns the label for the prometheus counter of the given proof type
+	ReportLabel() string
 }

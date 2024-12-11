@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -97,10 +96,6 @@ func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData)
 	return types.EmptyNodeID, errors.New("invalid ballot malfeasance proof")
 }
 
-func (mh *MalfeasanceHandler) ReportProof(numProofs *prometheus.CounterVec) {
-	numProofs.WithLabelValues(multiBallots).Inc()
-}
-
-func (mh *MalfeasanceHandler) ReportInvalidProof(numInvalidProofs *prometheus.CounterVec) {
-	numInvalidProofs.WithLabelValues(multiBallots).Inc()
+func (mh *MalfeasanceHandler) ReportLabel() string {
+	return multiBallots
 }

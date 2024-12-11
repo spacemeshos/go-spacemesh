@@ -101,7 +101,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 				return types.EmptyNodeID, errors.New("invalid proof")
 			},
 		)
-		handler.EXPECT().ReportInvalidProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
@@ -131,7 +131,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		handler.EXPECT().ReportProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
@@ -242,7 +242,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		handler.EXPECT().ReportProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -276,7 +276,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				return types.EmptyNodeID, errors.New("invalid proof")
 			},
 		)
-		handler.EXPECT().ReportInvalidProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -309,7 +309,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		handler.EXPECT().ReportProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
