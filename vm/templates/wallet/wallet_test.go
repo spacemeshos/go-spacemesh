@@ -82,7 +82,7 @@ func TestSpawn(t *testing.T) {
 	principalAddress := core.ComputePrincipalFromBlob(TemplateAddress, pubkey)
 
 	const maxGas = 100_000
-	mockHost.EXPECT().Principal().Return(principalAddress).Times(3)
+	mockHost.EXPECT().Principal().Return(principalAddress).Times(2)
 	mockHost.EXPECT().TemplateAddress().Return(TemplateAddress)
 	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(principalAddress, nil)
 
@@ -98,7 +98,7 @@ func TestSpawn(t *testing.T) {
 	require.NoError(t, err)
 	defer vmhost.Destroy()
 
-	output, gasLeft, err := vmhost.Execute(0, maxGas, types.Address{}, types.Address{}, executionPayload, 0, PROGRAM)
+	output, gasLeft, err := vmhost.Execute(0, maxGas, types.Address{}, types.Address{}, executionPayload, PROGRAM)
 	require.Less(t, gasLeft, int64(maxGas))
 	require.Len(t, output, 24)
 	require.Equal(t, principalAddress, types.Address(output))
