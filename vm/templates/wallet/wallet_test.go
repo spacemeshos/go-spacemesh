@@ -82,7 +82,7 @@ func TestSpawn(t *testing.T) {
 	principalAddress := core.ComputePrincipalFromBlob(TemplateAddress, pubkey)
 
 	const maxGas = 100_000
-	mockHost.EXPECT().Principal().Return(principalAddress).Times(3)
+	mockHost.EXPECT().Principal().Return(principalAddress).Times(2)
 	mockHost.EXPECT().TemplateAddress().Return(TemplateAddress)
 	mockHost.EXPECT().Spawn(gomock.Any(), gomock.Any()).Return(principalAddress, nil)
 
