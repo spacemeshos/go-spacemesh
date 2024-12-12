@@ -3,5 +3,20 @@
         "node-service-address": "http://0.0.0.0:9099",
         "data-folder": "/tmp/spacemesh-client",
         "filelock": "/tmp/spacemesh-client/node.lock"
+    },
+    "logging": {
+        "trtl": "WARN",
+        "beacon": "ERROR",
+        "proposalBuilder": "DEBUG",
+        "atxBuilder": "ERROR",
+        "hare": "ERROR",
+        "nodeServiceClient": "ERROR"
+    },
+    "smeshing": {
+        "smeshing-opts": {
+            "smeshing-opts-datadir": "/tmp/spacemesh-client/post-data"
+        },
+        "smeshing-coinbase": "stest1qqqqqqqpcpmljkxcscyj83uz6hl4dfhjgqjhzxqygkzwa",
+        "smeshing-start": true
     }
 }

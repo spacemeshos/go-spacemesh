@@ -2,40 +2,62 @@ version: "3"
 
 services:
   activation-service:
-    image: spacemeshos/go-spacemesh-dev:7d2f6ce47
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:b435640ff
     command:
       [
         "-c",
         "/config.json",
         "--node-service-address",
-        "http://node-service:9099",
+        "http://127.0.0.1:9099",
         "--grpc-json-listener",
         "0.0.0.0:9071",
         "--proxy-api-v2-address",
-        "http://node-service:9070",
+        "http://127.0.0.1:9060",
         "--proxy-listener",
         "0.0.0.0:9072",
+        "--grpc-public-listener",
+        "0.0.0.0:9082",
+        "--grpc-private-listener",
+        "0.0.0.0:9083",
       ]
     volumes:
       - ./spacemesh-client:/tmp/spacemesh-client
       - ./config.testnet.client.merged.json:/config.json
     ports:
       - 9071:9071
-    networks:
-      - spacemesh-testnet
+      - 9072:9072
+      - 9082:9082
+      - 9083:9083
+
+    # networks:
+    #   - spacemesh-testnet
 
   node-service:
-    image: spacemeshos/go-spacemesh-dev:7d2f6ce47
-    command: ["-c", "/config.json", "--grpc-json-listener", "0.0.0.0:9070"]
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:b435640ff
+    command: [
+        "-c",
+        "/config.json",
+        "--grpc-json-listener",
+        "0.0.0.0:9060",
+        "--grpc-public-listener",
+        "0.0.0.0:9062",
+        "--grpc-private-listener",
+        "0.0.0.0:9063",
+        # "--node-service-listener",
+        # "0.0.0.0:9099", ## this is somehow not exposed via CLI
+      ]
     volumes:
       - ./spacemesh-node-service:/tmp/spacemesh-node-service
       - ./config.testnet.node-service.merged.json:/config.json
-    networks:
-      - spacemesh-testnet
+    # networks:
+    #   - spacemesh-testnet
     ports:
-      - 9092:9092
-      - 9093:9093
-
-networks:
-  spacemesh-testnet:
-    driver: bridge
+      - 9062:9062
+      - 9063:9063
+      - 9060:9060
+      - 9099:9099
+# networks:
+#   spacemesh-testnet:
+#     driver: host
