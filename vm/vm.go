@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
@@ -82,10 +83,9 @@ type VM struct {
 // Validation initializes validation request.
 func (v *VM) Validation(raw types.RawTx) system.ValidationRequest {
 	return &Request{
-		vm:      v,
-		cache:   core.NewStagedCache(core.DBLoader{Executor: v.db}),
-		decoder: scale.NewDecoder(bytes.NewReader(raw.Raw)),
-		raw:     raw,
+		vm:    v,
+		cache: core.NewStagedCache(core.DBLoader{Executor: v.db}),
+		raw:   raw,
 	}
 }
 
@@ -290,8 +290,6 @@ func (v *VM) execute(
 	txs []types.Transaction,
 ) ([]types.TransactionWithResult, []types.Transaction, uint64, error) {
 	var (
-		rd          bytes.Reader
-		decoder     = scale.NewDecoder(&rd)
 		fees        uint64
 		ineffective []types.Transaction
 		executed    []types.TransactionWithResult
@@ -303,13 +301,11 @@ func (v *VM) execute(
 
 		t1 := time.Now()
 
-		rd.Reset(tx.GetRaw().Raw)
 		req := &Request{
-			vm:      v,
-			cache:   ss,
-			lid:     layer,
-			raw:     tx.GetRaw(),
-			decoder: decoder,
+			vm:    v,
+			cache: ss,
+			lid:   layer,
+			raw:   tx.GetRaw(),
 		}
 
 		header, err := req.Parse()
@@ -491,9 +487,8 @@ type Request struct {
 	vm    *VM
 	cache *core.StagedCache
 
-	lid     types.LayerID
-	raw     types.RawTx
-	decoder *scale.Decoder
+	lid types.LayerID
+	raw types.RawTx
 
 	// ctx set after successful Parse
 	ctx *core.Context
@@ -505,7 +500,7 @@ func (r *Request) Parse() (*core.Header, error) {
 	if len(r.raw.Raw) > core.TxSizeLimit {
 		return nil, fmt.Errorf("%w: tx size (%d) > limit (%d)", core.ErrTxLimit, len(r.raw.Raw), core.TxSizeLimit)
 	}
-	header, ctx, err := parse(r.vm.logger, r.lid, r.cache, r.vm.cfg, r.raw.Raw, r.decoder)
+	header, ctx, err := parse(r.vm.logger, r.lid, r.cache, r.vm.cfg, r.raw.Raw)
 	if err != nil {
 		return nil, err
 	}
@@ -520,7 +515,7 @@ func (r *Request) Verify() error {
 		panic("Verify should be called after successful Parse")
 	}
 	start := time.Now()
-	rst := verify(r.ctx, r.raw.Raw, r.decoder)
+	rst := verify(r.ctx)
 	transactionDurationVerify.Observe(float64(time.Since(start)))
 	return rst
 }
@@ -536,16 +531,24 @@ func parse(
 	loader core.AccountLoader,
 	cfg Config,
 	raw []byte,
-	decoder *scale.Decoder,
 ) (*core.Header, *core.Context, error) {
 	var tx core.Tx
-	_, err := tx.DecodeScale(decoder)
+	decoder := scale.NewDecoder(bytes.NewReader(raw))
+	n, err := tx.DecodeScale(decoder)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: decoding TX: %w", core.ErrMalformed, err)
 	}
 	// v1 is athena compatible tx
 	if tx.Version != 1 {
 		return nil, nil, fmt.Errorf("%w: %d", errWrongVersion, tx.Version)
+	}
+	// Decode witness data
+	witnessData, _, err := scale.DecodeByteSlice(decoder)
+	switch {
+	case errors.Is(err, io.EOF):
+		logger.Debug("witness data is empty")
+	case err != nil:
+		return nil, nil, fmt.Errorf("decoding witness data: %w", err)
 	}
 
 	ctx, err := core.New(cfg.GenesisID, lid, tx.Principal, loader, logger)
@@ -600,6 +603,8 @@ func parse(
 		return nil, nil, fmt.Errorf("%w: %s", errUnknownTemplate, ctx.Header.TemplateAddress)
 	}
 	ctx.TxPayload = tx.Payload
+	ctx.TxData = raw[:n]
+	ctx.WitnessData = witnessData
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
@@ -623,6 +628,6 @@ func parse(
 	return &ctx.Header, ctx, nil
 }
 
-func verify(ctx *core.Context, raw []byte, dec *scale.Decoder) error {
-	return ctx.PrincipalTemplate.Verify(raw, dec)
+func verify(ctx *core.Context) error {
+	return ctx.PrincipalTemplate.Verify(ctx.TxData, ctx.WitnessData)
 }

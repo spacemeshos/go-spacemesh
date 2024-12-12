@@ -1,8 +1,6 @@
 package core
 
 import (
-	"github.com/spacemeshos/go-scale"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -45,7 +43,7 @@ type Template interface {
 	// LoadGas is a cost to load account from disk.
 	LoadGas() uint64
 	// Verify security of the transaction.
-	Verify([]byte, *scale.Decoder) error
+	Verify(tx, witnessData []byte) error
 }
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/loader.go github.com/spacemeshos/go-spacemesh/vm/core AccountLoader
@@ -95,7 +93,6 @@ type Host interface {
 type StaticContext struct {
 	Principal   types.Address
 	Destination types.Address
-	Nonce       uint64
 }
 
 // dynamic context may change with each call frame.

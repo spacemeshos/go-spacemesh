@@ -6,7 +6,6 @@ import (
 	"maps"
 	"math"
 
-	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -33,10 +32,11 @@ type Context struct {
 	PrincipalAccount  types.Account
 	PrincipalTemplate Template
 
-	TxPayload []byte
+	TxPayload   []byte
+	TxData      []byte
+	WitnessData []byte
 
 	Header  Header
-	Args    scale.Encodable
 	SpawnTx bool
 
 	Logger *zap.Logger

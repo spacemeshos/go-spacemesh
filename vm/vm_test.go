@@ -334,7 +334,7 @@ func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 
 func (t *tester) estimateSpawnGas(principal, target int) int {
 	// TODO(lane): improve gas arithmetic and gas estimation
-	return core.ATHENA_GAS_SPAWN + 11_156
+	return core.ATHENA_GAS_SPAWN + core.ATHENA_GAS_VERIFY
 	// tx := t.accounts[principal].spawn(t, 0)
 	// gas := t.accounts[principal].baseGas() +
 	// 	int(core.TxDataGas(len(tx)))
@@ -346,7 +346,7 @@ func (t *tester) estimateSpawnGas(principal, target int) int {
 
 func (t *tester) estimateSpendGas(principal, to, amount int, nonce core.Nonce) int {
 	// TODO(lane): improve gas arithmetic and gas estimation
-	return core.ATHENA_GAS_SPEND + 10_820
+	return core.ATHENA_GAS_SPEND + core.ATHENA_GAS_VERIFY
 	// tx := t.accounts[principal].spend(t, t.accounts[to].getAddress(), uint64(amount), nonce)
 	// return t.accounts[principal].baseGas() +
 	// 	t.accounts[principal].loadGas() +
