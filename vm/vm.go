@@ -330,7 +330,7 @@ func (v *VM) execute(
 			continue
 		}
 		balance := ctx.Balance()
-		intrinsic := core.IntrinsicGas(ctx.PrincipalTemplate.BaseGas(), len(tx.GetRaw().Raw))
+		intrinsic := core.IntrinsicGas(ctx.PrincipalTemplate.BaseGas(), 0) // we don't charge for TX storage yet
 		logger.Info("intrinsic gas check", zap.Uint64("balance", balance), zap.Uint64("intrinsic gas", intrinsic))
 		if balance < intrinsic {
 			logger.Warn("ineffective transaction. intrinsic gas not covered",
@@ -568,10 +568,12 @@ func parse(
 	// is passed not explicitly as part of the tx, but implicitly in the args. This simplifies the
 	// logic here considerably.
 
+	var estimatedStateSize int
 	if ctx.PrincipalAccount.TemplateAddress == nil {
 		if tx.Template == nil {
 			return nil, nil, core.ErrNotSpawned
 		}
+		estimatedStateSize = max(len(tx.Payload), 6) - 6
 		ctx.SpawnTx = true
 		ctx.Header.TemplateAddress = *tx.Template
 		// in case of a self-spawn, we need to check that the calculated principal matches.
@@ -592,6 +594,7 @@ func parse(
 		if tx.Template != nil {
 			return nil, nil, fmt.Errorf("%w: principal account already spawned", core.ErrMalformed)
 		}
+		estimatedStateSize = len(ctx.PrincipalAccount.State)
 		ctx.Header.TemplateAddress = *ctx.PrincipalAccount.TemplateAddress
 	}
 
@@ -615,7 +618,14 @@ func parse(
 	}
 
 	// FIXME: How to obtain a max gas? Should it be returned from Verify()?
-	ctx.Header.MaxGas = core.MaxGas(max(len(tx.Payload), 6) - 6) // skip bytes for method selector
+	logger.Debug(
+		"calculating max gas",
+		zap.Int("payload len", len(tx.Payload)),
+		zap.Int("witness data len", len(witnessData)),
+	)
+	ctx.Header.MaxGas = core.MaxGas(
+		estimatedStateSize + max(len(tx.Payload), 6) - 6 + len(witnessData),
+	) // skip bytes for method selector
 	ctx.Header.Principal = tx.Principal
 	ctx.Header.GasPrice = tx.Metadata.GasPrice
 	ctx.Header.Nonce = tx.Metadata.Nonce

@@ -17,11 +17,7 @@ const (
 
 	// Hardcoded Athena gas costs
 	// TODO(lane): remove hardcoded gas costs.
-	ATHENA_MAX_GAS    = 20_000
-	ATHENA_GAS_SPAWN  = 4472
-	ATHENA_GAS_DEPLOY = 10000
-	ATHENA_GAS_SPEND  = 6184
-	ATHENA_GAS_VERIFY = 9820
+	ATHENA_GAS_VERIFY = 12_000
 )
 
 const (
@@ -47,5 +43,5 @@ func TxDataGas(size int) uint64 {
 }
 
 func MaxGas(inputSize int) uint64 {
-	return ATHENA_MAX_GAS + uint64(inputSize)*100
+	return 10_000 + uint64(inputSize)*150
 }

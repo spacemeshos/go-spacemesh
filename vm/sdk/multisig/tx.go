@@ -12,6 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/host"
+	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 )
 
 // SpawnArguments contains a collection with PublicKeys.
@@ -53,21 +55,23 @@ func (tx *Aggregator) Add(ref uint8, sig core.Signature) {
 
 // Raw returns full raw transaction including payload and signatures.
 func (tx *Aggregator) Raw() []byte {
-	buf := bytes.NewBuffer(tx.unsigned)
-	enc := scale.NewEncoder(buf)
+	var buf bytes.Buffer
+	enc := scale.NewEncoder(&buf)
 	keys := slices.Sorted(maps.Keys(tx.parts))
 	for _, ref := range keys {
-		if err := enc.Encode(tx.parts[ref].Ref); err != nil {
-			panic(err)
-		}
-		if err := enc.Encode(tx.parts[ref].Sig); err != nil {
+		if err := enc.Encode(tx.parts[ref]); err != nil {
 			panic(err)
 		}
 	}
-	return buf.Bytes()
+	rawTxBuf := bytes.NewBuffer(tx.unsigned)
+	enc = scale.NewEncoder(rawTxBuf)
+	if err := enc.Encode(buf.Bytes()); err != nil {
+		panic(err)
+	}
+	return rawTxBuf.Bytes()
 }
 
-func encodeSpawnArgs(required uint8, pubkeys []core.PublicKey) ([]byte, error) {
+func EncodeSpawnArgs(required uint8, pubkeys []core.PublicKey) ([]byte, error) {
 	args := SpawnArguments{
 		Required:   required,
 		PublicKeys: pubkeys,
@@ -76,8 +80,18 @@ func encodeSpawnArgs(required uint8, pubkeys []core.PublicKey) ([]byte, error) {
 	return scale.Marshal(args)
 }
 
-func Spawn(template types.Address, required uint8, pubkeys []core.PublicKey, nonce core.Nonce) ([]byte, error) {
-	encodedArgs, err := encodeSpawnArgs(required, pubkeys)
+func Spawn(
+	template types.Address,
+	required uint8,
+	pubkeys []core.PublicKey,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) ([]byte, error) {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+	encodedArgs, err := EncodeSpawnArgs(required, pubkeys)
 	if err != nil {
 		return nil, fmt.Errorf("marshalling spawn args: %w", err)
 	}
@@ -91,15 +105,47 @@ func Spawn(template types.Address, required uint8, pubkeys []core.PublicKey, non
 		return nil, fmt.Errorf("encoding TX payload: %w", err)
 	}
 	accountAddress := core.ComputePrincipalFromBlob(template, encodedArgs)
+	fmt.Printf("calculated principal: %s\n", accountAddress.String())
 	tx := core.Tx{
 		Version:   1,
 		Principal: accountAddress,
 		Template:  &template,
 		Metadata: core.Metadata{
 			Nonce:    nonce,
-			GasPrice: 1,
+			GasPrice: options.GasPrice,
 		},
 		Payload: encodedPayload,
+	}
+	return codec.Encode(&tx)
+}
+
+// Spend creates a raw SPEND transaction, which needs to be signed by the required
+// number of signers.
+func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	// Encode using the VM
+	libPath, err := host.AthenaLibPath()
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	vmlib, err := athcon.LoadLibrary(libPath)
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	defer vmlib.Close()
+
+	tx := core.Tx{
+		Version:   uint8(sdk.TxVersion),
+		Principal: principal,
+		Metadata: core.Metadata{
+			Nonce:    nonce,
+			GasPrice: options.GasPrice,
+		},
+		Payload: vmlib.EncodeTxSpend(athcon.Address(to), amount),
 	}
 	return codec.Encode(&tx)
 }

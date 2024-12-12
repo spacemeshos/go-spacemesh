@@ -5,24 +5,16 @@ edition = "2021"
 
 [dependencies]
 parity-scale-codec = { version = "3.6.12", features = ["derive"] }
-
-# athena-interface = { git = "https://github.com/athenavm/athena", tag = "v0.6.1" }
-# athena-vm = { git = "https://github.com/athenavm/athena", tag = "v0.6.1" }
-# athena-vm-declare = { git = "https://github.com/athenavm/athena", tag = "v0.6.1" }
-# athena-vm-sdk = { git = "https://github.com/athenavm/athena", tag = "v0.6.1" }
-athena-interface = { path = "/home/bartosz/workspace/athena/interface" }
-athena-vm = { path = "/home/bartosz/workspace/athena/vm/entrypoint" }
-athena-vm-declare = { path = "/home/bartosz/workspace/athena/vm/declare" }
-athena-vm-sdk = { path = "/home/bartosz/workspace/athena/vm/sdk" }
+athena-interface = { git = "https://github.com/athenavm/athena", tag = "v0.6.2" }
+athena-vm = { git = "https://github.com/athenavm/athena", tag = "v0.6.2" }
+athena-vm-declare = { git = "https://github.com/athenavm/athena", tag = "v0.6.2" }
+athena-vm-sdk = { git = "https://github.com/athenavm/athena", tag = "v0.6.2" }
 
 [dev-dependencies]
 multisig = { path = ".", features = ["unittest"] }
-# athena-sdk = { git = "https://github.com/athenavm/athena", tag = "v0.6.1" }
-# athena-runner = { git = "https://github.com/athenavm/athena", tag = "v0.6.1" }
-athena-sdk = { path = "/home/bartosz/workspace/athena/sdk" }
-athena-runner = { path = "/home/bartosz/workspace/athena/runner" }
+athena-sdk = { git = "https://github.com/athenavm/athena", tag = "v0.6.2" }
+athena-runner = { git = "https://github.com/athenavm/athena", tag = "v0.6.2" }
 ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
-
 rand = "0.8.5"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
@@ -31,9 +23,3 @@ athena-helper = { git = "https://github.com/athenavm/athena", tag = "v0.6.1" }
 
 [features]
 unittest = []
-
-[profile.release]
-panic = "abort"
-
-[profile.dev]
-panic = "abort"

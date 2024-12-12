@@ -56,8 +56,8 @@ POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/
 POSTRS_SERVICE_ZIP = post-service-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
-ATHENA_SETUP_REV = v0.6.1
-ATHENA_SETUP_RELEASE = v0.6.1
+ATHENA_SETUP_REV = v0.6.2
+ATHENA_SETUP_RELEASE = v0.6.2
 ATHENA_SETUP_ARTIFACT = athena_vmlib_$(ATHENA_SETUP_REV)_$(GOOS)_$(GOARCH).tar.gz
 ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/$(ATHENA_SETUP_RELEASE)/$(ATHENA_SETUP_ARTIFACT)
 
@@ -121,7 +121,7 @@ $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 ATHENA_LIB_RENAMED := libathenavmwrapper$(suffix $(ATHENA_LIB))
 ATHENA_LIB_PATH := $(BIN_DIR)$(ATHENA_LIB_RENAMED)
 $(ATHENA_LIB_PATH): $(BIN_DIR)$(ATHENA_LIB)
-	mv $(BIN_DIR)$(ATHENA_LIB) $@
+	cp $(BIN_DIR)$(ATHENA_LIB) $@
 
 $(PROJ_DIR)$(POSTRS_SETUP_ZIP):
 	curl -sSL $(CURL_OPTIONS) $(POSTRS_SETUP_URL_ZIP) -o $(PROJ_DIR)$(POSTRS_SETUP_ZIP)

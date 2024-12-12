@@ -13,7 +13,7 @@ struct Contract {
     keys: alloc::vec::Vec<Pubkey>,
 }
 
-#[derive(Encode, Decode)]
+#[derive(Decode)]
 struct SpawnArguments {
     required: u8,
     keys: alloc::vec::Vec<Pubkey>,
@@ -53,17 +53,20 @@ impl Contract {
     }
 
     #[callable]
-    fn verify(&self, tx: alloc::vec::Vec<u8>) -> bool {
+    fn verify() -> bool {
         let mut io = IoReader(athena_vm::io::Io::default());
+        let state = Contract::decode(&mut io).unwrap();
+        let tx = alloc::vec::Vec::<u8>::decode(&mut io).unwrap();
+
         let mut last_id = None;
-        for _ in 0..self.required {
+        for _ in 0..state.required {
             let sig = if let Ok(s) = Signature::decode(&mut io) {
                 s
             } else {
                 return false;
             };
 
-            if self.keys.len() < sig.id as usize {
+            if state.keys.len() < sig.id as usize {
                 return false;
             }
             if let Some(last) = last_id {
@@ -72,7 +75,7 @@ impl Contract {
                 }
             }
             last_id = Some(sig.id);
-            let pubkey = &self.keys[sig.id as usize];
+            let pubkey = &state.keys[sig.id as usize];
 
             if !athena_vm_sdk::precompiles::ed25519::verify(&tx, &pubkey.0, &sig.sig) {
                 return false;

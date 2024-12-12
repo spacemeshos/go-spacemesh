@@ -21,7 +21,6 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	for _, opt := range opts {
 		opt(options)
 	}
-	principal := Address(signing.Public(pk))
 	var blobEncoded bytes.Buffer
 	if _, err := codec.EncodeByteSlice(&blobEncoded, blob); err != nil {
 		return nil, fmt.Errorf("encoding code blob: %w", err)
@@ -35,9 +34,14 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	if err != nil {
 		return nil, fmt.Errorf("encoding tx payload: %w", err)
 	}
+
+	template := options.Template
+	if template == nil {
+		template = &wallet.TemplateAddress
+	}
 	tx := core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: principal,
+		Principal: core.ComputePrincipalFromBlob(*template, signing.Public(pk)),
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
@@ -105,9 +109,14 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	}
 	defer vmlib.Close()
 
+	template := options.Template
+	if template == nil {
+		template = &wallet.TemplateAddress
+	}
+
 	tx := core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: Address(signing.Public(pk)),
+		Principal: core.ComputePrincipalFromBlob(*template, signing.Public(pk)),
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
