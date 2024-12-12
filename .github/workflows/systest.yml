@@ -379,20 +379,38 @@ jobs:
       - systest-gke
       - systest-dedicated-cluster
     runs-on: ubuntu-22.04
-    env:
-      # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest-gke.result == 'success' || needs.systest-dedicated-cluster.result == 'success') && 'success' || 'failure' }}
     steps:
-      # print a single, clean status update to slack
-      - uses: act10ns/slack@v2
-        name: Slack notification
-        # skip if the secret is not accessible
-        if: env.SLACK_WEBHOOK_URL
-        with:
-          status: ${{ env.status }}
-      - name: Mark the job as succeeded
-        if: env.status == 'success'
-        run: exit 0
-      - name: Mark the job as failed
-        if: env.status != 'success'
-        run: exit 1
+      - name: Check test status
+        id: check
+        run: |
+          if [[ "${{ needs.filter-changes.outputs.nondocchanges }}" == "false" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "reason=only documentation changes" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ "${{ needs.systest-gke.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "reason=GKE tests passed" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          if [[ "${{ needs.systest-dedicated-cluster.result }}" == "success" ]]; then
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "reason=dedicated cluster tests passed" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "reason=all tests failed" >> $GITHUB_OUTPUT
+
+      - name: Set final status
+        env:
+          STATUS: ${{ steps.check.outputs.status }}
+          REASON: ${{ steps.check.outputs.reason }}
+        run: |
+          echo "Final status: ${{ steps.check.outputs.status }}"
+          echo "Reason: ${{ steps.check.outputs.reason }}"
+          if [[ "${{ steps.check.outputs.status }}" == "failure" ]]; then
+            exit 1
+          fi
