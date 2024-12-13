@@ -13,18 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
 )
-
-// SpawnArguments contains a collection with PublicKeys.
-type SpawnArguments struct {
-	Required   uint8
-	PublicKeys []core.PublicKey
-}
-
-type SpendArguments struct {
-	To     types.Address
-	Amount uint64
-}
 
 // part contains a reference to public key and signature from private key counterpart.
 type part struct {
@@ -72,7 +62,7 @@ func (a *SignatureAggregator) Raw() []byte {
 }
 
 func EncodeSpawnArgs(required uint8, pubkeys []core.PublicKey) []byte {
-	args := SpawnArguments{
+	args := multisig.SpawnArguments{
 		Required:   required,
 		PublicKeys: pubkeys,
 	}
@@ -80,7 +70,7 @@ func EncodeSpawnArgs(required uint8, pubkeys []core.PublicKey) []byte {
 }
 
 func EncodeSpendArgs(to types.Address, amount uint64) []byte {
-	args := SpendArguments{
+	args := multisig.SpendArguments{
 		To:     to,
 		Amount: amount,
 	}

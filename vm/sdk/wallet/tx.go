@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	"github.com/spacemeshos/go-spacemesh/vm/templates"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -27,7 +28,7 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	}
 
 	athPayload := athcon.Payload{
-		Selector: &wallet.DeploySelector,
+		Selector: &templates.DeploySelector,
 		Input:    blobEncoded.Bytes(),
 	}
 	payload, err := gossamerScale.Marshal(athPayload)
