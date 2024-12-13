@@ -170,11 +170,9 @@ jobs:
   systest-gke:
     runs-on: ubuntu-22.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    continue-on-error: true
     needs:
       - filter-changes
       - provision-gke-cluster
-      - build-docker-images
     timeout-minutes: 70
     permissions:
       contents: 'read'
@@ -262,7 +260,6 @@ jobs:
     if: always()
     needs:
       - filter-changes
-      - provision-gke-cluster
       - systest-gke
     timeout-minutes: 20
     permissions:
@@ -303,7 +300,6 @@ jobs:
       - filter-changes
       - build-docker-images
     timeout-minutes: 70
-    continue-on-error: true
     permissions:
       contents: 'read'
       id-token: 'write'
