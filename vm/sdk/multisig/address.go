@@ -1,8 +1,6 @@
 package multisig
 
 import (
-	"fmt"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 )
@@ -13,10 +11,6 @@ func Address(template types.Address, required uint8, pubkeys []core.PublicKey) t
 		panic("cannot require more than available public keys")
 	}
 
-	args, err := EncodeSpawnArgs(required, pubkeys)
-	if err != nil {
-		panic(fmt.Errorf("encoding spawn args failed: %w", err))
-	}
-
+	args := EncodeSpawnArgs(required, pubkeys)
 	return core.ComputePrincipalFromBlob(template, args)
 }

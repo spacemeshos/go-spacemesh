@@ -2,7 +2,6 @@ package vm
 
 import (
 	"bytes"
-	"fmt"
 	"math"
 	"math/big"
 	"math/rand"
@@ -208,17 +207,22 @@ func (a *multisigAccount) selfSpawnGas() int {
 
 func (a *multisigAccount) spendMaxGas() int {
 	pubs := make([]core.PublicKey, len(a.pks))
-	stateSize, _ := sdkmultisig.EncodeSpawnArgs(a.required, pubs)
-	return int(core.MaxGas(len(stateSize) + 32 + int(a.required)*(64+1)))
+	state := sdkmultisig.EncodeSpawnArgs(a.required, pubs)
+	args := sdkmultisig.EncodeSpendArgs(types.Address{}, 0)
+	var buf bytes.Buffer
+	argsSize, _ := scale.EncodeByteSlice(scale.NewEncoder(&buf), args)
+	// total input is state + args + witness data
+	return int(core.MaxGas(len(state) + argsSize + int(a.required)*(64+1)))
 }
 
 func (a *multisigAccount) selfSpawnMaxGas() int {
 	pubs := make([]core.PublicKey, len(a.pks))
-	spawnArgs, _ := sdkmultisig.EncodeSpawnArgs(a.required, pubs)
+	args := sdkmultisig.EncodeSpawnArgs(a.required, pubs)
+	stateSize := len(args)
 	var buf bytes.Buffer
-	n, _ := scale.EncodeByteSlice(scale.NewEncoder(&buf), spawnArgs)
-	fmt.Printf("spawn payload size: %d\n", n)
-	return int(core.MaxGas(n + len(spawnArgs) + int(a.required)*(64+1)))
+	argsSize, _ := scale.EncodeByteSlice(scale.NewEncoder(&buf), args)
+	// total input is state + args + witness data
+	return int(core.MaxGas(stateSize + argsSize + int(a.required)*(64+1)))
 }
 
 type testTemplate struct {

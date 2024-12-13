@@ -6,13 +6,13 @@ import (
 	"maps"
 	"slices"
 
+	// FIXME: use go-scale when we add a tag to encode uint8 non-compact.
 	"github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
-	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 )
 
@@ -20,6 +20,11 @@ import (
 type SpawnArguments struct {
 	Required   uint8
 	PublicKeys []core.PublicKey
+}
+
+type SpendArguments struct {
+	To     types.Address
+	Amount uint64
 }
 
 // Signatures is a collections of parts that must satisfy multisig
@@ -71,13 +76,21 @@ func (tx *Aggregator) Raw() []byte {
 	return rawTxBuf.Bytes()
 }
 
-func EncodeSpawnArgs(required uint8, pubkeys []core.PublicKey) ([]byte, error) {
+func EncodeSpawnArgs(required uint8, pubkeys []core.PublicKey) []byte {
 	args := SpawnArguments{
 		Required:   required,
 		PublicKeys: pubkeys,
 	}
 
-	return scale.Marshal(args)
+	return scale.MustMarshal(args)
+}
+
+func EncodeSpendArgs(to types.Address, amount uint64) []byte {
+	args := SpendArguments{
+		To:     to,
+		Amount: amount,
+	}
+	return scale.MustMarshal(args)
 }
 
 func Spawn(
@@ -91,18 +104,11 @@ func Spawn(
 	for _, opt := range opts {
 		opt(options)
 	}
-	encodedArgs, err := EncodeSpawnArgs(required, pubkeys)
-	if err != nil {
-		return nil, fmt.Errorf("marshalling spawn args: %w", err)
-	}
+	encodedArgs := EncodeSpawnArgs(required, pubkeys)
 	selector, _ := athcon.FromString("athexp_spawn")
 	payload := athcon.Payload{
 		Selector: &selector,
 		Input:    encodedArgs,
-	}
-	encodedPayload, err := scale.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("encoding TX payload: %w", err)
 	}
 	accountAddress := core.ComputePrincipalFromBlob(template, encodedArgs)
 	fmt.Printf("calculated principal: %s\n", accountAddress.String())
@@ -114,7 +120,7 @@ func Spawn(
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
 		},
-		Payload: encodedPayload,
+		Payload: scale.MustMarshal(payload),
 	}
 	return codec.Encode(&tx)
 }
@@ -127,16 +133,11 @@ func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts .
 		opt(options)
 	}
 
-	// Encode using the VM
-	libPath, err := host.AthenaLibPath()
-	if err != nil {
-		panic(fmt.Errorf("loading Athena VM: %w", err))
+	selector, _ := athcon.FromString("athexp_spend")
+	payload := athcon.Payload{
+		Selector: &selector,
+		Input:    EncodeSpendArgs(to, amount),
 	}
-	vmlib, err := athcon.LoadLibrary(libPath)
-	if err != nil {
-		panic(fmt.Errorf("loading Athena VM: %w", err))
-	}
-	defer vmlib.Close()
 
 	tx := core.Tx{
 		Version:   uint8(sdk.TxVersion),
@@ -145,7 +146,7 @@ func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts .
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
 		},
-		Payload: vmlib.EncodeTxSpend(athcon.Address(to), amount),
+		Payload: scale.MustMarshal(payload),
 	}
 	return codec.Encode(&tx)
 }

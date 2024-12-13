@@ -9,7 +9,7 @@ use ed25519_dalek::ed25519::signature::Signer;
 use rand::rngs::OsRng;
 
 pub const PROGRAM: &[u8] = include_bytes!("../elf/multisig");
-pub const ADDRESS_ALICE: Address = Address([1u8; 24]);
+pub const ADDRESS_ALICE: [u8; 24] = [1u8; 24];
 
 #[derive(Encode)]
 struct SpawnArguments {
@@ -29,7 +29,7 @@ fn spawn(required: u8, keys: Vec<Pubkey>) -> Result<(Address, Vec<u8>), Box<dyn 
     let mut host = athena_interface::MockHostInterface::new();
     host.expect_spawn().returning_st(move |s| {
         state_w.send(s).unwrap();
-        ADDRESS_ALICE
+        Address::from(ADDRESS_ALICE)
     });
 
     let args = SpawnArguments { required, keys };
@@ -105,7 +105,7 @@ fn spawning() {
 
     let (address, state) = spawn(1, vec![Pubkey(signing_key.verifying_key().to_bytes())]).unwrap();
 
-    assert_eq!(ADDRESS_ALICE, address);
+    assert_eq!(Address::from(ADDRESS_ALICE), address);
     assert!(!state.is_empty());
 }
 
