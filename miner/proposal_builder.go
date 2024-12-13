@@ -593,7 +593,8 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 				log.ZContext(ctx),
 				zap.Uint32("epoch_id", signer.session.epoch.Uint32()),
 			)
-			return nil, 0, errors.New("no atx in epoch")
+			// no atx in epoch means not eligible for proposal in layer
+			return nil, 0, nil
 		} else {
 			return nil, 0, err
 		}

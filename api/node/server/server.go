@@ -326,15 +326,14 @@ type proposalResp struct {
 }
 
 func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
-	if p.buf == nil {
-		w.WriteHeader(204)
-		return nil
-	}
 	w.Header().Add("content-type", "application/octet-stream")
 	w.Header().Add("x-spacemesh-atx-nonce", fmt.Sprintf("%d", p.nonce))
 	w.WriteHeader(200)
-	_, err := w.Write(p.buf)
-	return err
+	if p.buf != nil {
+		_, err := w.Write(p.buf)
+		return err
+	}
+	return nil
 }
 
 func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (
