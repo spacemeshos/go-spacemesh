@@ -89,6 +89,31 @@ jobs:
           make test-tidy
           make test-generate
 
+  # The contracts are written in Rust and require a 
+  # specific toolchain to build for Athena (Risc-V).
+  test-contracts:
+    runs-on: ubuntu-22.04
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    timeout-minutes: 10
+    env:
+      ATHENA_DIR: "${{ github.workspace }}/.athena"
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install Athena CLI & toolchain
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # for authorization to have higher rate-limit.
+        run: |
+          cargo install athena-cli --git https://github.com/athenavm/athena --tag v0.6.2
+          cargo athena install-toolchain
+      - name: test contracts
+        run: cargo t --manifest-path vm/templates/multisig/Cargo.toml
+
   lint:
     runs-on: ubuntu-22.04
     needs: filter-changes
@@ -307,6 +332,7 @@ jobs:
       - lint
       - build
       - unittests
+      - test-contracts
     runs-on: ubuntu-22.04
     env:
       # short-circuit success if no non-doc files were modified
