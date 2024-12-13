@@ -28,7 +28,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	sdkmultisig "github.com/spacemeshos/go-spacemesh/vm/sdk/multisig"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
 	walletTemplate "github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -580,7 +582,7 @@ func TestToTxContents(t *testing.T) {
 		require.NoError(t, err)
 		tx := newTx(t, 0, types.Address{}, signer)
 
-		contents, txType, err := toTxContents(tx.Raw)
+		contents, txType, err := toTxContents(tx.Raw, &types.TxHeader{TemplateAddress: walletTemplate.TemplateAddress})
 		require.NoError(t, err)
 		require.NotNil(t, contents.GetSingleSigSpawn())
 		require.Nil(t, contents.GetSend())
@@ -594,7 +596,7 @@ func TestToTxContents(t *testing.T) {
 		require.NoError(t, err)
 		tx := newTx(t, 1, types.Address{}, signer)
 
-		contents, txType, err := toTxContents(tx.Raw)
+		contents, txType, err := toTxContents(tx.Raw, &types.TxHeader{TemplateAddress: walletTemplate.TemplateAddress})
 		require.NoError(t, err)
 		require.NotNil(t, contents.GetSend())
 		require.Nil(t, contents.GetSingleSigSpawn())
@@ -602,76 +604,82 @@ func TestToTxContents(t *testing.T) {
 	})
 
 	t.Run("multisig spawn", func(t *testing.T) {
-		t.Skip("multisig spawn is not supported yet")
-		// t.Parallel()
+		t.Parallel()
 
-		// var pubs []ed25519.PublicKey
-		// pks := make([]ed25519.PrivateKey, 0, 3)
-		// for i := 0; i < 3; i++ {
-		// 	pub, pk, err := ed25519.GenerateKey(nil)
-		// 	require.NoError(t, err)
-		// 	pubs = append(pubs, pub)
-		// 	pks = append(pks, pk)
-		// }
+		var (
+			pubs    []core.PublicKey
+			pubStrs []string
+			pks     []ed25519.PrivateKey
+		)
 
-		// var agg *multisig2.Aggregator
-		// for i := 0; i < len(pks); i++ {
-		// 	part := multisig2.SelfSpawn(uint8(i), pks[i], multisig.TemplateAddress, 1, pubs, types.Nonce(1))
-		// 	if agg == nil {
-		// 		agg = part
-		// 	} else {
-		// 		agg.Add(*part.Part(uint8(i)))
-		// 	}
-		// }
-		// rawTx := agg.Raw()
+		for i := 0; i < 3; i++ {
+			pub, pk, err := ed25519.GenerateKey(nil)
+			require.NoError(t, err)
+			pks = append(pks, pk)
+			p := core.PublicKey(pub)
+			pubs = append(pubs, p)
+			pubStrs = append(pubStrs, p.String())
+		}
 
-		// contents, txType, err := toTxContents(rawTx)
-		// require.NoError(t, err)
-		// require.NotNil(t, contents.GetMultiSigSpawn())
-		// require.Nil(t, contents.GetSend())
-		// require.Nil(t, contents.GetSingleSigSpawn())
-		// require.Nil(t, contents.GetVestingSpawn())
-		// require.Nil(t, contents.GetVaultSpawn())
-		// require.Nil(t, contents.GetDrainVault())
-		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SPAWN, txType)
+		tx, err := sdkmultisig.Spawn(multisig.TemplateAddress, 2, pubs, 0)
+		require.NoError(t, err)
+		agg := sdkmultisig.NewSignatureAggregator(tx)
+		for i := range 2 {
+			sig := core.SignRawTx(tx, types.Hash20{}, pks[i])
+			agg.Add(uint8(i), core.Signature(sig))
+		}
+		rawTx := agg.Raw()
+		contents, txType, err := toTxContents(rawTx, &types.TxHeader{TemplateAddress: multisig.TemplateAddress})
+		require.NoError(t, err)
+		require.NotNil(t, contents.GetMultiSigSpawn())
+		require.Equal(t, &spacemeshv2alpha1.ContentsMultiSigSpawn{
+			Required: 2,
+			Pubkey:   pubStrs,
+		}, contents.GetMultiSigSpawn())
+		require.Nil(t, contents.GetSend())
+		require.Nil(t, contents.GetSingleSigSpawn())
+		require.Nil(t, contents.GetVestingSpawn())
+		require.Nil(t, contents.GetVaultSpawn())
+		require.Nil(t, contents.GetDrainVault())
+		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SPAWN, txType)
 	})
 
 	t.Run("multisig send", func(t *testing.T) {
-		t.Skip("multisig send is not supported yet")
-		// t.Parallel()
+		t.Parallel()
 
-		// var pubs []ed25519.PublicKey
-		// pks := make([]ed25519.PrivateKey, 0, 3)
-		// for i := 0; i < 3; i++ {
-		// 	pub, pk, err := ed25519.GenerateKey(nil)
-		// 	require.NoError(t, err)
-		// 	pubs = append(pubs, pub)
-		// 	pks = append(pks, pk)
-		// }
+		var (
+			pks  []ed25519.PrivateKey
+			to   = types.RandomAddress(t)
+			from = types.RandomAddress(t)
+		)
+		for i := 0; i < 3; i++ {
+			_, pk, err := ed25519.GenerateKey(nil)
+			require.NoError(t, err)
+			pks = append(pks, pk)
+		}
 
-		// to, err := wallet.Address(*signing.NewPublicKey(pubs[0]))
-		// require.NoError(t, err)
+		tx, err := sdkmultisig.Spend(from, to, 100, 1)
+		require.NoError(t, err)
+		agg := sdkmultisig.NewSignatureAggregator(tx)
+		for i := range 2 {
+			sig := core.SignRawTx(tx, types.Hash20{}, pks[i])
+			agg.Add(uint8(i), core.Signature(sig))
+		}
+		rawTx := agg.Raw()
 
-		// var agg *multisig2.Aggregator
-		// for i := 0; i < len(pks); i++ {
-		// 	part := multisig2.Spend(uint8(i), pks[i], multisig.TemplateAddress, to, 100, types.Nonce(1))
-		// 	if agg == nil {
-		// 		agg = part
-		// 	} else {
-		// 		agg.Add(*part.Part(uint8(i)))
-		// 	}
-		// }
-		// rawTx := agg.Raw()
-
-		// contents, txType, err := toTxContents(rawTx)
-		// require.NoError(t, err)
-		// require.NotNil(t, contents.GetSend())
-		// require.Nil(t, contents.GetMultiSigSpawn())
-		// require.Nil(t, contents.GetSingleSigSpawn())
-		// require.Nil(t, contents.GetVestingSpawn())
-		// require.Nil(t, contents.GetVaultSpawn())
-		// require.Nil(t, contents.GetDrainVault())
-		// require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SEND, txType)
+		contents, txType, err := toTxContents(rawTx, &types.TxHeader{TemplateAddress: multisig.TemplateAddress})
+		require.NoError(t, err)
+		require.NotNil(t, contents.GetSend())
+		require.Equal(t, &spacemeshv2alpha1.ContentsSend{
+			Destination: to.String(),
+			Amount:      100,
+		}, contents.GetSend())
+		require.Nil(t, contents.GetMultiSigSpawn())
+		require.Nil(t, contents.GetSingleSigSpawn())
+		require.Nil(t, contents.GetVestingSpawn())
+		require.Nil(t, contents.GetVaultSpawn())
+		require.Nil(t, contents.GetDrainVault())
+		require.Equal(t, spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SEND, txType)
 	})
 
 	t.Run("vault spawn", func(t *testing.T) {

@@ -271,10 +271,8 @@ func (t *tester) addWalletTemplate() *tester {
 	return t.addTemplate(wallet.TemplateAddress, wallet.PROGRAM)
 }
 
-var multiSigWalletTemplateAddress = types.Address{2}
-
 func (t *tester) addMultiSigWalletTemplate() *tester {
-	return t.addTemplate(multiSigWalletTemplateAddress, multisig.PROGRAM)
+	return t.addTemplate(multisig.TemplateAddress, multisig.PROGRAM)
 }
 
 func (t *tester) addSingleSig(n int) *tester {
@@ -1411,37 +1409,36 @@ func TestWallets(t *testing.T) {
 		})
 	})
 	t.Run("MultiSig13", func(t *testing.T) {
-		testWallet(t, defaultGasPrice, multiSigWalletTemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultiSigWalletTemplate().
-				addMultisig(multiSigWalletTemplateAddress, funded, 1, 3).
+				addMultisig(multisig.TemplateAddress, funded, 1, 3).
 				applyGenesisWithBalance().
-				addMultisig(multiSigWalletTemplateAddress, total-funded, 1, 3)
+				addMultisig(multisig.TemplateAddress, total-funded, 1, 3)
 		})
 	})
 	t.Run("MultiSig23", func(t *testing.T) {
-		testWallet(t, defaultGasPrice, multiSigWalletTemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultiSigWalletTemplate().
-				addMultisig(multiSigWalletTemplateAddress, funded, 2, 3).
+				addMultisig(multisig.TemplateAddress, funded, 2, 3).
 				applyGenesisWithBalance().
-				addMultisig(multiSigWalletTemplateAddress, total-funded, 2, 3)
+				addMultisig(multisig.TemplateAddress, total-funded, 2, 3)
 		})
 	})
 	t.Run("MultiSig57", func(t *testing.T) {
-		testWallet(t, defaultGasPrice, multiSigWalletTemplateAddress, func(t *testing.T) *tester {
+		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultiSigWalletTemplate().
-				addMultisig(multiSigWalletTemplateAddress, funded, 5, 7).
+				addMultisig(multisig.TemplateAddress, funded, 5, 7).
 				applyGenesisWithBalance().
-				addMultisig(multiSigWalletTemplateAddress, total-funded, 5, 7)
+				addMultisig(multisig.TemplateAddress, total-funded, 5, 7)
 		})
 	})
 }
 
 func TestSingleSigWalletDeploy(t *testing.T) {
-	code := multisig.PROGRAM
-	templateAddress := core.TemplateAddress(code)
+	templateAddress := multisig.TemplateAddress
 	tt := newTester(
 		t,
 	).addWalletTemplate().
@@ -1462,6 +1459,7 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Deploy a new contract using it
+	code := multisig.PROGRAM
 	rawDeployTx := types.NewRawTx(account.deploy(tt, 1, code))
 	skipped, results, err := tt.Apply(types.GetEffectiveGenesis()+1, []types.Transaction{{RawTx: rawDeployTx}}, nil)
 	require.NoError(t, err)

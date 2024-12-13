@@ -1,4 +1,4 @@
-package wallet
+package multisig
 
 import (
 	"errors"
@@ -8,20 +8,23 @@ import (
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/templates"
 )
 
-type DeployArgs struct {
-	Code []byte
+// SpawnArguments contains a collection with PublicKeys.
+type SpawnArguments struct {
+	Required   uint8
+	PublicKeys []core.PublicKey
 }
 
-type SpawnArgs struct {
-	Pubkey [32]byte
-}
-
-type SpendArgs struct {
+type SpendArguments struct {
 	To     types.Address
 	Amount uint64
+}
+
+type DeployArguments struct {
+	Code []byte
 }
 
 func ParseArgs(payload athcon.Payload) (any, error) {
@@ -32,11 +35,11 @@ func ParseArgs(payload athcon.Payload) (any, error) {
 
 	switch *payload.Selector {
 	case templates.DeploySelector:
-		txArgs = new(DeployArgs)
+		txArgs = new(DeployArguments)
 	case templates.SpawnSelector:
-		txArgs = new(SpawnArgs)
+		txArgs = new(SpawnArguments)
 	case templates.SpendSelector:
-		txArgs = new(SpendArgs)
+		txArgs = new(SpendArguments)
 	default:
 		return nil, fmt.Errorf("unknown method selector %q", payload.Selector.String())
 	}

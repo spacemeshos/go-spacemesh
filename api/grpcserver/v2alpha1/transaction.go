@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -174,7 +175,7 @@ func (s *TransactionService) ParseTransaction(
 		t.MaxGas = header.MaxGas
 		t.GasPrice = header.GasPrice
 		t.MaxSpend = header.MaxSpend
-		contents, txType, err := toTxContents(raw.Raw)
+		contents, txType, err := toTxContents(raw.Raw, header)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -327,7 +328,7 @@ func (s *TransactionService) toTx(
 		t.GasPrice = tx.GasPrice
 		t.MaxSpend = tx.MaxSpend
 
-		contents, txType, err := toTxContents(tx.Raw)
+		contents, txType, err := toTxContents(tx.Raw, tx.TxHeader)
 		if err != nil {
 			return nil
 		}
@@ -403,61 +404,88 @@ func (s *TransactionService) convertTxState(
 	}
 }
 
-func decodeTxArgs(decoder *scale.Decoder) (any, *core.Address, error) {
+func toTxContents(rawTx []byte, header *types.TxHeader) (
+	*spacemeshv2alpha1.TransactionContents, spacemeshv2alpha1.Transaction_TransactionType, error,
+) {
+	res := &spacemeshv2alpha1.TransactionContents{}
+	txType := spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_UNSPECIFIED
+
 	var tx core.Tx
-	_, err := tx.DecodeScale(decoder)
+	_, err := tx.DecodeScale(scale.NewDecoder(bytes.NewReader(rawTx)))
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: decoding TX: %w", core.ErrMalformed, err)
+		return nil, txType, fmt.Errorf("%w: decoding TX: %w", core.ErrMalformed, err)
 	}
 
 	var payload athcon.Payload
 	err = gossamerScale.Unmarshal(tx.Payload, &payload)
 	if err != nil {
-		return nil, nil, fmt.Errorf("%w: tx payload: %w", core.ErrMalformed, err)
+		return nil, txType, fmt.Errorf("%w: tx payload: %w", core.ErrMalformed, err)
 	}
 
-	txArgs, err := wallet.ParseArgs(payload)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
-	}
-	return txArgs, &wallet.TemplateAddress, nil
-}
-
-func toTxContents(rawTx []byte) (*spacemeshv2alpha1.TransactionContents,
-	spacemeshv2alpha1.Transaction_TransactionType, error,
-) {
-	res := &spacemeshv2alpha1.TransactionContents{}
-	txType := spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_UNSPECIFIED
-
-	r := bytes.NewReader(rawTx)
-	txArgs, _, err := decodeTxArgs(scale.NewDecoder(r))
-	if err != nil {
-		return res, txType, err
-	}
-
-	switch args := txArgs.(type) {
-	case *wallet.SpawnArgs:
-		res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
-			SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
-				Pubkey: signing.NewPublicKey(args.Pubkey[:]).String(),
-			},
+	switch header.TemplateAddress {
+	case wallet.TemplateAddress:
+		txArgs, err := wallet.ParseArgs(payload)
+		if err != nil {
+			return nil, txType, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
 		}
-		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SPAWN
-	case *wallet.SpendArgs:
-		res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
-			Send: &spacemeshv2alpha1.ContentsSend{
-				Destination: args.To.String(),
-				Amount:      args.Amount,
-			},
+		switch args := txArgs.(type) {
+		case *wallet.SpawnArgs:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
+				SingleSigSpawn: &spacemeshv2alpha1.ContentsSingleSigSpawn{
+					Pubkey: signing.NewPublicKey(args.Pubkey[:]).String(),
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SPAWN
+		case *wallet.SpendArgs:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
+				Send: &spacemeshv2alpha1.ContentsSend{
+					Destination: args.To.String(),
+					Amount:      args.Amount,
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SEND
+		case *wallet.DeployArgs:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_Deploy{
+				Deploy: &spacemeshv2alpha1.ContentsDeploy{
+					Template: core.TemplateAddress(args.Code).String(),
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DEPLOY
 		}
-		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_SINGLE_SIG_SEND
-	case *wallet.DeployArgs:
-		res.Contents = &spacemeshv2alpha1.TransactionContents_Deploy{
-			Deploy: &spacemeshv2alpha1.ContentsDeploy{
-				Template: core.TemplateAddress(args.Code).String(),
-			},
+	case multisig.TemplateAddress:
+		txArgs, err := multisig.ParseArgs(payload)
+		if err != nil {
+			return nil, txType, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
 		}
-		txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DEPLOY
+		switch args := txArgs.(type) {
+		case *multisig.SpawnArguments:
+			pubs := make([]string, 0, len(args.PublicKeys))
+			for _, pub := range args.PublicKeys {
+				pubs = append(pubs, pub.String())
+			}
+			res.Contents = &spacemeshv2alpha1.TransactionContents_MultiSigSpawn{
+				MultiSigSpawn: &spacemeshv2alpha1.ContentsMultiSigSpawn{
+					Required: uint32(args.Required),
+					Pubkey:   pubs,
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SPAWN
+		case *multisig.SpendArguments:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
+				Send: &spacemeshv2alpha1.ContentsSend{
+					Destination: args.To.String(),
+					Amount:      args.Amount,
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MULTI_SIG_SEND
+		case *multisig.DeployArguments:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_Deploy{
+				Deploy: &spacemeshv2alpha1.ContentsDeploy{
+					Template: core.TemplateAddress(args.Code).String(),
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DEPLOY
+		}
 	}
 
 	return res, txType, nil
