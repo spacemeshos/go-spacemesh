@@ -117,7 +117,7 @@ func (mh *MalfeasanceHandlerV2) Info(data []byte) (map[string]string, error) {
 func (mh *MalfeasanceHandlerV2) ReportLabels(data []byte) []string {
 	proof, err := mh.decodeProof(data)
 	if err != nil {
-		return nil
+		return []string{"ATX", "unknown"}
 	}
 	return []string{"ATX", proof.String()}
 }
