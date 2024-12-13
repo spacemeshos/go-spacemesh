@@ -767,34 +767,34 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{1},
 					},
 				},
-				// {
-				// 	txs: []testTx{
-				// 		&spendTx{1, 0, 1000},
-				// 		&spendTx{0, 10, 1000},
-				// 	},
-				// 	expected: map[int]change{
-				// 		0: spent{
-				// 			amount: ref.estimateSpendGas(0),
-				// 			change: nonce{increased: 1},
-				// 		},
-				// 		1:  spent{amount: 1000 + ref.estimateSpendGas(1)},
-				// 		10: earned{amount: 1000},
-				// 	},
-				// },
-				// {
-				// 	txs: []testTx{
-				// 		&spendTx{0, 10, 1000},
-				// 		&spendTx{1, 0, 1000},
-				// 	},
-				// 	expected: map[int]change{
-				// 		0: spent{
-				// 			amount: ref.estimateSpendGas(0),
-				// 			change: nonce{increased: 1},
-				// 		},
-				// 		1:  spent{amount: 1000 + ref.estimateSpendGas(1)},
-				// 		10: earned{amount: 1000},
-				// 	},
-				// },
+				{
+					txs: []testTx{
+						&spendTx{1, 0, 1000},
+						&spendTx{0, 10, 1000},
+					},
+					expected: map[int]change{
+						0: spent{
+							amount: ref.estimateSpendGas(0),
+							change: nonce{increased: 1},
+						},
+						1:  spent{amount: 1000 + ref.estimateSpendGas(1)},
+						10: earned{amount: 1000},
+					},
+				},
+				{
+					txs: []testTx{
+						&spendTx{0, 10, 1000},
+						&spendTx{1, 0, 1000},
+					},
+					expected: map[int]change{
+						0: spent{
+							amount: ref.estimateSpendGas(0),
+							change: nonce{increased: 1},
+						},
+						1:  spent{amount: 1000 + ref.estimateSpendGas(1)},
+						10: earned{amount: 1000},
+					},
+				},
 			},
 		},
 		{
@@ -1481,18 +1481,18 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	require.NoError(t, err)
 	require.Less(t, pAccount1.Balance, pAccount0.Balance)
 
-	// // Try deploy again
-	// rawDeployTx = types.NewRawTx(account.deploy(tt, 2, code))
-	// skipped, results, err = tt.Apply(types.GetEffectiveGenesis()+2, []types.Transaction{{RawTx: rawDeployTx}}, nil)
-	// require.NoError(t, err)
-	// require.Empty(t, skipped)
-	// logger.Debug("applied TX", zap.Any("results", results[0].TransactionResult))
-	//
-	// // TODO: should it fail?
-	// // principal was charged
-	// pAccount2, err := accounts.Latest(tt.db, account.getAddress())
-	// require.NoError(t, err)
-	// require.Less(t, pAccount2.Balance, pAccount1.Balance)
+	// Try deploy again
+	rawDeployTx = types.NewRawTx(account.deploy(tt, 2, code))
+	skipped, results, err = tt.Apply(types.GetEffectiveGenesis()+2, []types.Transaction{{RawTx: rawDeployTx}}, nil)
+	require.NoError(t, err)
+	require.Empty(t, skipped)
+	logger.Debug("applied TX", zap.Any("results", results[0].TransactionResult))
+
+	// TODO: should it fail?
+	// principal was charged
+	pAccount2, err := accounts.Latest(tt.db, account.getAddress())
+	require.NoError(t, err)
+	require.Less(t, pAccount2.Balance, pAccount1.Balance)
 
 	// 3. Spawn the new template using the 2nd prefunded account
 	_, _, err = tt.Apply(
