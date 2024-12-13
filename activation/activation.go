@@ -89,7 +89,7 @@ type Builder struct {
 	nipostBuilder     nipostBuilder
 	validator         nipostValidator
 	layerClock        layerClock
-	syncer            syncer
+	syncer            Syncer
 	logger            *zap.Logger
 	parentCtx         context.Context
 	poets             []PoetService
@@ -112,9 +112,6 @@ type Builder struct {
 	signers       map[types.NodeID]*signing.EdSigner
 	eg            errgroup.Group
 	stop          context.CancelFunc
-
-	// for node client
-	AlwaysSynced bool
 }
 
 type foundPosAtx struct {
@@ -186,7 +183,7 @@ func NewBuilder(
 	nipostValidator nipostValidator,
 	nipostBuilder nipostBuilder,
 	layerClock layerClock,
-	syncer syncer,
+	syncer Syncer,
 	log *zap.Logger,
 	opts ...BuilderOption,
 ) *Builder {
@@ -519,20 +516,17 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID) (*types.NIPostChallenge, error) {
 	logger := b.logger.With(log.ZShortStringer("smesherID", nodeID))
 
-	// assuming node-service is always synced
-	if !b.AlwaysSynced {
-		atxSyncedCh := b.syncer.RegisterForATXSynced()
-		select {
-		case <-atxSyncedCh:
-		default:
-			b.identitiesStates.Set(nodeID, nil, &identity.WaitForATXSynced{})
-		}
+	atxSyncedCh := b.syncer.RegisterForATXSynced()
+	select {
+	case <-atxSyncedCh:
+	default:
+		b.identitiesStates.Set(nodeID, nil, &identity.WaitForATXSynced{})
+	}
 
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-atxSyncedCh:
-		}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-atxSyncedCh:
 	}
 
 	currentEpochId := b.layerClock.CurrentLayer().GetEpoch()

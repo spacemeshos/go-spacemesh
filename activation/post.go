@@ -184,7 +184,7 @@ func (o PostSetupOpts) ToInitOpts() config.InitOpts {
 // PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
 	commitmentAtxId types.ATXID
-	syncer          syncer
+	syncer          Syncer
 
 	cfg         PostConfig
 	logger      *zap.Logger
@@ -219,7 +219,7 @@ func NewPostSetupManager(
 	db sql.Executor,
 	atxsdata *atxsdata.Data,
 	goldenATXID types.ATXID,
-	syncer syncer,
+	syncer Syncer,
 	validator nipostValidator,
 	opts ...PostSetupManagerOpt,
 ) (*PostSetupManager, error) {

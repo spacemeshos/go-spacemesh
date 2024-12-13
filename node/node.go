@@ -594,6 +594,14 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
+type alwaysSyncedSyncer struct{}
+
+func (s alwaysSyncedSyncer) RegisterForATXSynced() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
 func (app *App) initServices(ctx context.Context) error {
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
@@ -1193,10 +1201,12 @@ func (app *App) initServices(ctx context.Context) error {
 		atxBuilderLog = app.addLogger(ATXBuilderLogger, lg).Zap()
 		atxService    activation.AtxService
 		atxPublisher  pubsub.Publisher
+		syncer        activation.Syncer
 	)
 	if nodeServiceClient != nil {
 		atxService = nodeServiceClient
 		atxPublisher = nodeServiceClient
+		syncer = alwaysSyncedSyncer{}
 	} else {
 		trustedIDs := make([]types.NodeID, 0, len(app.signers))
 		for _, sig := range app.signers {
@@ -1212,6 +1222,7 @@ func (app *App) initServices(ctx context.Context) error {
 			activation.WithTrustedIDs(trustedIDs...),
 		)
 		atxPublisher = app.host
+		syncer = newSyncer
 	}
 
 	atxBuilder := activation.NewBuilder(
@@ -1219,11 +1230,10 @@ func (app *App) initServices(ctx context.Context) error {
 		app.localDB,
 		atxService,
 		atxPublisher,
-
 		app.validator,
 		nipostBuilder,
 		app.clock,
-		newSyncer,
+		syncer,
 		atxBuilderLog,
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
@@ -1234,9 +1244,7 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithPoets(poetClients...),
 		activation.BuilderAtxVersions(app.Config.AtxVersions),
 	)
-	if nodeServiceClient != nil {
-		atxBuilder.AlwaysSynced = true
-	}
+
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
 		// Any setup with more than one signer is considered a remote setup. If there is only one signer it
