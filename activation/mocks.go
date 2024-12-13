@@ -1031,32 +1031,32 @@ func (c *MocknipostBuilderResetStateCall) DoAndReturn(f func(types.NodeID) error
 	return c
 }
 
-// Mocksyncer is a mock of syncer interface.
-type Mocksyncer struct {
+// MockSyncer is a mock of Syncer interface.
+type MockSyncer struct {
 	ctrl     *gomock.Controller
-	recorder *MocksyncerMockRecorder
+	recorder *MockSyncerMockRecorder
 	isgomock struct{}
 }
 
-// MocksyncerMockRecorder is the mock recorder for Mocksyncer.
-type MocksyncerMockRecorder struct {
-	mock *Mocksyncer
+// MockSyncerMockRecorder is the mock recorder for MockSyncer.
+type MockSyncerMockRecorder struct {
+	mock *MockSyncer
 }
 
-// NewMocksyncer creates a new mock instance.
-func NewMocksyncer(ctrl *gomock.Controller) *Mocksyncer {
-	mock := &Mocksyncer{ctrl: ctrl}
-	mock.recorder = &MocksyncerMockRecorder{mock}
+// NewMockSyncer creates a new mock instance.
+func NewMockSyncer(ctrl *gomock.Controller) *MockSyncer {
+	mock := &MockSyncer{ctrl: ctrl}
+	mock.recorder = &MockSyncerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mocksyncer) EXPECT() *MocksyncerMockRecorder {
+func (m *MockSyncer) EXPECT() *MockSyncerMockRecorder {
 	return m.recorder
 }
 
 // RegisterForATXSynced mocks base method.
-func (m *Mocksyncer) RegisterForATXSynced() <-chan struct{} {
+func (m *MockSyncer) RegisterForATXSynced() <-chan struct{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterForATXSynced")
 	ret0, _ := ret[0].(<-chan struct{})
@@ -1064,31 +1064,31 @@ func (m *Mocksyncer) RegisterForATXSynced() <-chan struct{} {
 }
 
 // RegisterForATXSynced indicates an expected call of RegisterForATXSynced.
-func (mr *MocksyncerMockRecorder) RegisterForATXSynced() *MocksyncerRegisterForATXSyncedCall {
+func (mr *MockSyncerMockRecorder) RegisterForATXSynced() *MockSyncerRegisterForATXSyncedCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForATXSynced", reflect.TypeOf((*Mocksyncer)(nil).RegisterForATXSynced))
-	return &MocksyncerRegisterForATXSyncedCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForATXSynced", reflect.TypeOf((*MockSyncer)(nil).RegisterForATXSynced))
+	return &MockSyncerRegisterForATXSyncedCall{Call: call}
 }
 
-// MocksyncerRegisterForATXSyncedCall wrap *gomock.Call
-type MocksyncerRegisterForATXSyncedCall struct {
+// MockSyncerRegisterForATXSyncedCall wrap *gomock.Call
+type MockSyncerRegisterForATXSyncedCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MocksyncerRegisterForATXSyncedCall) Return(arg0 <-chan struct{}) *MocksyncerRegisterForATXSyncedCall {
+func (c *MockSyncerRegisterForATXSyncedCall) Return(arg0 <-chan struct{}) *MockSyncerRegisterForATXSyncedCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocksyncerRegisterForATXSyncedCall) Do(f func() <-chan struct{}) *MocksyncerRegisterForATXSyncedCall {
+func (c *MockSyncerRegisterForATXSyncedCall) Do(f func() <-chan struct{}) *MockSyncerRegisterForATXSyncedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocksyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{}) *MocksyncerRegisterForATXSyncedCall {
+func (c *MockSyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{}) *MockSyncerRegisterForATXSyncedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

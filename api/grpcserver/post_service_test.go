@@ -52,7 +52,7 @@ func launchPostSupervisor(
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
 
-	syncer := activation.NewMocksyncer(ctrl)
+	syncer := activation.NewMockSyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
@@ -96,7 +96,7 @@ func launchPostSupervisorTLS(
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
-	syncer := activation.NewMocksyncer(ctrl)
+	syncer := activation.NewMockSyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)

@@ -50,7 +50,7 @@ func newPostManager(tb testing.TB, cfg PostConfig, opts PostSetupOpts) *PostSetu
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
 
-	syncer := NewMocksyncer(ctrl)
+	syncer := NewMockSyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)

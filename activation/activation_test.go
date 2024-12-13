@@ -63,7 +63,7 @@ type testAtxBuilder struct {
 	mnipost      *MocknipostBuilder
 	mpostClient  *MockPostClient
 	mclock       *MocklayerClock
-	msync        *Mocksyncer
+	msync        *MockSyncer
 	mValidator   *MocknipostValidator
 }
 
@@ -87,7 +87,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 		mnipost:      NewMocknipostBuilder(ctrl),
 		mpostClient:  NewMockPostClient(ctrl),
 		mclock:       NewMocklayerClock(ctrl),
-		msync:        NewMocksyncer(ctrl),
+		msync:        NewMockSyncer(ctrl),
 		mValidator:   NewMocknipostValidator(ctrl),
 	}
 

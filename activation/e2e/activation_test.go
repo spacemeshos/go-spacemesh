@@ -33,8 +33,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func syncedSyncer(tb testing.TB) *activation.Mocksyncer {
-	syncer := activation.NewMocksyncer(gomock.NewController(tb))
+func syncedSyncer(tb testing.TB) *activation.MockSyncer {
+	syncer := activation.NewMockSyncer(gomock.NewController(tb))
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		synced := make(chan struct{})
 		close(synced)
