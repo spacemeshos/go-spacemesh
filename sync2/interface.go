@@ -3,10 +3,7 @@ package sync2
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p/core/host"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -14,10 +11,8 @@ import (
 //go:generate mockgen -typed -package=sync2_test -destination=./mocks_test.go -source=./interface.go
 
 type Fetcher interface {
-	system.AtxFetcher
-	Host() host.Host
-	Peers() *peers.Peers
-	RegisterPeerHash(peer p2p.Peer, hash types.Hash32)
+	GetAtxs(context.Context, []types.ATXID, ...system.GetAtxOpt) error
+	RegisterPeerHashes(peer p2p.Peer, hash []types.Hash32)
 }
 
 type HashSync interface {

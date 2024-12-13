@@ -55,8 +55,8 @@ func TestAtxHandler_Success(t *testing.T) {
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
-		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
+		f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
 	}
 	toFetch := make(map[types.ATXID]bool)
 	for _, id := range allAtxs {
@@ -102,8 +102,8 @@ func TestAtxHandler_Retry(t *testing.T) {
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
-		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
+		f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
 	}
 	failCount := 0
 	var fetched []types.ATXID
@@ -184,8 +184,8 @@ func TestAtxHandler_Cancel(t *testing.T) {
 	clock := clockwork.NewFakeClock()
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
-	baseSet.EXPECT().Has(rangesync.KeyBytes(atxID[:])).Return(false, nil)
-	f.EXPECT().RegisterPeerHash(peer, atxID.Hash32())
+	baseSet.EXPECT().Has(rangesync.KeyBytes(atxID.Bytes())).Return(false, nil)
+	f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{atxID.Hash32()})
 	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
 			return context.Canceled
@@ -218,8 +218,8 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
-		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
+		f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
 	}
 	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
@@ -273,8 +273,8 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id[:]))
-		f.EXPECT().RegisterPeerHash(peer, id.Hash32())
+		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
+		f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
 	}
 	sr := rangesync.SeqResult{
 		Seq: func(yield func(k rangesync.KeyBytes) bool) {

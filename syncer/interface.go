@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -43,13 +42,12 @@ type malSyncer interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
 	GetLayerData(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
-	sync2.Fetcher
-	system.MalfeasanceProofFetcher
+	GetAtxs(context.Context, []types.ATXID, ...system.GetAtxOpt) error
+	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)

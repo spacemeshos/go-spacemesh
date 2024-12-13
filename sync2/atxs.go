@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/jonboulle/clockwork"
+	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -84,7 +86,7 @@ func (h *ATXHandler) setupState(
 			continue
 		}
 		id := types.BytesToATXID(k)
-		h.f.RegisterPeerHash(peer, id.Hash32())
+		h.f.RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
 		state[id] = 0
 	}
 	if err := received.Error(); err != nil {
@@ -297,18 +299,18 @@ func NewATXSyncer(
 	cfg Config,
 	db sql.Database,
 	f Fetcher,
+	peers *peers.Peers,
 	epoch types.EpochID,
 	enableActiveSync bool,
 ) *P2PHashSync {
 	curSet := dbset.NewDBSet(db, atxsTable(epoch), 32, cfg.MaxDepth)
-	handler := NewATXHandler(logger, f, cfg.BatchSize, cfg.MaxAttempts,
-		cfg.MaxBatchRetries, cfg.FailedBatchDelay, nil)
-	return NewP2PHashSync(logger, d, name, curSet, 32, f.Peers(), handler, cfg, enableActiveSync)
+	handler := NewATXHandler(logger, f, cfg.BatchSize, cfg.MaxAttempts, cfg.MaxBatchRetries, cfg.FailedBatchDelay, nil)
+	return NewP2PHashSync(logger, d, name, curSet, 32, peers, handler, cfg, enableActiveSync)
 }
 
-func NewDispatcher(logger *zap.Logger, f Fetcher, opts []server.Opt) *rangesync.Dispatcher {
+func NewDispatcher(logger *zap.Logger, host host.Host, opts []server.Opt) *rangesync.Dispatcher {
 	d := rangesync.NewDispatcher(logger)
-	d.SetupServer(f.Host(), proto, opts...)
+	d.SetupServer(host, proto, opts...)
 	return d
 }
 
@@ -317,6 +319,7 @@ type ATXSyncSource struct {
 	d                *rangesync.Dispatcher
 	db               sql.Database
 	f                Fetcher
+	peers            *peers.Peers
 	enableActiveSync bool
 }
 
@@ -327,12 +330,13 @@ func NewATXSyncSource(
 	d *rangesync.Dispatcher,
 	db sql.Database,
 	f Fetcher,
+	peers *peers.Peers,
 	enableActiveSync bool,
 ) *ATXSyncSource {
-	return &ATXSyncSource{logger: logger, d: d, db: db, f: f, enableActiveSync: enableActiveSync}
+	return &ATXSyncSource{logger: logger, d: d, db: db, f: f, peers: peers, enableActiveSync: enableActiveSync}
 }
 
 // CreateHashSync implements HashSyncSource.
 func (as *ATXSyncSource) CreateHashSync(name string, cfg Config, epoch types.EpochID) HashSync {
-	return NewATXSyncer(as.logger.Named(name), as.d, name, cfg, as.db, as.f, epoch, as.enableActiveSync)
+	return NewATXSyncer(as.logger.Named(name), as.d, name, cfg, as.db, as.f, as.peers, epoch, as.enableActiveSync)
 }

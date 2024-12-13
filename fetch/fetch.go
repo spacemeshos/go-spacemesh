@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	corehost "github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"go.uber.org/zap"
@@ -271,6 +270,7 @@ func NewFetch(
 	cdb *datastore.CachedDB,
 	proposals *store.Store,
 	host *p2p.Host,
+	peersCache *peers.Peers,
 	opts ...Option,
 ) (*Fetch, error) {
 	bs := datastore.NewBlobStore(cdb, proposals)
@@ -294,7 +294,7 @@ func NewFetch(
 		opt(f)
 	}
 	f.getAtxsLimiter = semaphore.NewWeighted(f.cfg.GetAtxsConcurrency)
-	f.peers = peers.New()
+	f.peers = peersCache
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
 	if host != nil {
@@ -1009,14 +1009,6 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
 }
 
-// RegisterPeerHashes registers provided peer for a hash.
-func (f *Fetch) RegisterPeerHash(peer p2p.Peer, hash types.Hash32) {
-	if peer == f.host.ID() {
-		return
-	}
-	f.hashToPeers.Add(hash, peer)
-}
-
 func (f *Fetch) SelectBestShuffled(n int) []p2p.Peer {
 	// shuffle to split the load between peers with good latency.
 	// and it avoids sticky behavior, when temporarily faulty peer had good latency in the past.
@@ -1025,12 +1017,4 @@ func (f *Fetch) SelectBestShuffled(n int) []p2p.Peer {
 		peers[i], peers[j] = peers[j], peers[i]
 	})
 	return peers
-}
-
-func (f *Fetch) Host() corehost.Host {
-	return f.host.(corehost.Host)
-}
-
-func (f *Fetch) Peers() *peers.Peers {
-	return f.peers
 }

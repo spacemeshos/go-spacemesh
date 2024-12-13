@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -212,6 +214,8 @@ func NewSyncer(
 	mesh *mesh.Mesh,
 	tortoise system.Tortoise,
 	fetcher fetcher,
+	peersCache *peers.Peers,
+	host host.Host,
 	patrol layerPatrol,
 	ch certHandler,
 	atxSyncer atxSyncer,
@@ -247,15 +251,24 @@ func NewSyncer(
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
 	if s.cfg.ReconcSync.Enable && s.asv2 == nil {
-		serverOpts := append(
-			s.cfg.ReconcSync.ServerConfig.ToOpts(),
-			server.WithHardTimeout(s.cfg.ReconcSync.HardTimeout))
-		s.dispatcher = sync2.NewDispatcher(s.logger, fetcher.(sync2.Fetcher), serverOpts)
-		hss := sync2.NewATXSyncSource(s.logger, s.dispatcher, cdb.Database, fetcher,
-			s.cfg.ReconcSync.EnableActiveSync)
+		serverOpts := s.cfg.ReconcSync.ServerConfig.ToOpts()
+		serverOpts = append(serverOpts, server.WithHardTimeout(s.cfg.ReconcSync.HardTimeout))
+		s.dispatcher = sync2.NewDispatcher(s.logger, host, serverOpts)
+		hss := sync2.NewATXSyncSource(
+			s.logger,
+			s.dispatcher,
+			cdb.Database,
+			fetcher,
+			peersCache,
+			s.cfg.ReconcSync.EnableActiveSync,
+		)
 		s.asv2 = sync2.NewMultiEpochATXSyncer(
-			s.logger, hss, s.cfg.ReconcSync.OldAtxSyncCfg, s.cfg.ReconcSync.NewAtxSyncCfg,
-			s.cfg.ReconcSync.ParallelLoadLimit)
+			s.logger,
+			hss,
+			s.cfg.ReconcSync.OldAtxSyncCfg,
+			s.cfg.ReconcSync.NewAtxSyncCfg,
+			s.cfg.ReconcSync.ParallelLoadLimit,
+		)
 	}
 	return s
 }

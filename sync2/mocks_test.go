@@ -13,9 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	host "github.com/libp2p/go-libp2p/core/host"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	peers "github.com/spacemeshos/go-spacemesh/fetch/peers"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	sync2 "github.com/spacemeshos/go-spacemesh/sync2"
 	system "github.com/spacemeshos/go-spacemesh/system"
@@ -89,114 +87,38 @@ func (c *MockFetcherGetAtxsCall) DoAndReturn(f func(context.Context, []types.ATX
 	return c
 }
 
-// Host mocks base method.
-func (m *MockFetcher) Host() host.Host {
+// RegisterPeerHashes mocks base method.
+func (m *MockFetcher) RegisterPeerHashes(peer p2p.Peer, hash []types.Hash32) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Host")
-	ret0, _ := ret[0].(host.Host)
-	return ret0
+	m.ctrl.Call(m, "RegisterPeerHashes", peer, hash)
 }
 
-// Host indicates an expected call of Host.
-func (mr *MockFetcherMockRecorder) Host() *MockFetcherHostCall {
+// RegisterPeerHashes indicates an expected call of RegisterPeerHashes.
+func (mr *MockFetcherMockRecorder) RegisterPeerHashes(peer, hash any) *MockFetcherRegisterPeerHashesCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Host", reflect.TypeOf((*MockFetcher)(nil).Host))
-	return &MockFetcherHostCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHashes", reflect.TypeOf((*MockFetcher)(nil).RegisterPeerHashes), peer, hash)
+	return &MockFetcherRegisterPeerHashesCall{Call: call}
 }
 
-// MockFetcherHostCall wrap *gomock.Call
-type MockFetcherHostCall struct {
+// MockFetcherRegisterPeerHashesCall wrap *gomock.Call
+type MockFetcherRegisterPeerHashesCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockFetcherHostCall) Return(arg0 host.Host) *MockFetcherHostCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockFetcherHostCall) Do(f func() host.Host) *MockFetcherHostCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockFetcherHostCall) DoAndReturn(f func() host.Host) *MockFetcherHostCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Peers mocks base method.
-func (m *MockFetcher) Peers() *peers.Peers {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Peers")
-	ret0, _ := ret[0].(*peers.Peers)
-	return ret0
-}
-
-// Peers indicates an expected call of Peers.
-func (mr *MockFetcherMockRecorder) Peers() *MockFetcherPeersCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Peers", reflect.TypeOf((*MockFetcher)(nil).Peers))
-	return &MockFetcherPeersCall{Call: call}
-}
-
-// MockFetcherPeersCall wrap *gomock.Call
-type MockFetcherPeersCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockFetcherPeersCall) Return(arg0 *peers.Peers) *MockFetcherPeersCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockFetcherPeersCall) Do(f func() *peers.Peers) *MockFetcherPeersCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockFetcherPeersCall) DoAndReturn(f func() *peers.Peers) *MockFetcherPeersCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// RegisterPeerHash mocks base method.
-func (m *MockFetcher) RegisterPeerHash(peer p2p.Peer, hash types.Hash32) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RegisterPeerHash", peer, hash)
-}
-
-// RegisterPeerHash indicates an expected call of RegisterPeerHash.
-func (mr *MockFetcherMockRecorder) RegisterPeerHash(peer, hash any) *MockFetcherRegisterPeerHashCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterPeerHash", reflect.TypeOf((*MockFetcher)(nil).RegisterPeerHash), peer, hash)
-	return &MockFetcherRegisterPeerHashCall{Call: call}
-}
-
-// MockFetcherRegisterPeerHashCall wrap *gomock.Call
-type MockFetcherRegisterPeerHashCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockFetcherRegisterPeerHashCall) Return() *MockFetcherRegisterPeerHashCall {
+func (c *MockFetcherRegisterPeerHashesCall) Return() *MockFetcherRegisterPeerHashesCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockFetcherRegisterPeerHashCall) Do(f func(p2p.Peer, types.Hash32)) *MockFetcherRegisterPeerHashCall {
+func (c *MockFetcherRegisterPeerHashesCall) Do(f func(p2p.Peer, []types.Hash32)) *MockFetcherRegisterPeerHashesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockFetcherRegisterPeerHashCall) DoAndReturn(f func(p2p.Peer, types.Hash32)) *MockFetcherRegisterPeerHashCall {
+func (c *MockFetcherRegisterPeerHashesCall) DoAndReturn(f func(p2p.Peer, []types.Hash32)) *MockFetcherRegisterPeerHashesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
