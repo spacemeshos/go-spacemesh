@@ -2,7 +2,6 @@ package multisig
 
 import (
 	"bytes"
-	"fmt"
 	"maps"
 	"slices"
 
@@ -27,48 +26,44 @@ type SpendArguments struct {
 	Amount uint64
 }
 
-// Signatures is a collections of parts that must satisfy multisig
-// threshold requirement.
-type Signatures []Part
-
-// Part contains a reference to public key and signature from private key counterpart.
-type Part struct {
+// part contains a reference to public key and signature from private key counterpart.
+type part struct {
 	Ref uint8
 	Sig core.Signature
 }
 
-func NewAggregator(unsigned []byte) *Aggregator {
-	return &Aggregator{unsigned: unsigned, parts: map[uint8]Part{}}
+func NewSignatureAggregator(unsigned []byte) *SignatureAggregator {
+	return &SignatureAggregator{unsigned: unsigned, parts: map[uint8]part{}}
 }
 
-// Aggregator is a signature accumulator.
-type Aggregator struct {
+// SignatureAggregator is a signature accumulator.
+type SignatureAggregator struct {
 	unsigned []byte
-	parts    map[uint8]Part
+	parts    map[uint8]part
 }
 
-// Add signature parts to the accumulator.
-func (tx *Aggregator) Add(ref uint8, sig core.Signature) {
-	if _, exists := tx.parts[ref]; exists {
+// Add signature and reference to the public key counterpart.
+func (a *SignatureAggregator) Add(ref uint8, sig core.Signature) {
+	if _, exists := a.parts[ref]; exists {
 		panic("signature already exists")
 	}
-	tx.parts[ref] = Part{
+	a.parts[ref] = part{
 		Ref: ref,
 		Sig: sig,
 	}
 }
 
 // Raw returns full raw transaction including payload and signatures.
-func (tx *Aggregator) Raw() []byte {
+func (a *SignatureAggregator) Raw() []byte {
 	var buf bytes.Buffer
 	enc := scale.NewEncoder(&buf)
-	keys := slices.Sorted(maps.Keys(tx.parts))
+	keys := slices.Sorted(maps.Keys(a.parts))
 	for _, ref := range keys {
-		if err := enc.Encode(tx.parts[ref]); err != nil {
+		if err := enc.Encode(a.parts[ref]); err != nil {
 			panic(err)
 		}
 	}
-	rawTxBuf := bytes.NewBuffer(tx.unsigned)
+	rawTxBuf := bytes.NewBuffer(a.unsigned)
 	enc = scale.NewEncoder(rawTxBuf)
 	if err := enc.Encode(buf.Bytes()); err != nil {
 		panic(err)
@@ -81,7 +76,6 @@ func EncodeSpawnArgs(required uint8, pubkeys []core.PublicKey) []byte {
 		Required:   required,
 		PublicKeys: pubkeys,
 	}
-
 	return scale.MustMarshal(args)
 }
 
@@ -93,6 +87,8 @@ func EncodeSpendArgs(to types.Address, amount uint64) []byte {
 	return scale.MustMarshal(args)
 }
 
+// Spawn creates a raw SPAWN transaction, which needs to be signed by the required
+// number of signers.
 func Spawn(
 	template types.Address,
 	required uint8,
@@ -110,11 +106,9 @@ func Spawn(
 		Selector: &selector,
 		Input:    encodedArgs,
 	}
-	accountAddress := core.ComputePrincipalFromBlob(template, encodedArgs)
-	fmt.Printf("calculated principal: %s\n", accountAddress.String())
 	tx := core.Tx{
 		Version:   1,
-		Principal: accountAddress,
+		Principal: core.ComputePrincipalFromBlob(template, encodedArgs),
 		Template:  &template,
 		Metadata: core.Metadata{
 			Nonce:    nonce,

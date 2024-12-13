@@ -127,7 +127,7 @@ func (a *multisigAccount) spend(t *tester, to core.Address, amount uint64, nonce
 	tx, err := sdkmultisig.Spend(a.address, to, amount, nonce, opts...)
 	require.NoError(t, err)
 
-	agg := sdkmultisig.NewAggregator(tx)
+	agg := sdkmultisig.NewSignatureAggregator(tx)
 	for i := range a.required {
 		pk := a.pks[i]
 		sig := core.SignRawTx(tx, t.cfg.GenesisID, pk)
@@ -151,7 +151,7 @@ func (a *multisigAccount) selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt
 	}
 	tx, err := sdkmultisig.Spawn(a.template, a.required, pubs, nonce, opts...)
 	require.NoError(t, err)
-	agg := sdkmultisig.NewAggregator(tx)
+	agg := sdkmultisig.NewSignatureAggregator(tx)
 	for i := range a.required {
 		pk := a.pks[i]
 		sig := core.SignRawTx(tx, t.cfg.GenesisID, pk)
