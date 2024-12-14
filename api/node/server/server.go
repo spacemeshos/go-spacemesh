@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -187,11 +186,7 @@ func (s *Server) PostPublishProtocol(
 	if err != nil {
 		return nil, err
 	}
-	proposal := &types.Proposal{}
-	codec.MustDecode(blob, proposal)
 
-	events.EmitProposal(proposal.SmesherID, proposal.Layer, proposal.ID())
-	events.ReportProposal(events.ProposalCreated, proposal)
 	s.publisher.Publish(ctx, string(request.Protocol), blob)
 	return PostPublishProtocol200Response{}, nil
 }
