@@ -148,11 +148,12 @@ func (h *ATXHandler) Commit(
 	batchAttemptsRemaining := h.maxBatchRetries
 	for len(cs.state) > 0 {
 		someSucceeded, err := h.getAtxs(ctx, cs)
+		batchErr := &fetch.BatchError{}
 		switch {
 		case err == nil:
 		case errors.Is(err, context.Canceled):
 			return err
-		case !errors.Is(err, &fetch.BatchError{}):
+		case !errors.As(err, &batchErr):
 			h.logger.Debug("failed to download ATXs", zap.Error(err))
 		}
 		if !someSucceeded {

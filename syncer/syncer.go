@@ -648,7 +648,6 @@ func (s *Syncer) ensureATXsInSyncV2(ctx context.Context) error {
 
 func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
 	// TODO: use syncv2 for malfeasance proofs:
-	// https://github.com/spacemeshos/go-spacemesh/issues/3987
 	current := s.ticker.CurrentLayer()
 	if !s.ListenToATXGossip() {
 		s.logger.Info("syncing malicious proofs", log.ZContext(ctx))

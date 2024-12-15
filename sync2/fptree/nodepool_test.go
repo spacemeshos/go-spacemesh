@@ -42,7 +42,6 @@ func TestNodePool(t *testing.T) {
 	require.Equal(t, uint32(1), np.refCount(idx2))
 
 	require.Equal(t, nodeIndex(2), idx3)
-	require.Nil(t, nil, idx3)
 	require.Equal(t, idx1, np.left(idx3))
 	require.Equal(t, idx2, np.right(idx3))
 	require.False(t, np.leaf(idx3))
