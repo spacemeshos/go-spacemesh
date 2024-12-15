@@ -270,7 +270,7 @@ func NewFetch(
 	cdb *datastore.CachedDB,
 	proposals *store.Store,
 	host *p2p.Host,
-	peersCache *peers.Peers,
+	peerCache *peers.Peers,
 	opts ...Option,
 ) (*Fetch, error) {
 	bs := datastore.NewBlobStore(cdb, proposals)
@@ -294,7 +294,7 @@ func NewFetch(
 		opt(f)
 	}
 	f.getAtxsLimiter = semaphore.NewWeighted(f.cfg.GetAtxsConcurrency)
-	f.peers = peersCache
+	f.peers = peerCache
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
 	if host != nil {

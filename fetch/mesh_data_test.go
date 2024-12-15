@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
@@ -1023,6 +1024,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
 			f, err := NewFetch(cdb, store.New(), host,
+				peers.New(),
 				WithContext(context.Background()),
 				withServers(map[string]requester{hashProtocol: client}),
 				WithConfig(cfg),

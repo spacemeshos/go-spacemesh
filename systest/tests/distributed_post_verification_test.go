@@ -26,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
@@ -120,6 +121,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	)
 
 	fetcher, err := fetch.NewFetch(cdb, proposalsStore, host,
+		peers.New(),
 		fetch.WithContext(ctx),
 		fetch.WithConfig(cfg.FETCH),
 		fetch.WithLogger(logger.Named("fetcher")),

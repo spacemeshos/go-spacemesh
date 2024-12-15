@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -87,6 +88,7 @@ func createFetch(tb testing.TB) *testFetch {
 		cdb,
 		store.New(),
 		nil,
+		peers.New(),
 		WithContext(context.Background()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -133,6 +135,7 @@ func TestFetch_Start(t *testing.T) {
 		cdb,
 		store.New(),
 		nil,
+		peers.New(),
 		WithContext(context.Background()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
@@ -407,6 +410,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		cdb,
 		store.New(),
 		h,
+		peers.New(),
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),

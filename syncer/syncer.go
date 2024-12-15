@@ -214,7 +214,7 @@ func NewSyncer(
 	mesh *mesh.Mesh,
 	tortoise system.Tortoise,
 	fetcher fetcher,
-	peersCache *peers.Peers,
+	peerCache *peers.Peers,
 	host host.Host,
 	patrol layerPatrol,
 	ch certHandler,
@@ -259,7 +259,7 @@ func NewSyncer(
 			s.dispatcher,
 			cdb.Database,
 			fetcher,
-			peersCache,
+			peerCache,
 			s.cfg.ReconcSync.EnableActiveSync,
 		)
 		s.asv2 = sync2.NewMultiEpochATXSyncer(

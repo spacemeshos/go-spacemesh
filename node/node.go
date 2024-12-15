@@ -742,13 +742,13 @@ func (app *App) initServices(ctx context.Context) error {
 		store.WithCapacity(app.Config.Tortoise.Zdist+1),
 	)
 
-	peersCache := peers.New()
+	peerCache := peers.New()
 	flog := app.addLogger(Fetcher, lg).Zap()
 	fetcher, err := fetch.NewFetch(
 		app.cachedDB,
 		proposalsStore,
 		app.host,
-		peersCache,
+		peerCache,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),
@@ -813,7 +813,7 @@ func (app *App) initServices(ctx context.Context) error {
 		msh,
 		trtl,
 		fetcher,
-		peersCache,
+		peerCache,
 		app.host,
 		patrol,
 		certifier,

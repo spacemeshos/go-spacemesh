@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
@@ -132,6 +133,7 @@ func createP2PFetch(
 		tpf.serverCDB,
 		tpf.serverPDB,
 		serverHost,
+		peers.New(),
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(serverStreaming)),
 		WithLogger(lg),
@@ -153,6 +155,7 @@ func createP2PFetch(
 		tpf.clientCDB,
 		tpf.clientPDB,
 		clientHost,
+		peers.New(),
 		WithContext(ctx),
 		WithConfig(p2pFetchCfg(clientStreaming)),
 		WithLogger(lg),
