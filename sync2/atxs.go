@@ -226,7 +226,10 @@ func (s *MultiEpochATXSyncer) load(newEpoch types.EpochID) error {
 			if epoch == newEpoch {
 				cfg = s.newCfg
 			}
-			hs := s.hss.CreateHashSync(name, cfg, epoch)
+			hs, err := s.hss.CreateHashSync(name, cfg, epoch)
+			if err != nil {
+				return fmt.Errorf("create ATX syncer for epoch %d: %w", epoch, err)
+			}
 			if err := hs.Load(); err != nil {
 				return fmt.Errorf("load ATX syncer for epoch %d: %w", epoch, err)
 			}
@@ -303,7 +306,7 @@ func NewATXSyncer(
 	peers *peers.Peers,
 	epoch types.EpochID,
 	enableActiveSync bool,
-) *P2PHashSync {
+) (*P2PHashSync, error) {
 	curSet := dbset.NewDBSet(db, atxsTable(epoch), 32, cfg.MaxDepth)
 	handler := NewATXHandler(logger, f, cfg.BatchSize, cfg.MaxAttempts, cfg.MaxBatchRetries, cfg.FailedBatchDelay, nil)
 	return NewP2PHashSync(logger, d, name, curSet, 32, peers, handler, cfg, enableActiveSync)
@@ -338,6 +341,6 @@ func NewATXSyncSource(
 }
 
 // CreateHashSync implements HashSyncSource.
-func (as *ATXSyncSource) CreateHashSync(name string, cfg Config, epoch types.EpochID) HashSync {
+func (as *ATXSyncSource) CreateHashSync(name string, cfg Config, epoch types.EpochID) (HashSync, error) {
 	return NewATXSyncer(as.logger.Named(name), as.d, name, cfg, as.db, as.f, as.peers, epoch, as.enableActiveSync)
 }

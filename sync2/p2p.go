@@ -29,6 +29,30 @@ type Config struct {
 	FailedBatchDelay                    time.Duration `mapstructure:"failed-batch-delay"`
 }
 
+func (cfg *Config) Validate() error {
+	// Join the errors together so that the user doesn't have to fix one at a time.
+	errs := []error{
+		cfg.RangeSetReconcilerConfig.Validate(),
+		cfg.MultiPeerReconcilerConfig.Validate(),
+	}
+	if cfg.MaxDepth < 1 {
+		errs = append(errs, errors.New("max-depth must be at least 1"))
+	}
+	if cfg.BatchSize < 1 {
+		errs = append(errs, errors.New("batch-size must be at least 1"))
+	}
+	if cfg.MaxAttempts < 1 {
+		errs = append(errs, errors.New("max-attempts must be at least 1"))
+	}
+	if cfg.MaxBatchRetries < 0 {
+		errs = append(errs, errors.New("max-batch-retries must not be negative"))
+	}
+	if cfg.FailedBatchDelay < 0 {
+		errs = append(errs, errors.New("failed-batch-delay must not be negative"))
+	}
+	return errors.Join(errs...)
+}
+
 // DefaultConfig returns the default configuration for the P2PHashSync.
 func DefaultConfig() Config {
 	return Config{
@@ -70,7 +94,10 @@ func NewP2PHashSync(
 	handler multipeer.SyncKeyHandler,
 	cfg Config,
 	enableActiveSync bool,
-) *P2PHashSync {
+) (*P2PHashSync, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
 	s := &P2PHashSync{
 		logger:           logger,
 		os:               os,
@@ -84,7 +111,7 @@ func NewP2PHashSync(
 		logger, cfg.MultiPeerReconcilerConfig,
 		s.syncBase, peers, keyLen, cfg.MaxDepth)
 	d.Register(name, s.syncBase.Serve)
-	return s
+	return s, nil
 }
 
 // Set returns the OrderedSet that is being synchronized.

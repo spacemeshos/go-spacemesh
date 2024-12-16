@@ -91,9 +91,10 @@ func TestP2P(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		eg.Go(func() error { return srv.Run(ctx) })
-		hs[n] = sync2.NewP2PHashSync(
+		hs[n], err = sync2.NewP2PHashSync(
 			logger.Named(fmt.Sprintf("node%d", n)),
 			d, "test", &os, keyLen, ps, handlers[n], cfg, true)
+		require.NoError(t, err)
 		require.NoError(t, hs[n].Load())
 		is := hs[n].Set().(*rangesync.DumbSet)
 		is.SetAllowMultiReceive(true)
@@ -154,5 +155,57 @@ func TestP2P(t *testing.T) {
 				require.ElementsMatch(t, initialSet, actualItems)
 				return nil
 			}))
+	}
+}
+
+func TestConfigValidation(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		cfg    func(cfg *sync2.Config)
+		expErr string
+	}{
+		{
+			name: "default",
+			cfg:  func(cfg *sync2.Config) {},
+		},
+		{
+			name: "empty",
+			cfg: func(cfg *sync2.Config) {
+				*cfg = sync2.Config{}
+			},
+			expErr: "max-send-range must be positive",
+		},
+		{
+			name: "bad toplevel config",
+			cfg: func(cfg *sync2.Config) {
+				cfg.SyncInterval = 0
+			},
+			expErr: "sync-interval must be positive",
+		},
+		{
+			name: "bad range set reconciler config",
+			cfg: func(cfg *sync2.Config) {
+				cfg.RangeSetReconcilerConfig.MaxSendRange = 0
+			},
+			expErr: "max-send-range must be positive",
+		},
+		{
+			name: "bad multi peer reconciler config",
+			cfg: func(cfg *sync2.Config) {
+				cfg.MultiPeerReconcilerConfig.MaxSyncDiff = -1
+			},
+			expErr: "max-sync-diff must be non-negative",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := sync2.DefaultConfig()
+			tc.cfg(&cfg)
+			err := cfg.Validate()
+			if tc.expErr == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.expErr)
+			}
+		})
 	}
 }

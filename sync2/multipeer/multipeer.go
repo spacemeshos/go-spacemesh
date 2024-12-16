@@ -72,6 +72,8 @@ type MultiPeerReconcilerConfig struct {
 	SyncInterval time.Duration `mapstructure:"sync-interval"`
 	// Interval spread factor for split sync.
 	// The actual interval will be SyncInterval * (1 + (random[0..2]*SplitSyncIntervalSpread-1)).
+	// So, if you want the actual interval to be with the range of SplitInterval ± 25%,
+	// set this to 0.25.
 	SyncIntervalSpread float64 `mapstructure:"sync-interval-spread"`
 	// Interval between retries after a failed sync.
 	RetryInterval time.Duration `mapstructure:"retry-interval"`
@@ -89,6 +91,51 @@ type MultiPeerReconcilerConfig struct {
 	// Duration within which the minimum number of full syncs must have happened for
 	// the node to be considered fully synced.
 	FullSyncednessPeriod time.Duration `mapstructure:"full-syncedness-count"`
+}
+
+func (cfg *MultiPeerReconcilerConfig) Validate() error {
+	// Join the errors together so that the user doesn't have to fix one at a time.
+	var errs []error
+	if cfg.SyncPeerCount <= 0 {
+		errs = append(errs, errors.New("sync-peer-count must be positive"))
+	}
+	if cfg.MinSplitSyncPeers <= 0 {
+		errs = append(errs, errors.New("min-split-sync-peers must be positive"))
+	}
+	if cfg.MinSplitSyncCount <= 0 {
+		errs = append(errs, errors.New("min-split-sync-count must be positive"))
+	}
+	if cfg.MaxFullDiff < 0 {
+		errs = append(errs, errors.New("max-full-diff must be non-negative"))
+	}
+	if cfg.MaxSyncDiff < 0 {
+		errs = append(errs, errors.New("max-sync-diff must be non-negative"))
+	}
+	if cfg.MinCompleteFraction < 0 || cfg.MinCompleteFraction > 1 {
+		errs = append(errs, errors.New("min-complete-fraction must be in [0, 1]"))
+	}
+	if cfg.SyncInterval <= 0 {
+		errs = append(errs, errors.New("sync-interval must be positive"))
+	}
+	if cfg.SyncIntervalSpread < 0 {
+		errs = append(errs, errors.New("sync-interval-spread must be non-negative"))
+	}
+	if cfg.RetryInterval <= 0 {
+		errs = append(errs, errors.New("retry-interval must be positive"))
+	}
+	if cfg.NoPeersRecheckInterval <= 0 {
+		errs = append(errs, errors.New("no-peers-recheck-interval must be positive"))
+	}
+	if cfg.SplitSyncGracePeriod <= 0 {
+		errs = append(errs, errors.New("split-sync-grace-period must be positive"))
+	}
+	if cfg.MinFullSyncednessCount <= 0 {
+		errs = append(errs, errors.New("min-full-syncedness-count must be positive"))
+	}
+	if cfg.FullSyncednessPeriod <= 0 {
+		errs = append(errs, errors.New("full-syncedness-period must be positive"))
+	}
+	return errors.Join(errs...)
 }
 
 // DefaultConfig returns the default configuration for the MultiPeerReconciler.

@@ -319,7 +319,7 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 	var syncActions []string
 	curIdx := 0
 	hss.EXPECT().CreateHashSync(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(name string, cfg sync2.Config, epoch types.EpochID) sync2.HashSync {
+		func(name string, cfg sync2.Config, epoch types.EpochID) (sync2.HashSync, error) {
 			idx := curIdx
 			curIdx++
 			syncActions = append(syncActions,
@@ -339,7 +339,7 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 			hs.EXPECT().Stop().DoAndReturn(func() {
 				syncActions = append(syncActions, fmt.Sprintf("stop %d %s", idx, name))
 			}).AnyTimes()
-			return hs
+			return hs, nil
 		}).AnyTimes()
 
 	// Last wait epoch 3, new epoch 3

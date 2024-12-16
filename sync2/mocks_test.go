@@ -320,11 +320,12 @@ func (m *MockHashSyncSource) EXPECT() *MockHashSyncSourceMockRecorder {
 }
 
 // CreateHashSync mocks base method.
-func (m *MockHashSyncSource) CreateHashSync(name string, cfg sync2.Config, epoch types.EpochID) sync2.HashSync {
+func (m *MockHashSyncSource) CreateHashSync(name string, cfg sync2.Config, epoch types.EpochID) (sync2.HashSync, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "CreateHashSync", name, cfg, epoch)
 	ret0, _ := ret[0].(sync2.HashSync)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // CreateHashSync indicates an expected call of CreateHashSync.
@@ -340,19 +341,19 @@ type MockHashSyncSourceCreateHashSyncCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHashSyncSourceCreateHashSyncCall) Return(arg0 sync2.HashSync) *MockHashSyncSourceCreateHashSyncCall {
-	c.Call = c.Call.Return(arg0)
+func (c *MockHashSyncSourceCreateHashSyncCall) Return(arg0 sync2.HashSync, arg1 error) *MockHashSyncSourceCreateHashSyncCall {
+	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHashSyncSourceCreateHashSyncCall) Do(f func(string, sync2.Config, types.EpochID) sync2.HashSync) *MockHashSyncSourceCreateHashSyncCall {
+func (c *MockHashSyncSourceCreateHashSyncCall) Do(f func(string, sync2.Config, types.EpochID) (sync2.HashSync, error)) *MockHashSyncSourceCreateHashSyncCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHashSyncSourceCreateHashSyncCall) DoAndReturn(f func(string, sync2.Config, types.EpochID) sync2.HashSync) *MockHashSyncSourceCreateHashSyncCall {
+func (c *MockHashSyncSourceCreateHashSyncCall) DoAndReturn(f func(string, sync2.Config, types.EpochID) (sync2.HashSync, error)) *MockHashSyncSourceCreateHashSyncCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

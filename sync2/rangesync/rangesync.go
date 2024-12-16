@@ -38,6 +38,23 @@ type RangeSetReconcilerConfig struct {
 	MessageLimit int `mapstructure:"message-limit"`
 }
 
+func (cfg *RangeSetReconcilerConfig) Validate() error {
+	var errs []error
+	if cfg.MaxSendRange <= 0 {
+		errs = append(errs, errors.New("max-send-range must be positive"))
+	}
+	if cfg.ItemChunkSize == 0 {
+		errs = append(errs, errors.New("item-chunk-size must be positive"))
+	}
+	if cfg.SampleSize > maxSampleSize {
+		return fmt.Errorf("bad sample-size %d (max %d)", cfg.SampleSize, maxSampleSize)
+	}
+	if cfg.MaxReconcDiff < 0 || cfg.MaxReconcDiff > 1 {
+		errs = append(errs, errors.New("bad max-reconc-diff"))
+	}
+	return errors.Join(errs...)
+}
+
 // DefaultConfig returns the default configuration for the RangeSetReconciler.
 func DefaultConfig() RangeSetReconcilerConfig {
 	return RangeSetReconcilerConfig{
