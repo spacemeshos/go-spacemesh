@@ -582,7 +582,7 @@ func TestToTxContents(t *testing.T) {
 		require.NoError(t, err)
 		tx := newTx(t, 0, types.Address{}, signer)
 
-		contents, txType, err := toTxContents(tx.Raw, &types.TxHeader{TemplateAddress: walletTemplate.TemplateAddress})
+		contents, txType, err := toTxContents(context.Background(), tx.Raw, &types.TxHeader{TemplateAddress: walletTemplate.TemplateAddress})
 		require.NoError(t, err)
 		require.NotNil(t, contents.GetSingleSigSpawn())
 		require.Nil(t, contents.GetSend())
@@ -596,7 +596,7 @@ func TestToTxContents(t *testing.T) {
 		require.NoError(t, err)
 		tx := newTx(t, 1, types.Address{}, signer)
 
-		contents, txType, err := toTxContents(tx.Raw, &types.TxHeader{TemplateAddress: walletTemplate.TemplateAddress})
+		contents, txType, err := toTxContents(context.Background(), tx.Raw, &types.TxHeader{TemplateAddress: walletTemplate.TemplateAddress})
 		require.NoError(t, err)
 		require.NotNil(t, contents.GetSend())
 		require.Nil(t, contents.GetSingleSigSpawn())
@@ -629,7 +629,7 @@ func TestToTxContents(t *testing.T) {
 			agg.Add(uint8(i), core.Signature(sig))
 		}
 		rawTx := agg.Raw()
-		contents, txType, err := toTxContents(rawTx, &types.TxHeader{TemplateAddress: multisig.TemplateAddress})
+		contents, txType, err := toTxContents(context.Background(), rawTx, &types.TxHeader{TemplateAddress: multisig.TemplateAddress})
 		require.NoError(t, err)
 		require.NotNil(t, contents.GetMultiSigSpawn())
 		require.Equal(t, &spacemeshv2alpha1.ContentsMultiSigSpawn{
@@ -667,7 +667,7 @@ func TestToTxContents(t *testing.T) {
 		}
 		rawTx := agg.Raw()
 
-		contents, txType, err := toTxContents(rawTx, &types.TxHeader{TemplateAddress: multisig.TemplateAddress})
+		contents, txType, err := toTxContents(context.Background(), rawTx, &types.TxHeader{TemplateAddress: multisig.TemplateAddress})
 		require.NoError(t, err)
 		require.NotNil(t, contents.GetSend())
 		require.Equal(t, &spacemeshv2alpha1.ContentsSend{

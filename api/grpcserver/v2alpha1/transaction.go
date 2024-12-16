@@ -175,7 +175,7 @@ func (s *TransactionService) ParseTransaction(
 		t.MaxGas = header.MaxGas
 		t.GasPrice = header.GasPrice
 		t.MaxSpend = header.MaxSpend
-		contents, txType, err := toTxContents(raw.Raw, header)
+		contents, txType, err := toTxContents(ctx, raw.Raw, header)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -328,7 +328,7 @@ func (s *TransactionService) toTx(
 		t.GasPrice = tx.GasPrice
 		t.MaxSpend = tx.MaxSpend
 
-		contents, txType, err := toTxContents(tx.Raw, tx.TxHeader)
+		contents, txType, err := toTxContents(ctx, tx.Raw, tx.TxHeader)
 		if err != nil {
 			return nil
 		}
@@ -404,7 +404,7 @@ func (s *TransactionService) convertTxState(
 	}
 }
 
-func toTxContents(rawTx []byte, header *types.TxHeader) (
+func toTxContents(ctx context.Context, rawTx []byte, header *types.TxHeader) (
 	*spacemeshv2alpha1.TransactionContents, spacemeshv2alpha1.Transaction_TransactionType, error,
 ) {
 	res := &spacemeshv2alpha1.TransactionContents{}
@@ -421,13 +421,14 @@ func toTxContents(rawTx []byte, header *types.TxHeader) (
 	if err != nil {
 		return nil, txType, fmt.Errorf("%w: tx payload: %w", core.ErrMalformed, err)
 	}
-
+	ctxzap.Debug(ctx, "parsing TX contents", zap.Stringer("template", header.TemplateAddress), zap.Stringer("principal", header.Principal), zap.Any("header", header))
 	switch header.TemplateAddress {
 	case wallet.TemplateAddress:
 		txArgs, err := wallet.ParseArgs(payload)
 		if err != nil {
 			return nil, txType, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
 		}
+		ctxzap.Debug(ctx, "parsed as singlesig wallet", zap.Any("args", txArgs))
 		switch args := txArgs.(type) {
 		case *wallet.SpawnArgs:
 			res.Contents = &spacemeshv2alpha1.TransactionContents_SingleSigSpawn{
@@ -457,6 +458,7 @@ func toTxContents(rawTx []byte, header *types.TxHeader) (
 		if err != nil {
 			return nil, txType, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
 		}
+		ctxzap.Debug(ctx, "parsed as multisig wallet", zap.Any("args", txArgs))
 		switch args := txArgs.(type) {
 		case *multisig.SpawnArguments:
 			pubs := make([]string, 0, len(args.PublicKeys))
