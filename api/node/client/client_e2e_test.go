@@ -196,16 +196,24 @@ func Test_Hare(t *testing.T) {
 func TestProposals(t *testing.T) {
 	svc, mock := setupE2E(t)
 	t.Run("build for", func(t *testing.T) {
-		p := createProposal(t)
+		p := createProposal(t, true)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
 		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
 		prop.MustInitialize()
 		require.NoError(t, err)
 		require.Equal(t, p, prop)
 	})
+	svc, mock = setupE2E(t)
+	t.Run("build for - no eligibility", func(t *testing.T) {
+		p := createProposal(t, false)
+		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
+		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
+		require.NoError(t, err)
+		require.Empty(t, prop)
+	})
 }
 
-func createProposal(tb testing.TB) *types.Proposal {
+func createProposal(tb testing.TB, eligible bool) *types.Proposal {
 	tb.Helper()
 	b := types.RandomBallot()
 	b.Layer = 10000
@@ -217,6 +225,10 @@ func createProposal(tb testing.TB) *types.Proposal {
 	}
 	p.Ballot.EpochData = &types.EpochData{
 		EligibilityCount: 1,
+	}
+	if !eligible {
+		p.Ballot.EpochData.EligibilityCount = 0
+		p.Ballot.RefBallot = types.EmptyBallotID
 	}
 
 	signer, err := signing.NewEdSigner()

@@ -212,7 +212,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	case http.StatusOK:
 	case http.StatusNoContent:
 		// special case - no error but also no proposal, means
-		// we're no eligibile this epoch with this node ID
+		// we're no eligible this epoch with this node ID
 		return nil, 0, nil
 	default:
 		return nil, 0, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -221,6 +221,13 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, 0, fmt.Errorf("read all: %w", err)
+	}
+
+	if len(bytes) == 0 {
+		// there was no http.StatusNoContent but proposal body was empty
+		// what means no proposal and in effect we're no eligible this epoch
+		// with this node ID
+		return nil, 0, nil
 	}
 
 	prop := types.Proposal{}
