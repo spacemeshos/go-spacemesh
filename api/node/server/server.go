@@ -187,7 +187,13 @@ func (s *Server) PostPublishProtocol(
 		return nil, err
 	}
 
-	s.publisher.Publish(ctx, string(request.Protocol), blob)
+	protocol := string(request.Protocol)
+	if protocol == "hare3" {
+		// TODO: hare3 takes that from configuration what also should be done
+		// there instead of using the default value
+		protocol = hare3.DefaultProtocolName
+	}
+	s.publisher.Publish(ctx, protocol, blob)
 	return PostPublishProtocol200Response{}, nil
 }
 
