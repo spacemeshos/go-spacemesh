@@ -159,53 +159,51 @@ func TestP2P(t *testing.T) {
 }
 
 func TestConfigValidation(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		cfg    func(cfg *sync2.Config)
-		expErr string
-	}{
-		{
-			name: "default",
-			cfg:  func(cfg *sync2.Config) {},
-		},
-		{
-			name: "empty",
-			cfg: func(cfg *sync2.Config) {
-				*cfg = sync2.Config{}
+	t.Run("default", func(t *testing.T) {
+		cfg := sync2.DefaultConfig()
+		require.NoError(t, cfg.Validate())
+	})
+	t.Run("faulty", func(t *testing.T) {
+		for _, tc := range []struct {
+			name   string
+			cfg    func(cfg *sync2.Config)
+			expErr string
+		}{
+			{
+				name: "empty",
+				cfg: func(cfg *sync2.Config) {
+					*cfg = sync2.Config{}
+				},
+				expErr: "max-send-range must be positive",
 			},
-			expErr: "max-send-range must be positive",
-		},
-		{
-			name: "bad toplevel config",
-			cfg: func(cfg *sync2.Config) {
-				cfg.SyncInterval = 0
+			{
+				name: "bad toplevel config",
+				cfg: func(cfg *sync2.Config) {
+					cfg.SyncInterval = 0
+				},
+				expErr: "sync-interval must be positive",
 			},
-			expErr: "sync-interval must be positive",
-		},
-		{
-			name: "bad range set reconciler config",
-			cfg: func(cfg *sync2.Config) {
-				cfg.RangeSetReconcilerConfig.MaxSendRange = 0
+			{
+				name: "bad range set reconciler config",
+				cfg: func(cfg *sync2.Config) {
+					cfg.RangeSetReconcilerConfig.MaxSendRange = 0
+				},
+				expErr: "max-send-range must be positive",
 			},
-			expErr: "max-send-range must be positive",
-		},
-		{
-			name: "bad multi peer reconciler config",
-			cfg: func(cfg *sync2.Config) {
-				cfg.MultiPeerReconcilerConfig.SyncPeerCount = 0
+			{
+				name: "bad multi peer reconciler config",
+				cfg: func(cfg *sync2.Config) {
+					cfg.MultiPeerReconcilerConfig.SyncPeerCount = 0
+				},
+				expErr: "sync-peer-count must be positive",
 			},
-			expErr: "sync-peer-count must be positive",
-		},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			cfg := sync2.DefaultConfig()
-			tc.cfg(&cfg)
-			err := cfg.Validate()
-			if tc.expErr == "" {
-				require.NoError(t, err)
-			} else {
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				cfg := sync2.DefaultConfig()
+				tc.cfg(&cfg)
+				err := cfg.Validate()
 				require.ErrorContains(t, err, tc.expErr)
-			}
-		})
-	}
+			})
+		}
+	})
 }
