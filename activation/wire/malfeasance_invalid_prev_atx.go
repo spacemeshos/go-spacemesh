@@ -40,6 +40,17 @@ func (p ProofInvalidPrevAtxV2) Type() ProofType {
 	return InvalidPreviousV2
 }
 
+func (p ProofInvalidPrevAtxV2) Info() map[string]string {
+	return map[string]string{
+		"prev_atx":    p.PrevATX.String(),
+		"node_id":     p.NodeID.String(),
+		"atx1":        p.Proofs[0].ATXID.String(),
+		"smesher_id1": p.Proofs[0].SmesherID.String(),
+		"atx2":        p.Proofs[1].ATXID.String(),
+		"smesher_id2": p.Proofs[1].SmesherID.String(),
+	}
+}
+
 var _ Proof = &ProofInvalidPrevAtxV2{}
 
 func NewInvalidPrevAtxProofV2(
@@ -204,6 +215,17 @@ func (p ProofInvalidPrevAtxV1) String() string {
 
 func (p ProofInvalidPrevAtxV1) Type() ProofType {
 	return InvalidPreviousV1
+}
+
+func (p ProofInvalidPrevAtxV1) Info() map[string]string {
+	return map[string]string{
+		"prev_atx":    p.PrevATX.String(),
+		"node_id":     p.NodeID.String(),
+		"atx1":        p.Proof.ATXID.String(),
+		"smesher_id1": p.Proof.SmesherID.String(),
+		"atx2":        p.ATXv1.ID().String(),
+		"smesher_id2": p.ATXv1.SmesherID.String(),
+	}
 }
 
 var _ Proof = &ProofInvalidPrevAtxV1{}

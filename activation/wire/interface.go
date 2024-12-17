@@ -37,5 +37,6 @@ type Proof interface {
 	fmt.Stringer
 
 	Type() ProofType
+	Info() map[string]string
 	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
 }

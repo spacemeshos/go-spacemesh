@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -21,8 +22,8 @@ import (
 //  3. The commitment ATX of NodeID used for the invalid PoST based on their initial ATX.
 //  4. The provided Post is invalid for the given NodeID.
 type ProofInvalidPost struct {
-	// ATXID is the ID of the ATX containing the invalid PoST.
-	ATXID types.ATXID
+	// ATX is the ID of the ATX containing the invalid PoST.
+	ATX types.ATXID
 	// SmesherID is the ID of the smesher that published the ATX.
 	SmesherID types.NodeID
 	// Signature is the signature of the ATXID by the smesher.
@@ -44,6 +45,15 @@ func (p ProofInvalidPost) String() string {
 
 func (p ProofInvalidPost) Type() ProofType {
 	return InvalidPost
+}
+
+func (p ProofInvalidPost) Info() map[string]string {
+	return map[string]string{
+		"atx":          p.ATX.String(),
+		"index":        strconv.FormatUint(uint64(p.InvalidPostProof.InvalidPostIndex), 10),
+		"post_node_id": p.NodeID.String(),
+		"smesher_id":   p.SmesherID.String(),
+	}
 }
 
 var _ Proof = &ProofInvalidPost{}
@@ -94,7 +104,7 @@ func NewInvalidPostProof(
 	}
 
 	return &ProofInvalidPost{
-		ATXID:     atx.ID(),
+		ATX:       atx.ID(),
 		SmesherID: atx.SmesherID,
 		Signature: atx.Signature,
 
@@ -107,7 +117,7 @@ func NewInvalidPostProof(
 }
 
 func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
-	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATXID.Bytes(), p.Signature) {
+	if !malValidator.Signature(signing.ATX, p.SmesherID, p.ATX.Bytes(), p.Signature) {
 		return types.EmptyNodeID, errors.New("invalid signature")
 	}
 
@@ -117,7 +127,7 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 
 	var marriageIndex *uint32
 	if p.MarriageProof != nil {
-		if err := p.MarriageProof.Valid(malValidator, p.ATXID, p.NodeID, p.SmesherID); err != nil {
+		if err := p.MarriageProof.Valid(malValidator, p.ATX, p.NodeID, p.SmesherID); err != nil {
 			return types.EmptyNodeID, fmt.Errorf("invalid marriage proof: %w", err)
 		}
 		marriageIndex = &p.MarriageProof.NodeIDMarryProof.CertificateIndex
@@ -126,7 +136,7 @@ func (p ProofInvalidPost) Valid(ctx context.Context, malValidator MalfeasanceVal
 	if err := p.InvalidPostProof.Valid(
 		ctx,
 		malValidator,
-		p.ATXID,
+		p.ATX,
 		p.NodeID,
 		marriageIndex,
 	); err != nil {

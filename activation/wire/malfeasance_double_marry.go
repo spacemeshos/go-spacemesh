@@ -50,6 +50,16 @@ func (p ProofDoubleMarry) Type() ProofType {
 	return DoubleMarry
 }
 
+func (p ProofDoubleMarry) Info() map[string]string {
+	return map[string]string{
+		"node_id":     p.NodeID.String(),
+		"atx1":        p.ATX1.String(),
+		"smesher_id1": p.SmesherID1.String(),
+		"atx2":        p.ATX2.String(),
+		"smesher_id2": p.SmesherID2.String(),
+	}
+}
+
 var _ Proof = &ProofDoubleMarry{}
 
 func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID types.NodeID) (*ProofDoubleMarry, error) {

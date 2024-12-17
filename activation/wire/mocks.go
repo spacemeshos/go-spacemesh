@@ -221,6 +221,44 @@ func (c *MockProofEncodeScaleCall) DoAndReturn(f func(*scale.Encoder) (int, erro
 	return c
 }
 
+// Info mocks base method.
+func (m *MockProof) Info() map[string]string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info")
+	ret0, _ := ret[0].(map[string]string)
+	return ret0
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockProofMockRecorder) Info() *MockProofInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockProof)(nil).Info))
+	return &MockProofInfoCall{Call: call}
+}
+
+// MockProofInfoCall wrap *gomock.Call
+type MockProofInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofInfoCall) Return(arg0 map[string]string) *MockProofInfoCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofInfoCall) Do(f func() map[string]string) *MockProofInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofInfoCall) DoAndReturn(f func() map[string]string) *MockProofInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // String mocks base method.
 func (m *MockProof) String() string {
 	m.ctrl.T.Helper()

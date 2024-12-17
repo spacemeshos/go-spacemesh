@@ -10,7 +10,7 @@ import (
 
 func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error) {
 	{
-		n, err := scale.EncodeByteArray(enc, t.ATXID[:])
+		n, err := scale.EncodeByteArray(enc, t.ATX[:])
 		if err != nil {
 			return total, err
 		}
@@ -56,7 +56,7 @@ func (t *ProofInvalidPost) EncodeScale(enc *scale.Encoder) (total int, err error
 
 func (t *ProofInvalidPost) DecodeScale(dec *scale.Decoder) (total int, err error) {
 	{
-		n, err := scale.DecodeByteArray(dec, t.ATXID[:])
+		n, err := scale.DecodeByteArray(dec, t.ATX[:])
 		if err != nil {
 			return total, err
 		}

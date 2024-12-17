@@ -260,3 +260,8 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+// temporary until this issue is resolved and cloud.google.com/go/storage has been updated
+// https://github.com/googleapis/google-cloud-go/issues/11283
+exclude google.golang.org/grpc v1.69.0
+

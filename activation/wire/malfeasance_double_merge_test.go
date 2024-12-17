@@ -119,8 +119,8 @@ func Test_DoubleMergeProof(t *testing.T) {
 		require.Nil(t, proof)
 
 		proof = &ProofDoubleMerge{
-			ATXID1: atx1.ID(),
-			ATXID2: atx1.ID(),
+			ATX1: atx1.ID(),
+			ATX2: atx1.ID(),
 		}
 		id, err := proof.Valid(context.Background(), verifier)
 		require.EqualError(t, err, "ATXs have the same ID")
@@ -243,20 +243,20 @@ func Test_DoubleMergeProof(t *testing.T) {
 		proof.MarriageATXSmesherID = smesherID
 
 		// invalid ATX1 ID
-		id1 := proof.ATXID1
-		proof.ATXID1 = types.RandomATXID()
+		id1 := proof.ATX1
+		proof.ATX1 = types.RandomATXID()
 		id, err = proof.Valid(context.Background(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.ATXID1 = id1
+		proof.ATX1 = id1
 
 		// invalid ATX2 ID
-		id2 := proof.ATXID2
-		proof.ATXID2 = types.RandomATXID()
+		id2 := proof.ATX2
+		proof.ATX2 = types.RandomATXID()
 		id, err = proof.Valid(context.Background(), verifier)
 		require.EqualError(t, err, "ATX 2 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.ATXID2 = id2
+		proof.ATX2 = id2
 
 		// invalid ATX1 smesher ID
 		smesherID1 := proof.SmesherID1

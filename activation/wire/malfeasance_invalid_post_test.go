@@ -434,11 +434,11 @@ func Test_InvalidPostProof(t *testing.T) {
 			}).AnyTimes()
 
 		// invalid ATXID
-		proof.ATXID = types.RandomATXID()
+		proof.ATX = types.RandomATXID()
 		id, err := proof.Valid(context.Background(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.ATXID = atx.ID()
+		proof.ATX = atx.ID()
 
 		// invalid smesher ID
 		proof.SmesherID = types.RandomNodeID()
@@ -618,11 +618,11 @@ func Test_InvalidPostProof(t *testing.T) {
 			}).AnyTimes()
 
 		// invalid ATXID
-		proof.ATXID = types.RandomATXID()
+		proof.ATX = types.RandomATXID()
 		id, err := proof.Valid(context.Background(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.ATXID = atx.ID()
+		proof.ATX = atx.ID()
 
 		// invalid smesher ID
 		proof.SmesherID = types.RandomNodeID()

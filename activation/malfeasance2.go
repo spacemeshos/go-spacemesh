@@ -110,8 +110,11 @@ func (mh *MalfeasanceHandlerV2) Validate(ctx context.Context, data []byte) (type
 }
 
 func (mh *MalfeasanceHandlerV2) Info(data []byte) (map[string]string, error) {
-	// TODO(mafa): implement me
-	return nil, nil
+	proof, err := mh.decodeProof(data)
+	if err != nil {
+		return nil, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
+	}
+	return proof.Info(), nil
 }
 
 func (mh *MalfeasanceHandlerV2) ReportLabels(data []byte) []string {
