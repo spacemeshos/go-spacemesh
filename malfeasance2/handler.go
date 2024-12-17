@@ -18,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
 
 var (
@@ -83,20 +85,38 @@ func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
 	}
 }
 
-func (h *Handler) Info(data []byte) (map[string]string, error) {
-	var p MalfeasanceProof
-	if err := codec.Decode(data, &p); err != nil {
-		return nil, fmt.Errorf("decode malfeasance proof: %w", err)
+func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error) {
+	var (
+		isMarried = false
+		domain    byte
+		proof     []byte
+	)
+	marriageID, err := marriage.FindIDByNodeID(h.db, nodeID)
+	if err == nil {
+		isMarried = true
+		domain, proof, err = malfeasance.MarriageProof(h.db, marriageID)
+		if err != nil {
+			return nil, fmt.Errorf("get malfeasance proof for married node ID %s: %w", nodeID, err)
+		}
+	} else {
+		domain, proof, err = malfeasance.NodeIDProof(h.db, nodeID)
+		if err != nil {
+			return nil, fmt.Errorf("get malfeasance proof for node ID %s: %w", nodeID, err)
+		}
 	}
-	mh, ok := h.handlers[p.Domain]
+
+	mh, ok := h.handlers[ProofDomain(domain)]
 	if !ok {
-		return nil, fmt.Errorf("unknown malfeasance domain %d", p.Domain)
+		return nil, fmt.Errorf("unknown malfeasance domain %d", domain)
 	}
-	properties, err := mh.Info(p.Proof)
+	properties, err := mh.Info(proof)
 	if err != nil {
 		return nil, fmt.Errorf("malfeasance info: %w", err)
 	}
-	properties["domain"] = strconv.FormatUint(uint64(p.Domain), 10)
+	properties["domain"] = strconv.FormatUint(uint64(domain), 10)
+	if isMarried {
+		properties["malicious_id"] = nodeID.String()
+	}
 	return properties, nil
 }
 
