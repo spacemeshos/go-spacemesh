@@ -256,7 +256,7 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 		}
 
 		s.syncable = append(s.syncable, pr.p)
-		if pr.Count > int(mpr.cfg.MinSplitSyncCount) {
+		if uint(pr.Count) > mpr.cfg.MinSplitSyncCount {
 			mpr.logger.Debug("splitSyncable peer",
 				zap.Stringer("peer", pr.p),
 				zap.Int("count", pr.Count))
