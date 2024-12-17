@@ -22,10 +22,10 @@ type Config struct {
 	multipeer.MultiPeerReconcilerConfig `mapstructure:",squash"`
 	TrafficLimit                        int           `mapstructure:"traffic-limit"`
 	MessageLimit                        int           `mapstructure:"message-limit"`
-	MaxDepth                            int           `mapstructure:"max-depth"`
-	BatchSize                           int           `mapstructure:"batch-size"`
-	MaxAttempts                         int           `mapstructure:"max-attempts"`
-	MaxBatchRetries                     int           `mapstructure:"max-batch-retries"`
+	MaxDepth                            uint          `mapstructure:"max-depth"`
+	BatchSize                           uint          `mapstructure:"batch-size"`
+	MaxAttempts                         uint          `mapstructure:"max-attempts"`
+	MaxBatchRetries                     uint          `mapstructure:"max-batch-retries"`
 	FailedBatchDelay                    time.Duration `mapstructure:"failed-batch-delay"`
 }
 
@@ -43,12 +43,6 @@ func (cfg *Config) Validate() error {
 	}
 	if cfg.MaxAttempts < 1 {
 		errs = append(errs, errors.New("max-attempts must be at least 1"))
-	}
-	if cfg.MaxBatchRetries < 0 {
-		errs = append(errs, errors.New("max-batch-retries must not be negative"))
-	}
-	if cfg.FailedBatchDelay < 0 {
-		errs = append(errs, errors.New("failed-batch-delay must not be negative"))
 	}
 	return errors.Join(errs...)
 }
@@ -109,7 +103,7 @@ func NewP2PHashSync(
 	s.syncBase = multipeer.NewSetSyncBase(ps, s.os, handler)
 	s.reconciler = multipeer.NewMultiPeerReconciler(
 		logger, cfg.MultiPeerReconcilerConfig,
-		s.syncBase, peers, keyLen, cfg.MaxDepth)
+		s.syncBase, peers, keyLen, int(cfg.MaxDepth))
 	d.Register(name, s.syncBase.Serve)
 	return s, nil
 }
@@ -139,7 +133,7 @@ func (s *P2PHashSync) Load() error {
 		zap.Duration("elapsed", time.Since(start)),
 		zap.Int("count", info.Count),
 		zap.Stringer("fingerprint", info.Fingerprint),
-		zap.Int("maxDepth", s.cfg.MaxDepth))
+		zap.Uint("maxDepth", s.cfg.MaxDepth))
 	return nil
 }
 

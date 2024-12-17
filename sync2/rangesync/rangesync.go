@@ -20,11 +20,11 @@ const (
 
 type RangeSetReconcilerConfig struct {
 	// Maximum range size to send instead of further subdividing the input range.
-	MaxSendRange int `mapstructure:"max-send-range"`
+	MaxSendRange uint `mapstructure:"max-send-range"`
 	// Size of the item chunk to use when sending the set items.
 	ItemChunkSize int `mapstructure:"item-chunk-size"`
 	// Size of the MinHash sample to be sent to the peer.
-	SampleSize int `mapstructure:"sample-size"`
+	SampleSize uint `mapstructure:"sample-size"`
 	// Maximum set difference metric (0..1) allowed for recursive reconciliation, with
 	// value of 0 meaning equal sets and 1 meaning completely disjoint set. If the
 	// difference metric MaxReconcDiff value, the whole set is transmitted instead of
@@ -39,20 +39,20 @@ type RangeSetReconcilerConfig struct {
 }
 
 func (cfg *RangeSetReconcilerConfig) Validate() error {
-	var errs []error
-	if cfg.MaxSendRange <= 0 {
-		errs = append(errs, errors.New("max-send-range must be positive"))
+	var err error
+	if cfg.MaxSendRange == 0 {
+		err = errors.Join(err, errors.New("max-send-range must be positive"))
 	}
 	if cfg.ItemChunkSize == 0 {
-		errs = append(errs, errors.New("item-chunk-size must be positive"))
+		err = errors.Join(err, errors.New("item-chunk-size must be positive"))
 	}
 	if cfg.SampleSize > maxSampleSize {
-		return fmt.Errorf("bad sample-size %d (max %d)", cfg.SampleSize, maxSampleSize)
+		err = errors.Join(err, fmt.Errorf("bad sample-size %d (max %d)", cfg.SampleSize, maxSampleSize))
 	}
 	if cfg.MaxReconcDiff < 0 || cfg.MaxReconcDiff > 1 {
-		errs = append(errs, errors.New("bad max-reconc-diff"))
+		err = errors.Join(err, errors.New("bad max-reconc-diff"))
 	}
-	return errors.Join(errs...)
+	return err
 }
 
 // DefaultConfig returns the default configuration for the RangeSetReconciler.
@@ -210,7 +210,7 @@ func (rsr *RangeSetReconciler) sendSmallRange(
 	rsr.logger.Debug("handleMessage: send small range",
 		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
 		zap.Int("count", count),
-		zap.Int("maxSendRange", rsr.cfg.MaxSendRange))
+		zap.Uint("maxSendRange", rsr.cfg.MaxSendRange))
 	if _, err := rsr.sendItems(s, count, sr, nil); err != nil {
 		return fmt.Errorf("send items: %w", err)
 	}
@@ -294,12 +294,12 @@ func (rsr *RangeSetReconciler) handleFingerprint(
 			zap.Float64("sim", pr.Sim),
 			zap.Float64("diff", 1-pr.Sim),
 			zap.Float64("maxDiff", rsr.cfg.MaxReconcDiff))
-		if info.Count > rsr.cfg.MaxSendRange {
+		if uint(info.Count) > rsr.cfg.MaxSendRange {
 			return false, rsr.splitRange(s, info.Count, x, y)
 		}
 		return false, rsr.sendSmallRange(s, info.Count, info.Items, x, y)
 
-	case info.Count <= rsr.cfg.MaxSendRange:
+	case uint(info.Count) <= rsr.cfg.MaxSendRange:
 		return false, rsr.sendSmallRange(s, info.Count, info.Items, x, y)
 
 	default:
@@ -506,7 +506,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 	case info.Count == 0:
 		rsr.logger.Debug("initiate: send empty set")
 		return s.SendEmptyRange(x, y)
-	case info.Count < rsr.cfg.MaxSendRange:
+	case uint(info.Count) < rsr.cfg.MaxSendRange:
 		rsr.logger.Debug("initiate: send whole range", zap.Int("count", info.Count))
 		if _, err := rsr.sendItems(s, info.Count, info.Items, nil); err != nil {
 			return fmt.Errorf("send items: %w", err)
@@ -537,8 +537,8 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 		// Use minhash to check if syncing this range is feasible
 		rsr.logger.Debug("initiate: send sample",
 			zap.Int("count", info.Count),
-			zap.Int("sampleSize", rsr.cfg.SampleSize))
-		return s.SendSample(x, y, info.Fingerprint, info.Count, rsr.cfg.SampleSize, info.Items)
+			zap.Uint("sampleSize", rsr.cfg.SampleSize))
+		return s.SendSample(x, y, info.Fingerprint, info.Count, int(rsr.cfg.SampleSize), info.Items)
 	default:
 		rsr.logger.Debug("initiate: send fingerprint", zap.Int("count", info.Count))
 		return s.SendFingerprint(x, y, info.Fingerprint, info.Count)
@@ -556,7 +556,7 @@ func (rsr *RangeSetReconciler) InitiateProbe(
 	if err != nil {
 		return RangeInfo{}, err
 	}
-	if err := s.SendProbe(x, y, info.Fingerprint, rsr.cfg.SampleSize); err != nil {
+	if err := s.SendProbe(x, y, info.Fingerprint, int(rsr.cfg.SampleSize)); err != nil {
 		return RangeInfo{}, err
 	}
 	if err := s.SendEndRound(); err != nil {
@@ -574,7 +574,7 @@ func (rsr *RangeSetReconciler) handleSample(
 	if info.Fingerprint == msg.Fingerprint() {
 		pr.Sim = 1
 	} else {
-		localSample, err := Sample(info.Items, info.Count, rsr.cfg.SampleSize)
+		localSample, err := Sample(info.Items, info.Count, int(rsr.cfg.SampleSize))
 		if err != nil {
 			return ProbeResult{}, fmt.Errorf("sampling local items: %w", err)
 		}

@@ -137,7 +137,7 @@ func newTestSyncerWithConfig(tb testing.TB, cfg Config) *testSyncer {
 	ts.msh, err = mesh.NewMesh(db, atxsdata, ts.mTortoise, exec, ts.mConState, lg)
 	require.NoError(tb, err)
 
-	ts.syncer = NewSyncer(
+	ts.syncer, err = NewSyncer(
 		ts.cdb,
 		ts.mTicker,
 		ts.msh,
@@ -155,6 +155,7 @@ func newTestSyncerWithConfig(tb testing.TB, cfg Config) *testSyncer {
 		withForkFinder(ts.mForkFinder),
 		withAtxSyncerV2(ts.mASV2),
 	)
+	require.NoError(tb, err)
 	return ts
 }
 
@@ -869,7 +870,8 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	// recover from a checkpoint
 	types.SetEffectiveGenesis(current.Uint32())
 	ts.mTicker.advanceToLayer(current)
-	ts.syncer = NewSyncer(
+	var err error
+	ts.syncer, err = NewSyncer(
 		ts.cdb,
 		ts.mTicker,
 		ts.msh,
@@ -887,6 +889,7 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 		withForkFinder(ts.mForkFinder),
 		withAtxSyncerV2(ts.mASV2),
 	)
+	require.NoError(t, err)
 	// should not sync any atxs before current epoch
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), current.GetEpoch(), gomock.Any())
 

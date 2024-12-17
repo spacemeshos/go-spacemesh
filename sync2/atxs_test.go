@@ -309,7 +309,8 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 	newCfg := sync2.DefaultConfig()
 	newCfg.MaxDepth = 24
 	hss := NewMockHashSyncSource(ctrl)
-	mhs := sync2.NewMultiEpochATXSyncer(logger, hss, oldCfg, newCfg, 1)
+	mhs, err := sync2.NewMultiEpochATXSyncer(logger, hss, oldCfg, newCfg, 1)
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	lastSynced, err := mhs.EnsureSync(ctx, 0, 0)

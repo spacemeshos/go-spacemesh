@@ -807,7 +807,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
 	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
-	syncer := syncer.NewSyncer(
+	syncer, err := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
 		msh,
@@ -829,6 +829,9 @@ func (app *App) initServices(ctx context.Context) error {
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
 	)
+	if err != nil {
+		return fmt.Errorf("create syncer: %w", err)
+	}
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(syncer)
 	hOracle.SetSync(syncer)

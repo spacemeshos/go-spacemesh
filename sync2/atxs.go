@@ -197,14 +197,26 @@ func NewMultiEpochATXSyncer(
 	hss HashSyncSource,
 	oldCfg, newCfg Config,
 	parallelLoadLimit int,
-) *MultiEpochATXSyncer {
+) (*MultiEpochATXSyncer, error) {
+	var err error
+	if vErr := oldCfg.Validate(); vErr != nil {
+		// extra newline added to the error message to make it more
+		// readable, as it may contain multiple config errors
+		err = errors.Join(err, fmt.Errorf("old config:\n%w", vErr))
+	}
+	if vErr := newCfg.Validate(); vErr != nil {
+		err = errors.Join(err, fmt.Errorf("new config:\n%w", vErr))
+	}
+	if err != nil {
+		return nil, err
+	}
 	return &MultiEpochATXSyncer{
 		logger:            logger,
 		oldCfg:            oldCfg,
 		newCfg:            newCfg,
 		parallelLoadLimit: parallelLoadLimit,
 		hss:               hss,
-	}
+	}, nil
 }
 
 func (s *MultiEpochATXSyncer) load(newEpoch types.EpochID) error {
@@ -307,8 +319,9 @@ func NewATXSyncer(
 	epoch types.EpochID,
 	enableActiveSync bool,
 ) (*P2PHashSync, error) {
-	curSet := dbset.NewDBSet(db, atxsTable(epoch), 32, cfg.MaxDepth)
-	handler := NewATXHandler(logger, f, cfg.BatchSize, cfg.MaxAttempts, cfg.MaxBatchRetries, cfg.FailedBatchDelay, nil)
+	curSet := dbset.NewDBSet(db, atxsTable(epoch), 32, int(cfg.MaxDepth))
+	handler := NewATXHandler(logger, f, int(cfg.BatchSize), int(cfg.MaxAttempts),
+		int(cfg.MaxBatchRetries), cfg.FailedBatchDelay, nil)
 	return NewP2PHashSync(logger, d, name, curSet, 32, peers, handler, cfg, enableActiveSync)
 }
 

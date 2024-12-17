@@ -192,9 +192,9 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "bad multi peer reconciler config",
 			cfg: func(cfg *sync2.Config) {
-				cfg.MultiPeerReconcilerConfig.MaxSyncDiff = -1
+				cfg.MultiPeerReconcilerConfig.SyncPeerCount = 0
 			},
-			expErr: "max-sync-diff must be non-negative",
+			expErr: "sync-peer-count must be positive",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
