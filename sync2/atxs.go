@@ -202,10 +202,10 @@ func NewMultiEpochATXSyncer(
 	if vErr := oldCfg.Validate(); vErr != nil {
 		// extra newline added to the error message to make it more
 		// readable, as it may contain multiple config errors
-		err = errors.Join(err, fmt.Errorf("old config:\n%w", vErr))
+		err = errors.Join(err, fmt.Errorf("old epoch config:\n%w", vErr))
 	}
 	if vErr := newCfg.Validate(); vErr != nil {
-		err = errors.Join(err, fmt.Errorf("new config:\n%w", vErr))
+		err = errors.Join(err, fmt.Errorf("new epoch config:\n%w", vErr))
 	}
 	if err != nil {
 		return nil, err
