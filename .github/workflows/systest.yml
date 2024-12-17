@@ -173,6 +173,7 @@ jobs:
     needs:
       - filter-changes
       - provision-gke-cluster
+      - build-docker-images
     timeout-minutes: 70
     permissions:
       contents: 'read'
