@@ -557,8 +557,8 @@ func (rsr *RangeSetReconciler) handleSample(
 ) (pr ProbeResult, err error) {
 	pr.InSync = msg.Fingerprint() == info.Fingerprint
 	pr.Count = msg.Count()
-	if pr.InSync && pr.Count != msg.Count() {
-		return ProbeResult{}, errors.New("mismatched count with matching fingerprint, collision?")
+	if pr.InSync && pr.Count != info.Count {
+		return ProbeResult{}, errors.New("mismatched count with matching fingerprint, possible collision")
 	}
 	if info.Fingerprint == msg.Fingerprint() {
 		pr.Sim = 1

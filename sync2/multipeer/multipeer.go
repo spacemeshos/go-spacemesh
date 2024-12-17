@@ -182,13 +182,13 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 		eg.Go(func() error {
 			mpr.logger.Debug("probe peer", zap.Stringer("peer", p))
 			pr, err := mpr.syncBase.Probe(ctx, p)
-			if err != nil {
-				mpr.logger.Warn("error probing the peer", zap.Any("peer", p), zap.Error(err))
-				if errors.Is(err, context.Canceled) {
-					return err
-				}
-			} else {
+			switch {
+			case err == nil:
 				probeCh <- probeResult{p, pr}
+			case errors.Is(err, context.Canceled):
+				return err
+			default:
+				mpr.logger.Warn("error probing the peer", zap.Any("peer", p), zap.Error(err))
 			}
 			return nil
 		})
