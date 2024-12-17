@@ -30,16 +30,18 @@ const (
 	MalfeasanceStream = "malfeasance_stream_v2alpha1"
 )
 
-func NewMalfeasanceService(db sql.Executor, malfeasanceHandler malfeasanceInfo) *MalfeasanceService {
+func NewMalfeasanceService(db sql.Executor, malfeasanceHandler, legacyHandler malfeasanceInfo) *MalfeasanceService {
 	return &MalfeasanceService{
-		db:   db,
-		info: malfeasanceHandler,
+		db:         db,
+		info:       malfeasanceHandler,
+		infoLegacy: legacyHandler,
 	}
 }
 
 type MalfeasanceService struct {
-	db   sql.Executor
-	info malfeasanceInfo
+	db         sql.Executor
+	info       malfeasanceInfo
+	infoLegacy malfeasanceInfo
 }
 
 func (s *MalfeasanceService) RegisterService(server *grpc.Server) {
@@ -54,6 +56,7 @@ func (s *MalfeasanceService) String() string {
 	return "MalfeasanceService"
 }
 
+// TODO(mafa): add a ListV2 method to return the new malfeasance proofs.
 func (s *MalfeasanceService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.MalfeasanceRequest,
@@ -72,7 +75,7 @@ func (s *MalfeasanceService) List(
 
 	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, request.Limit)
 	if err := identities.IterateOps(s.db, ops, func(id types.NodeID, _ []byte, _ time.Time) bool {
-		rst := toProof(ctx, s.info, id)
+		rst := toProof(ctx, s.infoLegacy, id)
 		if rst == nil {
 			return true
 		}
@@ -85,16 +88,22 @@ func (s *MalfeasanceService) List(
 	return &spacemeshv2alpha1.MalfeasanceList{Proofs: proofs}, nil
 }
 
-func NewMalfeasanceStreamService(db sql.Executor, malfeasanceHandler malfeasanceInfo) *MalfeasanceStreamService {
+func NewMalfeasanceStreamService(
+	db sql.Executor,
+	malfeasanceHandler,
+	legacyHandler malfeasanceInfo,
+) *MalfeasanceStreamService {
 	return &MalfeasanceStreamService{
-		db:   db,
-		info: malfeasanceHandler,
+		db:         db,
+		info:       malfeasanceHandler,
+		infoLegacy: legacyHandler,
 	}
 }
 
 type MalfeasanceStreamService struct {
-	db   sql.Executor
-	info malfeasanceInfo
+	db         sql.Executor
+	info       malfeasanceInfo
+	infoLegacy malfeasanceInfo
 }
 
 func (s *MalfeasanceStreamService) RegisterService(server *grpc.Server) {
@@ -109,6 +118,7 @@ func (s *MalfeasanceStreamService) String() string {
 	return "MalfeasanceStreamService"
 }
 
+// TODO(mafa): add a StreamV2 method to return the new malfeasance proofs
 func (s *MalfeasanceStreamService) Stream(
 	request *spacemeshv2alpha1.MalfeasanceStreamRequest,
 	stream spacemeshv2alpha1.MalfeasanceStreamService_StreamServer,
@@ -149,7 +159,7 @@ func (s *MalfeasanceStreamService) Stream(
 		select {
 		// process events first
 		case rst := <-eventsOut:
-			proof := toProof(stream.Context(), s.info, rst.Smesher)
+			proof := toProof(stream.Context(), s.infoLegacy, rst.Smesher)
 			if proof == nil {
 				continue
 			}
@@ -163,7 +173,7 @@ func (s *MalfeasanceStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				proof := toProof(stream.Context(), s.info, rst.Smesher)
+				proof := toProof(stream.Context(), s.infoLegacy, rst.Smesher)
 				if proof == nil {
 					continue
 				}
@@ -210,7 +220,7 @@ func (s *MalfeasanceStreamService) fetchFromDB(
 	go func() {
 		defer close(dbChan)
 		if err := identities.IterateOps(s.db, ops, func(id types.NodeID, _ []byte, _ time.Time) bool {
-			rst := toProof(ctx, s.info, id)
+			rst := toProof(ctx, s.infoLegacy, id)
 			if rst == nil {
 				return true
 			}
@@ -264,7 +274,7 @@ func toProof(
 	delete(properties, "type")
 	return &spacemeshv2alpha1.MalfeasanceProof{
 		Smesher:    id.Bytes(),
-		Domain:     spacemeshv2alpha1.MalfeasanceProof_MalfeasanceDomain(domain),
+		Domain:     spacemeshv2alpha1.MalfeasanceProof_MalfeasanceDomain(domain), // TODO(mafa): add new domains
 		Type:       uint32(proofType),
 		Properties: properties,
 	}

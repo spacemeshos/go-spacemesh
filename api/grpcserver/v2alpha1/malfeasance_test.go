@@ -49,7 +49,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 			require.NoError(t, identities.SetMalicious(db, proofs[i].ID, proofs[i].Proof, time.Now()))
 		}
 
-		svc := NewMalfeasanceService(db, info)
+		svc := NewMalfeasanceService(db, nil, info)
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
@@ -107,6 +107,52 @@ func TestMalfeasanceService_List(t *testing.T) {
 	})
 }
 
+func TestMalfeasanceService_ListV2(t *testing.T) {
+	// TODO(mafa): add a ListV2 method to return the new malfeasance proofs
+
+	// // 70 proofs are for individual identities
+	// for i := range 70 {
+	// 	proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
+	// 	proofs[i].Properties = map[string]string{
+	// 		"domain":                strconv.FormatUint(uint64(i%4+1), 10),
+	// 		"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+	// 		fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
+	// 	}
+	// 	info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
+	// 	legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+
+	// 	require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, byte(i%4+1), time.Now()))
+	// }
+	// // last 20 proofs are from for a single marriage
+	// id, err := marriage.NewID(db)
+	// require.NoError(t, err)
+	// marriageATX := types.RandomATXID()
+
+	// for i := 70; i < 90; i++ {
+	// 	proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
+	// 	proofs[i].Properties = map[string]string{
+	// 		"domain":                strconv.FormatUint(uint64(i%4+1), 10),
+	// 		"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+	// 		fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
+	// 		"malicious_id":          proofs[i].ID.String(),
+	// 	}
+	// 	info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
+	// 	legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+
+	// 	err = marriage.Add(db, marriage.Info{
+	// 		ID:            id,
+	// 		NodeID:        proofs[i].ID,
+	// 		ATX:           marriageATX,
+	// 		MarriageIndex: i % 70,
+	// 		Target:        proofs[70].ID,
+	// 		Signature:     types.RandomEdSignature(),
+	// 	})
+	// 	require.NoError(t, err)
+
+	// 	require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, &id, proofs[i].Proof, byte(i%4+1), time.Now()))
+	// }
+}
+
 func TestMalfeasanceStreamService_Stream(t *testing.T) {
 	setup := func(
 		t *testing.T,
@@ -126,7 +172,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			require.NoError(t, identities.SetMalicious(db, proofs[i].ID, proofs[i].Proof, time.Now()))
 		}
 
-		svc := NewMalfeasanceStreamService(db, info)
+		svc := NewMalfeasanceStreamService(db, nil, info)
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 

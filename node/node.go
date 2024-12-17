@@ -1615,15 +1615,11 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Malfeasance:
-		// TODO(mafa): update to also use malfeasance2 handler
-		_ = app.malfeasance2Handler
-		service := v2alpha1.NewMalfeasanceService(app.apiDB, app.malfeasanceHandler)
+		service := v2alpha1.NewMalfeasanceService(app.apiDB, app.malfeasance2Handler, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.MalfeasanceStream:
-		// TODO(mafa): update to also use malfeasance2 handler
-		_ = app.malfeasance2Handler
-		service := v2alpha1.NewMalfeasanceStreamService(app.apiDB, app.malfeasanceHandler)
+		service := v2alpha1.NewMalfeasanceStreamService(app.apiDB, app.malfeasance2Handler, app.malfeasanceHandler)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Network:
