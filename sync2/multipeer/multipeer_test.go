@@ -195,9 +195,9 @@ func TestMultiPeerSync(t *testing.T) {
 		mt.syncBase.EXPECT().Count().Return(50, nil).AnyTimes()
 		for i := 0; i < numSyncs; i++ {
 			plSplit := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{
-				FP:    "foo",
-				Count: 100,
-				Sim:   0.5, // too low for full sync
+				InSync: false,
+				Count:  100,
+				Sim:    0.5, // too low for full sync
 			})
 			mt.syncRunner.EXPECT().SplitSync(gomock.Any(), gomock.Any()).DoAndReturn(
 				func(_ context.Context, peers []p2p.Peer) error {
@@ -205,12 +205,12 @@ func TestMultiPeerSync(t *testing.T) {
 					return nil
 				})
 			mt.clock.BlockUntilContext(ctx, 1)
-			plFull := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{
-				FP:    "foo",
-				Count: 100,
-				Sim:   1, // after sync
+			mt.expectProbe(numSyncPeers, rangesync.ProbeResult{
+				InSync: true,
+				Count:  100,
+				Sim:    1, // after sync
 			})
-			mt.expectFullSync(plFull, numSyncPeers, 0)
+			// no full sync here as the node is already in sync according to the probe above
 			if i > 0 {
 				mt.clock.Advance(time.Minute)
 			} else if i < numSyncs-1 {
@@ -226,14 +226,70 @@ func TestMultiPeerSync(t *testing.T) {
 		require.False(t, mt.reconciler.Synced())
 		expect := func() {
 			pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{
-				FP:    "foo",
-				Count: 100,
-				Sim:   0.99, // high enough for full sync
+				InSync: false,
+				Count:  100,
+				Sim:    0.99, // high enough for full sync
 			})
 			mt.expectFullSync(pl, numSyncPeers, 0)
 		}
 		expect()
-		// first full sync happens immediately
+		// first probe and first full sync happen immediately
+		ctx := mt.start()
+		mt.clock.BlockUntilContext(ctx, 1)
+		mt.satisfy()
+		for i := 0; i < numSyncs; i++ {
+			expect()
+			mt.clock.Advance(time.Minute)
+			mt.clock.BlockUntilContext(ctx, 1)
+			mt.satisfy()
+		}
+		require.True(t, mt.reconciler.Synced())
+	})
+
+	t.Run("some in sync", func(t *testing.T) {
+		mt := newMultiPeerSyncTester(t, 10)
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
+		require.False(t, mt.reconciler.Synced())
+		expect := func() {
+			pl := mt.expectProbe(numSyncPeers-1, rangesync.ProbeResult{
+				InSync: false,
+				Count:  100,
+				Sim:    0.99,
+			})
+			mt.expectFullSync(pl, numSyncPeers-1, 0)
+			mt.expectProbe(1, rangesync.ProbeResult{
+				InSync: true,
+				Count:  100,
+				Sim:    1,
+			})
+		}
+		expect()
+		// first probe happens immediately
+		ctx := mt.start()
+		mt.clock.BlockUntilContext(ctx, 1)
+		mt.satisfy()
+		for i := 0; i < numSyncs; i++ {
+			expect()
+			mt.clock.Advance(time.Minute)
+			mt.clock.BlockUntilContext(ctx, 1)
+			mt.satisfy()
+		}
+		require.True(t, mt.reconciler.Synced())
+	})
+
+	t.Run("all in sync", func(t *testing.T) {
+		mt := newMultiPeerSyncTester(t, 10)
+		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
+		require.False(t, mt.reconciler.Synced())
+		expect := func() {
+			mt.expectProbe(numSyncPeers, rangesync.ProbeResult{
+				InSync: true,
+				Count:  100,
+				Sim:    1,
+			})
+		}
+		expect()
+		// first probe happens immediately
 		ctx := mt.start()
 		mt.clock.BlockUntilContext(ctx, 1)
 		mt.satisfy()
@@ -252,9 +308,9 @@ func TestMultiPeerSync(t *testing.T) {
 		require.False(t, mt.reconciler.Synced())
 		expect := func() {
 			pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{
-				FP:    "foo",
-				Count: 100,
-				Sim:   0.99, // high enough for full sync
+				InSync: false,
+				Count:  100,
+				Sim:    0.99, // high enough for full sync
 			})
 			mt.expectFullSync(pl, numSyncPeers, 0)
 		}
@@ -281,16 +337,16 @@ func TestMultiPeerSync(t *testing.T) {
 			var pl peerList
 			for _, p := range addedPeers[:5] {
 				mt.expectSingleProbe(p, rangesync.ProbeResult{
-					FP:    "foo",
-					Count: 1000,
-					Sim:   0.99, // high enough for full sync
+					InSync: false,
+					Count:  1000,
+					Sim:    0.99, // high enough for full sync
 				})
 				pl.add(p)
 			}
 			mt.expectSingleProbe(addedPeers[5], rangesync.ProbeResult{
-				FP:    "foo",
-				Count: 800, // count too low, this peer should be ignored
-				Sim:   0.9,
+				InSync: false,
+				Count:  800, // count too low, this peer should be ignored
+				Sim:    0.9,
 			})
 			mt.expectFullSync(&pl, 5, 0)
 		}
@@ -313,9 +369,9 @@ func TestMultiPeerSync(t *testing.T) {
 		mt.syncBase.EXPECT().Count().Return(50, nil).AnyTimes()
 		expect := func() {
 			pl := mt.expectProbe(1, rangesync.ProbeResult{
-				FP:    "foo",
-				Count: 100,
-				Sim:   0.5, // too low for full sync, but will have it anyway
+				InSync: false,
+				Count:  100,
+				Sim:    0.5, // too low for full sync, but will have it anyway
 			})
 			mt.expectFullSync(pl, 1, 0)
 		}
@@ -337,7 +393,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 		mt.syncBase.EXPECT().Probe(gomock.Any(), gomock.Any()).
 			Return(rangesync.ProbeResult{}, errors.New("probe failed"))
-		pl := mt.expectProbe(5, rangesync.ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
+		pl := mt.expectProbe(5, rangesync.ProbeResult{InSync: false, Count: 100, Sim: 0.99})
 		// just 5 peers for which the probe worked will be checked
 		mt.expectFullSync(pl, 5, 0)
 		ctx := mt.start()
@@ -349,7 +405,7 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t, 10)
 		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 		expect := func() {
-			pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
+			pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{InSync: false, Count: 100, Sim: 0.99})
 			mt.expectFullSync(pl, numSyncPeers, numFails)
 		}
 		expect()
@@ -369,14 +425,14 @@ func TestMultiPeerSync(t *testing.T) {
 		mt := newMultiPeerSyncTester(t, 10)
 		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
 
-		pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
+		pl := mt.expectProbe(numSyncPeers, rangesync.ProbeResult{InSync: false, Count: 100, Sim: 0.99})
 		mt.expectFullSync(pl, numSyncPeers, numSyncPeers)
 
 		ctx := mt.start()
 		mt.clock.BlockUntilContext(ctx, 1)
 		mt.satisfy()
 
-		pl = mt.expectProbe(numSyncPeers, rangesync.ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
+		pl = mt.expectProbe(numSyncPeers, rangesync.ProbeResult{InSync: false, Count: 100, Sim: 0.99})
 		mt.expectFullSync(pl, numSyncPeers, 0)
 		// Retry should happen after mere 5 seconds as no peers have succeeded, no
 		// need to wait full sync interval.
@@ -389,7 +445,7 @@ func TestMultiPeerSync(t *testing.T) {
 	t.Run("cancellation during sync", func(t *testing.T) {
 		mt := newMultiPeerSyncTester(t, 10)
 		mt.syncBase.EXPECT().Count().Return(100, nil).AnyTimes()
-		mt.expectProbe(numSyncPeers, rangesync.ProbeResult{FP: "foo", Count: 100, Sim: 0.99})
+		mt.expectProbe(numSyncPeers, rangesync.ProbeResult{InSync: false, Count: 100, Sim: 0.99})
 		mt.syncRunner.EXPECT().FullSync(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, peers []p2p.Peer) error {
 				mt.cancel()
