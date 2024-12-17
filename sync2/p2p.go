@@ -31,20 +31,20 @@ type Config struct {
 
 func (cfg *Config) Validate() error {
 	// Join the errors together so that the user doesn't have to fix one at a time.
-	errs := []error{
+	err := errors.Join(
 		cfg.RangeSetReconcilerConfig.Validate(),
 		cfg.MultiPeerReconcilerConfig.Validate(),
-	}
+	)
 	if cfg.MaxDepth < 1 {
-		errs = append(errs, errors.New("max-depth must be at least 1"))
+		err = errors.Join(err, errors.New("max-depth must be at least 1"))
 	}
 	if cfg.BatchSize < 1 {
-		errs = append(errs, errors.New("batch-size must be at least 1"))
+		err = errors.Join(err, errors.New("batch-size must be at least 1"))
 	}
 	if cfg.MaxAttempts < 1 {
-		errs = append(errs, errors.New("max-attempts must be at least 1"))
+		err = errors.Join(err, errors.New("max-attempts must be at least 1"))
 	}
-	return errors.Join(errs...)
+	return err
 }
 
 // DefaultConfig returns the default configuration for the P2PHashSync.
