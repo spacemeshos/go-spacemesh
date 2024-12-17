@@ -26,8 +26,8 @@ type ProofInvalidPrevAtxV2 struct {
 	// NodeID is the node ID that referenced the same previous ATX twice.
 	NodeID types.NodeID
 
-	// PrevATX is the ATX that was referenced twice.
-	PrevATX types.ATXID
+	// PrevATXID is the ATX that was referenced twice.
+	PrevATXID types.ATXID
 
 	Proofs [2]InvalidPrevAtxProof
 }
@@ -42,7 +42,7 @@ func (p ProofInvalidPrevAtxV2) Type() ProofType {
 
 func (p ProofInvalidPrevAtxV2) Info() map[string]string {
 	return map[string]string{
-		"prev_atx":    p.PrevATX.String(),
+		"prev_atx":    p.PrevATXID.String(),
 		"node_id":     p.NodeID.String(),
 		"atx1":        p.Proofs[0].ATXID.String(),
 		"smesher_id1": p.Proofs[0].SmesherID.String(),
@@ -133,9 +133,9 @@ func NewInvalidPrevAtxProofV2(
 	}
 
 	proof := &ProofInvalidPrevAtxV2{
-		NodeID:  nodeID,
-		PrevATX: prevATX1,
-		Proofs:  [2]InvalidPrevAtxProof{proof1, proof2},
+		NodeID:    nodeID,
+		PrevATXID: prevATX1,
+		Proofs:    [2]InvalidPrevAtxProof{proof1, proof2},
 	}
 	return proof, nil
 }
@@ -180,10 +180,10 @@ func (p ProofInvalidPrevAtxV2) Valid(_ context.Context, malValidator Malfeasance
 	if p.Proofs[0].ATXID == p.Proofs[1].ATXID {
 		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
 	}
-	if err := p.Proofs[0].Valid(p.PrevATX, p.NodeID, malValidator); err != nil {
+	if err := p.Proofs[0].Valid(p.PrevATXID, p.NodeID, malValidator); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
-	if err := p.Proofs[1].Valid(p.PrevATX, p.NodeID, malValidator); err != nil {
+	if err := p.Proofs[1].Valid(p.PrevATXID, p.NodeID, malValidator); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
 	}
 	return p.NodeID, nil
@@ -202,8 +202,8 @@ type ProofInvalidPrevAtxV1 struct {
 	// NodeID is the node ID that referenced the same previous ATX twice.
 	NodeID types.NodeID
 
-	// PrevATX is the ATX that was referenced twice.
-	PrevATX types.ATXID
+	// PrevATXID is the ATX that was referenced twice.
+	PrevATXID types.ATXID
 
 	Proof InvalidPrevAtxProof
 	ATXv1 ActivationTxV1
@@ -219,7 +219,7 @@ func (p ProofInvalidPrevAtxV1) Type() ProofType {
 
 func (p ProofInvalidPrevAtxV1) Info() map[string]string {
 	return map[string]string{
-		"prev_atx":    p.PrevATX.String(),
+		"prev_atx":    p.PrevATXID.String(),
 		"node_id":     p.NodeID.String(),
 		"atx1":        p.Proof.ATXID.String(),
 		"smesher_id1": p.Proof.SmesherID.String(),
@@ -278,15 +278,15 @@ func NewInvalidPrevAtxProofV1(
 	}
 
 	return &ProofInvalidPrevAtxV1{
-		NodeID:  nodeID,
-		PrevATX: prevATX1,
-		Proof:   proof,
-		ATXv1:   *atx2,
+		NodeID:    nodeID,
+		PrevATXID: prevATX1,
+		Proof:     proof,
+		ATXv1:     *atx2,
 	}, nil
 }
 
 func (p ProofInvalidPrevAtxV1) Valid(_ context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
-	if err := p.Proof.Valid(p.PrevATX, p.NodeID, malValidator); err != nil {
+	if err := p.Proof.Valid(p.PrevATXID, p.NodeID, malValidator); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof is invalid: %w", err)
 	}
 	if !malValidator.Signature(signing.ATX, p.ATXv1.SmesherID, p.ATXv1.SignedBytes(), p.ATXv1.Signature) {
@@ -295,7 +295,7 @@ func (p ProofInvalidPrevAtxV1) Valid(_ context.Context, malValidator Malfeasance
 	if p.NodeID != p.ATXv1.SmesherID {
 		return types.EmptyNodeID, errors.New("ATXv1 has not been signed by the same identity")
 	}
-	if p.ATXv1.PrevATXID != p.PrevATX {
+	if p.ATXv1.PrevATXID != p.PrevATXID {
 		return types.EmptyNodeID, errors.New("ATXv1 references a different previous ATX")
 	}
 	return p.NodeID, nil
