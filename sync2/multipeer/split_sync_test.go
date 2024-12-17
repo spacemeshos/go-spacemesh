@@ -23,7 +23,6 @@ import (
 
 type splitSyncTester struct {
 	testing.TB
-	ctrl          *gomock.Controller
 	syncPeers     []p2p.Peer
 	clock         clockwork.FakeClock
 	mtx           sync.Mutex
@@ -58,7 +57,6 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 	ctrl := gomock.NewController(t)
 	tst := &splitSyncTester{
 		TB:        t,
-		ctrl:      ctrl,
 		syncPeers: make([]p2p.Peer, 4),
 		clock:     clockwork.NewFakeClock(),
 		fail:      make(map[hexRange]bool),
@@ -92,38 +90,27 @@ func newTestSplitSync(t testing.TB) *splitSyncTester {
 
 func (tst *splitSyncTester) expectPeerSync(p p2p.Peer) {
 	tst.syncBase.EXPECT().
-		WithPeerSyncer(gomock.Any(), p, gomock.Any()).
-		DoAndReturn(func(
-			_ context.Context,
-			peer p2p.Peer,
-			toCall func(multipeer.PeerSyncer) error,
-		) error {
-			s := NewMockPeerSyncer(tst.ctrl)
-			s.EXPECT().Peer().Return(p).AnyTimes()
-			s.EXPECT().
-				Sync(gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ context.Context, x, y rangesync.KeyBytes) error {
-					tst.mtx.Lock()
-					defer tst.mtx.Unlock()
-					require.NotNil(tst, x)
-					require.NotNil(tst, y)
-					k := hexRange{x.String(), y.String()}
-					tst.peerRanges[k] = append(tst.peerRanges[k], peer)
-					count, found := tst.expPeerRanges[k]
-					require.True(tst, found, "peer range not found: x %s y %s", x, y)
-					if tst.fail[k] {
-						tst.Logf("ERR: peer %s x %s y %s",
-							string(p), x.String(), y.String())
-						tst.fail[k] = false
-						return errors.New("injected fault")
-					} else {
-						tst.Logf("OK: peer %s x %s y %s",
-							string(p), x.String(), y.String())
-						tst.expPeerRanges[k] = count + 1
-					}
-					return nil
-				})
-			return toCall(s)
+		Sync(gomock.Any(), p, gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, p p2p.Peer, x, y rangesync.KeyBytes) error {
+			tst.mtx.Lock()
+			defer tst.mtx.Unlock()
+			require.NotNil(tst, x)
+			require.NotNil(tst, y)
+			k := hexRange{x.String(), y.String()}
+			tst.peerRanges[k] = append(tst.peerRanges[k], p)
+			count, found := tst.expPeerRanges[k]
+			require.True(tst, found, "peer range not found: x %s y %s", x, y)
+			if tst.fail[k] {
+				tst.Logf("ERR: peer %s x %s y %s",
+					string(p), x.String(), y.String())
+				tst.fail[k] = false
+				return errors.New("injected fault")
+			} else {
+				tst.Logf("OK: peer %s x %s y %s",
+					string(p), x.String(), y.String())
+				tst.expPeerRanges[k] = count + 1
+			}
+			return nil
 		}).AnyTimes()
 }
 
@@ -169,21 +156,10 @@ func TestSplitSync_SlowPeers(t *testing.T) {
 
 	for _, p := range tst.syncPeers[2:] {
 		tst.syncBase.EXPECT().
-			WithPeerSyncer(gomock.Any(), p, gomock.Any()).
-			DoAndReturn(func(
-				_ context.Context,
-				peer p2p.Peer,
-				toCall func(multipeer.PeerSyncer) error,
-			) error {
-				s := NewMockPeerSyncer(tst.ctrl)
-				s.EXPECT().Peer().Return(p).AnyTimes()
-				s.EXPECT().
-					Sync(gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(ctx context.Context, x, y rangesync.KeyBytes) error {
-						<-ctx.Done()
-						return nil
-					})
-				return toCall(s)
+			Sync(gomock.Any(), p, gomock.Any(), gomock.Any()).
+			DoAndReturn(func(ctx context.Context, p p2p.Peer, x, y rangesync.KeyBytes) error {
+				<-ctx.Done()
+				return nil
 			})
 	}
 

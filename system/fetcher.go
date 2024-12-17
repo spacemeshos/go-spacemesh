@@ -28,13 +28,27 @@ type BlockFetcher interface {
 
 type GetAtxOpts struct {
 	LimitingOff bool
+	Callback    func(types.ATXID, error)
 }
 
 type GetAtxOpt func(*GetAtxOpts)
 
+// WithoutLimiting disables rate limiting when downloading ATXs.
 func WithoutLimiting() GetAtxOpt {
 	return func(opts *GetAtxOpts) {
 		opts.LimitingOff = true
+	}
+}
+
+// WithATXCallback sets a callback function to be called after each ATX is downloaded,
+// found locally or failed to download.
+// The callback is guaranteed to be called exactly once for each ATX ID passed to GetAtxs.
+// The callback is guaranteed not to be invoked after GetAtxs returns.
+// The callback may be called concurrently from multiple goroutines.
+// A non-nil error is passed in case the ATX cannot be found locally and failed to download.
+func WithATXCallback(callback func(types.ATXID, error)) GetAtxOpt {
+	return func(opts *GetAtxOpts) {
+		opts.Callback = callback
 	}
 }
 
@@ -67,11 +81,6 @@ type ProposalFetcher interface {
 // ActiveSetFetcher defines an interface downloading active set.
 type ActiveSetFetcher interface {
 	GetActiveSet(context.Context, types.Hash32) error
-}
-
-// MalfeasanceProofFetcher defines an interface for fetching malfeasance proofs.
-type MalfeasanceProofFetcher interface {
-	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 }
 
 // PeerTracker defines an interface to track peer hashes.

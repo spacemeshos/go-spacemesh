@@ -363,6 +363,7 @@ func (ft *FPTree) traverseFrom(
 }
 
 // All returns all the items currently in the tree (including those in the IDStore).
+// The sequence in SeqResult is either empty or infinite.
 // Implements sqlstore.All.
 func (ft *FPTree) All() rangesync.SeqResult {
 	ft.np.lockRead()
@@ -386,6 +387,7 @@ func (ft *FPTree) All() rangesync.SeqResult {
 }
 
 // From returns all the items in the tree that are greater than or equal to the given key.
+// The sequence in SeqResult is either empty or infinite.
 // Implements sqlstore.IDStore.
 func (ft *FPTree) From(from rangesync.KeyBytes, sizeHint int) rangesync.SeqResult {
 	ft.np.lockRead()
@@ -1108,9 +1110,9 @@ func (ft *FPTree) fingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr F
 
 	if ac.items.Seq != nil {
 		ft.log("fingerprintInterval: items %v", ac.items)
-		fpr.Items = ac.items
+		fpr.Items = ac.items.Limit(int(ac.count))
 	} else {
-		fpr.Items = ft.from(x, 1)
+		fpr.Items = ft.from(x, 1).Limit(int(ac.count))
 		ft.log("fingerprintInterval: start from x: %v", fpr.Items)
 	}
 
@@ -1187,7 +1189,7 @@ func (ft *FPTree) easySplit(x, y rangesync.KeyBytes, limit int) (sr SplitResult,
 		FP:    ac.fp0,
 		Count: ac.count0,
 		IType: ac.itype,
-		Items: items,
+		Items: items.Limit(int(ac.count0)),
 		// Next is only used during splitting itself, and thus not included
 	}
 	items = ft.startFromPrefix(&ac, *ac.lastPrefix0)
@@ -1195,7 +1197,7 @@ func (ft *FPTree) easySplit(x, y rangesync.KeyBytes, limit int) (sr SplitResult,
 		FP:    ac.fp,
 		Count: ac.count,
 		IType: ac.itype,
-		Items: items,
+		Items: items.Limit(int(ac.count0)),
 		// Next is only used during splitting itself, and thus not included
 	}
 	return SplitResult{

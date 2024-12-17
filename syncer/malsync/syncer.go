@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 //go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./syncer.go
@@ -27,7 +26,7 @@ import (
 type fetcher interface {
 	SelectBestShuffled(int) []p2p.Peer
 	GetMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
-	system.MalfeasanceProofFetcher
+	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 }
 
 type Opt func(*Syncer)

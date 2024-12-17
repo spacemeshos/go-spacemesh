@@ -116,7 +116,7 @@ type ServerConfig struct {
 	Interval time.Duration `mapstructure:"interval"`
 }
 
-func (s ServerConfig) toOpts() []server.Opt {
+func (s ServerConfig) ToOpts() []server.Opt {
 	opts := []server.Opt{}
 	if s.Queue != 0 {
 		opts = append(opts, server.WithQueueSize(s.Queue))
@@ -270,6 +270,7 @@ func NewFetch(
 	cdb *datastore.CachedDB,
 	proposals *store.Store,
 	host *p2p.Host,
+	peerCache *peers.Peers,
 	opts ...Option,
 ) (*Fetch, error) {
 	bs := datastore.NewBlobStore(cdb, proposals)
@@ -293,7 +294,7 @@ func NewFetch(
 		opt(f)
 	}
 	f.getAtxsLimiter = semaphore.NewWeighted(f.cfg.GetAtxsConcurrency)
-	f.peers = peers.New()
+	f.peers = peerCache
 	// NOTE(dshulyak) this is to avoid tests refactoring.
 	// there is one test that covers this part.
 	if host != nil {
@@ -375,7 +376,7 @@ func (f *Fetch) registerServer(
 	if f.cfg.EnableServerMetrics {
 		opts = append(opts, server.WithMetrics())
 	}
-	opts = append(opts, f.cfg.getServerConfig(protocol).toOpts()...)
+	opts = append(opts, f.cfg.getServerConfig(protocol).ToOpts()...)
 	f.servers[protocol] = server.New(host, protocol, handler, opts...)
 }
 
@@ -1006,14 +1007,6 @@ func (f *Fetch) RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32) {
 		return
 	}
 	f.hashToPeers.RegisterPeerHashes(peer, hashes)
-}
-
-// RegisterPeerHashes registers provided peer for a hash.
-func (f *Fetch) RegisterPeerHash(peer p2p.Peer, hash types.Hash32) {
-	if peer == f.host.ID() {
-		return
-	}
-	f.hashToPeers.Add(hash, peer)
 }
 
 func (f *Fetch) SelectBestShuffled(n int) []p2p.Peer {

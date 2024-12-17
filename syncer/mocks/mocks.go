@@ -419,45 +419,6 @@ func (c *MockfetchLogicGetMalfeasanceProofsCall) DoAndReturn(f func(context.Cont
 	return c
 }
 
-// GetMaliciousIDs mocks base method.
-func (m *MockfetchLogic) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].([]types.NodeID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
-func (mr *MockfetchLogicMockRecorder) GetMaliciousIDs(arg0, arg1 any) *MockfetchLogicGetMaliciousIDsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*MockfetchLogic)(nil).GetMaliciousIDs), arg0, arg1)
-	return &MockfetchLogicGetMaliciousIDsCall{Call: call}
-}
-
-// MockfetchLogicGetMaliciousIDsCall wrap *gomock.Call
-type MockfetchLogicGetMaliciousIDsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockfetchLogicGetMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetchLogicGetMaliciousIDsCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockfetchLogicGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetchLogicGetMaliciousIDsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetchLogicGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetchLogicGetMaliciousIDsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // PeerEpochInfo mocks base method.
 func (m *MockfetchLogic) PeerEpochInfo(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID) (*fetch.EpochData, error) {
 	m.ctrl.T.Helper()
@@ -1153,45 +1114,6 @@ func (c *MockfetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context
 	return c
 }
 
-// GetMaliciousIDs mocks base method.
-func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
-	ret0, _ := ret[0].([]types.NodeID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
-func (mr *MockfetcherMockRecorder) GetMaliciousIDs(arg0, arg1 any) *MockfetcherGetMaliciousIDsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*Mockfetcher)(nil).GetMaliciousIDs), arg0, arg1)
-	return &MockfetcherGetMaliciousIDsCall{Call: call}
-}
-
-// MockfetcherGetMaliciousIDsCall wrap *gomock.Call
-type MockfetcherGetMaliciousIDsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockfetcherGetMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetcherGetMaliciousIDsCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockfetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // PeerEpochInfo mocks base method.
 func (m *Mockfetcher) PeerEpochInfo(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID) (*fetch.EpochData, error) {
 	m.ctrl.T.Helper()
@@ -1678,6 +1600,105 @@ func (c *MockforkFinderUpdateAgreementCall) Do(f func(p2p.Peer, types.LayerID, t
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockforkFinderUpdateAgreementCall) DoAndReturn(f func(p2p.Peer, types.LayerID, types.Hash32, time.Time)) *MockforkFinderUpdateAgreementCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockmultiEpochAtxSyncerV2 is a mock of multiEpochAtxSyncerV2 interface.
+type MockmultiEpochAtxSyncerV2 struct {
+	ctrl     *gomock.Controller
+	recorder *MockmultiEpochAtxSyncerV2MockRecorder
+	isgomock struct{}
+}
+
+// MockmultiEpochAtxSyncerV2MockRecorder is the mock recorder for MockmultiEpochAtxSyncerV2.
+type MockmultiEpochAtxSyncerV2MockRecorder struct {
+	mock *MockmultiEpochAtxSyncerV2
+}
+
+// NewMockmultiEpochAtxSyncerV2 creates a new mock instance.
+func NewMockmultiEpochAtxSyncerV2(ctrl *gomock.Controller) *MockmultiEpochAtxSyncerV2 {
+	mock := &MockmultiEpochAtxSyncerV2{ctrl: ctrl}
+	mock.recorder = &MockmultiEpochAtxSyncerV2MockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmultiEpochAtxSyncerV2) EXPECT() *MockmultiEpochAtxSyncerV2MockRecorder {
+	return m.recorder
+}
+
+// EnsureSync mocks base method.
+func (m *MockmultiEpochAtxSyncerV2) EnsureSync(ctx context.Context, lastWaitEpoch, newEpoch types.EpochID) (types.EpochID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureSync", ctx, lastWaitEpoch, newEpoch)
+	ret0, _ := ret[0].(types.EpochID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EnsureSync indicates an expected call of EnsureSync.
+func (mr *MockmultiEpochAtxSyncerV2MockRecorder) EnsureSync(ctx, lastWaitEpoch, newEpoch any) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureSync", reflect.TypeOf((*MockmultiEpochAtxSyncerV2)(nil).EnsureSync), ctx, lastWaitEpoch, newEpoch)
+	return &MockmultiEpochAtxSyncerV2EnsureSyncCall{Call: call}
+}
+
+// MockmultiEpochAtxSyncerV2EnsureSyncCall wrap *gomock.Call
+type MockmultiEpochAtxSyncerV2EnsureSyncCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmultiEpochAtxSyncerV2EnsureSyncCall) Return(lastSynced types.EpochID, err error) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	c.Call = c.Call.Return(lastSynced, err)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmultiEpochAtxSyncerV2EnsureSyncCall) Do(f func(context.Context, types.EpochID, types.EpochID) (types.EpochID, error)) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmultiEpochAtxSyncerV2EnsureSyncCall) DoAndReturn(f func(context.Context, types.EpochID, types.EpochID) (types.EpochID, error)) *MockmultiEpochAtxSyncerV2EnsureSyncCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Stop mocks base method.
+func (m *MockmultiEpochAtxSyncerV2) Stop() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Stop")
+}
+
+// Stop indicates an expected call of Stop.
+func (mr *MockmultiEpochAtxSyncerV2MockRecorder) Stop() *MockmultiEpochAtxSyncerV2StopCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockmultiEpochAtxSyncerV2)(nil).Stop))
+	return &MockmultiEpochAtxSyncerV2StopCall{Call: call}
+}
+
+// MockmultiEpochAtxSyncerV2StopCall wrap *gomock.Call
+type MockmultiEpochAtxSyncerV2StopCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmultiEpochAtxSyncerV2StopCall) Return() *MockmultiEpochAtxSyncerV2StopCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmultiEpochAtxSyncerV2StopCall) Do(f func()) *MockmultiEpochAtxSyncerV2StopCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmultiEpochAtxSyncerV2StopCall) DoAndReturn(f func()) *MockmultiEpochAtxSyncerV2StopCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -31,6 +31,10 @@ type SplitInfo struct {
 
 // OrderedSet represents the set that can be synced against a remote peer.
 // OrderedSet methods are non-threadsafe except for WithCopy, Loaded and EnsureLoaded.
+// SeqResult values obtained by method calls on an OrderedSet passed to WithCopy
+// callback are valid only within the callback and should not be used outside of it,
+// with exception of SeqResult returned by Received, which is expected to be valid
+// outside of the callback as well.
 type OrderedSet interface {
 	// Add adds a new key to the set.
 	// It should not perform any additional actions related to handling
@@ -40,6 +44,9 @@ type OrderedSet interface {
 	// It should not add the key to the set.
 	Receive(k KeyBytes) error
 	// Received returns the sequence containing all the items received from the peer.
+	// Unlike other methods, SeqResult returned by Received called on a copy of the
+	// OrderedSet passed to WithCopy callback is expected to be valid outside of the
+	// callback as well.
 	Received() SeqResult
 	// GetRangeInfo returns RangeInfo for the item range in the ordered set,
 	// bounded by [x, y).

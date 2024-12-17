@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -15,9 +16,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sync2"
+	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -34,15 +39,32 @@ type Config struct {
 	TallyVotesFrequency      float64
 	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
 	Standalone               bool
-	GossipDuration           time.Duration  `mapstructure:"gossipduration"`
-	DisableMeshAgreement     bool           `mapstructure:"disable-mesh-agreement"`
-	OutOfSyncThresholdLayers uint32         `mapstructure:"out-of-sync-threshold"`
-	AtxSync                  atxsync.Config `mapstructure:"atx-sync"`
-	MalSync                  malsync.Config `mapstructure:"malfeasance-sync"`
+	GossipDuration           time.Duration    `mapstructure:"gossipduration"`
+	DisableMeshAgreement     bool             `mapstructure:"disable-mesh-agreement"`
+	OutOfSyncThresholdLayers uint32           `mapstructure:"out-of-sync-threshold"`
+	AtxSync                  atxsync.Config   `mapstructure:"atx-sync"`
+	MalSync                  malsync.Config   `mapstructure:"malfeasance-sync"`
+	ReconcSync               ReconcSyncConfig `mapstructure:"reconc-sync"`
+}
+
+type ReconcSyncConfig struct {
+	Enable            bool               `mapstructure:"enable"`
+	EnableActiveSync  bool               `mapstructure:"enable-active-sync"`
+	OldAtxSyncCfg     sync2.Config       `mapstructure:"old-atx-sync"`
+	NewAtxSyncCfg     sync2.Config       `mapstructure:"new-atx-sync"`
+	ParallelLoadLimit int                `mapstructure:"parallel-load-limit"`
+	HardTimeout       time.Duration      `mapstructure:"hard-timeout"`
+	ServerConfig      fetch.ServerConfig `mapstructure:"server-config"`
 }
 
 // DefaultConfig for the syncer.
 func DefaultConfig() Config {
+	oldAtxSyncCfg := sync2.DefaultConfig()
+	oldAtxSyncCfg.MaxDepth = 16
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = time.Hour
+	newAtxSyncCfg := sync2.DefaultConfig()
+	newAtxSyncCfg.MaxDepth = 21
+	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
 	return Config{
 		Interval:                 10 * time.Second,
 		EpochEndFraction:         0.5,
@@ -54,6 +76,19 @@ func DefaultConfig() Config {
 		OutOfSyncThresholdLayers: 3,
 		AtxSync:                  atxsync.DefaultConfig(),
 		MalSync:                  malsync.DefaultConfig(),
+		ReconcSync: ReconcSyncConfig{
+			Enable:            false,
+			EnableActiveSync:  false,
+			OldAtxSyncCfg:     oldAtxSyncCfg,
+			NewAtxSyncCfg:     newAtxSyncCfg,
+			ParallelLoadLimit: 10,
+			HardTimeout:       10 * time.Minute,
+			ServerConfig: fetch.ServerConfig{
+				Queue:    200,
+				Requests: 100,
+				Interval: time.Second,
+			},
+		},
 	}
 }
 
@@ -119,6 +154,12 @@ func withForkFinder(f forkFinder) Option {
 	}
 }
 
+func withAtxSyncerV2(asv2 multiEpochAtxSyncerV2) Option {
+	return func(s *Syncer) {
+		s.asv2 = asv2
+	}
+}
+
 // Syncer is responsible to keep the node in sync with the network.
 type Syncer struct {
 	logger       *zap.Logger
@@ -161,6 +202,9 @@ type Syncer struct {
 
 	eg   errgroup.Group
 	stop context.CancelFunc
+
+	asv2       multiEpochAtxSyncerV2
+	dispatcher *rangesync.Dispatcher
 }
 
 // NewSyncer creates a new Syncer instance.
@@ -170,6 +214,8 @@ func NewSyncer(
 	mesh *mesh.Mesh,
 	tortoise system.Tortoise,
 	fetcher fetcher,
+	peerCache *peers.Peers,
+	host host.Host,
 	patrol layerPatrol,
 	ch certHandler,
 	atxSyncer atxSyncer,
@@ -204,6 +250,26 @@ func NewSyncer(
 	s.isBusy.Store(false)
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
+	if s.cfg.ReconcSync.Enable && s.asv2 == nil {
+		serverOpts := s.cfg.ReconcSync.ServerConfig.ToOpts()
+		serverOpts = append(serverOpts, server.WithHardTimeout(s.cfg.ReconcSync.HardTimeout))
+		s.dispatcher = sync2.NewDispatcher(s.logger, host, serverOpts)
+		hss := sync2.NewATXSyncSource(
+			s.logger,
+			s.dispatcher,
+			cdb.Database,
+			fetcher,
+			peerCache,
+			s.cfg.ReconcSync.EnableActiveSync,
+		)
+		s.asv2 = sync2.NewMultiEpochATXSyncer(
+			s.logger,
+			hss,
+			s.cfg.ReconcSync.OldAtxSyncCfg,
+			s.cfg.ReconcSync.NewAtxSyncCfg,
+			s.cfg.ReconcSync.ParallelLoadLimit,
+		)
+	}
 	return s
 }
 
@@ -215,6 +281,9 @@ func (s *Syncer) Close() {
 	s.stop()
 	s.logger.Debug("waiting for syncer goroutines to finish")
 	err := s.eg.Wait()
+	if s.asv2 != nil {
+		s.asv2.Stop()
+	}
 	s.logger.Debug("all syncer goroutines finished", zap.Error(err))
 }
 
@@ -243,7 +312,13 @@ func (s *Syncer) Start() {
 	s.syncOnce.Do(func() {
 		ctx, cancel := context.WithCancel(context.Background())
 		s.stop = cancel
+
 		s.logger.Info("starting syncer loop", log.ZContext(ctx))
+		if s.dispatcher != nil {
+			s.eg.Go(func() error {
+				return s.dispatcher.Server.Run(ctx)
+			})
+		}
 		s.eg.Go(func() error {
 			if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 				s.setSyncState(ctx, synced)
@@ -405,7 +480,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return false
 		}
 
-		if err := s.syncAtx(ctx); err != nil {
+		if err := s.syncAtxAndMalfeasance(ctx); err != nil {
 			if !errors.Is(err, context.Canceled) {
 				s.logger.Error("failed to sync atxs", log.ZContext(ctx), zap.Error(err))
 			}
@@ -415,6 +490,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		if s.ticker.CurrentLayer() <= types.GetEffectiveGenesis() {
 			return true
 		}
+
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layer := s.getLastSyncedLayer().Add(1); layer.Before(s.ticker.CurrentLayer()); layer = layer.Add(1) {
 			if err := s.syncLayer(ctx, layer); err != nil {
@@ -463,8 +539,18 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	return success
 }
 
-func (s *Syncer) syncAtx(ctx context.Context) error {
+func (s *Syncer) ensureATXsInSync(ctx context.Context) error {
 	current := s.ticker.CurrentLayer()
+	publish := current.GetEpoch()
+	if publish == 0 {
+		return nil // nothing to sync in epoch 0
+	}
+
+	// if we are not advanced enough sync previous epoch, otherwise start syncing activations published in this epoch
+	if current.OrdinalInEpoch() <= uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
+		publish -= 1
+	}
+
 	// on startup always download all activations that were published before current epoch
 	if !s.ListenToATXGossip() {
 		s.logger.Debug("syncing atx from genesis",
@@ -478,25 +564,8 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			}
 		}
 		s.logger.Debug("atxs synced to epoch", log.ZContext(ctx), zap.Stringer("last epoch", s.lastAtxEpoch()))
-
-		// FIXME https://github.com/spacemeshos/go-spacemesh/issues/3987
-		s.logger.Info("syncing malicious proofs", log.ZContext(ctx))
-		if err := s.syncMalfeasance(ctx, current.GetEpoch()); err != nil {
-			return err
-		}
-		s.logger.Info("malicious IDs synced", log.ZContext(ctx))
-		s.setATXSynced()
 	}
 
-	publish := current.GetEpoch()
-	if publish == 0 {
-		return nil // nothing to sync in epoch 0
-	}
-
-	// if we are not advanced enough sync previous epoch, otherwise start syncing activations published in this epoch
-	if current.OrdinalInEpoch() <= uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
-		publish -= 1
-	}
 	if epoch := s.backgroundSync.epoch.Load(); epoch != 0 && epoch != publish.Uint32() {
 		s.backgroundSync.cancel()
 		s.backgroundSync.eg.Wait()
@@ -525,7 +594,74 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			return err
 		})
 	}
-	if !s.malSync.started {
+	return nil
+}
+
+// ensureATXsInSyncV2 ensures that the ATXs are in sync and being synchronized
+// continuously using syncv2.
+func (s *Syncer) ensureATXsInSyncV2(ctx context.Context) error {
+	current := s.ticker.CurrentLayer()
+	currentEpoch := current.GetEpoch()
+	if currentEpoch == 0 {
+		return nil // nothing to sync in epoch 0
+	}
+	publish := currentEpoch
+	if current.OrdinalInEpoch() <= uint32(float64(types.GetLayersPerEpoch())*s.cfg.EpochEndFraction) {
+		publish--
+	}
+
+	if !s.ListenToATXGossip() && s.cfg.ReconcSync.EnableActiveSync {
+		// ATXs are not in sync yet, to we need to sync them synchronously
+		lastWaitEpoch := types.EpochID(0)
+		if currentEpoch > 1 {
+			lastWaitEpoch = currentEpoch - 1
+		}
+		s.logger.Debug("syncing atx from genesis",
+			log.ZContext(ctx),
+			zap.Stringer("current layer", current),
+			zap.Stringer("last synced epoch", s.lastAtxEpoch()),
+			zap.Stringer("lastWaitEpoch", lastWaitEpoch),
+			zap.Stringer("publish", publish),
+		)
+		lastAtxEpoch, err := s.asv2.EnsureSync(ctx, lastWaitEpoch, publish)
+		if lastAtxEpoch > 0 {
+			s.setLastAtxEpoch(lastAtxEpoch)
+		}
+		if err != nil {
+			return fmt.Errorf("syncing atxs: %w", err)
+		}
+		s.logger.Debug("atxs synced to epoch",
+			log.ZContext(ctx), zap.Stringer("last epoch", s.lastAtxEpoch()))
+		return nil
+	}
+
+	// When active syncv2 is not enabled, this will only cause the per-epoch sync
+	// servers (multiplexed via dispatcher) to be activated, without attempting to
+	// initiate sync against the peers
+	s.logger.Debug("activating sync2", zap.Uint32("new epoch", publish.Uint32()))
+	if _, err := s.asv2.EnsureSync(ctx, 0, publish); err != nil {
+		return fmt.Errorf("activating sync: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
+	// TODO: use syncv2 for malfeasance proofs:
+	current := s.ticker.CurrentLayer()
+	if !s.ListenToATXGossip() {
+		s.logger.Info("syncing malicious proofs", log.ZContext(ctx))
+		if err := s.syncMalfeasance(ctx, current.GetEpoch()); err != nil {
+			return err
+		}
+		s.logger.Info("malicious IDs synced", log.ZContext(ctx))
+		// Malfeasance proofs are synced after the actual ATXs.
+		// We set ATX synced status after both ATXs and malfeascance proofs
+		// are in sync.
+		s.setATXSynced()
+	}
+
+	if current.GetEpoch() > 0 && !s.malSync.started {
 		s.malSync.started = true
 		s.malSync.eg.Go(func() error {
 			select {
@@ -540,7 +676,24 @@ func (s *Syncer) syncAtx(ctx context.Context) error {
 			}
 		})
 	}
+
 	return nil
+}
+
+func (s *Syncer) syncAtxAndMalfeasance(ctx context.Context) error {
+	if s.cfg.ReconcSync.Enable {
+		if err := s.ensureATXsInSyncV2(ctx); err != nil {
+			return err
+		}
+	}
+	if !s.cfg.ReconcSync.Enable || !s.cfg.ReconcSync.EnableActiveSync {
+		// If syncv2 is being used in server-only mode, we still need to run
+		// active syncv1.
+		if err := s.ensureATXsInSync(ctx); err != nil {
+			return err
+		}
+	}
+	return s.ensureMalfeasanceInSync(ctx)
 }
 
 func isTooFarBehind(

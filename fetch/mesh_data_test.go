@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	p2phost "github.com/libp2p/go-libp2p/core/host"
@@ -20,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
@@ -87,7 +89,7 @@ func startTestLoop(tb testing.TB, f *Fetch, eg *errgroup.Group, stop chan struct
 			default:
 				f.mu.Lock()
 				for h, req := range f.unprocessed {
-					require.NoError(tb, req.validator(req.ctx, types.Hash32{}, p2p.NoPeer, []byte{}))
+					require.NoError(tb, req.validator(req.ctx, h, p2p.NoPeer, []byte{}))
 					close(req.promise.completed)
 					delete(f.unprocessed, h)
 				}
@@ -596,7 +598,7 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 }
 
 func TestGetATXs(t *testing.T) {
-	atxs := genATXs(t, 2)
+	atxs := genATXs(t, 4)
 	f := createFetch(t)
 	f.mAtxH.EXPECT().
 		HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -607,10 +609,22 @@ func TestGetATXs(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	atxIDs := types.ToATXIDs(atxs)
-	require.NoError(t, f.GetAtxs(context.Background(), atxIDs))
+	atxIDs1 := types.ToATXIDs(atxs[:2])
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs1))
+
+	atxIDs2 := types.ToATXIDs(atxs[2:])
+	var recvIDs []types.ATXID
+	var mtx sync.Mutex
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs2,
+		system.WithATXCallback(func(id types.ATXID, err error) {
+			mtx.Lock()
+			defer mtx.Unlock()
+			require.NoError(t, err)
+			recvIDs = append(recvIDs, id)
+		})))
 	close(stop)
 	require.NoError(t, eg.Wait())
+	require.ElementsMatch(t, atxIDs2, recvIDs)
 }
 
 func TestGetActiveSet(t *testing.T) {
@@ -1010,6 +1024,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
 			f, err := NewFetch(cdb, store.New(), host,
+				peers.New(),
 				WithContext(context.Background()),
 				withServers(map[string]requester{hashProtocol: client}),
 				WithConfig(cfg),

@@ -3,7 +3,6 @@ package multipeer
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"math/rand/v2"
 	"sync/atomic"
@@ -277,24 +276,17 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 	var someSucceeded atomic.Bool
 	for _, p := range syncPeers {
 		eg.Go(func() error {
-			if err := mpr.syncBase.WithPeerSyncer(ctx, p, func(ps PeerSyncer) error {
-				err := ps.Sync(ctx, nil, nil)
-				switch {
-				case err == nil:
-					someSucceeded.Store(true)
-					mpr.sl.NoteSync()
-				case errors.Is(err, context.Canceled):
-					return err
-				default:
-					// failing to sync against a particular peer is not considered
-					// a fatal sync failure, so we just log the error
-					mpr.logger.Error("error syncing peer",
-						zap.Stringer("peer", p),
-						zap.Error(err))
-				}
-				return nil
-			}); err != nil {
-				return fmt.Errorf("sync %s: %w", p, err)
+			err := mpr.syncBase.Sync(ctx, p, nil, nil)
+			switch {
+			case err == nil:
+				someSucceeded.Store(true)
+				mpr.sl.NoteSync()
+			case errors.Is(err, context.Canceled):
+				return err
+			default:
+				// failing to sync against a particular peer is not considered
+				// a fatal sync failure, so we just log the error
+				mpr.logger.Error("error syncing peer", zap.Stringer("peer", p), zap.Error(err))
 			}
 			return nil
 		})
@@ -354,11 +346,6 @@ func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context, lastWasSplit bool)
 		} else {
 			mpr.logger.Debug("full sync complete")
 		}
-	}
-
-	// handler errors are not fatal
-	if handlerErr := mpr.syncBase.Wait(); handlerErr != nil {
-		mpr.logger.Error("error handling synced keys", zap.Error(handlerErr))
 	}
 
 	return full, err
@@ -431,9 +418,6 @@ LOOP:
 		case <-kickCh:
 		}
 	}
-	// The loop is only exited upon context cancellation.
-	// Thus, syncBase.Wait() is guaranteed not to block indefinitely here.
-	mpr.syncBase.Wait()
 	return err
 }
 

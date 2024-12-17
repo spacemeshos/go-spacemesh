@@ -2,13 +2,9 @@ package multipeer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
-
-	"go.uber.org/zap"
-	"golang.org/x/sync/singleflight"
 
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
@@ -20,25 +16,20 @@ import (
 // has not been yet received and validated.
 type SetSyncBase struct {
 	mtx     sync.Mutex
-	logger  *zap.Logger
 	ps      PairwiseSyncer
 	os      rangesync.OrderedSet
 	handler SyncKeyHandler
-	waiting []<-chan singleflight.Result
-	g       singleflight.Group
 }
 
 var _ SyncBase = &SetSyncBase{}
 
 // NewSetSyncBase creates a new SetSyncBase.
 func NewSetSyncBase(
-	logger *zap.Logger,
 	ps PairwiseSyncer,
 	os rangesync.OrderedSet,
 	handler SyncKeyHandler,
 ) *SetSyncBase {
 	return &SetSyncBase{
-		logger:  logger,
 		ps:      ps,
 		os:      os,
 		handler: handler,
@@ -66,15 +57,44 @@ func (ssb *SetSyncBase) Count() (int, error) {
 	return info.Count, nil
 }
 
-// WithPeerSyncer implements SyncBase.
-func (ssb *SetSyncBase) WithPeerSyncer(ctx context.Context, p p2p.Peer, toCall func(PeerSyncer) error) error {
-	return ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
-		return toCall(&peerSetSyncer{
-			SetSyncBase: ssb,
-			OrderedSet:  os,
-			p:           p,
-			handler:     ssb.handler,
-		})
+func (ssb *SetSyncBase) syncPeer(
+	ctx context.Context,
+	p p2p.Peer,
+	toCall func(rangesync.OrderedSet) error,
+) error {
+	sr := rangesync.EmptySeqResult()
+	if err := ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
+		if err := toCall(os); err != nil {
+			return err
+		}
+		sr = os.Received()
+		return nil
+	}); err != nil {
+		return fmt.Errorf("sync: %w", err)
+	}
+	empty, err := sr.IsEmpty()
+	if err != nil {
+		return fmt.Errorf("check if the sequence result is empty: %w", err)
+	}
+	if !empty {
+		if err := ssb.handler.Commit(ctx, p, ssb.os, sr); err != nil {
+			return fmt.Errorf("commit: %w", err)
+		}
+	}
+	ssb.mtx.Lock()
+	defer ssb.mtx.Unlock()
+	return ssb.os.Advance()
+}
+
+func (ssb *SetSyncBase) Sync(ctx context.Context, p p2p.Peer, x, y rangesync.KeyBytes) error {
+	return ssb.syncPeer(ctx, p, func(os rangesync.OrderedSet) error {
+		return ssb.ps.Sync(ctx, p, os, x, y)
+	})
+}
+
+func (ssb *SetSyncBase) Serve(ctx context.Context, p p2p.Peer, stream io.ReadWriter) error {
+	return ssb.syncPeer(ctx, p, func(os rangesync.OrderedSet) error {
+		return ssb.ps.Serve(ctx, stream, os)
 	})
 }
 
@@ -92,107 +112,4 @@ func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (pr rangesync.Pro
 	}
 
 	return pr, nil
-}
-
-func (ssb *SetSyncBase) receiveKey(k rangesync.KeyBytes, p p2p.Peer) error {
-	ssb.mtx.Lock()
-	defer ssb.mtx.Unlock()
-	key := k.String()
-	has, err := ssb.os.Has(k)
-	if err != nil {
-		return fmt.Errorf("checking if the key is present: %w", err)
-	}
-	if !has {
-		ssb.waiting = append(ssb.waiting,
-			ssb.g.DoChan(key, func() (any, error) {
-				addToOrig, err := ssb.handler.Receive(k, p)
-				if err == nil && addToOrig {
-					ssb.mtx.Lock()
-					defer ssb.mtx.Unlock()
-					err = ssb.os.Receive(k)
-				}
-				return key, err
-			}))
-	}
-	return nil
-}
-
-// Wait waits for all the handlers used by derived syncers to finish.
-func (ssb *SetSyncBase) Wait() error {
-	// At this point, the derived syncers should be done syncing, and we only want to
-	// wait for the remaining handlers to complete. In case if some syncers happen to
-	// be still running at this point, let's not fail too badly.
-	// TODO: wait for any derived running syncers here, too
-	ssb.mtx.Lock()
-	waiting := ssb.waiting
-	ssb.waiting = nil
-	ssb.mtx.Unlock()
-	gotError := false
-	for _, w := range waiting {
-		r := <-w
-		key := r.Val.(string)
-		ssb.g.Forget(key)
-		if r.Err != nil {
-			gotError = true
-			ssb.logger.Error("error from key handler", zap.String("key", key), zap.Error(r.Err))
-		}
-	}
-	if gotError {
-		return errors.New("some key handlers failed")
-	}
-	return nil
-}
-
-func (ssb *SetSyncBase) advance() error {
-	ssb.mtx.Lock()
-	defer ssb.mtx.Unlock()
-	return ssb.os.Advance()
-}
-
-type peerSetSyncer struct {
-	*SetSyncBase
-	rangesync.OrderedSet
-	p       p2p.Peer
-	handler SyncKeyHandler
-}
-
-var (
-	_ PeerSyncer           = &peerSetSyncer{}
-	_ rangesync.OrderedSet = &peerSetSyncer{}
-)
-
-// Peer implements Syncer.
-func (pss *peerSetSyncer) Peer() p2p.Peer {
-	return pss.p
-}
-
-// Sync implements Syncer.
-func (pss *peerSetSyncer) Sync(ctx context.Context, x, y rangesync.KeyBytes) error {
-	if err := pss.ps.Sync(ctx, pss.p, pss, x, y); err != nil {
-		return err
-	}
-	return pss.commit(ctx)
-}
-
-// Serve implements Syncer.
-func (pss *peerSetSyncer) Serve(ctx context.Context, stream io.ReadWriter) error {
-	if err := pss.ps.Serve(ctx, stream, pss); err != nil {
-		return err
-	}
-	return pss.commit(ctx)
-}
-
-// Receive implements OrderedSet.
-func (pss *peerSetSyncer) Receive(k rangesync.KeyBytes) error {
-	if err := pss.receiveKey(k, pss.p); err != nil {
-		return err
-	}
-	return pss.OrderedSet.Receive(k)
-}
-
-func (pss *peerSetSyncer) commit(ctx context.Context) error {
-	if err := pss.handler.Commit(ctx, pss.p, pss.SetSyncBase.os, pss.OrderedSet); err != nil {
-		return err
-	}
-	return pss.SetSyncBase.advance()
 }

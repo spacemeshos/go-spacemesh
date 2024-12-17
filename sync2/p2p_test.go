@@ -21,40 +21,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
-type addedKey struct {
-	// The fields are actually used to make sure each key is synced just once between
-	// each pair of peers.
-	//nolint:unused
-	fromPeer, toPeer p2p.Peer
-	//nolint:unused
-	key string
-}
-
 type fakeHandler struct {
-	mtx         *sync.Mutex
-	localPeerID p2p.Peer
-	synced      map[addedKey]struct{}
-	committed   map[string]struct{}
+	mtx       *sync.Mutex
+	committed map[string]struct{}
 }
 
-func (fh *fakeHandler) Receive(k rangesync.KeyBytes, peer p2p.Peer) (bool, error) {
+func (fh *fakeHandler) Commit(
+	ctx context.Context,
+	peer p2p.Peer,
+	base rangesync.OrderedSet,
+	received rangesync.SeqResult,
+) error {
 	fh.mtx.Lock()
 	defer fh.mtx.Unlock()
-	ak := addedKey{
-		toPeer: fh.localPeerID,
-		key:    string(k),
+	for k := range received.Seq {
+		fh.committed[string(k)] = struct{}{}
 	}
-	fh.synced[ak] = struct{}{}
-	return true, nil
-}
-
-func (fh *fakeHandler) Commit(ctx context.Context, peer p2p.Peer, base, new rangesync.OrderedSet) error {
-	fh.mtx.Lock()
-	defer fh.mtx.Unlock()
-	for k := range fh.synced {
-		fh.committed[k.key] = struct{}{}
-	}
-	clear(fh.synced)
 	return nil
 }
 
@@ -100,10 +82,8 @@ func TestP2P(t *testing.T) {
 		cfg.MaxDepth = maxDepth
 		host := mesh.Hosts()[n]
 		handlers[n] = &fakeHandler{
-			mtx:         &mtx,
-			localPeerID: host.ID(),
-			synced:      make(map[addedKey]struct{}),
-			committed:   make(map[string]struct{}),
+			mtx:       &mtx,
+			committed: make(map[string]struct{}),
 		}
 		var os rangesync.DumbSet
 		d := rangesync.NewDispatcher(logger)

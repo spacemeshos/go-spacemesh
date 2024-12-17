@@ -235,6 +235,8 @@ func TestDBRangeIterator(t *testing.T) {
 						var collected []rangesync.KeyBytes
 						var firstK rangesync.KeyBytes
 						for k := range sr.Seq {
+							// sequences returned by IDSFromTable is either empty
+							// or cyclic
 							if firstK == nil {
 								firstK = k
 							} else if k.Compare(firstK) == 0 {

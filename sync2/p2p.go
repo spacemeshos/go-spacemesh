@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,7 +12,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
@@ -81,20 +79,12 @@ func NewP2PHashSync(
 		enableActiveSync: enableActiveSync,
 	}
 	ps := rangesync.NewPairwiseSetSyncer(logger, d, name, cfg.RangeSetReconcilerConfig)
-	s.syncBase = multipeer.NewSetSyncBase(logger, ps, s.os, handler)
+	s.syncBase = multipeer.NewSetSyncBase(ps, s.os, handler)
 	s.reconciler = multipeer.NewMultiPeerReconciler(
 		logger, cfg.MultiPeerReconcilerConfig,
 		s.syncBase, peers, keyLen, cfg.MaxDepth)
-	d.Register(name, s.serve)
+	d.Register(name, s.syncBase.Serve)
 	return s
-}
-
-func (s *P2PHashSync) serve(ctx context.Context, peer p2p.Peer, stream io.ReadWriter) error {
-	// We derive a dedicated Syncer for the peer being served to pass all the received
-	// items through the handler before adding them to the main OrderedSet.
-	return s.syncBase.WithPeerSyncer(ctx, peer, func(syncer multipeer.PeerSyncer) error {
-		return syncer.Serve(ctx, stream)
-	})
 }
 
 // Set returns the OrderedSet that is being synchronized.

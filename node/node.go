@@ -51,6 +51,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
@@ -744,17 +745,22 @@ func (app *App) initServices(ctx context.Context) error {
 		store.WithCapacity(app.Config.Tortoise.Zdist+1),
 	)
 
-	flog := app.addLogger(Fetcher, lg)
-	fetcher, err := fetch.NewFetch(app.cachedDB, proposalsStore, app.host,
+	peerCache := peers.New()
+	flog := app.addLogger(Fetcher, lg).Zap()
+	fetcher, err := fetch.NewFetch(
+		app.cachedDB,
+		proposalsStore,
+		app.host,
+		peerCache,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
-		fetch.WithLogger(flog.Zap()),
+		fetch.WithLogger(flog),
 	)
 	if err != nil {
 		return fmt.Errorf("create fetcher: %w", err)
 	}
 	app.eg.Go(func() error {
-		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
+		return blockssync.Sync(ctx, flog, msh.MissingBlocks(), fetcher)
 	})
 
 	hOracle, err := eligibility.New(
@@ -810,6 +816,8 @@ func (app *App) initServices(ctx context.Context) error {
 		msh,
 		trtl,
 		fetcher,
+		peerCache,
+		app.host,
 		patrol,
 		certifier,
 		atxsync.New(fetcher, app.db, app.localDB,

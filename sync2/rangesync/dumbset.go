@@ -259,7 +259,7 @@ func (ds *DumbSet) getRangeInfo(
 		if start == nil || end == nil {
 			panic("empty start/end from naiveRange")
 		}
-		r.Items = ds.seqFor(start)
+		r.Items = ds.seqFor(start).Limit(r.Count)
 	} else {
 		r.Items = EmptySeqResult()
 	}
@@ -301,10 +301,7 @@ func (ds *DumbSet) Empty() (bool, error) {
 
 // Items implements OrderedSet.
 func (ds *DumbSet) Items() SeqResult {
-	if len(ds.keys) == 0 {
-		return EmptySeqResult()
-	}
-	return ds.seq(0)
+	return MakeSeqResult(ds.keys)
 }
 
 // WithCopy implements OrderedSet.
@@ -334,14 +331,8 @@ func (ds *DumbSet) Advance() error {
 
 // Has implements OrderedSet.
 func (ds *DumbSet) Has(k KeyBytes) (bool, error) {
-	var first KeyBytes
 	sr := ds.Items()
 	for cur := range sr.Seq {
-		if first == nil {
-			first = cur
-		} else if first.Compare(cur) == 0 {
-			return false, sr.Error()
-		}
 		if k.Compare(cur) == 0 {
 			return true, sr.Error()
 		}
