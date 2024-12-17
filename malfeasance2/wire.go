@@ -8,9 +8,9 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 type ProofDomain byte
 
 const (
-	InvalidActivation ProofDomain = iota
-	InvalidBallot
-	InvalidHareMsg
+	InvalidActivation ProofDomain = 0x01
+	InvalidBallot     ProofDomain = 0x02
+	InvalidHareMsg    ProofDomain = 0x03
 )
 
 // ProofVersion encodes the version of the malfeasance proof.
