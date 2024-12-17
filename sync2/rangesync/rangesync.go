@@ -562,13 +562,13 @@ func (rsr *RangeSetReconciler) handleSample(
 	}
 	if info.Fingerprint == msg.Fingerprint() {
 		pr.Sim = 1
-	} else {
-		localSample, err := Sample(info.Items, info.Count, rsr.cfg.SampleSize)
-		if err != nil {
-			return ProbeResult{}, fmt.Errorf("sampling local items: %w", err)
-		}
-		pr.Sim = CalcSim(localSample, msg.Sample())
+		return pr, nil
 	}
+	localSample, err := Sample(info.Items, info.Count, rsr.cfg.SampleSize)
+	if err != nil {
+		return ProbeResult{}, fmt.Errorf("sampling local items: %w", err)
+	}
+	pr.Sim = CalcSim(localSample, msg.Sample())
 	return pr, nil
 }
 
