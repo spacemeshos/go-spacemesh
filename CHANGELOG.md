@@ -4,6 +4,11 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ## v1.7.9
 
+### Upgrade information
+
+This release contains improvements to sync. The changes are disabled by default and are still being tested. The changes
+will officially be enabled for all nodes in a future release. No action from users is necessary at the moment.
+
 ### Improvements
 
 * [#6457](https://github.com/spacemeshos/go-spacemesh/pull/6457) Fix trying to certify POST when certifier URL is empty.
