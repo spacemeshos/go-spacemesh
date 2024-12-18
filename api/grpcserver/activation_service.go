@@ -118,9 +118,6 @@ func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*p
 	}, nil
 }
 
-// TODO(mafa): instead of passing along the proof bytes the API should query the malfeasance handler for the metadata
-// of the proof if needed.
-// The malfeasance handler should then take care of decoding the proof, caching if necessary and returning the metadata.
 func toMalfeasancePB(nodeID types.NodeID, proof []byte, includeProof bool) *pb.MalfeasanceProof {
 	mp := &wire.MalfeasanceProof{}
 	if err := codec.Decode(proof, mp); err != nil {

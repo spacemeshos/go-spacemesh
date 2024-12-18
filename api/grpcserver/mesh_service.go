@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
@@ -655,15 +654,15 @@ func (s *MeshService) MalfeasanceStream(
 		case <-fullCh:
 			return status.Errorf(codes.Canceled, "buffer is full")
 		case ev := <-eventCh:
-			var blob sql.Blob
-			if err := identities.LoadMalfeasanceBlob(stream.Context(), s.cdb, ev.Smesher.Bytes(), &blob); err != nil {
+			proof, err := s.cdb.MalfeasanceProof(ev.Smesher)
+			if err != nil {
 				return status.Error(
 					codes.Internal,
 					fmt.Errorf("load malfeasance proof for %s: %w", ev.Smesher.ShortString(), err).Error(),
 				)
 			}
 			if err := stream.Send(&pb.MalfeasanceStreamResponse{
-				Proof: toMalfeasancePB(ev.Smesher, blob.Bytes, req.IncludeProof),
+				Proof: toMalfeasancePB(ev.Smesher, proof, req.IncludeProof),
 			}); err != nil {
 				return status.Error(codes.Internal, fmt.Errorf("send to stream: %w", err).Error())
 			}
