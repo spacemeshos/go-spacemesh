@@ -832,11 +832,14 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 	}
 
-	app.txHandler = txs.NewTxHandler(
-		app.conState,
-		app.host.ID(),
-		app.addLogger(TxHandlerLogger, lg).Zap(),
-	)
+	if nodeServiceClient == nil {
+		app.txHandler = txs.NewTxHandler(
+			app.conState,
+			app.host.ID(),
+			app.addLogger(TxHandlerLogger, lg).Zap(),
+		)
+	}
+
 	extraOpts := []eligibility.Opt{
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
@@ -1427,16 +1430,18 @@ func (app *App) initServices(ctx context.Context) error {
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
-	if !app.Config.TIME.Peersync.Disable {
-		app.ptimesync = peersync.New(
-			app.host,
-			app.host,
-			peersync.WithLog(app.addLogger(TimeSyncLogger, lg).Zap()),
-			peersync.WithConfig(app.Config.TIME.Peersync),
-		)
-	}
-	if err := app.host.Start(); err != nil {
-		return err
+	if !app.Config.IsNodeServiceClientMode() {
+		if !app.Config.TIME.Peersync.Disable {
+			app.ptimesync = peersync.New(
+				app.host,
+				app.host,
+				peersync.WithLog(app.addLogger(TimeSyncLogger, lg).Zap()),
+				peersync.WithConfig(app.Config.TIME.Peersync),
+			)
+		}
+		if err := app.host.Start(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -2403,11 +2408,13 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	if !onMainNet(app.Config) {
 		nc = handshake.NetworkCookie(prologue)
 	}
-	app.host, err = p2p.New(p2plog.Zap(), cfg, []byte(prologue), nc,
-		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
-	)
-	if err != nil {
-		return fmt.Errorf("initialize p2p host: %w", err)
+	if !app.Config.IsNodeServiceClientMode() {
+		app.host, err = p2p.New(p2plog.Zap(), cfg, []byte(prologue), nc,
+			p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
+		)
+		if err != nil {
+			return fmt.Errorf("initialize p2p host: %w", err)
+		}
 	}
 
 	if err := app.setupDBs(ctx, logger); err != nil {
