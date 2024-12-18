@@ -29,6 +29,8 @@ type syncability struct {
 	splitSyncable []p2p.Peer
 	// Number of peers that are similar enough to this one for full sync
 	nearFullCount int
+	// Number of peers that are in sync with this one
+	inSyncCount int
 }
 
 type runner struct {
@@ -164,9 +166,6 @@ func NewMultiPeerReconciler(
 
 func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.Peer) (syncability, error) {
 	var s syncability
-	s.syncable = nil
-	s.splitSyncable = nil
-	s.nearFullCount = 0
 	type probeResult struct {
 		p p2p.Peer
 		rangesync.ProbeResult
@@ -183,13 +182,13 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 		eg.Go(func() error {
 			mpr.logger.Debug("probe peer", zap.Stringer("peer", p))
 			pr, err := mpr.syncBase.Probe(ctx, p)
-			if err != nil {
-				mpr.logger.Warn("error probing the peer", zap.Any("peer", p), zap.Error(err))
-				if errors.Is(err, context.Canceled) {
-					return err
-				}
-			} else {
+			switch {
+			case err == nil:
 				probeCh <- probeResult{p, pr}
+			case errors.Is(err, context.Canceled):
+				return err
+			default:
+				mpr.logger.Warn("error probing the peer", zap.Any("peer", p), zap.Error(err))
 			}
 			return nil
 		})
@@ -204,11 +203,21 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 	})
 
 	for pr := range probeCh {
+		if pr.InSync {
+			mpr.logger.Debug("peer already in sync",
+				zap.Stringer("peer", pr.p),
+				zap.Int("peerCount", pr.Count),
+				zap.Int("localCount", localCount))
+			s.inSyncCount++
+			continue
+		}
+
 		// We do not consider peers with substantially fewer items than the local
 		// set for active sync. It's these peers' responsibility to request sync
 		// against this node.
 		if pr.Count+mpr.cfg.MaxSyncDiff < localCount {
 			mpr.logger.Debug("skipping peer with low item count",
+				zap.Stringer("peer", pr.p),
 				zap.Int("peerCount", pr.Count),
 				zap.Int("localCount", localCount))
 			continue
@@ -315,9 +324,22 @@ func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context, lastWasSplit bool)
 			if err != nil {
 				return false, err
 			}
+			mpr.logger.Debug("probing peers done",
+				zap.Int("syncableCount", len(s.syncable)),
+				zap.Int("splitSyncableCount", len(s.splitSyncable)),
+				zap.Int("nearFullCount", s.nearFullCount),
+				zap.Int("inSyncCount", s.inSyncCount))
 			if len(s.syncable) != 0 {
 				break
 			}
+		}
+
+		// We try to sync against peers which are not in full sync with this one.
+		// If there are no such peers, but there are some which are in sync with
+		// us, we consider this node to be in sync.
+		if s.inSyncCount > 0 {
+			mpr.sl.NoteSync()
+			return true, nil
 		}
 
 		mpr.logger.Debug("no peers found, waiting", zap.Duration("duration", mpr.cfg.NoPeersRecheckInterval))

@@ -66,8 +66,11 @@ func (t nullTracer) OnRecent(int, int) {}
 
 // ProbeResult contains the result of a probe.
 type ProbeResult struct {
-	// Fingerprint of the range.
-	FP any
+	// True if the peer's range (or full set) is fully in sync with the local range
+	// (or full set).
+	// Note that Sim==1 does not guarantee that the peer is in sync b/c simhash
+	// algorithm is not precise.
+	InSync bool
 	// Number of items in the range.
 	Count int
 	// An estimate of Jaccard similarity coefficient between the sets.
@@ -552,17 +555,20 @@ func (rsr *RangeSetReconciler) handleSample(
 	msg SyncMessage,
 	info RangeInfo,
 ) (pr ProbeResult, err error) {
-	pr.FP = msg.Fingerprint()
+	pr.InSync = msg.Fingerprint() == info.Fingerprint
 	pr.Count = msg.Count()
+	if pr.InSync && pr.Count != info.Count {
+		return ProbeResult{}, errors.New("mismatched count with matching fingerprint, possible collision")
+	}
 	if info.Fingerprint == msg.Fingerprint() {
 		pr.Sim = 1
-	} else {
-		localSample, err := Sample(info.Items, info.Count, rsr.cfg.SampleSize)
-		if err != nil {
-			return ProbeResult{}, fmt.Errorf("sampling local items: %w", err)
-		}
-		pr.Sim = CalcSim(localSample, msg.Sample())
+		return pr, nil
 	}
+	localSample, err := Sample(info.Items, info.Count, rsr.cfg.SampleSize)
+	if err != nil {
+		return ProbeResult{}, fmt.Errorf("sampling local items: %w", err)
+	}
+	pr.Sim = CalcSim(localSample, msg.Sample())
 	return pr, nil
 }
 

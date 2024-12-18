@@ -298,7 +298,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	require.NoError(t, err)
 	prA, err := pss.Probe(ctx, cst.srvPeerID, st.setB, nil, nil)
 	require.NoError(t, err)
-	require.Equal(t, infoA.Fingerprint, prA.FP)
+	require.False(t, prA.InSync)
 	require.Equal(t, infoA.Count, prA.Count)
 	require.InDelta(t, 0.98, prA.Sim, 0.05, "sim")
 
@@ -306,7 +306,7 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	require.NoError(t, err)
 	prA, err = pss.Probe(ctx, cst.srvPeerID, st.setB, x, splitInfo.Middle)
 	require.NoError(t, err)
-	require.Equal(t, splitInfo.Parts[0].Fingerprint, prA.FP)
+	require.False(t, prA.InSync)
 	require.Equal(t, splitInfo.Parts[0].Count, prA.Count)
 	require.InDelta(t, 0.98, prA.Sim, 0.1, "sim")
 }

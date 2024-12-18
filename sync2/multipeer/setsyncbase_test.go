@@ -52,9 +52,9 @@ func TestSetSyncBase(t *testing.T) {
 		t.Parallel()
 		st := newSetSyncBaseTester(t, nil)
 		expPr := rangesync.ProbeResult{
-			FP:    rangesync.RandomFingerprint(),
-			Count: 42,
-			Sim:   0.99,
+			InSync: false,
+			Count:  42,
+			Sim:    0.99,
 		}
 		set := st.expectCopy()
 		st.ps.EXPECT().Probe(gomock.Any(), p2p.Peer("p1"), set, nil, nil).Return(expPr, nil)
