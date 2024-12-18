@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
 
@@ -123,4 +124,30 @@ func MarriageProof(db sql.Executor, marriageID marriage.ID) (byte, []byte, error
 		return 0, nil, sql.ErrNotFound
 	}
 	return domain, proof, nil
+}
+
+func IterateOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(types.NodeID, []byte, byte, time.Time) bool,
+) error {
+	fullQuery := `
+		SELECT pubkey, proof, domain, received
+		FROM malfeasance
+	` + builder.FilterFrom(operations)
+	_, err := db.Exec(fullQuery, builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var id types.NodeID
+			stmt.ColumnBytes(0, id[:])
+			var proof []byte
+			if stmt.ColumnLen(1) > 0 {
+				proof = make([]byte, stmt.ColumnLen(1))
+				stmt.ColumnBytes(1, proof)
+			}
+			domain := byte(stmt.ColumnInt64(2))
+			received := time.Unix(0, stmt.ColumnInt64(3))
+			return fn(id, proof, domain, received)
+		},
+	)
+	return err
 }

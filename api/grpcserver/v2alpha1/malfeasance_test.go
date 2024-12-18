@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"strconv"
 	"testing"
 	"time"
@@ -20,6 +21,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
+	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -31,34 +34,93 @@ type malInfo struct {
 }
 
 func TestMalfeasanceService_List(t *testing.T) {
-	setup := func(t *testing.T) (spacemeshv2alpha1.MalfeasanceServiceClient, []malInfo) {
-		db := statesql.InMemoryTest(t)
-		ctrl := gomock.NewController(t)
-		info := NewMockmalfeasanceInfo(ctrl)
+	db := statesql.InMemoryTest(t)
+	ctrl := gomock.NewController(t)
+	info := NewMockmalfeasanceInfo(ctrl)
+	legacyInfo := NewMockmalfeasanceInfo(ctrl)
 
-		proofs := make([]malInfo, 90)
-		for i := range proofs {
-			proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
-			proofs[i].Properties = map[string]string{
-				"domain":                "0",
-				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
-				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
-			}
-			info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
+	proofs := make([]malInfo, 90)
 
-			require.NoError(t, identities.SetMalicious(db, proofs[i].ID, proofs[i].Proof, time.Now()))
+	// first 20 are legacy proofs
+	for i := range 20 {
+		proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
+		proofs[i].Properties = map[string]string{
+			"domain":                "0",
+			"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+			fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 		}
-
-		svc := NewMalfeasanceService(db, nil, info)
-		cfg, cleanup := launchServer(t, svc)
-		t.Cleanup(cleanup)
-
-		conn := dialGrpc(t, cfg)
-		return spacemeshv2alpha1.NewMalfeasanceServiceClient(conn), proofs
+		info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+		legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
+			func(_ context.Context, id types.NodeID) (map[string]string, error) {
+				return maps.Clone(proofs[i].Properties), nil
+			}).AnyTimes()
+		require.NoError(t, identities.SetMalicious(db, proofs[i].ID, proofs[i].Proof, time.Now()))
 	}
 
+	// next 50 are proofs for individual identities
+	for i := 20; i < 70; i++ {
+		proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
+		proofs[i].Properties = map[string]string{
+			"domain":                strconv.FormatUint(uint64(i%4+1), 10),
+			"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+			fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
+		}
+		info.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
+			func(_ context.Context, id types.NodeID) (map[string]string, error) {
+				return maps.Clone(proofs[i].Properties), nil
+			}).AnyTimes()
+		legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+		require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, byte(i%4+1), time.Now()))
+	}
+
+	// last 20 are proofs for a single marriage
+	id, err := marriage.NewID(db)
+	require.NoError(t, err)
+	marriageATX := types.RandomATXID()
+	for i := 70; i < 90; i++ {
+		proofs[i] = malInfo{ID: types.RandomNodeID()}
+		err := marriage.Add(db, marriage.Info{
+			ID:            id,
+			NodeID:        proofs[i].ID,
+			ATX:           marriageATX,
+			MarriageIndex: i % 70,
+			Target:        proofs[70].ID,
+			Signature:     types.RandomEdSignature(),
+		})
+		require.NoError(t, err)
+	}
+	proofs[70].Proof = types.RandomBytes(100)
+	proofs[70].Properties = map[string]string{
+		"domain": "1",
+		"type":   "1",
+		"key":    "value",
+	}
+	info.EXPECT().Info(gomock.Any(), proofs[70].ID).DoAndReturn(
+		func(_ context.Context, id types.NodeID) (map[string]string, error) {
+			return maps.Clone(proofs[70].Properties), nil
+		}).AnyTimes()
+	legacyInfo.EXPECT().Info(gomock.Any(), proofs[70].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+	require.NoError(t, malfeasance.AddProof(db, proofs[70].ID, &id, proofs[70].Proof, byte(1), time.Now()))
+	for i := 71; i < 90; i++ {
+		proofs[i] = malInfo{ID: proofs[i].ID, Proof: proofs[70].Proof}
+		proofs[i].Properties = maps.Clone(proofs[70].Properties)
+		proofs[i].Properties["malicious_id"] = proofs[i].ID.String()
+
+		info.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
+			func(_ context.Context, id types.NodeID) (map[string]string, error) {
+				return maps.Clone(proofs[i].Properties), nil
+			}).AnyTimes()
+		legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+
+		require.NoError(t, malfeasance.SetMalicious(db, proofs[i].ID, id, time.Now()))
+	}
+
+	svc := NewMalfeasanceService(db, info, legacyInfo)
+	cfg, cleanup := launchServer(t, svc)
+	t.Cleanup(cleanup)
+
 	t.Run("limit set too high", func(t *testing.T) {
-		client, _ := setup(t)
+		client := spacemeshv2alpha1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
 		_, err := client.List(context.Background(), &spacemeshv2alpha1.MalfeasanceRequest{Limit: 200})
 		require.Error(t, err)
 
@@ -69,7 +131,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 	})
 
 	t.Run("no limit set", func(t *testing.T) {
-		client, _ := setup(t)
+		client := spacemeshv2alpha1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
 		_, err := client.List(context.Background(), &spacemeshv2alpha1.MalfeasanceRequest{})
 		require.Error(t, err)
 
@@ -80,7 +142,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 	})
 
 	t.Run("limit and offset", func(t *testing.T) {
-		client, _ := setup(t)
+		client := spacemeshv2alpha1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
 		list, err := client.List(context.Background(), &spacemeshv2alpha1.MalfeasanceRequest{
 			Limit:  25,
 			Offset: 50,
@@ -90,14 +152,14 @@ func TestMalfeasanceService_List(t *testing.T) {
 	})
 
 	t.Run("all", func(t *testing.T) {
-		client, _ := setup(t)
+		client := spacemeshv2alpha1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
 		list, err := client.List(context.Background(), &spacemeshv2alpha1.MalfeasanceRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, list.Proofs, 90)
 	})
 
 	t.Run("smesherId", func(t *testing.T) {
-		client, proofs := setup(t)
+		client := spacemeshv2alpha1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
 		list, err := client.List(context.Background(), &spacemeshv2alpha1.MalfeasanceRequest{
 			Limit:     1,
 			SmesherId: [][]byte{proofs[1].ID.Bytes()},
@@ -107,72 +169,89 @@ func TestMalfeasanceService_List(t *testing.T) {
 	})
 }
 
-func TestMalfeasanceService_ListV2(t *testing.T) {
-	// TODO(mafa): add a ListV2 method to return the new malfeasance proofs
-
-	// // 70 proofs are for individual identities
-	// for i := range 70 {
-	// 	proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
-	// 	proofs[i].Properties = map[string]string{
-	// 		"domain":                strconv.FormatUint(uint64(i%4+1), 10),
-	// 		"type":                  strconv.FormatUint(uint64(i%4+1), 10),
-	// 		fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
-	// 	}
-	// 	info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
-	// 	legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
-
-	// 	require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, byte(i%4+1), time.Now()))
-	// }
-	// // last 20 proofs are from for a single marriage
-	// id, err := marriage.NewID(db)
-	// require.NoError(t, err)
-	// marriageATX := types.RandomATXID()
-
-	// for i := 70; i < 90; i++ {
-	// 	proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
-	// 	proofs[i].Properties = map[string]string{
-	// 		"domain":                strconv.FormatUint(uint64(i%4+1), 10),
-	// 		"type":                  strconv.FormatUint(uint64(i%4+1), 10),
-	// 		fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
-	// 		"malicious_id":          proofs[i].ID.String(),
-	// 	}
-	// 	info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
-	// 	legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
-
-	// 	err = marriage.Add(db, marriage.Info{
-	// 		ID:            id,
-	// 		NodeID:        proofs[i].ID,
-	// 		ATX:           marriageATX,
-	// 		MarriageIndex: i % 70,
-	// 		Target:        proofs[70].ID,
-	// 		Signature:     types.RandomEdSignature(),
-	// 	})
-	// 	require.NoError(t, err)
-
-	// 	require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, &id, proofs[i].Proof, byte(i%4+1), time.Now()))
-	// }
-}
-
 func TestMalfeasanceStreamService_Stream(t *testing.T) {
 	setup := func(
 		t *testing.T,
 		db sql.Executor,
 		info *MockmalfeasanceInfo,
+		legacyInfo *MockmalfeasanceInfo,
 	) spacemeshv2alpha1.MalfeasanceStreamServiceClient {
 		proofs := make([]malInfo, 90)
-		for i := range proofs {
+		// first 20 are legacy proofs
+		for i := range 20 {
 			proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
 			proofs[i].Properties = map[string]string{
 				"domain":                "0",
 				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(proofs[i].Properties, nil).AnyTimes()
-
+			info.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
+				func(_ context.Context, id types.NodeID) (map[string]string, error) {
+					return maps.Clone(proofs[i].Properties), nil
+				}).AnyTimes()
 			require.NoError(t, identities.SetMalicious(db, proofs[i].ID, proofs[i].Proof, time.Now()))
 		}
 
-		svc := NewMalfeasanceStreamService(db, nil, info)
+		// next 50 are proofs for individual identities
+		for i := 20; i < 70; i++ {
+			proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
+			proofs[i].Properties = map[string]string{
+				"domain":                strconv.FormatUint(uint64(i%4+1), 10),
+				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
+			}
+			info.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
+				func(_ context.Context, id types.NodeID) (map[string]string, error) {
+					return maps.Clone(proofs[i].Properties), nil
+				}).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+			require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, byte(i%4+1), time.Now()))
+		}
+
+		// last 20 are proofs for a single marriage
+		id, err := marriage.NewID(db)
+		require.NoError(t, err)
+		marriageATX := types.RandomATXID()
+		for i := 70; i < 90; i++ {
+			proofs[i] = malInfo{ID: types.RandomNodeID()}
+			err := marriage.Add(db, marriage.Info{
+				ID:            id,
+				NodeID:        proofs[i].ID,
+				ATX:           marriageATX,
+				MarriageIndex: i % 70,
+				Target:        proofs[70].ID,
+				Signature:     types.RandomEdSignature(),
+			})
+			require.NoError(t, err)
+		}
+		proofs[70].Proof = types.RandomBytes(100)
+		proofs[70].Properties = map[string]string{
+			"domain": "1",
+			"type":   "1",
+			"key":    "value",
+		}
+		info.EXPECT().Info(gomock.Any(), proofs[70].ID).DoAndReturn(
+			func(_ context.Context, id types.NodeID) (map[string]string, error) {
+				return maps.Clone(proofs[70].Properties), nil
+			}).AnyTimes()
+		legacyInfo.EXPECT().Info(gomock.Any(), proofs[70].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+		require.NoError(t, malfeasance.AddProof(db, proofs[70].ID, &id, proofs[70].Proof, byte(1), time.Now()))
+		for i := 71; i < 90; i++ {
+			proofs[i] = malInfo{ID: proofs[i].ID, Proof: proofs[70].Proof}
+			proofs[i].Properties = maps.Clone(proofs[70].Properties)
+			proofs[i].Properties["malicious_id"] = proofs[i].ID.String()
+
+			info.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
+				func(_ context.Context, id types.NodeID) (map[string]string, error) {
+					return maps.Clone(proofs[i].Properties), nil
+				}).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
+
+			require.NoError(t, malfeasance.SetMalicious(db, proofs[i].ID, id, time.Now()))
+		}
+
+		svc := NewMalfeasanceStreamService(db, info, legacyInfo)
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
@@ -184,9 +263,11 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
 
+		db := statesql.InMemoryTest(t)
 		ctrl := gomock.NewController(t)
 		info := NewMockmalfeasanceInfo(ctrl)
-		client := setup(t, statesql.InMemoryTest(t), info)
+		legacyInfo := NewMockmalfeasanceInfo(ctrl)
+		client := setup(t, db, info, legacyInfo)
 
 		stream, err := client.Stream(context.Background(), &spacemeshv2alpha1.MalfeasanceStreamRequest{})
 		require.NoError(t, err)
@@ -209,15 +290,18 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 		ctrl := gomock.NewController(t)
 		info := NewMockmalfeasanceInfo(ctrl)
-		client := setup(t, db, info)
+		legacyInfo := NewMockmalfeasanceInfo(ctrl)
+		client := setup(t, db, info, legacyInfo)
 
 		const (
-			start = 100
-			n     = 10
+			start       = 100
+			nLegacy     = 5
+			nIndividual = 5
+			nMarriage   = 5
 		)
 
 		var streamed []*events.EventMalfeasance
-		for i := 0; i < n; i++ {
+		for i := 0; i < nLegacy; i++ {
 			smesher := types.RandomNodeID()
 			streamed = append(streamed, &events.EventMalfeasance{
 				Smesher: smesher,
@@ -227,11 +311,62 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(properties, nil).AnyTimes()
+			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(nil, sql.ErrNotFound).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(
+				func(_ context.Context, id types.NodeID) (map[string]string, error) {
+					return maps.Clone(properties), nil
+				}).AnyTimes()
+		}
+
+		for i := nLegacy; i < nLegacy+nIndividual; i++ {
+			smesher := types.RandomNodeID()
+			streamed = append(streamed, &events.EventMalfeasance{
+				Smesher: smesher,
+			})
+			properties := map[string]string{
+				"domain":                strconv.FormatUint(uint64(i%4+1), 10),
+				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
+			}
+			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(
+				func(_ context.Context, id types.NodeID) (map[string]string, error) {
+					return maps.Clone(properties), nil
+				}).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(nil, sql.ErrNotFound).AnyTimes()
+		}
+
+		id, err := marriage.NewID(db)
+		require.NoError(t, err)
+		marriageATX := types.RandomATXID()
+		for i := nLegacy + nIndividual; i < nLegacy+nIndividual+nMarriage; i++ {
+			smesher := types.RandomNodeID()
+			streamed = append(streamed, &events.EventMalfeasance{
+				Smesher: smesher,
+			})
+			properties := map[string]string{
+				"domain": "1",
+				"type":   "1",
+				"key":    "value",
+			}
+			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(
+				func(_ context.Context, id types.NodeID) (map[string]string, error) {
+					return maps.Clone(properties), nil
+				}).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(nil, sql.ErrNotFound).AnyTimes()
+
+			err := marriage.Add(db, marriage.Info{
+				ID:            id,
+				NodeID:        streamed[i].Smesher,
+				ATX:           marriageATX,
+				MarriageIndex: i%nLegacy + nIndividual,
+				Target:        streamed[nLegacy+nIndividual].Smesher,
+				Signature:     types.RandomEdSignature(),
+			})
+			require.NoError(t, err)
 		}
 
 		request := &spacemeshv2alpha1.MalfeasanceStreamRequest{
-			SmesherId: [][]byte{streamed[3].Smesher.Bytes()},
+			SmesherId: [][]byte{streamed[3].Smesher.Bytes(), streamed[7].Smesher.Bytes(), streamed[12].Smesher.Bytes()},
 			Watch:     true,
 		}
 		stream, err := client.Stream(context.Background(), request)
@@ -241,7 +376,6 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 
 		var expect []types.NodeID
 		for _, rst := range streamed {
-			require.NoError(t, identities.SetMalicious(db, rst.Smesher, types.RandomBytes(100), time.Now()))
 			events.ReportMalfeasance(rst.Smesher)
 			matcher := malfeasanceMatcher{request}
 			if matcher.match(rst) {

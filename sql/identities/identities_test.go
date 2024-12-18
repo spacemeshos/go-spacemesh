@@ -77,6 +77,21 @@ func Test_GetMalicious(t *testing.T) {
 	require.Equal(t, bad, got)
 }
 
+func Test_CountMalicious(t *testing.T) {
+	db := statesql.InMemoryTest(t)
+	got, err := identities.CountMalicious(db)
+	require.NoError(t, err)
+	require.Zero(t, got)
+
+	const numBad = 11
+	for range numBad {
+		require.NoError(t, identities.SetMalicious(db, types.RandomNodeID(), types.RandomBytes(11), time.Now().Local()))
+	}
+	got, err = identities.CountMalicious(db)
+	require.NoError(t, err)
+	require.Equal(t, numBad, got)
+}
+
 func TestLoadMalfeasanceBlob(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	ctx := context.Background()

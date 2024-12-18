@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 )
 
 const (
@@ -56,7 +57,6 @@ func (s *MalfeasanceService) String() string {
 	return "MalfeasanceService"
 }
 
-// TODO(mafa): add a ListV2 method to return the new malfeasance proofs.
 func (s *MalfeasanceService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.MalfeasanceRequest,
@@ -68,24 +68,38 @@ func (s *MalfeasanceService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
-	ops, err := toMalfeasanceOps(request)
+	legacyCount, err := identities.CountMalicious(s.db)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, request.Limit)
-	if err := identities.IterateOps(s.db, ops, func(id types.NodeID, _ []byte, _ time.Time) bool {
-		rst := toProof(ctx, s.infoLegacy, id)
-		if rst == nil {
-			return true
-		}
-		proofs = append(proofs, rst)
-		return true
-	}); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	return &spacemeshv2alpha1.MalfeasanceList{Proofs: proofs}, nil
+	switch {
+	case request.Offset+request.Limit < legacyCount: // only legacy proofs
+		proofs, err := fetchLegacyFromDB(ctx, s.db, s.infoLegacy, request)
+		if err != nil {
+			return nil, err
+		}
+		return &spacemeshv2alpha1.MalfeasanceList{Proofs: proofs}, nil
+	case request.Offset >= legacyCount: // only new proofs
+		request.Offset -= legacyCount
+		proofs, err := fetchFromDB(ctx, s.db, s.info, request)
+		if err != nil {
+			return nil, err
+		}
+		return &spacemeshv2alpha1.MalfeasanceList{Proofs: proofs}, nil
+	default: // both legacy and new proofs
+		legacyProofs, err := fetchLegacyFromDB(ctx, s.db, s.infoLegacy, request)
+		if err != nil {
+			return nil, err
+		}
+		request.Limit -= uint64(len(legacyProofs))
+		request.Offset = 0
+		proofs, err := fetchFromDB(ctx, s.db, s.info, request)
+		if err != nil {
+			return nil, err
+		}
+		return &spacemeshv2alpha1.MalfeasanceList{Proofs: append(legacyProofs, proofs...)}, nil
+	}
 }
 
 func NewMalfeasanceStreamService(
@@ -118,52 +132,78 @@ func (s *MalfeasanceStreamService) String() string {
 	return "MalfeasanceStreamService"
 }
 
-// TODO(mafa): add a StreamV2 method to return the new malfeasance proofs
 func (s *MalfeasanceStreamService) Stream(
 	request *spacemeshv2alpha1.MalfeasanceStreamRequest,
 	stream spacemeshv2alpha1.MalfeasanceStreamService_StreamServer,
 ) error {
-	var sub *events.BufferedSubscription[events.EventMalfeasance]
-	if request.Watch {
-		matcher := malfeasanceMatcher{request}
-		var err error
-		sub, err = events.SubscribeMatched(matcher.match)
-		if err != nil {
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
+	}
+
+	legacyProofs, err := fetchLegacyFromDB(
+		stream.Context(),
+		s.db,
+		s.infoLegacy,
+		&spacemeshv2alpha1.MalfeasanceRequest{SmesherId: request.SmesherId},
+	)
+	if err != nil {
+		return err
+	}
+	for _, rst := range legacyProofs {
+		err := stream.Send(rst)
+		switch {
+		case errors.Is(err, io.EOF):
+			return nil
+		case err != nil:
 			return status.Error(codes.Internal, err.Error())
 		}
-		defer sub.Close()
-		if err := stream.SendHeader(metadata.MD{}); err != nil {
-			return status.Errorf(codes.Unavailable, "can't send header")
+	}
+
+	proofs, err := fetchFromDB(
+		stream.Context(),
+		s.db,
+		s.info,
+		&spacemeshv2alpha1.MalfeasanceRequest{SmesherId: request.SmesherId},
+	)
+	if err != nil {
+		return err
+	}
+	for _, rst := range proofs {
+		err := stream.Send(rst)
+		switch {
+		case errors.Is(err, io.EOF):
+			return nil
+		case err != nil:
+			return status.Error(codes.Internal, err.Error())
 		}
 	}
 
-	ops, err := toMalfeasanceOps(&spacemeshv2alpha1.MalfeasanceRequest{
-		SmesherId: request.SmesherId,
-	})
+	if !request.Watch {
+		return nil
+	}
+
+	matcher := malfeasanceMatcher{request}
+	sub, err := events.SubscribeMatched(matcher.match)
 	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
+		return status.Error(codes.Internal, err.Error())
 	}
-
-	ctx, cancel := context.WithCancel(stream.Context())
-	defer cancel()
-	dbChan, errChan := s.fetchFromDB(ctx, ops)
-
-	var eventsOut <-chan events.EventMalfeasance
-	var eventsFull <-chan struct{}
-	if sub != nil {
-		eventsOut = sub.Out()
-		eventsFull = sub.Full()
-	}
+	defer sub.Close()
+	eventsOut := sub.Out()
+	eventsFull := sub.Full()
 
 	for {
 		select {
-		// process events first
+		// process pending events first
 		case rst := <-eventsOut:
 			proof := toProof(stream.Context(), s.infoLegacy, rst.Smesher)
 			if proof == nil {
-				continue
+				// try again with the new handler
+				proof = toProof(stream.Context(), s.info, rst.Smesher)
+				if proof == nil {
+					continue
+				}
 			}
-			err = stream.Send(proof)
+			err := stream.Send(proof)
 			switch {
 			case errors.Is(err, io.EOF):
 				return nil
@@ -175,9 +215,13 @@ func (s *MalfeasanceStreamService) Stream(
 			case rst := <-eventsOut:
 				proof := toProof(stream.Context(), s.infoLegacy, rst.Smesher)
 				if proof == nil {
-					continue
+					// try again with the new handler
+					proof = toProof(stream.Context(), s.info, rst.Smesher)
+					if proof == nil {
+						continue
+					}
 				}
-				err = stream.Send(proof)
+				err := stream.Send(proof)
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
@@ -186,57 +230,11 @@ func (s *MalfeasanceStreamService) Stream(
 				}
 			case <-eventsFull:
 				return status.Error(codes.Canceled, "buffer overflow")
-			case rst, ok := <-dbChan:
-				if !ok {
-					dbChan = nil
-					if sub == nil {
-						return nil
-					}
-					continue
-				}
-				err = stream.Send(rst)
-				switch {
-				case errors.Is(err, io.EOF):
-					return nil
-				case err != nil:
-					return status.Error(codes.Internal, err.Error())
-				}
-			case err := <-errChan:
-				return err
 			case <-stream.Context().Done():
 				return nil
 			}
 		}
 	}
-}
-
-func (s *MalfeasanceStreamService) fetchFromDB(
-	ctx context.Context,
-	ops builder.Operations,
-) (<-chan *spacemeshv2alpha1.MalfeasanceProof, <-chan error) {
-	dbChan := make(chan *spacemeshv2alpha1.MalfeasanceProof)
-	errChan := make(chan error, 1) // buffered to avoid blocking, routine should exit immediately after sending an error
-
-	go func() {
-		defer close(dbChan)
-		if err := identities.IterateOps(s.db, ops, func(id types.NodeID, _ []byte, _ time.Time) bool {
-			rst := toProof(ctx, s.infoLegacy, id)
-			if rst == nil {
-				return true
-			}
-
-			select {
-			case dbChan <- rst:
-				return true
-			case <-ctx.Done():
-				// exit if the context is canceled
-				return false
-			}
-		}); err != nil {
-			errChan <- status.Error(codes.Internal, err.Error())
-		}
-	}()
-	return dbChan, errChan
 }
 
 func toProof(
@@ -280,12 +278,64 @@ func toProof(
 	}
 }
 
+func fetchFromDB(
+	ctx context.Context,
+	db sql.Executor,
+	info malfeasanceInfo,
+	request *spacemeshv2alpha1.MalfeasanceRequest,
+) ([]*spacemeshv2alpha1.MalfeasanceProof, error) {
+	ops, err := toMalfeasanceOps(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	ids := make([]types.NodeID, 0, request.Limit)
+	if err := malfeasance.IterateOps(db, ops, func(id types.NodeID, _ []byte, _ byte, _ time.Time) bool {
+		ids = append(ids, id)
+		return true
+	}); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, len(ids))
+	for _, id := range ids {
+		rst := toProof(ctx, info, id)
+		if rst == nil {
+			continue
+		}
+		proofs = append(proofs, rst)
+	}
+	return proofs, nil
+}
+
+func fetchLegacyFromDB(
+	ctx context.Context,
+	db sql.Executor,
+	info malfeasanceInfo,
+	request *spacemeshv2alpha1.MalfeasanceRequest,
+) ([]*spacemeshv2alpha1.MalfeasanceProof, error) {
+	ops, err := toMalfeasanceOps(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	ids := make([]types.NodeID, 0, request.Limit)
+	if err := identities.IterateOps(db, ops, func(id types.NodeID, _ []byte, _ time.Time) bool {
+		ids = append(ids, id)
+		return true
+	}); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, len(ids))
+	for _, id := range ids {
+		rst := toProof(ctx, info, id)
+		if rst == nil {
+			continue
+		}
+		proofs = append(proofs, rst)
+	}
+	return proofs, nil
+}
+
 func toMalfeasanceOps(filter *spacemeshv2alpha1.MalfeasanceRequest) (builder.Operations, error) {
 	ops := builder.Operations{}
-	ops.Filter = append(ops.Filter, builder.Op{
-		Field: builder.Proof,
-		Token: builder.IsNotNull,
-	})
 	ops.Modifiers = append(ops.Modifiers, builder.Modifier{
 		Key:   builder.OrderBy,
 		Value: builder.Smesher,

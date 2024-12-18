@@ -5,7 +5,7 @@ go 1.23.4
 require (
 	cloud.google.com/go/storage v1.48.0
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20241207233122-cb35037e984f
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20241218070203-9f5baffb5c4e
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
 	github.com/gofrs/flock v0.12.1
@@ -40,7 +40,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
-	github.com/spacemeshos/api/release/go v1.57.0
+	github.com/spacemeshos/api/release/go v1.59.0
 	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.1
@@ -56,10 +56,10 @@ require (
 	github.com/zeebo/blake3 v0.2.4
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20241210194714-1829a127f884
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 	golang.org/x/sync v0.10.0
 	golang.org/x/time v0.8.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241216192217-9240e9c98484
 	google.golang.org/grpc v1.68.1
 	google.golang.org/protobuf v1.36.0
 	k8s.io/api v0.32.0
