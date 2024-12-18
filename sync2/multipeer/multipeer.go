@@ -93,43 +93,55 @@ type MultiPeerReconcilerConfig struct {
 	FullSyncednessPeriod time.Duration `mapstructure:"full-syncedness-count"`
 }
 
-func (cfg *MultiPeerReconcilerConfig) Validate() error {
+func (cfg *MultiPeerReconcilerConfig) Validate(logger *zap.Logger) bool {
 	// Join the errors together so that the user doesn't have to fix one at a time.
-	var err error
+	r := true
 	if cfg.SyncPeerCount == 0 {
-		err = errors.Join(err, errors.New("sync-peer-count must be positive"))
+		logger.Error("sync-peer-count must be positive")
+		r = false
 	}
 	if cfg.MinSplitSyncPeers == 0 {
-		err = errors.Join(err, errors.New("min-split-sync-peers must be positive"))
+		logger.Error("min-split-sync-peers must be positive")
+		r = false
 	}
 	if cfg.MinSplitSyncCount == 0 {
-		err = errors.Join(err, errors.New("min-split-sync-count must be positive"))
+		logger.Error("min-split-sync-count must be positive")
+		r = false
 	}
 	if cfg.MinCompleteFraction < 0 || cfg.MinCompleteFraction > 1 {
-		err = errors.Join(err, errors.New("min-complete-fraction must be in [0, 1]"))
+		logger.Error("min-complete-fraction must be in [0, 1] interval",
+			zap.Float64("minCompleteFraction", cfg.MinCompleteFraction))
+		r = false
 	}
 	if cfg.SyncInterval <= 0 {
-		err = errors.Join(err, errors.New("sync-interval must be positive"))
+		logger.Error("sync-interval must be positive")
+		r = false
 	}
 	if cfg.SyncIntervalSpread < 0 {
-		err = errors.Join(err, errors.New("sync-interval-spread must be non-negative"))
+		logger.Error("sync-interval-spread must be non-negative")
+		r = false
 	}
 	if cfg.RetryInterval <= 0 {
-		err = errors.Join(err, errors.New("retry-interval must be positive"))
+		logger.Error("retry-interval must be positive")
+		r = false
 	}
 	if cfg.NoPeersRecheckInterval <= 0 {
-		err = errors.Join(err, errors.New("no-peers-recheck-interval must be positive"))
+		logger.Error("no-peers-recheck-interval must be positive")
+		r = false
 	}
 	if cfg.SplitSyncGracePeriod <= 0 {
-		err = errors.Join(err, errors.New("split-sync-grace-period must be positive"))
+		logger.Error("split-sync-grace-period must be positive")
+		r = false
 	}
 	if cfg.MinFullSyncednessCount == 0 {
-		err = errors.Join(err, errors.New("min-full-syncedness-count must be positive"))
+		logger.Error("min-full-syncedness-count must be positive")
+		r = false
 	}
 	if cfg.FullSyncednessPeriod <= 0 {
-		err = errors.Join(err, errors.New("full-syncedness-period must be positive"))
+		logger.Error("full-syncedness-period must be positive")
+		r = false
 	}
-	return err
+	return r
 }
 
 // DefaultConfig returns the default configuration for the MultiPeerReconciler.

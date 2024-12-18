@@ -29,22 +29,23 @@ type Config struct {
 	FailedBatchDelay                    time.Duration `mapstructure:"failed-batch-delay"`
 }
 
-func (cfg *Config) Validate() error {
-	// Join the errors together so that the user doesn't have to fix one at a time.
-	err := errors.Join(
-		cfg.RangeSetReconcilerConfig.Validate(),
-		cfg.MultiPeerReconcilerConfig.Validate(),
-	)
+func (cfg *Config) Validate(logger *zap.Logger) bool {
+	r := cfg.RangeSetReconcilerConfig.Validate(logger)
+	// always invoke Validate to log validation errors
+	r = cfg.MultiPeerReconcilerConfig.Validate(logger) && r
 	if cfg.MaxDepth < 1 {
-		err = errors.Join(err, errors.New("max-depth must be at least 1"))
+		logger.Error("max-depth must be at least 1")
+		r = false
 	}
 	if cfg.BatchSize < 1 {
-		err = errors.Join(err, errors.New("batch-size must be at least 1"))
+		logger.Error("batch-size must be at least 1")
+		r = false
 	}
 	if cfg.MaxAttempts < 1 {
-		err = errors.Join(err, errors.New("max-attempts must be at least 1"))
+		logger.Error("max-attempts must be at least 1")
+		r = false
 	}
-	return err
+	return r
 }
 
 // DefaultConfig returns the default configuration for the P2PHashSync.
@@ -89,8 +90,8 @@ func NewP2PHashSync(
 	cfg Config,
 	enableActiveSync bool,
 ) (*P2PHashSync, error) {
-	if err := cfg.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid config: %w", err)
+	if !cfg.Validate(logger) {
+		return nil, errors.New("invalid config")
 	}
 	s := &P2PHashSync{
 		logger:           logger,

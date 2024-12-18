@@ -38,21 +38,26 @@ type RangeSetReconcilerConfig struct {
 	MessageLimit int `mapstructure:"message-limit"`
 }
 
-func (cfg *RangeSetReconcilerConfig) Validate() error {
-	var err error
+func (cfg *RangeSetReconcilerConfig) Validate(logger *zap.Logger) bool {
+	r := true
 	if cfg.MaxSendRange == 0 {
-		err = errors.Join(err, errors.New("max-send-range must be positive"))
+		logger.Error("max-send-range must be positive")
+		r = false
 	}
 	if cfg.ItemChunkSize == 0 {
-		err = errors.Join(err, errors.New("item-chunk-size must be positive"))
+		logger.Error("item-chunk-size must be positive")
+		r = false
 	}
 	if cfg.SampleSize > maxSampleSize {
-		err = errors.Join(err, fmt.Errorf("bad sample-size %d (max %d)", cfg.SampleSize, maxSampleSize))
+		logger.Error("bad sample-size", zap.Uint("sample-size", cfg.SampleSize), zap.Uint("max", maxSampleSize))
+		r = false
 	}
 	if cfg.MaxReconcDiff < 0 || cfg.MaxReconcDiff > 1 {
-		err = errors.Join(err, errors.New("bad max-reconc-diff"))
+		logger.Error("bad max-reconc-diff, should be within [0, 1] interval",
+			zap.Float64("max-reconc-diff", cfg.MaxReconcDiff))
+		r = false
 	}
-	return err
+	return r
 }
 
 // DefaultConfig returns the default configuration for the RangeSetReconciler.

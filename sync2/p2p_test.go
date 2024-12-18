@@ -10,7 +10,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
@@ -160,49 +163,82 @@ func TestP2P(t *testing.T) {
 
 func TestConfigValidation(t *testing.T) {
 	t.Run("default", func(t *testing.T) {
+		obs, observedLogs := observer.New(zapcore.ErrorLevel)
+		logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+			func(core zapcore.Core) zapcore.Core {
+				return zapcore.NewTee(core, obs)
+			},
+		)))
 		cfg := sync2.DefaultConfig()
-		require.NoError(t, cfg.Validate())
+		require.True(t, cfg.Validate(logger))
+		require.Equal(t, 0, observedLogs.Len(), "expected 0 log messages")
 	})
 	t.Run("faulty", func(t *testing.T) {
 		for _, tc := range []struct {
-			name   string
-			cfg    func(cfg *sync2.Config)
-			expErr string
+			cfg     func(cfg *sync2.Config)
+			expErrs []string
 		}{
 			{
-				name: "empty",
 				cfg: func(cfg *sync2.Config) {
 					*cfg = sync2.Config{}
 				},
-				expErr: "max-send-range must be positive",
+				expErrs: []string{
+					"max-send-range must be positive",
+					"item-chunk-size must be positive",
+					"sync-peer-count must be positive",
+					"min-split-sync-peers must be positive",
+					"min-split-sync-count must be positive",
+					"sync-interval must be positive",
+					"retry-interval must be positive",
+					"no-peers-recheck-interval must be positive",
+					"split-sync-grace-period must be positive",
+					"min-full-syncedness-count must be positive",
+					"full-syncedness-period must be positive",
+					"max-depth must be at least 1",
+					"batch-size must be at least 1",
+					"max-attempts must be at least 1",
+				},
 			},
 			{
-				name: "bad toplevel config",
 				cfg: func(cfg *sync2.Config) {
 					cfg.SyncInterval = 0
 				},
-				expErr: "sync-interval must be positive",
+				expErrs: []string{
+					"sync-interval must be positive",
+				},
 			},
 			{
-				name: "bad range set reconciler config",
 				cfg: func(cfg *sync2.Config) {
-					cfg.RangeSetReconcilerConfig.MaxSendRange = 0
+					cfg.RangeSetReconcilerConfig.MaxReconcDiff = 2
 				},
-				expErr: "max-send-range must be positive",
+				expErrs: []string{
+					"bad max-reconc-diff, should be within [0, 1] interval",
+				},
 			},
 			{
-				name: "bad multi peer reconciler config",
 				cfg: func(cfg *sync2.Config) {
-					cfg.MultiPeerReconcilerConfig.SyncPeerCount = 0
+					cfg.MultiPeerReconcilerConfig.MinCompleteFraction = 3
 				},
-				expErr: "sync-peer-count must be positive",
+				expErrs: []string{
+					"min-complete-fraction must be in [0, 1] interval",
+				},
 			},
 		} {
-			t.Run(tc.name, func(t *testing.T) {
+			t.Run("", func(t *testing.T) {
+				obs, observedLogs := observer.New(zapcore.ErrorLevel)
+				logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WrapCore(
+					func(core zapcore.Core) zapcore.Core {
+						return zapcore.NewTee(core, obs)
+					},
+				)))
 				cfg := sync2.DefaultConfig()
 				tc.cfg(&cfg)
-				err := cfg.Validate()
-				require.ErrorContains(t, err, tc.expErr)
+				require.False(t, cfg.Validate(logger))
+				var msgs []string
+				for _, e := range observedLogs.All() {
+					msgs = append(msgs, e.Message)
+				}
+				require.ElementsMatch(t, tc.expErrs, msgs)
 			})
 		}
 	})
