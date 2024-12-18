@@ -1,4 +1,4 @@
-package grpcserver_test
+package grpcserver
 
 import (
 	"context"
@@ -13,19 +13,17 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
+	atxProvider := NewMockatxProvider(ctrl)
 	goldenAtx := types.ATXID{2, 3, 4}
-	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx)
+	activationService := NewActivationService(atxProvider, goldenAtx)
 
 	atxProvider.EXPECT().MaxHeightAtx().Return(types.EmptyATXID, errors.New("blah"))
 	response, err := activationService.Highest(context.Background(), &emptypb.Empty{})
@@ -41,9 +39,9 @@ func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
 
 func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
+	atxProvider := NewMockatxProvider(ctrl)
 	goldenAtx := types.ATXID{2, 3, 4}
-	activationService := grpcserver.NewActivationService(atxProvider, goldenAtx)
+	activationService := NewActivationService(atxProvider, goldenAtx)
 
 	previous := types.RandomATXID()
 	atx := types.ActivationTx{
@@ -71,8 +69,8 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 
 func TestGet_RejectInvalidAtxID(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
+	atxProvider := NewMockatxProvider(ctrl)
+	activationService := NewActivationService(atxProvider, types.ATXID{1})
 
 	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: []byte{1, 2, 3}})
 	require.Error(t, err)
@@ -81,8 +79,8 @@ func TestGet_RejectInvalidAtxID(t *testing.T) {
 
 func TestGet_AtxNotPresent(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
+	atxProvider := NewMockatxProvider(ctrl)
+	activationService := NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetAtx(id).Return(nil, nil)
@@ -94,8 +92,8 @@ func TestGet_AtxNotPresent(t *testing.T) {
 
 func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
+	atxProvider := NewMockatxProvider(ctrl)
+	activationService := NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetAtx(id).Return(&types.ActivationTx{}, errors.New(""))
@@ -107,8 +105,8 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 
 func TestGet_AtxProviderFailsObtainPreviousAtxs(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
+	atxProvider := NewMockatxProvider(ctrl)
+	activationService := NewActivationService(atxProvider, types.ATXID{1})
 
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetAtx(id).Return(&types.ActivationTx{}, nil)
@@ -121,8 +119,8 @@ func TestGet_AtxProviderFailsObtainPreviousAtxs(t *testing.T) {
 
 func TestGet_HappyPath(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
+	atxProvider := NewMockatxProvider(ctrl)
+	activationService := NewActivationService(atxProvider, types.ATXID{1})
 
 	previous := []types.ATXID{types.RandomATXID(), types.RandomATXID()}
 	id := types.RandomATXID()
@@ -155,10 +153,10 @@ func TestGet_HappyPath(t *testing.T) {
 
 func TestGet_IdentityCanceled(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	atxProvider := grpcserver.NewMockatxProvider(ctrl)
-	activationService := grpcserver.NewActivationService(atxProvider, types.ATXID{1})
+	atxProvider := NewMockatxProvider(ctrl)
+	activationService := NewActivationService(atxProvider, types.ATXID{1})
 
-	smesher, proof := grpcserver.BallotMalfeasance(t, statesql.InMemoryTest(t))
+	smesher, proof := BallotMalfeasance(t, statesql.InMemoryTest(t))
 	previous := types.RandomATXID()
 	id := types.RandomATXID()
 	atx := types.ActivationTx{
@@ -185,5 +183,5 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	require.Equal(t, previous.Bytes(), response.Atx.PreviousAtxs[0].Id)
 	require.Equal(t, atx.NumUnits, response.Atx.NumUnits)
 	require.Equal(t, atx.Sequence, response.Atx.Sequence)
-	require.Equal(t, events.ToMalfeasancePB(smesher, codec.MustEncode(proof), false), response.MalfeasanceProof)
+	require.Equal(t, toMalfeasancePB(smesher, codec.MustEncode(proof), false), response.MalfeasanceProof)
 }

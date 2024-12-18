@@ -221,7 +221,6 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			smesher := types.RandomNodeID()
 			streamed = append(streamed, &events.EventMalfeasance{
 				Smesher: smesher,
-				Proof:   types.RandomBytes(100),
 			})
 			properties := map[string]string{
 				"domain":                "0",
@@ -242,7 +241,8 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 
 		var expect []types.NodeID
 		for _, rst := range streamed {
-			events.ReportMalfeasance(rst.Smesher, rst.Proof)
+			require.NoError(t, identities.SetMalicious(db, rst.Smesher, types.RandomBytes(100), time.Now()))
+			events.ReportMalfeasance(rst.Smesher)
 			matcher := malfeasanceMatcher{request}
 			if matcher.match(rst) {
 				expect = append(expect, rst.Smesher)

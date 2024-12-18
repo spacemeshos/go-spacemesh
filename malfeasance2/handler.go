@@ -77,11 +77,11 @@ func (h *Handler) countInvalidProof(mp MalfeasanceProof) {
 	numInvalidProofs.WithLabelValues(labels...).Inc()
 }
 
-func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
+func (h *Handler) reportMalfeasance(smesher types.NodeID) {
 	h.tortoise.OnMalfeasance(smesher)
-	events.ReportMalfeasance(smesher, proof)
+	events.ReportMalfeasance(smesher)
 	if slices.Contains(h.nodeIDs, smesher) {
-		events.EmitOwnMalfeasanceProof(smesher, proof)
+		events.EmitOwnMalfeasanceProof(smesher)
 	}
 }
 
@@ -158,7 +158,7 @@ func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, peer p
 	}
 
 	for _, id := range nodeIDs {
-		h.reportMalfeasance(id, msg)
+		h.reportMalfeasance(id)
 	}
 	h.countProof(proof)
 	h.logger.Debug("synced malfeasance proof",
@@ -196,7 +196,7 @@ func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, msg []byte) e
 	}
 
 	for _, id := range nodeIDs {
-		h.reportMalfeasance(id, msg)
+		h.reportMalfeasance(id)
 	}
 	h.countProof(proof)
 	h.logger.Debug("received gossiped malfeasance proof",

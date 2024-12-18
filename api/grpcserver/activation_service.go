@@ -14,8 +14,9 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
@@ -85,7 +86,7 @@ func (s *activationService) Get(ctx context.Context, request *pb.GetRequest) (*p
 		Atx: convertActivation(atx, prev),
 	}
 	if proof != nil {
-		resp.MalfeasanceProof = events.ToMalfeasancePB(atx.SmesherID, proof, false)
+		resp.MalfeasanceProof = toMalfeasancePB(atx.SmesherID, proof, false)
 	}
 	return resp, nil
 }
@@ -115,4 +116,37 @@ func (s *activationService) Highest(ctx context.Context, req *emptypb.Empty) (*p
 	return &pb.HighestResponse{
 		Atx: convertActivation(atx, prev),
 	}, nil
+}
+
+// TODO(mafa): instead of passing along the proof bytes the API should query the malfeasance handler for the metadata
+// of the proof if needed.
+// The malfeasance handler should then take care of decoding the proof, caching if necessary and returning the metadata.
+func toMalfeasancePB(nodeID types.NodeID, proof []byte, includeProof bool) *pb.MalfeasanceProof {
+	mp := &wire.MalfeasanceProof{}
+	if err := codec.Decode(proof, mp); err != nil {
+		return &pb.MalfeasanceProof{}
+	}
+	kind := pb.MalfeasanceProof_MALFEASANCE_UNSPECIFIED
+	switch mp.Proof.Type {
+	case wire.MultipleATXs:
+		kind = pb.MalfeasanceProof_MALFEASANCE_ATX
+	case wire.MultipleBallots:
+		kind = pb.MalfeasanceProof_MALFEASANCE_BALLOT
+	case wire.HareEquivocation:
+		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
+	case wire.InvalidPostIndex:
+		kind = pb.MalfeasanceProof_MALFEASANCE_POST_INDEX
+	case wire.InvalidPrevATX:
+		kind = pb.MalfeasanceProof_MALFEASANCE_INCORRECT_PREV_ATX
+	}
+	result := &pb.MalfeasanceProof{
+		SmesherId: &pb.SmesherId{Id: nodeID.Bytes()},
+		Layer:     &pb.LayerNumber{Number: mp.Layer.Uint32()},
+		Kind:      kind,
+		DebugInfo: wire.MalfeasanceInfo(nodeID, mp),
+	}
+	if includeProof {
+		result.Proof = proof
+	}
+	return result
 }

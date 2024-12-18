@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
@@ -614,9 +615,8 @@ func (s *MeshService) MalfeasanceQuery(
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	// TODO(mafa): query malfeasance handler for data instead of extracting from proof bytes
 	return &pb.MalfeasanceResponse{
-		Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
+		Proof: toMalfeasancePB(id, proof, req.IncludeProof),
 	}, nil
 }
 
@@ -639,9 +639,8 @@ func (s *MeshService) MalfeasanceStream(
 		case <-stream.Context().Done():
 			return nil
 		default:
-			// TODO(mafa): query malfeasance handler for data instead of extracting from proof bytes
 			res := &pb.MalfeasanceStreamResponse{
-				Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
+				Proof: toMalfeasancePB(id, proof, req.IncludeProof),
 			}
 			return stream.Send(res)
 		}
@@ -656,9 +655,15 @@ func (s *MeshService) MalfeasanceStream(
 		case <-fullCh:
 			return status.Errorf(codes.Canceled, "buffer is full")
 		case ev := <-eventCh:
-			// TODO(mafa): query malfeasance handler for data instead of extracting from proof bytes
+			var blob sql.Blob
+			if err := identities.LoadMalfeasanceBlob(stream.Context(), s.cdb, ev.Smesher.Bytes(), &blob); err != nil {
+				return status.Error(
+					codes.Internal,
+					fmt.Errorf("load malfeasance proof for %s: %w", ev.Smesher.ShortString(), err).Error(),
+				)
+			}
 			if err := stream.Send(&pb.MalfeasanceStreamResponse{
-				Proof: events.ToMalfeasancePB(ev.Smesher, ev.Proof, req.IncludeProof),
+				Proof: toMalfeasancePB(ev.Smesher, blob.Bytes, req.IncludeProof),
 			}); err != nil {
 				return status.Error(codes.Internal, fmt.Errorf("send to stream: %w", err).Error())
 			}

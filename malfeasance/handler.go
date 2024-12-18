@@ -77,11 +77,11 @@ func (h *Handler) RegisterHandler(malfeasanceType MalfeasanceType, handler Malfe
 	h.handlers[malfeasanceType] = handler
 }
 
-func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
+func (h *Handler) reportMalfeasance(smesher types.NodeID) {
 	h.tortoise.OnMalfeasance(smesher)
-	events.ReportMalfeasance(smesher, proof)
+	events.ReportMalfeasance(smesher)
 	if slices.Contains(h.nodeIDs, smesher) {
-		events.EmitOwnMalfeasanceProof(smesher, proof)
+		events.EmitOwnMalfeasanceProof(smesher)
 	}
 }
 
@@ -177,7 +177,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 			h.countInvalidProof(&p.MalfeasanceProof)
 			return fmt.Errorf("%w: %s", pubsub.ErrValidationReject, err)
 		}
-		h.reportMalfeasance(id, codec.MustEncode(&p.MalfeasanceProof))
+		h.reportMalfeasance(id)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		h.countProof(&p.MalfeasanceProof)
@@ -226,7 +226,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		}
 		return nodeID, err
 	}
-	h.reportMalfeasance(nodeID, proofBytes)
+	h.reportMalfeasance(nodeID)
 	h.cdb.CacheMalfeasanceProof(nodeID, proofBytes)
 	h.countProof(p)
 	h.logger.Debug("new malfeasance proof",
