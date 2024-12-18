@@ -179,7 +179,7 @@ func TestRangeSync(t *testing.T) {
 		finalA, finalB string
 		x, y           string
 		countA, countB int
-		fpA, fpB       rangesync.Fingerprint
+		inSync         bool
 		maxRounds      [4]int
 		sim            float64
 	}{
@@ -191,8 +191,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "",
 			countA:    0,
 			countB:    0,
-			fpA:       rangesync.EmptyFingerprint(),
-			fpB:       rangesync.EmptyFingerprint(),
+			inSync:    true,
 			maxRounds: [4]int{1, 1, 1, 1},
 			sim:       1,
 		},
@@ -204,8 +203,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    0,
 			countB:    4,
-			fpA:       rangesync.EmptyFingerprint(),
-			fpB:       rangesync.StringToFP("abcd"),
+			inSync:    false,
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
 		},
@@ -217,8 +215,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    4,
 			countB:    0,
-			fpA:       rangesync.StringToFP("abcd"),
-			fpB:       rangesync.EmptyFingerprint(),
+			inSync:    false,
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
 		},
@@ -230,8 +227,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    2,
 			countB:    2,
-			fpA:       rangesync.StringToFP("ab"),
-			fpB:       rangesync.StringToFP("cd"),
+			inSync:    false,
 			maxRounds: [4]int{3, 2, 2, 2},
 			sim:       0,
 		},
@@ -243,8 +239,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcdefghijklmnopqr",
 			countA:    13,
 			countB:    7,
-			fpA:       rangesync.StringToFP("acdefghijklmn"),
-			fpB:       rangesync.StringToFP("bcdopqr"),
+			inSync:    false,
 			maxRounds: [4]int{4, 4, 3, 3},
 			sim:       0.153,
 		},
@@ -258,8 +253,7 @@ func TestRangeSync(t *testing.T) {
 			y:         "h",
 			countA:    6,
 			countB:    3,
-			fpA:       rangesync.StringToFP("acdefg"),
-			fpB:       rangesync.StringToFP("bcd"),
+			inSync:    false,
 			maxRounds: [4]int{3, 3, 2, 2},
 			sim:       0.333,
 		},
@@ -273,8 +267,7 @@ func TestRangeSync(t *testing.T) {
 			y:         "a",
 			countA:    7,
 			countB:    4,
-			fpA:       rangesync.StringToFP("hijklmn"),
-			fpB:       rangesync.StringToFP("opqr"),
+			inSync:    false,
 			maxRounds: [4]int{4, 3, 3, 2},
 			sim:       0,
 		},
@@ -286,8 +279,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    3,
 			countB:    1,
-			fpA:       rangesync.StringToFP("bcd"),
-			fpB:       rangesync.StringToFP("a"),
+			inSync:    false,
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
 		},
@@ -323,12 +315,24 @@ func TestRangeSync(t *testing.T) {
 
 				require.Equal(t, tc.countA, prBA.Count, "countA")
 				require.Equal(t, tc.countB, prAB.Count, "countB")
-				require.Equal(t, tc.fpA, prBA.FP, "fpA")
-				require.Equal(t, tc.fpB, prAB.FP, "fpB")
+				require.Equal(t, tc.inSync, prAB.InSync, "inSyncAB")
+				require.Equal(t, tc.inSync, prBA.InSync, "inSyncBA")
 				require.Equal(t, tc.finalA, setStr(setA), "finalA")
 				require.Equal(t, tc.finalB, setStr(setB), "finalB")
 				require.InDelta(t, tc.sim, prAB.Sim, 0.01, "prAB.Sim")
 				require.InDelta(t, tc.sim, prBA.Sim, 0.01, "prBA.Sim")
+
+				prBA = runProbe(t, syncB, syncA, x, y)
+				prAB = runProbe(t, syncA, syncB, x, y)
+				require.True(t, prAB.InSync, "inSyncAB after sync")
+				require.True(t, prBA.InSync, "inSyncBA after sync")
+				require.Equal(t, prAB.Count, prBA.Count, "count after sync")
+				// We expect exactly 1 similarity after sync, so we don't
+				// want to use require.InEpsilon as the linter suggests.
+				//nolint:testifylint
+				require.Equal(t, float64(1), prAB.Sim, "sim after sync")
+				//nolint:testifylint
+				require.Equal(t, float64(1), prBA.Sim, "sim after sync")
 			}
 		})
 	}
