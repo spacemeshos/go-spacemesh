@@ -11,7 +11,6 @@ import (
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/mock/gomock"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -26,8 +25,6 @@ import (
 func TestActivationService_List(t *testing.T) {
 	setup := func(t *testing.T) (spacemeshv2alpha1.ActivationServiceClient, []types.ActivationTx) {
 		db := statesql.InMemoryTest(t)
-		ctrl, _ := gomock.WithContext(context.Background(), t)
-		atxProvider := NewMockactivationProvider(ctrl)
 
 		gen := fixture.NewAtxsGenerator()
 		activations := make([]types.ActivationTx, 100)
@@ -38,7 +35,7 @@ func TestActivationService_List(t *testing.T) {
 		}
 
 		goldenAtx := types.ATXID{2, 3, 4}
-		svc := NewActivationService(db, atxProvider, goldenAtx)
+		svc := NewActivationService(db, goldenAtx)
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
@@ -232,9 +229,6 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	ctx := context.Background()
 
-	ctrl, ctx := gomock.WithContext(ctx, t)
-	atxProvider := NewMockactivationProvider(ctrl)
-
 	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)
 	epoch3ATXs := make([]types.ActivationTx, 30)
 	for i := range epoch3ATXs {
@@ -253,7 +247,7 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	}
 
 	goldenAtx := types.ATXID{2, 3, 4}
-	svc := NewActivationService(db, atxProvider, goldenAtx)
+	svc := NewActivationService(db, goldenAtx)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -286,32 +280,27 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 }
 
 func TestActivationService_Highest(t *testing.T) {
-	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
-
-	ctrl, ctx := gomock.WithContext(ctx, t)
-	atxProvider := NewMockactivationProvider(ctrl)
-	atx := types.ActivationTx{
-		Sequence:     rand.Uint64(),
-		PublishEpoch: 0,
-		Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
-		NumUnits:     rand.Uint32(),
-	}
-	id := types.RandomATXID()
-	atx.SetID(id)
-
-	goldenAtx := types.ATXID{2, 3, 4}
-
-	svc := NewActivationService(db, atxProvider, goldenAtx)
-	cfg, cleanup := launchServer(t, svc)
-	t.Cleanup(cleanup)
-
-	conn := dialGrpc(t, cfg)
-	client := spacemeshv2alpha1.NewActivationServiceClient(conn)
-
 	t.Run("max tick height", func(t *testing.T) {
-		atxProvider.EXPECT().MaxHeightAtx().Return(id, nil)
-		atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
+		db := statesql.InMemoryTest(t)
+		ctx := context.Background()
+
+		goldenAtx := types.ATXID{2, 3, 4}
+		svc := NewActivationService(db, goldenAtx)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		client := spacemeshv2alpha1.NewActivationServiceClient(conn)
+
+		atx := &types.ActivationTx{
+			Sequence:     rand.Uint64(),
+			PublishEpoch: 0,
+			Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
+			NumUnits:     rand.Uint32(),
+		}
+		id := types.RandomATXID()
+		atx.SetID(id)
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
 
 		res, err := client.Highest(ctx, &spacemeshv2alpha1.HighestRequest{})
 		require.NoError(t, err)
@@ -324,7 +313,16 @@ func TestActivationService_Highest(t *testing.T) {
 		require.Equal(t, atx.TickHeight(), res.Activation.Height)
 	})
 	t.Run("returns golden atx on error", func(t *testing.T) {
-		atxProvider.EXPECT().MaxHeightAtx().Return(types.ATXID{}, errors.New("empty"))
+		db := statesql.InMemoryTest(t)
+		ctx := context.Background()
+
+		goldenAtx := types.ATXID{2, 3, 4}
+		svc := NewActivationService(db, goldenAtx)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		client := spacemeshv2alpha1.NewActivationServiceClient(conn)
 
 		res, err := client.Highest(ctx, &spacemeshv2alpha1.HighestRequest{})
 		require.NoError(t, err)

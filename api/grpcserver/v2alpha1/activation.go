@@ -29,11 +29,6 @@ const (
 	ActivationStream = "activation_stream_v2alpha1"
 )
 
-type activationProvider interface {
-	GetAtx(id types.ATXID) (*types.ActivationTx, error)
-	MaxHeightAtx() (types.ATXID, error)
-}
-
 func NewActivationStreamService(db sql.Executor) *ActivationStreamService {
 	return &ActivationStreamService{db: db}
 }
@@ -172,18 +167,16 @@ func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 	}
 }
 
-func NewActivationService(db sql.Executor, atxProvider activationProvider, goldenAtx types.ATXID) *ActivationService {
+func NewActivationService(db sql.Executor, goldenAtx types.ATXID) *ActivationService {
 	return &ActivationService{
-		db:          db,
-		atxProvider: atxProvider,
-		goldenAtx:   goldenAtx,
+		db:        db,
+		goldenAtx: goldenAtx,
 	}
 }
 
 type ActivationService struct {
-	goldenAtx   types.ATXID
-	db          sql.Executor
-	atxProvider activationProvider
+	goldenAtx types.ATXID
+	db        sql.Executor
 }
 
 func (s *ActivationService) RegisterService(server *grpc.Server) {
@@ -252,7 +245,7 @@ func (s *ActivationService) Highest(
 	_ context.Context,
 	_ *spacemeshv2alpha1.HighestRequest,
 ) (*spacemeshv2alpha1.HighestResponse, error) {
-	highest, err := s.atxProvider.MaxHeightAtx()
+	highest, err := atxs.GetIDWithMaxHeight(s.db, types.EmptyNodeID, atxs.FilterAll)
 	if err != nil {
 		return &spacemeshv2alpha1.HighestResponse{
 			Activation: &spacemeshv2alpha1.Activation{
@@ -261,7 +254,7 @@ func (s *ActivationService) Highest(
 		}, nil
 	}
 
-	atx, err := s.atxProvider.GetAtx(highest)
+	atx, err := atxs.Get(s.db, highest)
 	if err != nil || atx == nil {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("atx id %v not found: %s", highest, err))
 	}
