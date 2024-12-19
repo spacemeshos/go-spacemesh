@@ -27,6 +27,7 @@ type Config struct {
 	MaxAttempts                         uint          `mapstructure:"max-attempts"`
 	MaxBatchRetries                     uint          `mapstructure:"max-batch-retries"`
 	FailedBatchDelay                    time.Duration `mapstructure:"failed-batch-delay"`
+	AdvanceInterval                     time.Duration `mapstructure:"advance-interval"`
 }
 
 func (cfg *Config) Validate(logger *zap.Logger) bool {
@@ -45,6 +46,10 @@ func (cfg *Config) Validate(logger *zap.Logger) bool {
 		logger.Error("max-attempts must be at least 1")
 		r = false
 	}
+	if cfg.AdvanceInterval <= 0 {
+		logger.Error("advance-interval must be positive")
+		r = false
+	}
 	return r
 }
 
@@ -60,6 +65,7 @@ func DefaultConfig() Config {
 		MaxAttempts:               3,
 		MaxBatchRetries:           3,
 		FailedBatchDelay:          10 * time.Second,
+		AdvanceInterval:           1 * time.Minute,
 	}
 }
 
@@ -143,18 +149,31 @@ func (s *P2PHashSync) start() (isWaiting bool) {
 	isWaiting = true
 	s.startOnce.Do(func() {
 		isWaiting = false
+		var ctx context.Context
+		ctx, s.cancel = context.WithCancel(context.Background())
 		if s.enableActiveSync {
 			s.eg.Go(func() error {
 				defer s.running.Store(false)
-				var ctx context.Context
-				ctx, s.cancel = context.WithCancel(context.Background())
 				return s.reconciler.Run(ctx, s.kickCh)
 			})
-			return
 		} else {
 			s.logger.Info("active syncv2 is disabled")
-			return
 		}
+		s.eg.Go(func() error {
+			ticker := time.NewTicker(s.cfg.AdvanceInterval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-ticker.C:
+					s.logger.Debug("advancing OrderedSet on timer")
+					if err := s.os.Advance(); err != nil {
+						s.logger.Error("error advancing the set", zap.Error(err))
+					}
+				}
+			}
+		})
 	})
 	return isWaiting
 }
@@ -177,7 +196,7 @@ func (s *P2PHashSync) StartAndSync(ctx context.Context) error {
 
 // Stop stops the multi-peer reconciler.
 func (s *P2PHashSync) Stop() {
-	if !s.enableActiveSync || !s.running.Load() {
+	if !s.running.Load() {
 		return
 	}
 	if s.cancel != nil {

@@ -24,32 +24,51 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
-type fakeHandler struct {
-	mtx       *sync.Mutex
-	committed map[string]struct{}
+type dumbSet struct {
+	*rangesync.DumbSet
+	mtx          sync.Mutex
+	committed    map[string]struct{}
+	advanceCount int
 }
 
-func (fh *fakeHandler) Commit(
+func (ds *dumbSet) addCommitted(seq rangesync.SeqResult) error {
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+	if ds.committed == nil {
+		ds.committed = make(map[string]struct{})
+	}
+	for k := range seq.Seq {
+		ds.committed[string(k)] = struct{}{}
+	}
+	return seq.Error()
+}
+
+func (ds *dumbSet) Advance() error {
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+	for k := range ds.committed {
+		ds.DumbSet.AddUnchecked(rangesync.KeyBytes(k))
+	}
+	clear(ds.committed)
+	ds.advanceCount++
+	return ds.DumbSet.Advance()
+}
+
+func (ds *dumbSet) AdvanceCount() int {
+	ds.mtx.Lock()
+	defer ds.mtx.Unlock()
+	return ds.advanceCount
+}
+
+type fakeHandler struct{}
+
+func (fh fakeHandler) Commit(
 	ctx context.Context,
 	peer p2p.Peer,
 	base rangesync.OrderedSet,
 	received rangesync.SeqResult,
 ) error {
-	fh.mtx.Lock()
-	defer fh.mtx.Unlock()
-	for k := range received.Seq {
-		fh.committed[string(k)] = struct{}{}
-	}
-	return nil
-}
-
-func (fh *fakeHandler) committedItems() (items []rangesync.KeyBytes) {
-	fh.mtx.Lock()
-	defer fh.mtx.Unlock()
-	for k := range fh.committed {
-		items = append(items, rangesync.KeyBytes(k))
-	}
-	return items
+	return base.(*dumbSet).addCommitted(received)
 }
 
 func TestP2P(t *testing.T) {
@@ -63,13 +82,11 @@ func TestP2P(t *testing.T) {
 	mesh, err := mocknet.FullMeshConnected(numNodes)
 	require.NoError(t, err)
 	hs := make([]*sync2.P2PHashSync, numNodes)
-	handlers := make([]*fakeHandler, numNodes)
 	initialSet := make([]rangesync.KeyBytes, numHashes)
 	for n := range initialSet {
 		initialSet[n] = rangesync.RandomKeyBytes(32)
 	}
 	var eg errgroup.Group
-	var mtx sync.Mutex
 	defer eg.Wait()
 	for n := range hs {
 		ps := peers.New()
@@ -83,12 +100,15 @@ func TestP2P(t *testing.T) {
 		cfg := sync2.DefaultConfig()
 		cfg.SyncInterval = 100 * time.Millisecond
 		cfg.MaxDepth = maxDepth
+		cfg.AdvanceInterval = 200 * time.Millisecond
 		host := mesh.Hosts()[n]
-		handlers[n] = &fakeHandler{
-			mtx:       &mtx,
-			committed: make(map[string]struct{}),
+		ds := dumbSet{DumbSet: new(rangesync.DumbSet)}
+		ds.SetAllowMultiReceive(true)
+		if n == 0 {
+			for _, h := range initialSet {
+				ds.AddUnchecked(h)
+			}
 		}
-		var os rangesync.DumbSet
 		d := rangesync.NewDispatcher(logger)
 		srv := d.SetupServer(host, "sync2test", server.WithLog(logger))
 		ctx, cancel := context.WithCancel(context.Background())
@@ -96,22 +116,15 @@ func TestP2P(t *testing.T) {
 		eg.Go(func() error { return srv.Run(ctx) })
 		hs[n], err = sync2.NewP2PHashSync(
 			logger.Named(fmt.Sprintf("node%d", n)),
-			d, "test", &os, keyLen, ps, handlers[n], cfg, true)
+			d, "test", &ds, keyLen, ps, fakeHandler{}, cfg, true)
 		require.NoError(t, err)
 		require.NoError(t, hs[n].Load())
-		is := hs[n].Set().(*rangesync.DumbSet)
-		is.SetAllowMultiReceive(true)
-		if n == 0 {
-			for _, h := range initialSet {
-				is.AddUnchecked(h)
-			}
-		}
 		require.False(t, hs[n].Synced())
 		hs[n].Start()
 	}
 
 	require.Eventually(t, func() bool {
-		for n, hsync := range hs {
+		for _, hsync := range hs {
 			// use a snapshot to avoid races
 			if !hsync.Synced() {
 				return false
@@ -120,17 +133,12 @@ func TestP2P(t *testing.T) {
 			require.NoError(t, hsync.Set().WithCopy(
 				context.Background(),
 				func(os rangesync.OrderedSet) error {
-					for _, k := range handlers[n].committedItems() {
-						os.(*rangesync.DumbSet).AddUnchecked(k)
-					}
 					empty, err := os.Empty()
 					require.NoError(t, err)
 					if empty {
 						r = false
 					} else {
-						k, err := os.Items().First()
-						require.NoError(t, err)
-						info, err := os.GetRangeInfo(k, k)
+						info, err := os.GetRangeInfo(nil, nil)
 						require.NoError(t, err)
 						if info.Count < numHashes {
 							r = false
@@ -145,19 +153,38 @@ func TestP2P(t *testing.T) {
 		return true
 	}, 30*time.Second, 300*time.Millisecond)
 
+	advCounts := make([]int, len(hs))
 	for n, hsync := range hs {
-		hsync.Stop()
 		require.NoError(t, hsync.Set().WithCopy(
 			context.Background(),
 			func(os rangesync.OrderedSet) error {
-				for _, k := range handlers[n].committedItems() {
-					os.(*rangesync.DumbSet).AddUnchecked(k)
-				}
 				actualItems, err := os.Items().Collect()
 				require.NoError(t, err)
 				require.ElementsMatch(t, initialSet, actualItems)
 				return nil
 			}))
+		// OrderedSet is advanced after each sync.
+		// The first set may not be advanced initially here b/c it does
+		// not receive any new items.
+		// There's some chance Advance() was called on it by timer handler.
+		advCounts[n] = hsync.Set().(*dumbSet).AdvanceCount()
+		if n > 0 {
+			require.NotZero(t, advCounts[n])
+		}
+	}
+
+	// Make sure OrderedSet is advanced without syncs using timer
+	require.Eventually(t, func() bool {
+		for n, hsync := range hs {
+			if hsync.Set().(*dumbSet).AdvanceCount() <= advCounts[n] {
+				return false
+			}
+		}
+		return true
+	}, 30*time.Second, 300*time.Millisecond)
+
+	for _, hsync := range hs {
+		hsync.Stop()
 	}
 }
 
@@ -197,6 +224,7 @@ func TestConfigValidation(t *testing.T) {
 					"max-depth must be at least 1",
 					"batch-size must be at least 1",
 					"max-attempts must be at least 1",
+					"advance-interval must be positive",
 				},
 			},
 			{

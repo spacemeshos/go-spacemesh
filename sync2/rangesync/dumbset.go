@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"errors"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -106,23 +107,26 @@ func realFPFunc(items []KeyBytes) Fingerprint {
 // DumbSet is a simple OrderedSet implementation that doesn't include any optimizations.
 // It is intended to be only used in tests.
 type DumbSet struct {
-	keys             []KeyBytes
-	received         map[string]int
-	added            map[string]bool
-	allowMutiReceive bool
-	FPFunc           func(items []KeyBytes) Fingerprint
+	copyMtx           sync.Mutex
+	keys              []KeyBytes
+	received          map[string]int
+	added             map[string]bool
+	allowMultiReceive bool
+	FPFunc            func(items []KeyBytes) Fingerprint
 }
 
 var _ OrderedSet = &DumbSet{}
 
 // SetAllowMultiReceive sets whether the set allows receiving the same item multiple times.
 func (ds *DumbSet) SetAllowMultiReceive(allow bool) {
-	ds.allowMutiReceive = allow
+	ds.allowMultiReceive = allow
 }
 
 // AddUnchecked adds an item to the set without registerting the item for checks
 // as in case of Add and Receive.
 func (ds *DumbSet) AddUnchecked(id KeyBytes) {
+	ds.copyMtx.Lock()
+	defer ds.copyMtx.Unlock()
 	if len(ds.keys) == 0 {
 		ds.keys = []KeyBytes{id}
 	}
@@ -180,7 +184,7 @@ func (ds *DumbSet) Receive(id KeyBytes) error {
 	}
 	sid := string(id)
 	ds.received[sid]++
-	if !ds.allowMutiReceive && ds.received[sid] > 1 {
+	if !ds.allowMultiReceive && ds.received[sid] > 1 {
 		panic("item already received: " + id.String())
 	}
 	return nil
@@ -306,7 +310,14 @@ func (ds *DumbSet) Items() SeqResult {
 
 // WithCopy implements OrderedSet.
 func (ds *DumbSet) WithCopy(_ context.Context, toCall func(OrderedSet) error) error {
-	return toCall(&DumbSet{keys: slices.Clone(ds.keys)})
+	ds.copyMtx.Lock()
+	copy := &DumbSet{
+		keys:              slices.Clone(ds.keys),
+		allowMultiReceive: ds.allowMultiReceive,
+		FPFunc:            ds.FPFunc,
+	}
+	ds.copyMtx.Unlock()
+	return toCall(copy)
 }
 
 // Recent implements OrderedSet.
