@@ -6,22 +6,9 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
-
-func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
-	rows, err := db.Exec(`
-		SELECT 1
-		FROM malfeasance
-		WHERE pubkey = ?1
-	`, func(stmt *sql.Statement) {
-		stmt.BindBytes(1, nodeID.Bytes())
-	}, nil)
-	if err != nil {
-		return false, fmt.Errorf("is malicious %v: %w", nodeID, err)
-	}
-	return rows > 0, nil
-}
 
 func AddProof(
 	db sql.Executor,
@@ -67,4 +54,44 @@ func SetMalicious(db sql.Executor, nodeID types.NodeID, marriageID marriage.ID, 
 		return fmt.Errorf("set malicious %v: %w", nodeID, err)
 	}
 	return nil
+}
+
+func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
+	rows, err := db.Exec(`
+		SELECT 1
+		FROM malfeasance
+		WHERE pubkey = ?1
+	`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}, nil)
+	if err != nil {
+		return false, fmt.Errorf("is malicious %v: %w", nodeID, err)
+	}
+	return rows > 0, nil
+}
+
+func IterateOps(
+	db sql.Executor,
+	operations builder.Operations,
+	fn func(types.NodeID, []byte, int, time.Time) bool,
+) error {
+	fullQuery := `
+		SELECT pubkey, proof, domain, received
+		FROM malfeasance
+	` + builder.FilterFrom(operations)
+	_, err := db.Exec(fullQuery, builder.BindingsFrom(operations),
+		func(stmt *sql.Statement) bool {
+			var id types.NodeID
+			stmt.ColumnBytes(0, id[:])
+			var proof []byte
+			if stmt.ColumnLen(1) > 0 {
+				proof = make([]byte, stmt.ColumnLen(1))
+				stmt.ColumnBytes(1, proof)
+			}
+			domain := int(stmt.ColumnInt64(2))
+			received := time.Unix(0, stmt.ColumnInt64(3))
+			return fn(id, proof, domain, received)
+		},
+	)
+	return err
 }

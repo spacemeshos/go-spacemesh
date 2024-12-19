@@ -615,7 +615,7 @@ func (s *MeshService) MalfeasanceQuery(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &pb.MalfeasanceResponse{
-		Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
+		Proof: toMalfeasancePB(id, proof, req.IncludeProof),
 	}, nil
 }
 
@@ -627,7 +627,7 @@ func (s *MeshService) MalfeasanceStream(
 	if sub == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
 	}
-	eventch, fullch := consumeEvents[events.EventMalfeasance](stream.Context(), sub)
+	eventCh, fullCh := consumeEvents[events.EventMalfeasance](stream.Context(), sub)
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
 		return status.Errorf(codes.Unavailable, "can't send header")
 	}
@@ -639,7 +639,7 @@ func (s *MeshService) MalfeasanceStream(
 			return nil
 		default:
 			res := &pb.MalfeasanceStreamResponse{
-				Proof: events.ToMalfeasancePB(id, proof, req.IncludeProof),
+				Proof: toMalfeasancePB(id, proof, req.IncludeProof),
 			}
 			return stream.Send(res)
 		}
@@ -651,11 +651,18 @@ func (s *MeshService) MalfeasanceStream(
 		select {
 		case <-stream.Context().Done():
 			return nil
-		case <-fullch:
+		case <-fullCh:
 			return status.Errorf(codes.Canceled, "buffer is full")
-		case ev := <-eventch:
+		case ev := <-eventCh:
+			proof, err := s.cdb.MalfeasanceProof(ev.Smesher)
+			if err != nil {
+				return status.Error(
+					codes.Internal,
+					fmt.Errorf("load malfeasance proof for %s: %w", ev.Smesher.ShortString(), err).Error(),
+				)
+			}
 			if err := stream.Send(&pb.MalfeasanceStreamResponse{
-				Proof: events.ToMalfeasancePB(ev.Smesher, ev.Proof, req.IncludeProof),
+				Proof: toMalfeasancePB(ev.Smesher, proof, req.IncludeProof),
 			}); err != nil {
 				return status.Error(codes.Internal, fmt.Errorf("send to stream: %w", err).Error())
 			}

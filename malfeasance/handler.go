@@ -77,11 +77,11 @@ func (h *Handler) RegisterHandler(malfeasanceType MalfeasanceType, handler Malfe
 	h.handlers[malfeasanceType] = handler
 }
 
-func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
+func (h *Handler) reportMalfeasance(smesher types.NodeID) {
 	h.tortoise.OnMalfeasance(smesher)
-	events.ReportMalfeasance(smesher, proof)
+	events.ReportMalfeasance(smesher)
 	if slices.Contains(h.nodeIDs, smesher) {
-		events.EmitOwnMalfeasanceProof(smesher, proof)
+		events.EmitOwnMalfeasanceProof(smesher)
 	}
 }
 
@@ -93,9 +93,14 @@ func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
 	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
 }
 
-func (h *Handler) Info(data []byte) (map[string]string, error) {
+func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error) {
+	var blob sql.Blob
+	if err := identities.LoadMalfeasanceBlob(ctx, h.cdb, nodeID.Bytes(), &blob); err != nil {
+		return nil, fmt.Errorf("load malfeasance proof: %w", err)
+	}
+
 	var p wire.MalfeasanceProof
-	if err := codec.Decode(data, &p); err != nil {
+	if err := codec.Decode(blob.Bytes, &p); err != nil {
 		return nil, fmt.Errorf("decode malfeasance proof: %w", err)
 	}
 	mh, ok := h.handlers[MalfeasanceType(p.Proof.Type)]
@@ -170,7 +175,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 			h.countInvalidProof(&p.MalfeasanceProof)
 			return fmt.Errorf("%w: %s", pubsub.ErrValidationReject, err)
 		}
-		h.reportMalfeasance(id, codec.MustEncode(&p.MalfeasanceProof))
+		h.reportMalfeasance(id)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		h.countProof(&p.MalfeasanceProof)
@@ -219,7 +224,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		}
 		return nodeID, err
 	}
-	h.reportMalfeasance(nodeID, proofBytes)
+	h.reportMalfeasance(nodeID)
 	h.cdb.CacheMalfeasanceProof(nodeID, proofBytes)
 	h.countProof(p)
 	h.logger.Debug("new malfeasance proof",

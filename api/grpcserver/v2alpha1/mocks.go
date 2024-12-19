@@ -10,8 +10,10 @@
 package v2alpha1
 
 import (
+	context "context"
 	reflect "reflect"
 
+	types "github.com/spacemeshos/go-spacemesh/common/types"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -40,18 +42,18 @@ func (m *MockmalfeasanceInfo) EXPECT() *MockmalfeasanceInfoMockRecorder {
 }
 
 // Info mocks base method.
-func (m *MockmalfeasanceInfo) Info(data []byte) (map[string]string, error) {
+func (m *MockmalfeasanceInfo) Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Info", data)
+	ret := m.ctrl.Call(m, "Info", ctx, nodeID)
 	ret0, _ := ret[0].(map[string]string)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Info indicates an expected call of Info.
-func (mr *MockmalfeasanceInfoMockRecorder) Info(data any) *MockmalfeasanceInfoInfoCall {
+func (mr *MockmalfeasanceInfoMockRecorder) Info(ctx, nodeID any) *MockmalfeasanceInfoInfoCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockmalfeasanceInfo)(nil).Info), data)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockmalfeasanceInfo)(nil).Info), ctx, nodeID)
 	return &MockmalfeasanceInfoInfoCall{Call: call}
 }
 
@@ -67,13 +69,13 @@ func (c *MockmalfeasanceInfoInfoCall) Return(arg0 map[string]string, arg1 error)
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalfeasanceInfoInfoCall) Do(f func([]byte) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
+func (c *MockmalfeasanceInfoInfoCall) Do(f func(context.Context, types.NodeID) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func([]byte) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
+func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func(context.Context, types.NodeID) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
