@@ -244,7 +244,7 @@ require (
 	gonum.org/v1/gonum v0.15.0 // indirect
 	google.golang.org/api v0.210.0 // indirect
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241118233622-e639e219e697 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241202173237-19429a94021a // indirect
 	google.golang.org/grpc/stats/opentelemetry v0.0.0-20240907200651-3ffb98b2c93a // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -261,6 +261,11 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-// temporary until this issue is resolved and cloud.google.com/go/storage has been updated
-// https://github.com/googleapis/google-cloud-go/issues/11283
-exclude google.golang.org/grpc v1.69.0
+exclude (
+	// temporary until this issue is resolved and cloud.google.com/go/storage has been updated
+	// https://github.com/googleapis/google-cloud-go/issues/11283
+	google.golang.org/grpc v1.68.2
+	google.golang.org/grpc v1.69.0
+	google.golang.org/grpc v1.69.1
+	google.golang.org/grpc v1.69.2
+)
