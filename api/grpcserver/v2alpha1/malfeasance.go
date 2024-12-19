@@ -136,10 +136,6 @@ func (s *MalfeasanceStreamService) Stream(
 	request *spacemeshv2alpha1.MalfeasanceStreamRequest,
 	stream spacemeshv2alpha1.MalfeasanceStreamService_StreamServer,
 ) error {
-	if err := stream.SendHeader(metadata.MD{}); err != nil {
-		return status.Errorf(codes.Unavailable, "can't send header")
-	}
-
 	legacyProofs, err := fetchLegacyFromDB(
 		stream.Context(),
 		s.db,
@@ -190,6 +186,10 @@ func (s *MalfeasanceStreamService) Stream(
 	defer sub.Close()
 	eventsOut := sub.Out()
 	eventsFull := sub.Full()
+
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
+	}
 
 	for {
 		select {

@@ -294,13 +294,12 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		client := setup(t, db, info, legacyInfo)
 
 		const (
-			start       = 100
 			nLegacy     = 5
 			nIndividual = 5
 			nMarriage   = 5
 		)
 
-		var streamed []*events.EventMalfeasance
+		streamed := make([]*events.EventMalfeasance, 0, nLegacy+nIndividual+nMarriage)
 		for i := 0; i < nLegacy; i++ {
 			smesher := types.RandomNodeID()
 			streamed = append(streamed, &events.EventMalfeasance{
@@ -374,7 +373,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		_, err = stream.Header()
 		require.NoError(t, err)
 
-		var expect []types.NodeID
+		expect := make([]types.NodeID, 0, len(request.SmesherId))
 		for _, rst := range streamed {
 			events.ReportMalfeasance(rst.Smesher)
 			matcher := malfeasanceMatcher{request}
