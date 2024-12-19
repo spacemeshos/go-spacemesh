@@ -38,9 +38,9 @@ type FPResult struct {
 
 // SplitResult represents the result of a split operation.
 type SplitResult struct {
-	// The two parts of the inteval
+	// The two parts of the interval
 	Part0, Part1 FPResult
-	// Moddle point value
+	// Middle point value
 	Middle rangesync.KeyBytes
 }
 
@@ -104,7 +104,7 @@ func (ac *aggContext) prefixBelowY(p prefix) bool {
 
 // fingerprintAtOrAfterX verifies that the specified fingerprint, which should be derived
 // from a single key, is at or after x bound of the interval.
-func (ac *aggContext) fingreprintAtOrAfterX(fp rangesync.Fingerprint) bool {
+func (ac *aggContext) fingerprintAtOrAfterX(fp rangesync.Fingerprint) bool {
 	k := make(rangesync.KeyBytes, len(ac.x))
 	copy(k, fp[:])
 	return k.Compare(ac.x) >= 0
@@ -112,7 +112,7 @@ func (ac *aggContext) fingreprintAtOrAfterX(fp rangesync.Fingerprint) bool {
 
 // fingerprintBelowY verifies that the specified fingerprint, which should be derived from a
 // single key, is below y bound of the interval.
-func (ac *aggContext) fingreprintBelowY(fp rangesync.Fingerprint) bool {
+func (ac *aggContext) fingerprintBelowY(fp rangesync.Fingerprint) bool {
 	k := make(rangesync.KeyBytes, len(ac.x))
 	copy(k, fp[:])
 	k[:FingerprintSize].Inc() // 1 after max key derived from the fingerprint
@@ -128,7 +128,7 @@ func (ac *aggContext) nodeAtOrAfterX(idx nodeIndex, p prefix) bool {
 		if v != nil {
 			return v.Compare(ac.x) >= 0
 		}
-		return ac.fingreprintAtOrAfterX(fp)
+		return ac.fingerprintAtOrAfterX(fp)
 	}
 	return ac.prefixAtOrAfterX(p)
 }
@@ -141,7 +141,7 @@ func (ac *aggContext) nodeBelowY(idx nodeIndex, p prefix) bool {
 		if v != nil {
 			return v.Compare(ac.y) < 0
 		}
-		return ac.fingreprintBelowY(fp)
+		return ac.fingerprintBelowY(fp)
 	}
 	return ac.prefixBelowY(p)
 }
@@ -207,7 +207,7 @@ func (ac *aggContext) switchToSecondPart() {
 }
 
 // maybeIncludeNode returns tries to include the full contents of the specified node in
-// the aggregation and returns if it succeeded, based on the remaining limit and the numer
+// the aggregation and returns if it succeeded, based on the remaining limit and the number
 // of items in the node.
 // It also handles "easy split" happening at the node.
 func (ac *aggContext) maybeIncludeNode(idx nodeIndex, p prefix) bool {
@@ -243,7 +243,7 @@ func (ac *aggContext) maybeIncludeNode(idx nodeIndex, p prefix) bool {
 		// We're doing a split and this node is exactly at the limit, or it was
 		// above the limit but first part was still empty, so store count and
 		// fingerprint for the first part which includes the current node and zero
-		// out cound and figerprint for the second part
+		// out count and fingerprint for the second part
 		ac.switchToSecondPart()
 	}
 	return true
@@ -271,14 +271,14 @@ var _ sqlstore.IDStore = &FPTree{}
 
 // NewFPTreeWithValues creates an FPTree which also stores the items themselves and does
 // not make use of a backing IDStore.
-// sizeHint specifies the approximage expected number of items.
+// sizeHint specifies the approximate expected number of items.
 // keyLen specifies the number of bytes in keys used.
 func NewFPTreeWithValues(sizeHint, keyLen int) *FPTree {
 	return NewFPTree(sizeHint, nil, keyLen, 0)
 }
 
 // NewFPTree creates an FPTree of limited depth backed by an IDStore.
-// sizeHint specifies the approximage expected number of items.
+// sizeHint specifies the approximate expected number of items.
 // keyLen specifies the number of bytes in keys used.
 func NewFPTree(sizeHint int, idStore sqlstore.IDStore, keyLen, maxDepth int) *FPTree {
 	var np nodePool
@@ -329,7 +329,7 @@ func (ft *FPTree) traverse(idx nodeIndex, yield func(rangesync.KeyBytes) bool) (
 	return ft.traverse(l, yield) && ft.traverse(r, yield)
 }
 
-// travereFrom traverses the subtree rooted in idx in order and calls the given function for
+// traverseFrom traverses the subtree rooted in idx in order and calls the given function for
 // each item starting from the given key.
 func (ft *FPTree) traverseFrom(
 	idx nodeIndex,
@@ -905,7 +905,7 @@ func (ft *FPTree) aggregateRight(
 	}
 }
 
-// aggregateXX aggregtes intervals of form [x, x) which denotes the whole set.
+// aggregateXX aggregates intervals of form [x, x) which denotes the whole set.
 func (ft *FPTree) aggregateXX(ac *aggContext) (err error) {
 	// [x, x) interval which denotes the whole set unless
 	// the limit is specified, in which case we need to start aggregating
@@ -1081,7 +1081,7 @@ func (ft *FPTree) nextFromPrefix(ac *aggContext, p prefix) (rangesync.KeyBytes, 
 	return id.Clone(), nil
 }
 
-// FingerprintInteval performs a range fingerprint query with specified bounds and limit.
+// FingerprintInterval performs a range fingerprint query with specified bounds and limit.
 func (ft *FPTree) FingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr FPResult, err error) {
 	ft.np.lockRead()
 	defer ft.np.unlockRead()
