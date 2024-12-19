@@ -98,7 +98,7 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 
 	nid1 := types.RandomNodeID()
 	proof1 := types.RandomBytes(11)
-	identities.SetMalicious(db, nid1, proof1, time.Now())
+	require.NoError(t, identities.SetMalicious(db, nid1, proof1, time.Now()))
 
 	var blob1 sql.Blob
 	require.NoError(t, identities.LoadMalfeasanceBlob(ctx, db, nid1.Bytes(), &blob1))
@@ -110,7 +110,7 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 
 	nid2 := types.RandomNodeID()
 	proof2 := types.RandomBytes(12)
-	identities.SetMalicious(db, nid2, proof2, time.Now())
+	require.NoError(t, identities.SetMalicious(db, nid2, proof2, time.Now()))
 
 	var blob2 sql.Blob
 	require.NoError(t, identities.LoadMalfeasanceBlob(ctx, db, nid2.Bytes(), &blob2))
