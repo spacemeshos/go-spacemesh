@@ -89,7 +89,7 @@ type Builder struct {
 	nipostBuilder     nipostBuilder
 	validator         nipostValidator
 	layerClock        layerClock
-	syncer            syncer
+	syncer            Syncer
 	logger            *zap.Logger
 	parentCtx         context.Context
 	poets             []PoetService
@@ -183,7 +183,7 @@ func NewBuilder(
 	nipostValidator nipostValidator,
 	nipostBuilder nipostBuilder,
 	layerClock layerClock,
-	syncer syncer,
+	syncer Syncer,
 	log *zap.Logger,
 	opts ...BuilderOption,
 ) *Builder {

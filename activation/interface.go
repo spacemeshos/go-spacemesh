@@ -91,7 +91,7 @@ type nipostBuilder interface {
 	ResetState(types.NodeID) error
 }
 
-type syncer interface {
+type Syncer interface {
 	RegisterForATXSynced() <-chan struct{}
 }
 

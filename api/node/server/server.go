@@ -187,7 +187,13 @@ func (s *Server) PostPublishProtocol(
 		return nil, err
 	}
 
-	s.publisher.Publish(ctx, string(request.Protocol), blob)
+	protocol := string(request.Protocol)
+	if protocol == "hare3" {
+		// TODO: hare3 takes that from configuration what also should be done
+		// there instead of using the default value
+		protocol = hare3.DefaultProtocolName
+	}
+	s.publisher.Publish(ctx, protocol, blob)
 	return PostPublishProtocol200Response{}, nil
 }
 
@@ -321,15 +327,14 @@ type proposalResp struct {
 }
 
 func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
-	if p.buf == nil {
-		w.WriteHeader(204)
-		return nil
-	}
 	w.Header().Add("content-type", "application/octet-stream")
 	w.Header().Add("x-spacemesh-atx-nonce", fmt.Sprintf("%d", p.nonce))
 	w.WriteHeader(200)
-	_, err := w.Write(p.buf)
-	return err
+	if p.buf != nil {
+		_, err := w.Write(p.buf)
+		return err
+	}
+	return nil
 }
 
 func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (

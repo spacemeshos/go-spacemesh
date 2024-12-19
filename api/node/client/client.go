@@ -103,6 +103,9 @@ func (s *NodeService) PositioningATX(ctx context.Context, maxPublish types.Epoch
 // Publish implements pubsub.Publisher.
 func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) error {
 	buf := bytes.NewBuffer(blob)
+	if proto == hare3.DefaultProtocolName {
+		proto = "hare3"
+	}
 	protocol := PostPublishProtocolParamsProtocol(proto)
 	resp, err := s.client.PostPublishProtocolWithBody(ctx, protocol, "application/octet-stream", buf)
 	if err != nil {
@@ -150,7 +153,7 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 		// therefore hare probably terminated.
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+		return nil, fmt.Errorf("unexpected status during get hare message: %s", resp.Status)
 	}
 }
 
@@ -212,7 +215,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	case http.StatusOK:
 	case http.StatusNoContent:
 		// special case - no error but also no proposal, means
-		// we're no eligibile this epoch with this node ID
+		// we're no eligible this epoch with this node ID
 		return nil, 0, nil
 	default:
 		return nil, 0, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -221,6 +224,13 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, 0, fmt.Errorf("read all: %w", err)
+	}
+
+	if len(bytes) == 0 {
+		// there was no http.StatusNoContent but proposal body was empty
+		// what means no proposal and in effect we're no eligible this epoch
+		// with this node ID
+		return nil, 0, nil
 	}
 
 	prop := types.Proposal{}

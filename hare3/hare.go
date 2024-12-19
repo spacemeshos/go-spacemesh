@@ -32,6 +32,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+const (
+	DefaultProtocolName = "/h/3.0"
+)
+
 type CommitteeUpgrade struct {
 	Layer types.LayerID
 	Size  uint16
@@ -112,7 +116,7 @@ func DefaultConfig() Config {
 		PreroundDelay:   25 * time.Second,
 		RoundDuration:   12 * time.Second,
 		// can be bumped to 3.1 when oracle upgrades
-		ProtocolName: "/h/3.0",
+		ProtocolName: DefaultProtocolName,
 		DisableLayer: math.MaxUint32,
 	}
 }

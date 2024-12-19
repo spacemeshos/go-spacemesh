@@ -100,7 +100,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
 
 	ctrl := gomock.NewController(t)
-	syncer := activation.NewMocksyncer(ctrl)
+	syncer := activation.NewMockSyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
 		close(ch)
