@@ -7,7 +7,7 @@ import (
 
 var ErrEasySplitFailed = errEasySplitFailed
 
-func (ft *FPTree) FingerprintIntervalInternal(
+func (ft *FPTree) FingerprintInternal(
 	x, y rangesync.KeyBytes,
 	limit int,
 	needNext bool,

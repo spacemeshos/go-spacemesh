@@ -581,7 +581,7 @@ func testFPTree(t *testing.T, makeFPTrees mkFPTreesFunc) {
 					name = fmt.Sprintf("%d-%d_%d", rtc.xIdx, rtc.yIdx, rtc.limit)
 				}
 				t.Run(name, func(t *testing.T) {
-					fpr, err := ft.FingerprintIntervalInternal(x, y, rtc.limit, true)
+					fpr, err := ft.FingerprintInternal(x, y, rtc.limit, true)
 					require.NoError(t, err)
 					assert.Equal(t, rtc.fp, fpr.FP.String(), "fp")
 					assert.Equal(t, rtc.count, fpr.Count, "count")
@@ -1035,7 +1035,7 @@ func dumbFP(hs hashList, x, y rangesync.KeyBytes, limit int) fpResultWithBounds 
 
 func verifyInterval(t *testing.T, hs hashList, ft *fptree.FPTree, x, y rangesync.KeyBytes, limit int) fptree.FPResult {
 	expFPR := dumbFP(hs, x, y, limit)
-	fpr, err := ft.FingerprintIntervalInternal(x, y, limit, true)
+	fpr, err := ft.FingerprintInternal(x, y, limit, true)
 	require.NoError(t, err)
 	require.Equal(t, expFPR, toFPResultWithBounds(t, fpr),
 		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
