@@ -5,7 +5,7 @@ go 1.23.4
 require (
 	cloud.google.com/go/storage v1.48.0
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20241204110417-3c631bce206f
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20241219054339-0b660c616ac8
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
 	github.com/gofrs/flock v0.12.1
@@ -40,7 +40,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
-	github.com/spacemeshos/api/release/go v1.58.0
+	github.com/spacemeshos/api/release/go v1.59.0
 	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.1
@@ -56,11 +56,11 @@ require (
 	github.com/zeebo/blake3 v0.2.4
 	go.uber.org/mock v0.5.0
 	go.uber.org/zap v1.27.0
-	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 	golang.org/x/sync v0.10.0
 	golang.org/x/time v0.8.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241202173237-19429a94021a
-	google.golang.org/grpc v1.68.0
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241216192217-9240e9c98484
+	google.golang.org/grpc v1.68.1
 	google.golang.org/protobuf v1.36.0
 	k8s.io/api v0.32.0
 	k8s.io/apimachinery v0.32.0
@@ -234,7 +234,7 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.31.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/oauth2 v0.24.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/term v0.27.0 // indirect
@@ -261,4 +261,6 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-exclude google.golang.org/grpc v1.69.0 // remove after cloud.google.com/** upgrades to grpc-go v1.67.3
+// temporary until this issue is resolved and cloud.google.com/go/storage has been updated
+// https://github.com/googleapis/google-cloud-go/issues/11283
+exclude google.golang.org/grpc v1.69.0
