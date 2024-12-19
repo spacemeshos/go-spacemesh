@@ -138,6 +138,9 @@ func ReportNodeStatusUpdate() error {
 
 // ReportResult reports creation or receipt of a new tx receipt.
 func ReportResult(rst types.TransactionWithResult) error {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.resultsEmitter.Emit(rst)
 	}
@@ -451,6 +454,7 @@ func CloseEventReporter() {
 	mu.Lock()
 	defer mu.Unlock()
 	if reporter != nil {
+		close(reporter.stopChan)
 		if err := reporter.transactionEmitter.Close(); err != nil {
 			log.With().Panic("failed to close transactionEmitter", log.Err(err))
 		}
@@ -481,8 +485,9 @@ func CloseEventReporter() {
 		if err := reporter.malfeasanceEmitter.Close(); err != nil {
 			log.With().Panic("failed to close malfeasanceEmitter", log.Err(err))
 		}
-
-		close(reporter.stopChan)
+		if err := reporter.events.emitter.Close(); err != nil {
+			log.With().Panic("failed to close eventsEmitter", log.Err(err))
+		}
 		reporter = nil
 	}
 }
