@@ -286,7 +286,7 @@ func TestRangeSync(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			logger := zaptest.NewLogger(t)
-			for n, maxSendRange := range []int{1, 2, 3, 4} {
+			for n, maxSendRange := range []uint{1, 2, 3, 4} {
 				t.Logf("maxSendRange: %d", maxSendRange)
 				cfg := rangesync.DefaultConfig()
 				cfg.MaxSendRange = maxSendRange
@@ -373,7 +373,7 @@ func TestRandomSync(t *testing.T) {
 		expectedSet := maps.Keys(keySet)
 		slices.Sort(expectedSet)
 
-		maxSendRange := rand.Intn(16) + 1
+		maxSendRange := uint(rand.Intn(16) + 1)
 		cfg := rangesync.DefaultConfig()
 		cfg.MaxSendRange = maxSendRange
 		cfg.ItemChunkSize = 3
@@ -391,7 +391,7 @@ func TestRandomSync(t *testing.T) {
 }
 
 type hashSyncTestConfig struct {
-	maxSendRange    int
+	maxSendRange    uint
 	numTestHashes   int
 	minNumSpecificA int
 	maxNumSpecificA int

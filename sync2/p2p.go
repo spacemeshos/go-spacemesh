@@ -22,11 +22,30 @@ type Config struct {
 	multipeer.MultiPeerReconcilerConfig `mapstructure:",squash"`
 	TrafficLimit                        int           `mapstructure:"traffic-limit"`
 	MessageLimit                        int           `mapstructure:"message-limit"`
-	MaxDepth                            int           `mapstructure:"max-depth"`
-	BatchSize                           int           `mapstructure:"batch-size"`
-	MaxAttempts                         int           `mapstructure:"max-attempts"`
-	MaxBatchRetries                     int           `mapstructure:"max-batch-retries"`
+	MaxDepth                            uint          `mapstructure:"max-depth"`
+	BatchSize                           uint          `mapstructure:"batch-size"`
+	MaxAttempts                         uint          `mapstructure:"max-attempts"`
+	MaxBatchRetries                     uint          `mapstructure:"max-batch-retries"`
 	FailedBatchDelay                    time.Duration `mapstructure:"failed-batch-delay"`
+}
+
+func (cfg *Config) Validate(logger *zap.Logger) bool {
+	r := cfg.RangeSetReconcilerConfig.Validate(logger)
+	// always invoke Validate to log validation errors
+	r = cfg.MultiPeerReconcilerConfig.Validate(logger) && r
+	if cfg.MaxDepth < 1 {
+		logger.Error("max-depth must be at least 1")
+		r = false
+	}
+	if cfg.BatchSize < 1 {
+		logger.Error("batch-size must be at least 1")
+		r = false
+	}
+	if cfg.MaxAttempts < 1 {
+		logger.Error("max-attempts must be at least 1")
+		r = false
+	}
+	return r
 }
 
 // DefaultConfig returns the default configuration for the P2PHashSync.
@@ -70,7 +89,10 @@ func NewP2PHashSync(
 	handler multipeer.SyncKeyHandler,
 	cfg Config,
 	enableActiveSync bool,
-) *P2PHashSync {
+) (*P2PHashSync, error) {
+	if !cfg.Validate(logger) {
+		return nil, errors.New("invalid config")
+	}
 	s := &P2PHashSync{
 		logger:           logger,
 		os:               os,
@@ -82,9 +104,9 @@ func NewP2PHashSync(
 	s.syncBase = multipeer.NewSetSyncBase(ps, s.os, handler)
 	s.reconciler = multipeer.NewMultiPeerReconciler(
 		logger, cfg.MultiPeerReconcilerConfig,
-		s.syncBase, peers, keyLen, cfg.MaxDepth)
+		s.syncBase, peers, keyLen, int(cfg.MaxDepth))
 	d.Register(name, s.syncBase.Serve)
-	return s
+	return s, nil
 }
 
 // Set returns the OrderedSet that is being synchronized.
@@ -112,7 +134,7 @@ func (s *P2PHashSync) Load() error {
 		zap.Duration("elapsed", time.Since(start)),
 		zap.Int("count", info.Count),
 		zap.Stringer("fingerprint", info.Fingerprint),
-		zap.Int("maxDepth", s.cfg.MaxDepth))
+		zap.Uint("maxDepth", s.cfg.MaxDepth))
 	return nil
 }
 

@@ -36,13 +36,14 @@ func atxSeqResult(atxs []types.ATXID) rangesync.SeqResult {
 	}
 }
 
+var testCfg = sync2.Config{
+	BatchSize:        4,
+	MaxAttempts:      3,
+	MaxBatchRetries:  2,
+	FailedBatchDelay: 10 * time.Second,
+}
+
 func TestAtxHandler_Success(t *testing.T) {
-	const (
-		batchSize       = 4
-		maxAttempts     = 3
-		maxBatchRetries = 2
-		batchRetryDelay = 10 * time.Second
-	)
 	ctrl := gomock.NewController(t)
 	allAtxs := make([]types.ATXID, 10)
 	logger := zaptest.NewLogger(t)
@@ -52,7 +53,7 @@ func TestAtxHandler_Success(t *testing.T) {
 	}
 	f := NewMockFetcher(ctrl)
 	clock := clockwork.NewFakeClock()
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
+	h := sync2.NewATXHandler(logger, f, testCfg, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
 		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
@@ -84,12 +85,6 @@ func TestAtxHandler_Success(t *testing.T) {
 }
 
 func TestAtxHandler_Retry(t *testing.T) {
-	const (
-		batchSize       = 4
-		maxAttempts     = 3
-		maxBatchRetries = 2
-		batchRetryDelay = 10 * time.Second
-	)
 	ctrl := gomock.NewController(t)
 	allAtxs := make([]types.ATXID, 10)
 	logger := zaptest.NewLogger(t)
@@ -99,7 +94,7 @@ func TestAtxHandler_Retry(t *testing.T) {
 	}
 	f := NewMockFetcher(ctrl)
 	clock := clockwork.NewFakeClock()
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
+	h := sync2.NewATXHandler(logger, f, testCfg, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
 		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
@@ -159,7 +154,7 @@ func TestAtxHandler_Retry(t *testing.T) {
 			if ctx.Err() != nil {
 				return nil
 			}
-			clock.Advance(batchRetryDelay)
+			clock.Advance(testCfg.FailedBatchDelay)
 		}
 	})
 
@@ -170,19 +165,13 @@ func TestAtxHandler_Retry(t *testing.T) {
 }
 
 func TestAtxHandler_Cancel(t *testing.T) {
-	const (
-		batchSize       = 4
-		maxAttempts     = 3
-		maxBatchRetries = 2
-		batchRetryDelay = 10 * time.Second
-	)
 	atxID := types.RandomATXID()
 	ctrl := gomock.NewController(t)
 	logger := zaptest.NewLogger(t)
 	peer := p2p.Peer("foobar")
 	f := NewMockFetcher(ctrl)
 	clock := clockwork.NewFakeClock()
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
+	h := sync2.NewATXHandler(logger, f, testCfg, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	baseSet.EXPECT().Has(rangesync.KeyBytes(atxID.Bytes())).Return(false, nil)
 	f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{atxID.Hash32()})
@@ -200,12 +189,6 @@ func TestAtxHandler_Cancel(t *testing.T) {
 }
 
 func TestAtxHandler_BatchRetry(t *testing.T) {
-	const (
-		batchSize       = 4
-		maxAttempts     = 3
-		maxBatchRetries = 2
-		batchRetryDelay = 10 * time.Second
-	)
 	ctrl := gomock.NewController(t)
 	allAtxs := make([]types.ATXID, 10)
 	logger := zaptest.NewLogger(t)
@@ -215,7 +198,7 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 	}
 	clock := clockwork.NewFakeClock()
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
+	h := sync2.NewATXHandler(logger, f, testCfg, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
 		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
@@ -249,18 +232,12 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 			}
 			return nil
 		}).Times(3)
-	clock.Advance(batchRetryDelay)
+	clock.Advance(testCfg.FailedBatchDelay)
 	require.NoError(t, eg.Wait())
 	require.Empty(t, toFetch)
 }
 
 func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
-	const (
-		batchSize       = 4
-		maxAttempts     = 3
-		maxBatchRetries = 2
-		batchRetryDelay = 10 * time.Second
-	)
 	ctrl := gomock.NewController(t)
 	allAtxs := make([]types.ATXID, 10)
 	logger := zaptest.NewLogger(t)
@@ -270,7 +247,7 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 	}
 	clock := clockwork.NewFakeClock()
 	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, batchSize, maxAttempts, maxBatchRetries, batchRetryDelay, clock)
+	h := sync2.NewATXHandler(logger, f, testCfg, clock)
 	baseSet := mocks.NewMockOrderedSet(ctrl)
 	for _, id := range allAtxs {
 		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
@@ -296,7 +273,7 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 	})
 	for range 2 {
 		clock.BlockUntil(1)
-		clock.Advance(batchRetryDelay)
+		clock.Advance(testCfg.FailedBatchDelay)
 	}
 	require.Error(t, eg.Wait())
 }
@@ -309,7 +286,8 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 	newCfg := sync2.DefaultConfig()
 	newCfg.MaxDepth = 24
 	hss := NewMockHashSyncSource(ctrl)
-	mhs := sync2.NewMultiEpochATXSyncer(logger, hss, oldCfg, newCfg, 1)
+	mhs, err := sync2.NewMultiEpochATXSyncer(logger, hss, oldCfg, newCfg, 1)
+	require.NoError(t, err)
 	ctx := context.Background()
 
 	lastSynced, err := mhs.EnsureSync(ctx, 0, 0)
@@ -319,7 +297,7 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 	var syncActions []string
 	curIdx := 0
 	hss.EXPECT().CreateHashSync(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(name string, cfg sync2.Config, epoch types.EpochID) sync2.HashSync {
+		func(name string, cfg sync2.Config, epoch types.EpochID) (sync2.HashSync, error) {
 			idx := curIdx
 			curIdx++
 			syncActions = append(syncActions,
@@ -339,7 +317,7 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 			hs.EXPECT().Stop().DoAndReturn(func() {
 				syncActions = append(syncActions, fmt.Sprintf("stop %d %s", idx, name))
 			}).AnyTimes()
-			return hs
+			return hs, nil
 		}).AnyTimes()
 
 	// Last wait epoch 3, new epoch 3

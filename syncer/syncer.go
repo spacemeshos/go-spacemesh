@@ -221,7 +221,7 @@ func NewSyncer(
 	atxSyncer atxSyncer,
 	malSyncer malSyncer,
 	opts ...Option,
-) *Syncer {
+) (*Syncer, error) {
 	s := &Syncer{
 		logger:           zap.NewNop(),
 		cfg:              DefaultConfig(),
@@ -262,15 +262,19 @@ func NewSyncer(
 			peerCache,
 			s.cfg.ReconcSync.EnableActiveSync,
 		)
-		s.asv2 = sync2.NewMultiEpochATXSyncer(
+		var err error
+		s.asv2, err = sync2.NewMultiEpochATXSyncer(
 			s.logger,
 			hss,
 			s.cfg.ReconcSync.OldAtxSyncCfg,
 			s.cfg.ReconcSync.NewAtxSyncCfg,
 			s.cfg.ReconcSync.ParallelLoadLimit,
 		)
+		if err != nil {
+			return nil, fmt.Errorf("creating multi-epoch ATX syncer: %w", err)
+		}
 	}
-	return s
+	return s, nil
 }
 
 // Close stops the syncing process and the goroutines syncer spawns.

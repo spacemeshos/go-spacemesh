@@ -54,19 +54,19 @@ func (r *runner) FullSync(ctx context.Context, syncPeers []p2p.Peer) error {
 type MultiPeerReconcilerConfig struct {
 	// Number of peers to pick for synchronization.
 	// Synchronization will still happen if fewer peers are available.
-	SyncPeerCount int `mapstructure:"sync-peer-count"`
+	SyncPeerCount uint `mapstructure:"sync-peer-count"`
 	// Minimum number of peers for the split sync to happen.
-	MinSplitSyncPeers int `mapstructure:"min-split-sync-peers"`
+	MinSplitSyncPeers uint `mapstructure:"min-split-sync-peers"`
 	// Minimum number of items that a peer must have to be eligible for split sync
 	// (subrange-per-peer).
-	MinSplitSyncCount int `mapstructure:"min-split-sync-count"`
+	MinSplitSyncCount uint `mapstructure:"min-split-sync-count"`
 	// Maximum approximate size of symmetric difference between the local set and the
 	// remote one for the sets to be considered "mostly in sync", so that full sync is
 	// preferred to split sync.
-	MaxFullDiff int `mapstructure:"max-full-diff"`
+	MaxFullDiff uint `mapstructure:"max-full-diff"`
 	// Maximum number of items that a peer can have less than the local set for it to
 	// be considered for synchronization.
-	MaxSyncDiff int `mapstructure:"max-sync-diff"`
+	MaxSyncDiff uint `mapstructure:"max-sync-diff"`
 	// Minimum fraction (0..1) of "mostly synced" peers starting with which full sync
 	// is used instead of split sync.
 	MinCompleteFraction float64 `mapstructure:"min-complete-fraction"`
@@ -74,6 +74,8 @@ type MultiPeerReconcilerConfig struct {
 	SyncInterval time.Duration `mapstructure:"sync-interval"`
 	// Interval spread factor for split sync.
 	// The actual interval will be SyncInterval * (1 + (random[0..2]*SplitSyncIntervalSpread-1)).
+	// So, if you want the actual interval to be with the range of SplitInterval ± 25%,
+	// set this to 0.25.
 	SyncIntervalSpread float64 `mapstructure:"sync-interval-spread"`
 	// Interval between retries after a failed sync.
 	RetryInterval time.Duration `mapstructure:"retry-interval"`
@@ -87,10 +89,61 @@ type MultiPeerReconcilerConfig struct {
 	SplitSyncGracePeriod time.Duration `mapstructure:"split-sync-grace-period"`
 	// Minimum number of full syncs that must have happened within the
 	// fullSyncednessPeriod for the node to be considered fully synced
-	MinFullSyncednessCount int `mapstructure:"min-full-syncedness-count"`
+	MinFullSyncednessCount uint `mapstructure:"min-full-syncedness-count"`
 	// Duration within which the minimum number of full syncs must have happened for
 	// the node to be considered fully synced.
 	FullSyncednessPeriod time.Duration `mapstructure:"full-syncedness-count"`
+}
+
+func (cfg *MultiPeerReconcilerConfig) Validate(logger *zap.Logger) bool {
+	// Join the errors together so that the user doesn't have to fix one at a time.
+	r := true
+	if cfg.SyncPeerCount == 0 {
+		logger.Error("sync-peer-count must be positive")
+		r = false
+	}
+	if cfg.MinSplitSyncPeers == 0 {
+		logger.Error("min-split-sync-peers must be positive")
+		r = false
+	}
+	if cfg.MinSplitSyncCount == 0 {
+		logger.Error("min-split-sync-count must be positive")
+		r = false
+	}
+	if cfg.MinCompleteFraction < 0 || cfg.MinCompleteFraction > 1 {
+		logger.Error("min-complete-fraction must be in [0, 1] interval",
+			zap.Float64("minCompleteFraction", cfg.MinCompleteFraction))
+		r = false
+	}
+	if cfg.SyncInterval <= 0 {
+		logger.Error("sync-interval must be positive")
+		r = false
+	}
+	if cfg.SyncIntervalSpread < 0 {
+		logger.Error("sync-interval-spread must be non-negative")
+		r = false
+	}
+	if cfg.RetryInterval <= 0 {
+		logger.Error("retry-interval must be positive")
+		r = false
+	}
+	if cfg.NoPeersRecheckInterval <= 0 {
+		logger.Error("no-peers-recheck-interval must be positive")
+		r = false
+	}
+	if cfg.SplitSyncGracePeriod <= 0 {
+		logger.Error("split-sync-grace-period must be positive")
+		r = false
+	}
+	if cfg.MinFullSyncednessCount == 0 {
+		logger.Error("min-full-syncedness-count must be positive")
+		r = false
+	}
+	if cfg.FullSyncednessPeriod <= 0 {
+		logger.Error("full-syncedness-period must be positive")
+		r = false
+	}
+	return r
 }
 
 // DefaultConfig returns the default configuration for the MultiPeerReconciler.
@@ -143,7 +196,7 @@ func newMultiPeerReconciler(
 		keyLen:   keyLen,
 		maxDepth: maxDepth,
 		runner:   syncRunner,
-		sl:       newSyncList(clock, cfg.MinFullSyncednessCount, cfg.FullSyncednessPeriod),
+		sl:       newSyncList(clock, int(cfg.MinFullSyncednessCount), cfg.FullSyncednessPeriod),
 	}
 	if mpr.runner == nil {
 		mpr.runner = &runner{mpr: mpr}
@@ -215,7 +268,7 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 		// We do not consider peers with substantially fewer items than the local
 		// set for active sync. It's these peers' responsibility to request sync
 		// against this node.
-		if pr.Count+mpr.cfg.MaxSyncDiff < localCount {
+		if pr.Count+int(mpr.cfg.MaxSyncDiff) < localCount {
 			mpr.logger.Debug("skipping peer with low item count",
 				zap.Stringer("peer", pr.p),
 				zap.Int("peerCount", pr.Count),
@@ -224,7 +277,7 @@ func (mpr *MultiPeerReconciler) probePeers(ctx context.Context, syncPeers []p2p.
 		}
 
 		s.syncable = append(s.syncable, pr.p)
-		if pr.Count > mpr.cfg.MinSplitSyncCount {
+		if uint(pr.Count) > mpr.cfg.MinSplitSyncCount {
 			mpr.logger.Debug("splitSyncable peer",
 				zap.Stringer("peer", pr.p),
 				zap.Int("count", pr.Count))
@@ -265,11 +318,11 @@ func (mpr *MultiPeerReconciler) needSplitSync(s syncability) bool {
 		return false
 	}
 
-	if len(s.splitSyncable) < mpr.cfg.MinSplitSyncPeers {
+	if uint(len(s.splitSyncable)) < mpr.cfg.MinSplitSyncPeers {
 		// would be nice to do split sync, but not enough peers for that
 		mpr.logger.Debug("not enough peers for split sync",
 			zap.Int("splitSyncableCount", len(s.splitSyncable)),
-			zap.Int("minSplitSyncPeers", mpr.cfg.MinSplitSyncPeers))
+			zap.Uint("minSplitSyncPeers", mpr.cfg.MinSplitSyncPeers))
 		return false
 	}
 
@@ -312,9 +365,9 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context, lastWasSplit bool) (full bool, err error) {
 	var s syncability
 	for {
-		syncPeers := mpr.peers.SelectBestWithProtocols(mpr.cfg.SyncPeerCount, []protocol.ID{Protocol})
+		syncPeers := mpr.peers.SelectBestWithProtocols(int(mpr.cfg.SyncPeerCount), []protocol.ID{Protocol})
 		mpr.logger.Debug("selected best peers for sync",
-			zap.Int("syncPeerCount", mpr.cfg.SyncPeerCount),
+			zap.Uint("syncPeerCount", mpr.cfg.SyncPeerCount),
 			zap.Int("totalPeers", mpr.peers.Total()),
 			zap.Int("numSelected", len(syncPeers)))
 		if len(syncPeers) != 0 {

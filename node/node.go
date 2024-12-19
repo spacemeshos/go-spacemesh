@@ -810,7 +810,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
 	}
 	app.syncLogger = app.addLogger(SyncLogger, lg)
-	syncer := syncer.NewSyncer(
+	syncer, err := syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
 		msh,
@@ -832,6 +832,9 @@ func (app *App) initServices(ctx context.Context) error {
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
 	)
+	if err != nil {
+		return fmt.Errorf("create syncer: %w", err)
+	}
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(syncer)
 	hOracle.SetSync(syncer)
@@ -1599,7 +1602,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.Activation:
-		service := v2alpha1.NewActivationService(app.apiDB)
+		service := v2alpha1.NewActivationService(app.apiDB, types.ATXID(app.Config.Genesis.GoldenATX()))
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2alpha1.ActivationStream:

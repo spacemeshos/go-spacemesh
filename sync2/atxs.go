@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -32,13 +31,10 @@ const (
 )
 
 type ATXHandler struct {
-	logger           *zap.Logger
-	f                Fetcher
-	clock            clockwork.Clock
-	batchSize        int
-	maxAttempts      int
-	maxBatchRetries  int
-	failedBatchDelay time.Duration
+	logger *zap.Logger
+	f      Fetcher
+	clock  clockwork.Clock
+	cfg    Config
 }
 
 var _ multipeer.SyncKeyHandler = &ATXHandler{}
@@ -46,26 +42,22 @@ var _ multipeer.SyncKeyHandler = &ATXHandler{}
 func NewATXHandler(
 	logger *zap.Logger,
 	f Fetcher,
-	batchSize, maxAttempts, maxBatchRetries int,
-	failedBatchDelay time.Duration,
+	cfg Config,
 	clock clockwork.Clock,
 ) *ATXHandler {
 	if clock == nil {
 		clock = clockwork.NewRealClock()
 	}
 	return &ATXHandler{
-		f:                f,
-		logger:           logger,
-		clock:            clock,
-		batchSize:        batchSize,
-		maxAttempts:      maxAttempts,
-		maxBatchRetries:  maxBatchRetries,
-		failedBatchDelay: failedBatchDelay,
+		f:      f,
+		logger: logger,
+		clock:  clock,
+		cfg:    cfg,
 	}
 }
 
 type commitState struct {
-	state         map[types.ATXID]int
+	state         map[types.ATXID]uint
 	total         int
 	numDownloaded int
 	items         []types.ATXID
@@ -76,7 +68,7 @@ func (h *ATXHandler) setupState(
 	base rangesync.OrderedSet,
 	received rangesync.SeqResult,
 ) (*commitState, error) {
-	state := make(map[types.ATXID]int)
+	state := make(map[types.ATXID]uint)
 	for k := range received.Seq {
 		found, err := base.Has(k)
 		if err != nil {
@@ -95,7 +87,7 @@ func (h *ATXHandler) setupState(
 	return &commitState{
 		state: state,
 		total: len(state),
-		items: make([]types.ATXID, 0, h.batchSize),
+		items: make([]types.ATXID, 0, h.cfg.BatchSize),
 	}, nil
 }
 
@@ -103,7 +95,7 @@ func (h *ATXHandler) getAtxs(ctx context.Context, cs *commitState) (bool, error)
 	cs.items = cs.items[:0] // reuse the slice to reduce allocations
 	for id := range cs.state {
 		cs.items = append(cs.items, id)
-		if len(cs.items) == h.batchSize {
+		if uint(len(cs.items)) == h.cfg.BatchSize {
 			break
 		}
 	}
@@ -121,7 +113,7 @@ func (h *ATXHandler) getAtxs(ctx context.Context, cs *commitState) (bool, error)
 			h.logger.Debug("failed to download ATX",
 				zap.String("atx", id.ShortString()), zap.Error(err))
 			delete(cs.state, id)
-		case cs.state[id] >= h.maxAttempts-1:
+		case cs.state[id] >= h.cfg.MaxAttempts-1:
 			h.logger.Debug("failed to download ATX: max attempts reached",
 				zap.String("atx", id.ShortString()))
 			delete(cs.state, id)
@@ -145,7 +137,7 @@ func (h *ATXHandler) Commit(
 		return err
 	}
 	startTime := h.clock.Now()
-	batchAttemptsRemaining := h.maxBatchRetries
+	batchAttemptsRemaining := h.cfg.MaxBatchRetries
 	for len(cs.state) > 0 {
 		someSucceeded, err := h.getAtxs(ctx, cs)
 		batchErr := &fetch.BatchError{}
@@ -162,17 +154,17 @@ func (h *ATXHandler) Commit(
 			}
 			batchAttemptsRemaining--
 			h.logger.Debug("failed to download any ATXs: will retry batch",
-				zap.Int("remaining", batchAttemptsRemaining),
-				zap.Duration("delay", h.failedBatchDelay))
+				zap.Uint("remaining", batchAttemptsRemaining),
+				zap.Duration("delay", h.cfg.FailedBatchDelay))
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-h.clock.After(h.failedBatchDelay):
+			case <-h.clock.After(h.cfg.FailedBatchDelay):
 				continue
 			}
 		}
 
-		batchAttemptsRemaining = h.maxBatchRetries
+		batchAttemptsRemaining = h.cfg.MaxBatchRetries
 		elapsed := h.clock.Since(startTime)
 		h.logger.Debug("fetched atxs",
 			zap.Int("total", cs.total),
@@ -197,14 +189,17 @@ func NewMultiEpochATXSyncer(
 	hss HashSyncSource,
 	oldCfg, newCfg Config,
 	parallelLoadLimit int,
-) *MultiEpochATXSyncer {
+) (*MultiEpochATXSyncer, error) {
+	if !oldCfg.Validate(logger) || !newCfg.Validate(logger) {
+		return nil, errors.New("invalid config")
+	}
 	return &MultiEpochATXSyncer{
 		logger:            logger,
 		oldCfg:            oldCfg,
 		newCfg:            newCfg,
 		parallelLoadLimit: parallelLoadLimit,
 		hss:               hss,
-	}
+	}, nil
 }
 
 func (s *MultiEpochATXSyncer) load(newEpoch types.EpochID) error {
@@ -226,7 +221,10 @@ func (s *MultiEpochATXSyncer) load(newEpoch types.EpochID) error {
 			if epoch == newEpoch {
 				cfg = s.newCfg
 			}
-			hs := s.hss.CreateHashSync(name, cfg, epoch)
+			hs, err := s.hss.CreateHashSync(name, cfg, epoch)
+			if err != nil {
+				return fmt.Errorf("create ATX syncer for epoch %d: %w", epoch, err)
+			}
 			if err := hs.Load(); err != nil {
 				return fmt.Errorf("load ATX syncer for epoch %d: %w", epoch, err)
 			}
@@ -303,9 +301,9 @@ func NewATXSyncer(
 	peers *peers.Peers,
 	epoch types.EpochID,
 	enableActiveSync bool,
-) *P2PHashSync {
-	curSet := dbset.NewDBSet(db, atxsTable(epoch), 32, cfg.MaxDepth)
-	handler := NewATXHandler(logger, f, cfg.BatchSize, cfg.MaxAttempts, cfg.MaxBatchRetries, cfg.FailedBatchDelay, nil)
+) (*P2PHashSync, error) {
+	curSet := dbset.NewDBSet(db, atxsTable(epoch), 32, int(cfg.MaxDepth))
+	handler := NewATXHandler(logger, f, cfg, nil)
 	return NewP2PHashSync(logger, d, name, curSet, 32, peers, handler, cfg, enableActiveSync)
 }
 
@@ -338,6 +336,6 @@ func NewATXSyncSource(
 }
 
 // CreateHashSync implements HashSyncSource.
-func (as *ATXSyncSource) CreateHashSync(name string, cfg Config, epoch types.EpochID) HashSync {
+func (as *ATXSyncSource) CreateHashSync(name string, cfg Config, epoch types.EpochID) (HashSync, error) {
 	return NewATXSyncer(as.logger.Named(name), as.d, name, cfg, as.db, as.f, as.peers, epoch, as.enableActiveSync)
 }

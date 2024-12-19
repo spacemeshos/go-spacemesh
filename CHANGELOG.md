@@ -2,13 +2,12 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## UNRELEASED
+## v1.7.9
 
 ### Upgrade information
 
-### Highlights
-
-### Features
+This release contains improvements to sync. The changes are disabled by default and are still being tested. Syncv2
+will officially be enabled for all nodes in a future release. No action from users is necessary at the moment.
 
 ### Improvements
 

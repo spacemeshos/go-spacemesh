@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 
@@ -166,12 +167,16 @@ func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 	}
 }
 
-func NewActivationService(db sql.Executor) *ActivationService {
-	return &ActivationService{db: db}
+func NewActivationService(db sql.Executor, goldenAtx types.ATXID) *ActivationService {
+	return &ActivationService{
+		db:        db,
+		goldenAtx: goldenAtx,
+	}
 }
 
 type ActivationService struct {
-	db sql.Executor
+	goldenAtx types.ATXID
+	db        sql.Executor
 }
 
 func (s *ActivationService) RegisterService(server *grpc.Server) {
@@ -234,6 +239,29 @@ func (s *ActivationService) ActivationsCount(
 	}
 
 	return &spacemeshv2alpha1.ActivationsCountResponse{Count: count}, nil
+}
+
+func (s *ActivationService) Highest(
+	_ context.Context,
+	_ *spacemeshv2alpha1.HighestRequest,
+) (*spacemeshv2alpha1.HighestResponse, error) {
+	highest, err := atxs.GetIDWithMaxHeight(s.db, types.EmptyNodeID, atxs.FilterAll)
+	if err != nil {
+		return &spacemeshv2alpha1.HighestResponse{
+			Activation: &spacemeshv2alpha1.Activation{
+				Id: s.goldenAtx.Bytes(),
+			},
+		}, nil
+	}
+
+	atx, err := atxs.Get(s.db, highest)
+	if err != nil || atx == nil {
+		return nil, status.Error(codes.NotFound, fmt.Sprintf("atx id %v not found: %s", highest, err))
+	}
+
+	return &spacemeshv2alpha1.HighestResponse{
+		Activation: toAtx(atx),
+	}, nil
 }
 
 func toAtxRequest(filter *spacemeshv2alpha1.ActivationStreamRequest) *spacemeshv2alpha1.ActivationRequest {
