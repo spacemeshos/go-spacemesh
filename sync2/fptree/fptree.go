@@ -1085,10 +1085,14 @@ func (ft *FPTree) nextFromPrefix(ac *aggContext, p prefix) (rangesync.KeyBytes, 
 func (ft *FPTree) FingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr FPResult, err error) {
 	ft.np.lockRead()
 	defer ft.np.unlockRead()
-	return ft.fingerprintInterval(x, y, limit)
+	return ft.fingerprintInterval(x, y, limit, false)
 }
 
-func (ft *FPTree) fingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr FPResult, err error) {
+func (ft *FPTree) fingerprintInterval(
+	x, y rangesync.KeyBytes,
+	limit int,
+	needNext bool,
+) (fpr FPResult, err error) {
 	ft.enter("fingerprintInterval: x %s y %s limit %d", x, y, limit)
 	defer func() {
 		ft.leave(fpr.FP, fpr.Count, fpr.IType, fpr.Items, fpr.Next, err)
@@ -1110,16 +1114,23 @@ func (ft *FPTree) fingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr F
 
 	if ac.items.Seq != nil {
 		ft.log("fingerprintInterval: items %v", ac.items)
-		fpr.Items = ac.items.Limit(int(ac.count))
+		fpr.Items = ac.items
 	} else {
-		fpr.Items = ft.from(x, 1).Limit(int(ac.count))
+		fpr.Items = ft.from(x, 1)
 		ft.log("fingerprintInterval: start from x: %v", fpr.Items)
 	}
 
-	if ac.next != nil {
+	switch {
+	case !needNext:
+		// The next item is only needed for splitting in case if easy split is not
+		// feasible, and it's better to avoid getting it as that may incur
+		// database access
+		fpr.Items = fpr.Items.Limit(int(fpr.Count))
+		return fpr, nil
+	case ac.next != nil:
 		ft.log("fingerprintInterval: next %s", ac.next)
 		fpr.Next = ac.next
-	} else if (fpr.IType == 0 && limit < 0) || fpr.Count == 0 {
+	case (fpr.IType == 0 && limit < 0) || fpr.Count == 0:
 		next, err := fpr.Items.First()
 		if err != nil {
 			return FPResult{}, err
@@ -1128,10 +1139,10 @@ func (ft *FPTree) fingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr F
 			fpr.Next = next.Clone()
 		}
 		ft.log("fingerprintInterval: next at start %s", fpr.Next)
-	} else if ac.lastPrefix != nil {
+	case ac.lastPrefix != nil:
 		fpr.Next, err = ft.nextFromPrefix(&ac, *ac.lastPrefix)
 		ft.log("fingerprintInterval: next at lastPrefix %s -> %s", *ac.lastPrefix, fpr.Next)
-	} else {
+	default:
 		next, err := ft.from(y, 1).First()
 		if err != nil {
 			return FPResult{}, err
@@ -1140,6 +1151,8 @@ func (ft *FPTree) fingerprintInterval(x, y rangesync.KeyBytes, limit int) (fpr F
 		ft.log("fingerprintInterval: next at y: %s", fpr.Next)
 	}
 
+	// We apply limit after we have retrieved the next item
+	fpr.Items = fpr.Items.Limit(int(fpr.Count))
 	return fpr, nil
 }
 
@@ -1219,7 +1232,7 @@ func (ft *FPTree) Split(x, y rangesync.KeyBytes, limit int) (sr SplitResult, err
 		return SplitResult{}, err
 	}
 
-	fpr0, err := ft.fingerprintInterval(x, y, limit)
+	fpr0, err := ft.fingerprintInterval(x, y, limit, true)
 	if err != nil {
 		return SplitResult{}, err
 	}
@@ -1228,7 +1241,7 @@ func (ft *FPTree) Split(x, y rangesync.KeyBytes, limit int) (sr SplitResult, err
 		return SplitResult{}, errors.New("can't split empty range")
 	}
 
-	fpr1, err := ft.fingerprintInterval(fpr0.Next, y, -1)
+	fpr1, err := ft.fingerprintInterval(fpr0.Next, y, -1, false)
 	if err != nil {
 		return SplitResult{}, err
 	}
