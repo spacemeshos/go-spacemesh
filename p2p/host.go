@@ -307,7 +307,7 @@ func New(
 					if cfg.Metrics {
 						opts = append(opts, tcp.WithMetrics())
 					}
-					return tcp.NewTCPTransport(upgrader, rcmgr, opts...)
+					return tcp.NewTCPTransport(upgrader, rcmgr, nil, opts...)
 				},
 			),
 			libp2p.Security(
