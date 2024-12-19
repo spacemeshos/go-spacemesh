@@ -53,7 +53,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 			p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
 			return nil
 		}
-		if err := malfeasance.AddProof(p.cdb, nodeID, nil, proof, byte(InvalidActivation), time.Now()); err != nil {
+		if err := malfeasance.AddProof(p.cdb, nodeID, nil, proof, int(InvalidActivation), time.Now()); err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
 		// TODO(mafa): cache proof, right now caching it would clash with legacy malfeasance proofs
@@ -81,7 +81,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		return fmt.Errorf("check if smesher is malicious: %w", err)
 	}
 	if !malicious {
-		err := malfeasance.AddProof(p.cdb, nodeID, &marriageID, proof, byte(InvalidActivation), time.Now())
+		err := malfeasance.AddProof(p.cdb, nodeID, &marriageID, proof, int(InvalidActivation), time.Now())
 		if err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}

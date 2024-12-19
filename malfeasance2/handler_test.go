@@ -279,7 +279,7 @@ func TestHandler_HandleGossip(t *testing.T) {
 		}
 		proofBytes := codec.MustEncode(proof)
 
-		err := malfeasance.AddProof(h.db, nodeID, nil, proofBytes, byte(malfeasance2.InvalidActivation), time.Now())
+		err := malfeasance.AddProof(h.db, nodeID, nil, proofBytes, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
 		err = h.HandleGossip(context.Background(), "peer", proofBytes)
@@ -319,7 +319,7 @@ func TestHandler_Info(t *testing.T) {
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		nodeID := types.RandomNodeID()
-		err := malfeasance.AddProof(h.db, nodeID, nil, invalidProof, byte(malfeasance2.InvalidActivation), time.Now())
+		err := malfeasance.AddProof(h.db, nodeID, nil, invalidProof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
 		info, err := h.Info(context.Background(), nodeID)
@@ -338,7 +338,7 @@ func TestHandler_Info(t *testing.T) {
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
 		nodeID := types.RandomNodeID()
-		err := malfeasance.AddProof(h.db, nodeID, nil, validProof, byte(malfeasance2.InvalidActivation), time.Now())
+		err := malfeasance.AddProof(h.db, nodeID, nil, validProof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
 		expectedProperties := map[string]string{
@@ -386,7 +386,7 @@ func TestHandler_Info(t *testing.T) {
 			nodeID,
 			&id,
 			validProof,
-			byte(malfeasance2.InvalidActivation),
+			int(malfeasance2.InvalidActivation),
 			time.Now(),
 		)
 		require.NoError(t, err)

@@ -17,6 +17,66 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
+// Mocktortoise is a mock of tortoise interface.
+type Mocktortoise struct {
+	ctrl     *gomock.Controller
+	recorder *MocktortoiseMockRecorder
+	isgomock struct{}
+}
+
+// MocktortoiseMockRecorder is the mock recorder for Mocktortoise.
+type MocktortoiseMockRecorder struct {
+	mock *Mocktortoise
+}
+
+// NewMocktortoise creates a new mock instance.
+func NewMocktortoise(ctrl *gomock.Controller) *Mocktortoise {
+	mock := &Mocktortoise{ctrl: ctrl}
+	mock.recorder = &MocktortoiseMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocktortoise) EXPECT() *MocktortoiseMockRecorder {
+	return m.recorder
+}
+
+// OnMalfeasance mocks base method.
+func (m *Mocktortoise) OnMalfeasance(arg0 types.NodeID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnMalfeasance", arg0)
+}
+
+// OnMalfeasance indicates an expected call of OnMalfeasance.
+func (mr *MocktortoiseMockRecorder) OnMalfeasance(arg0 any) *MocktortoiseOnMalfeasanceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*Mocktortoise)(nil).OnMalfeasance), arg0)
+	return &MocktortoiseOnMalfeasanceCall{Call: call}
+}
+
+// MocktortoiseOnMalfeasanceCall wrap *gomock.Call
+type MocktortoiseOnMalfeasanceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocktortoiseOnMalfeasanceCall) Return() *MocktortoiseOnMalfeasanceCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocktortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Mocksyncer is a mock of syncer interface.
 type Mocksyncer struct {
 	ctrl     *gomock.Controller
@@ -75,66 +135,6 @@ func (c *MocksyncerListenToATXGossipCall) Do(f func() bool) *MocksyncerListenToA
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocksyncerListenToATXGossipCall) DoAndReturn(f func() bool) *MocksyncerListenToATXGossipCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Mocktortoise is a mock of tortoise interface.
-type Mocktortoise struct {
-	ctrl     *gomock.Controller
-	recorder *MocktortoiseMockRecorder
-	isgomock struct{}
-}
-
-// MocktortoiseMockRecorder is the mock recorder for Mocktortoise.
-type MocktortoiseMockRecorder struct {
-	mock *Mocktortoise
-}
-
-// NewMocktortoise creates a new mock instance.
-func NewMocktortoise(ctrl *gomock.Controller) *Mocktortoise {
-	mock := &Mocktortoise{ctrl: ctrl}
-	mock.recorder = &MocktortoiseMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mocktortoise) EXPECT() *MocktortoiseMockRecorder {
-	return m.recorder
-}
-
-// OnMalfeasance mocks base method.
-func (m *Mocktortoise) OnMalfeasance(arg0 types.NodeID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "OnMalfeasance", arg0)
-}
-
-// OnMalfeasance indicates an expected call of OnMalfeasance.
-func (mr *MocktortoiseMockRecorder) OnMalfeasance(arg0 any) *MocktortoiseOnMalfeasanceCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnMalfeasance", reflect.TypeOf((*Mocktortoise)(nil).OnMalfeasance), arg0)
-	return &MocktortoiseOnMalfeasanceCall{Call: call}
-}
-
-// MocktortoiseOnMalfeasanceCall wrap *gomock.Call
-type MocktortoiseOnMalfeasanceCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MocktortoiseOnMalfeasanceCall) Return() *MocktortoiseOnMalfeasanceCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MocktortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

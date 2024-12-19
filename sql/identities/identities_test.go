@@ -83,9 +83,9 @@ func Test_CountMalicious(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, got)
 
-	const numBad = 11
+	const numBad = uint64(11)
 	for range numBad {
-		require.NoError(t, identities.SetMalicious(db, types.RandomNodeID(), types.RandomBytes(11), time.Now().Local()))
+		require.NoError(t, identities.SetMalicious(db, types.RandomNodeID(), types.RandomBytes(11), time.Now()))
 	}
 	got, err = identities.CountMalicious(db)
 	require.NoError(t, err)

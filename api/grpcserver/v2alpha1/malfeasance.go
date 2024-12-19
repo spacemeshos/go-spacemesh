@@ -195,11 +195,15 @@ func (s *MalfeasanceStreamService) Stream(
 		select {
 		// process pending events first
 		case rst := <-eventsOut:
-			proof := toProof(stream.Context(), s.infoLegacy, rst.Smesher)
+			proof := fetchMetaData(stream.Context(), s.infoLegacy, rst.Smesher)
 			if proof == nil {
 				// try again with the new handler
-				proof = toProof(stream.Context(), s.info, rst.Smesher)
+				proof = fetchMetaData(stream.Context(), s.info, rst.Smesher)
 				if proof == nil {
+					ctxzap.Debug(stream.Context(), "failed to get malfeasance info",
+						zap.String("smesher", rst.Smesher.String()),
+						zap.Error(err),
+					)
 					continue
 				}
 			}
@@ -213,11 +217,15 @@ func (s *MalfeasanceStreamService) Stream(
 		default:
 			select {
 			case rst := <-eventsOut:
-				proof := toProof(stream.Context(), s.infoLegacy, rst.Smesher)
+				proof := fetchMetaData(stream.Context(), s.infoLegacy, rst.Smesher)
 				if proof == nil {
 					// try again with the new handler
-					proof = toProof(stream.Context(), s.info, rst.Smesher)
+					proof = fetchMetaData(stream.Context(), s.info, rst.Smesher)
 					if proof == nil {
+						ctxzap.Debug(stream.Context(), "failed to get malfeasance info",
+							zap.String("smesher", rst.Smesher.String()),
+							zap.Error(err),
+						)
 						continue
 					}
 				}
@@ -237,17 +245,13 @@ func (s *MalfeasanceStreamService) Stream(
 	}
 }
 
-func toProof(
+func fetchMetaData(
 	ctx context.Context,
 	info malfeasanceInfo,
 	id types.NodeID,
 ) *spacemeshv2alpha1.MalfeasanceProof {
 	properties, err := info.Info(ctx, id)
 	if err != nil {
-		ctxzap.Debug(ctx, "failed to get malfeasance info",
-			zap.String("smesher", id.String()),
-			zap.Error(err),
-		)
 		return nil
 	}
 	domain, err := strconv.ParseUint(properties["domain"], 10, 64)
@@ -289,7 +293,7 @@ func fetchFromDB(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	ids := make([]types.NodeID, 0, request.Limit)
-	if err := malfeasance.IterateOps(db, ops, func(id types.NodeID, _ []byte, _ byte, _ time.Time) bool {
+	if err := malfeasance.IterateOps(db, ops, func(id types.NodeID, _ []byte, _ int, _ time.Time) bool {
 		ids = append(ids, id)
 		return true
 	}); err != nil {
@@ -297,7 +301,7 @@ func fetchFromDB(
 	}
 	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, len(ids))
 	for _, id := range ids {
-		rst := toProof(ctx, info, id)
+		rst := fetchMetaData(ctx, info, id)
 		if rst == nil {
 			continue
 		}
@@ -325,7 +329,7 @@ func fetchLegacyFromDB(
 	}
 	proofs := make([]*spacemeshv2alpha1.MalfeasanceProof, 0, len(ids))
 	for _, id := range ids {
-		rst := toProof(ctx, info, id)
+		rst := fetchMetaData(ctx, info, id)
 		if rst == nil {
 			continue
 		}

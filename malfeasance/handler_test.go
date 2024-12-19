@@ -406,7 +406,7 @@ func TestHandler_Info(t *testing.T) {
 		}
 		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
-		identities.SetMalicious(h.db, nodeID, proofBytes, time.Now())
+		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
 
 		info, err := h.Info(context.Background(), nodeID)
 		require.ErrorContains(t, err, fmt.Sprintf("unknown malfeasance type %d", wire.MultipleATXs))
@@ -430,7 +430,7 @@ func TestHandler_Info(t *testing.T) {
 		}
 		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
-		identities.SetMalicious(h.db, nodeID, proofBytes, time.Now())
+		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
 
 		info, err := h.Info(context.Background(), nodeID)
 		require.ErrorContains(t, err, "invalid proof")
@@ -458,7 +458,7 @@ func TestHandler_Info(t *testing.T) {
 		}
 		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
-		identities.SetMalicious(h.db, nodeID, proofBytes, time.Now())
+		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
 
 		expectedProperties := map[string]string{
 			"domain": "0",

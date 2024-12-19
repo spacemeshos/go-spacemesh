@@ -70,7 +70,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 				return maps.Clone(proofs[i].Properties), nil
 			}).AnyTimes()
 		legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
-		require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, byte(i%4+1), time.Now()))
+		require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, i%4+1, time.Now()))
 	}
 
 	// last 20 are proofs for a single marriage
@@ -100,7 +100,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 			return maps.Clone(proofs[70].Properties), nil
 		}).AnyTimes()
 	legacyInfo.EXPECT().Info(gomock.Any(), proofs[70].ID).Return(nil, sql.ErrNotFound).AnyTimes()
-	require.NoError(t, malfeasance.AddProof(db, proofs[70].ID, &id, proofs[70].Proof, byte(1), time.Now()))
+	require.NoError(t, malfeasance.AddProof(db, proofs[70].ID, &id, proofs[70].Proof, 1, time.Now()))
 	for i := 71; i < 90; i++ {
 		proofs[i] = malInfo{ID: proofs[i].ID, Proof: proofs[70].Proof}
 		proofs[i].Properties = maps.Clone(proofs[70].Properties)
@@ -206,7 +206,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 					return maps.Clone(proofs[i].Properties), nil
 				}).AnyTimes()
 			legacyInfo.EXPECT().Info(gomock.Any(), proofs[i].ID).Return(nil, sql.ErrNotFound).AnyTimes()
-			require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, byte(i%4+1), time.Now()))
+			require.NoError(t, malfeasance.AddProof(db, proofs[i].ID, nil, proofs[i].Proof, i%4+1, time.Now()))
 		}
 
 		// last 20 are proofs for a single marriage
@@ -236,7 +236,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 				return maps.Clone(proofs[70].Properties), nil
 			}).AnyTimes()
 		legacyInfo.EXPECT().Info(gomock.Any(), proofs[70].ID).Return(nil, sql.ErrNotFound).AnyTimes()
-		require.NoError(t, malfeasance.AddProof(db, proofs[70].ID, &id, proofs[70].Proof, byte(1), time.Now()))
+		require.NoError(t, malfeasance.AddProof(db, proofs[70].ID, &id, proofs[70].Proof, 1, time.Now()))
 		for i := 71; i < 90; i++ {
 			proofs[i] = malInfo{ID: proofs[i].ID, Proof: proofs[70].Proof}
 			proofs[i].Properties = maps.Clone(proofs[70].Properties)
