@@ -278,8 +278,12 @@ paths:
                   Slots:
                     type: integer
                     format: uint32
+                  Nonce:
+                    type: integer
+                    format: uint64
                 required:
                   - Slots
+                  - Nonce
         "500":
             description: could not calculate eligibility slots
 

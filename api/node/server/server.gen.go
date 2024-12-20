@@ -622,6 +622,7 @@ type GetEligibilitySlotsNodeEpochResponseObject interface {
 }
 
 type GetEligibilitySlotsNodeEpoch200JSONResponse struct {
+	Nonce uint64 `json:"Nonce"`
 	Slots uint32 `json:"Slots"`
 }
 

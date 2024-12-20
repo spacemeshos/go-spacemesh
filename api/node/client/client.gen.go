@@ -827,6 +827,7 @@ type GetEligibilitySlotsNodeEpochResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
+		Nonce uint64 `json:"Nonce"`
 		Slots uint32 `json:"Slots"`
 	}
 }
@@ -1189,6 +1190,7 @@ func ParseGetEligibilitySlotsNodeEpochResponse(rsp *http.Response) (*GetEligibil
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
+			Nonce uint64 `json:"Nonce"`
 			Slots uint32 `json:"Slots"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
