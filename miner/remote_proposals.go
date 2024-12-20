@@ -200,6 +200,10 @@ func (pb *RemoteProposalBuilder) build(
 				)
 				eligibilities[nodeId] = proofs
 				pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
+				pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.Eligible{
+					Epoch:  epoch.Uint32(),
+					Layers: proofs,
+				})
 			} else {
 				proofs = nodeElig
 			}
