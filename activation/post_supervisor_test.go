@@ -51,11 +51,11 @@ func newPostManager(tb testing.TB, cfg PostConfig, opts PostSetupOpts) *PostSetu
 		AnyTimes()
 
 	syncer := NewMockSyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	//syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+	//	ch := make(chan struct{})
+	//	close(ch)
+	//	return ch
+	//})
 	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(tb), db, atxsdata, types.RandomATXID(), syncer, validator)
