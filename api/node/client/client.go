@@ -259,7 +259,7 @@ func (s *NodeService) CalculateEligibilitySlotsFor(
 	switch resp.StatusCode() {
 	case http.StatusOK:
 	default:
-		return 0, 0, fmt.Errorf("unexpected status: %s", resp.Status)
+		return 0, 0, fmt.Errorf("unexpected status: %s", resp.Status())
 	}
 	return resp.JSON200.Slots, types.VRFPostIndex(resp.JSON200.Nonce), nil
 }
