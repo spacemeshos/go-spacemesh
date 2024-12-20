@@ -42,6 +42,46 @@ func (m *MockproposalService) EXPECT() *MockproposalServiceMockRecorder {
 	return m.recorder
 }
 
+// CalculateEligibilitySlotsFor mocks base method.
+func (m *MockproposalService) CalculateEligibilitySlotsFor(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CalculateEligibilitySlotsFor", ctx, node, epoch)
+	ret0, _ := ret[0].(uint32)
+	ret1, _ := ret[1].(types.VRFPostIndex)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// CalculateEligibilitySlotsFor indicates an expected call of CalculateEligibilitySlotsFor.
+func (mr *MockproposalServiceMockRecorder) CalculateEligibilitySlotsFor(ctx, node, epoch any) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalculateEligibilitySlotsFor", reflect.TypeOf((*MockproposalService)(nil).CalculateEligibilitySlotsFor), ctx, node, epoch)
+	return &MockproposalServiceCalculateEligibilitySlotsForCall{Call: call}
+}
+
+// MockproposalServiceCalculateEligibilitySlotsForCall wrap *gomock.Call
+type MockproposalServiceCalculateEligibilitySlotsForCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockproposalServiceCalculateEligibilitySlotsForCall) Return(arg0 uint32, arg1 types.VRFPostIndex, arg2 error) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockproposalServiceCalculateEligibilitySlotsForCall) Do(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockproposalServiceCalculateEligibilitySlotsForCall) DoAndReturn(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Proposal mocks base method.
 func (m *MockproposalService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error) {
 	m.ctrl.T.Helper()

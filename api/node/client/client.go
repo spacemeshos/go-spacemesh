@@ -248,3 +248,32 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	}
 	return &prop, nonce, nil
 }
+
+func (s *NodeService) CalculateEligibilitySlotsFor(
+	ctx context.Context, node types.NodeID, epoch types.EpochID,
+) (uint32, types.VRFPostIndex, error) {
+	resp, err := s.client.GetEligibilitySlotsNodeEpoch(ctx, node.String(), externalRef0.EpochID(epoch))
+	if err != nil {
+		return 0, 0, err
+	}
+	switch resp.StatusCode {
+	case http.StatusOK:
+	default:
+		return 0, 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	}
+	atxNonce := resp.Header.Get("X-Spacemesh-Atx-Nonce")
+	if atxNonce == "" {
+		return 0, 0, errors.New("missing atx nonce")
+	}
+	nonce, err := strconv.ParseUint(atxNonce, 10, 64)
+	if err != nil {
+		return 0, 0, fmt.Errorf("nonce parse: %w", err)
+	}
+
+	res, err := ParseGetEligibilitySlotsNodeEpochResponse(resp)
+	if err != nil {
+		return 0, 0, fmt.Errorf("response body parse: %w", err)
+	}
+
+	return res.JSON200.Slots, types.VRFPostIndex(nonce), nil
+}

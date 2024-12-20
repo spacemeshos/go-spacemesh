@@ -115,6 +115,9 @@ type ClientInterface interface {
 	// GetActivationPositioningAtxPublishEpoch request
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetEligibilitySlotsNodeEpoch request
+	GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHareBeaconEpoch request
 	GetHareBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -163,6 +166,18 @@ func (c *Client) GetActivationLastAtxNodeId(ctx context.Context, nodeId external
 
 func (c *Client) GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivationPositioningAtxPublishEpochRequest(c.Server, publishEpoch)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetEligibilitySlotsNodeEpochRequest(c.Server, node, epoch)
 	if err != nil {
 		return nil, err
 	}
@@ -342,6 +357,47 @@ func NewGetActivationPositioningAtxPublishEpochRequest(server string, publishEpo
 	}
 
 	operationPath := fmt.Sprintf("/activation/positioning_atx/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetEligibilitySlotsNodeEpochRequest generates requests for GetEligibilitySlotsNodeEpoch
+func NewGetEligibilitySlotsNodeEpochRequest(server string, node externalRef0.NodeID, epoch externalRef0.EpochID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "node", runtime.ParamLocationPath, node)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "epoch", runtime.ParamLocationPath, epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/eligibility/slots/%s/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -674,6 +730,9 @@ type ClientWithResponsesInterface interface {
 	// GetActivationPositioningAtxPublishEpochWithResponse request
 	GetActivationPositioningAtxPublishEpochWithResponse(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetActivationPositioningAtxPublishEpochResponse, error)
 
+	// GetEligibilitySlotsNodeEpochWithResponse request
+	GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error)
+
 	// GetHareBeaconEpochWithResponse request
 	GetHareBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetHareBeaconEpochResponse, error)
 
@@ -758,6 +817,30 @@ func (r GetActivationPositioningAtxPublishEpochResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetActivationPositioningAtxPublishEpochResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetEligibilitySlotsNodeEpochResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Slots uint32 `json:"Slots"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetEligibilitySlotsNodeEpochResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetEligibilitySlotsNodeEpochResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -938,6 +1021,15 @@ func (c *ClientWithResponses) GetActivationPositioningAtxPublishEpochWithRespons
 	return ParseGetActivationPositioningAtxPublishEpochResponse(rsp)
 }
 
+// GetEligibilitySlotsNodeEpochWithResponse request returning *GetEligibilitySlotsNodeEpochResponse
+func (c *ClientWithResponses) GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error) {
+	rsp, err := c.GetEligibilitySlotsNodeEpoch(ctx, node, epoch, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetEligibilitySlotsNodeEpochResponse(rsp)
+}
+
 // GetHareBeaconEpochWithResponse request returning *GetHareBeaconEpochResponse
 func (c *ClientWithResponses) GetHareBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetHareBeaconEpochResponse, error) {
 	rsp, err := c.GetHareBeaconEpoch(ctx, epoch, reqEditors...)
@@ -1070,6 +1162,34 @@ func ParseGetActivationPositioningAtxPublishEpochResponse(rsp *http.Response) (*
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
 			ID externalRef0.ATXID `json:"ID"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetEligibilitySlotsNodeEpochResponse parses an HTTP response from a GetEligibilitySlotsNodeEpochWithResponse call
+func ParseGetEligibilitySlotsNodeEpochResponse(rsp *http.Response) (*GetEligibilitySlotsNodeEpochResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetEligibilitySlotsNodeEpochResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Slots uint32 `json:"Slots"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
