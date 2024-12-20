@@ -328,10 +328,10 @@ func TestNodeIDProof(t *testing.T) {
 		err := malfeasance.AddProof(db, nodeID, nil, proof, 1, time.Now())
 		require.NoError(t, err)
 
-		domain, p, err := malfeasance.NodeIDProof(db, nodeID)
+		p, domain, err := malfeasance.NodeIDProof(db, nodeID)
 		require.NoError(t, err)
-		require.Equal(t, byte(1), domain)
 		require.Equal(t, proof, p)
+		require.Equal(t, 1, domain)
 	})
 
 	t.Run("node with proof and marriage ID returns no proof", func(t *testing.T) {
@@ -420,9 +420,9 @@ func TestMarriageProof(t *testing.T) {
 		nodeID2 := types.RandomNodeID()
 		require.NoError(t, malfeasance.SetMalicious(db, nodeID2, id, time.Now()))
 
-		domain, p, err := malfeasance.MarriageProof(db, id)
+		p, domain, err := malfeasance.MarriageProof(db, id)
 		require.NoError(t, err)
-		require.Equal(t, byte(1), domain)
 		require.Equal(t, proof, p)
+		require.Equal(t, 1, domain)
 	})
 }
