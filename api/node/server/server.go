@@ -38,7 +38,8 @@ type hare interface {
 
 type proposalBuilder interface {
 	BuildFor(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error)
-	CalculateEligibilitySlotsFor(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error)
+	CalculateEligibilitySlotsFor(
+		ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error)
 }
 
 type Server struct {
