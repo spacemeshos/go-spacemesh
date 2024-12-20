@@ -31,16 +31,16 @@ const (
 	MalfeasanceStream = "malfeasance_stream_v2alpha1"
 )
 
-func NewMalfeasanceService(db sql.Executor, malfeasanceHandler, legacyHandler malfeasanceInfo) *MalfeasanceService {
+func NewMalfeasanceService(db sql.StateDatabase, malHandler, legacyHandler malfeasanceInfo) *MalfeasanceService {
 	return &MalfeasanceService{
 		db:         db,
-		info:       malfeasanceHandler,
+		info:       malHandler,
 		infoLegacy: legacyHandler,
 	}
 }
 
 type MalfeasanceService struct {
-	db         sql.Executor
+	db         sql.StateDatabase
 	info       malfeasanceInfo
 	infoLegacy malfeasanceInfo
 }
@@ -68,38 +68,47 @@ func (s *MalfeasanceService) List(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
-	legacyCount, err := identities.CountMalicious(s.db)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
+	result := &spacemeshv2alpha1.MalfeasanceList{}
+	err := s.db.WithTx(ctx, func(tx sql.Transaction) error {
+		legacyCount, err := identities.CountMalicious(tx)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
 
-	switch {
-	case request.Offset+request.Limit < legacyCount: // only legacy proofs
-		proofs, err := fetchLegacyFromDB(ctx, s.db, s.infoLegacy, request)
-		if err != nil {
-			return nil, err
+		switch {
+		case request.Offset+request.Limit < legacyCount: // only legacy proofs
+			proofs, err := fetchLegacyFromDB(ctx, tx, s.infoLegacy, request)
+			if err != nil {
+				return err
+			}
+			result.Proofs = proofs
+			return nil
+		case request.Offset >= legacyCount: // only new proofs
+			request.Offset -= legacyCount
+			proofs, err := fetchFromDB(ctx, tx, s.info, request)
+			if err != nil {
+				return err
+			}
+			result.Proofs = proofs
+			return nil
+		default: // both legacy and new proofs
+			legacyProofs, err := fetchLegacyFromDB(ctx, tx, s.infoLegacy, request)
+			if err != nil {
+				return err
+			}
+			request.Limit -= uint64(len(legacyProofs))
+			proofs, err := fetchFromDB(ctx, tx, s.info, request)
+			if err != nil {
+				return err
+			}
+			result.Proofs = append(legacyProofs, proofs...)
+			return nil
 		}
-		return &spacemeshv2alpha1.MalfeasanceList{Proofs: proofs}, nil
-	case request.Offset >= legacyCount: // only new proofs
-		request.Offset -= legacyCount
-		proofs, err := fetchFromDB(ctx, s.db, s.info, request)
-		if err != nil {
-			return nil, err
-		}
-		return &spacemeshv2alpha1.MalfeasanceList{Proofs: proofs}, nil
-	default: // both legacy and new proofs
-		legacyProofs, err := fetchLegacyFromDB(ctx, s.db, s.infoLegacy, request)
-		if err != nil {
-			return nil, err
-		}
-		request.Limit -= uint64(len(legacyProofs))
-		request.Offset = 0
-		proofs, err := fetchFromDB(ctx, s.db, s.info, request)
-		if err != nil {
-			return nil, err
-		}
-		return &spacemeshv2alpha1.MalfeasanceList{Proofs: append(legacyProofs, proofs...)}, nil
+	})
+	if err != nil {
+		return nil, err
 	}
+	return result, nil
 }
 
 func NewMalfeasanceStreamService(

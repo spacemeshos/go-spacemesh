@@ -124,7 +124,7 @@ func testFPTree(t *testing.T, makeFPTrees mkFPTreesFunc) {
 					count:    0,
 					itype:    0,
 					startIdx: -1,
-					endIdx:   -1,
+					endIdx:   0,
 				},
 				{
 					xIdx:     0,
@@ -194,7 +194,7 @@ func testFPTree(t *testing.T, makeFPTrees mkFPTreesFunc) {
 					count:    0,
 					itype:    -1,
 					startIdx: -1,
-					endIdx:   -1,
+					endIdx:   0,
 				},
 				{
 					xIdx:     1,
@@ -234,7 +234,7 @@ func testFPTree(t *testing.T, makeFPTrees mkFPTreesFunc) {
 					count:    0,
 					itype:    1,
 					startIdx: -1,
-					endIdx:   -1,
+					endIdx:   2,
 				},
 				{
 					xIdx:     3,
@@ -274,7 +274,7 @@ func testFPTree(t *testing.T, makeFPTrees mkFPTreesFunc) {
 					count:    0,
 					itype:    -1,
 					startIdx: -1,
-					endIdx:   -1,
+					endIdx:   0,
 				},
 			},
 		},
@@ -581,7 +581,7 @@ func testFPTree(t *testing.T, makeFPTrees mkFPTreesFunc) {
 					name = fmt.Sprintf("%d-%d_%d", rtc.xIdx, rtc.yIdx, rtc.limit)
 				}
 				t.Run(name, func(t *testing.T) {
-					fpr, err := ft.FingerprintInterval(x, y, rtc.limit)
+					fpr, err := ft.FingerprintInternal(x, y, rtc.limit, true)
 					require.NoError(t, err)
 					assert.Equal(t, rtc.fp, fpr.FP.String(), "fp")
 					assert.Equal(t, rtc.count, fpr.Count, "count")
@@ -963,11 +963,13 @@ func dumbFP(hs hashList, x, y rangesync.KeyBytes, limit int) fpResultWithBounds 
 	case -1:
 		p := hs.findGTE(x)
 		pY := hs.findGTE(y)
-		fpr.start = hs.keyAt(p)
 		for {
 			if p >= pY || limit == 0 {
 				fpr.next = hs.keyAt(p)
 				break
+			}
+			if fpr.start == nil {
+				fpr.start = hs.keyAt(p)
 			}
 			fpr.fp.Update(hs.keyAt(p))
 			limit--
@@ -976,11 +978,13 @@ func dumbFP(hs hashList, x, y rangesync.KeyBytes, limit int) fpResultWithBounds 
 		}
 	case 1:
 		p := hs.findGTE(x)
-		fpr.start = hs.keyAt(p)
 		for {
 			if p >= len(hs) || limit == 0 {
 				fpr.next = hs.keyAt(p)
 				break
+			}
+			if fpr.start == nil {
+				fpr.start = hs.keyAt(p)
 			}
 			fpr.fp.Update(hs.keyAt(p))
 			limit--
@@ -997,6 +1001,9 @@ func dumbFP(hs hashList, x, y rangesync.KeyBytes, limit int) fpResultWithBounds 
 				fpr.next = hs.keyAt(p)
 				break
 			}
+			if fpr.start == nil {
+				fpr.start = hs.keyAt(p)
+			}
 			fpr.fp.Update(hs.keyAt(p))
 			limit--
 			fpr.count++
@@ -1005,12 +1012,14 @@ func dumbFP(hs hashList, x, y rangesync.KeyBytes, limit int) fpResultWithBounds 
 	default:
 		pX := hs.findGTE(x)
 		p := pX
-		fpr.start = hs.keyAt(p)
-		fpr.next = fpr.start
+		fpr.next = hs.keyAt(p)
 		for {
 			if limit == 0 {
 				fpr.next = hs.keyAt(p)
 				break
+			}
+			if fpr.start == nil {
+				fpr.start = hs.keyAt(p)
 			}
 			fpr.fp.Update(hs.keyAt(p))
 			limit--
@@ -1026,14 +1035,15 @@ func dumbFP(hs hashList, x, y rangesync.KeyBytes, limit int) fpResultWithBounds 
 
 func verifyInterval(t *testing.T, hs hashList, ft *fptree.FPTree, x, y rangesync.KeyBytes, limit int) fptree.FPResult {
 	expFPR := dumbFP(hs, x, y, limit)
-	fpr, err := ft.FingerprintInterval(x, y, limit)
+	fpr, err := ft.FingerprintInternal(x, y, limit, true)
 	require.NoError(t, err)
 	require.Equal(t, expFPR, toFPResultWithBounds(t, fpr),
 		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
-
-	require.Equal(t, expFPR, toFPResultWithBounds(t, fpr),
+	fprNoNext, err := ft.FingerprintInterval(x, y, limit)
+	require.NoError(t, err)
+	expFPR.next = nil
+	require.Equal(t, expFPR, toFPResultWithBounds(t, fprNoNext),
 		"x=%s y=%s limit=%d", x.String(), y.String(), limit)
-
 	return fpr
 }
 
@@ -1154,8 +1164,6 @@ func verifyEasySplit(
 	}
 	a := firstKey(t, fpr.Items)
 	require.NoError(t, err)
-	b := fpr.Next
-	require.NotNil(t, b)
 
 	m := fpr.Count / 2
 	sr, err := ft.EasySplit(x, y, int(m))

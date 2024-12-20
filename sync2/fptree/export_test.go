@@ -7,6 +7,16 @@ import (
 
 var ErrEasySplitFailed = errEasySplitFailed
 
+func (ft *FPTree) FingerprintInternal(
+	x, y rangesync.KeyBytes,
+	limit int,
+	needNext bool,
+) (fpr FPResult, err error) {
+	ft.np.lockRead()
+	defer ft.np.unlockRead()
+	return ft.fingerprintInterval(x, y, limit, needNext)
+}
+
 func (ft *FPTree) EasySplit(x, y rangesync.KeyBytes, limit int) (sr SplitResult, err error) {
 	return ft.easySplit(x, y, limit)
 }
