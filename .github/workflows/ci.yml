@@ -1,7 +1,6 @@
 name: CI
 
 env:
-  go-version: "1.23"
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -79,7 +78,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
       - name: fmt, tidy, generate
         run: |
           make install
@@ -110,7 +109,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
       - name: setup env
         run: make install
       - name: lint
@@ -157,7 +156,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
           cache: ${{ runner.arch != 'arm64' }}
       - name: setup env
         run: make install
@@ -267,7 +266,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
           cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
