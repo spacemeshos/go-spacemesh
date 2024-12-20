@@ -148,7 +148,6 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 					zap.Error(err),
 				)
 			}
-
 		}
 	}
 }
@@ -168,6 +167,10 @@ func (pb *RemoteProposalBuilder) build(
 	if !ok {
 		bcn, err = pb.beaconSvc.Beacon(ctx, epoch)
 		if err != nil {
+			pb.identityStates.Set(types.EmptyNodeID, &epoch, &smesherIdentity.ProposalBuildFailed{
+				Error: fmt.Errorf("beacon: %v", err),
+				Layer: layer,
+			})
 			return fmt.Errorf("beacon: %w", err)
 		}
 		beacons[epoch] = bcn
@@ -178,6 +181,10 @@ func (pb *RemoteProposalBuilder) build(
 		proposal, nonce, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
+			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalBuildFailed{
+				Error: fmt.Errorf("get partial proposal: %v", err),
+				Layer: layer,
+			})
 			continue
 		}
 		if proposal == nil {
@@ -223,6 +230,10 @@ func (pb *RemoteProposalBuilder) build(
 		err = proposal.Initialize()
 		if err != nil {
 			pb.logger.Error("failed to initialize proposal", zap.Error(err))
+			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalBuildFailed{
+				Error: fmt.Errorf("failed to initialize proposal: %v", err),
+				Layer: layer,
+			})
 			continue
 		}
 		pb.logger.Info("publishing proposal", zap.Inline(proposal))
