@@ -180,31 +180,28 @@ func (pb *RemoteProposalBuilder) build(
 		nodeId := signer.signer.NodeID()
 
 		var proofs map[types.LayerID][]types.VotingEligibility
-		if layer.FirstInEpoch() {
+		nodeElig, ok := eligibilities[nodeId]
+		if !ok {
 			slots, nonce, err := pb.proposalSvc.CalculateEligibilitySlotsFor(ctx, nodeId, epoch)
 			if err != nil {
 				pb.logger.Error("calculate eligibility slots error", zap.Error(err))
 				continue
 			}
-
-			nodeElig, ok := eligibilities[nodeId]
-			if !ok {
-				proofs = calcEligibilityProofs(
-					signer.signer.VRFSigner(),
-					epoch,
-					bcn,
-					nonce,
-					slots,
-					pb.cfg.layersPerEpoch,
-				)
-				eligibilities[nodeId] = proofs
-				pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
-				pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.Eligible{
-					Layers: proofs,
-				})
-			} else {
-				proofs = nodeElig
-			}
+			proofs = calcEligibilityProofs(
+				signer.signer.VRFSigner(),
+				epoch,
+				bcn,
+				nonce,
+				slots,
+				pb.cfg.layersPerEpoch,
+			)
+			eligibilities[nodeId] = proofs
+			pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
+			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.Eligible{
+				Layers: proofs,
+			})
+		} else {
+			proofs = nodeElig
 		}
 
 		proposal, _, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)

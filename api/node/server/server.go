@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -366,23 +365,6 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, nil
 }
 
-type eligibilitySlotsResp struct {
-	Slots uint32
-	nonce types.VRFPostIndex
-}
-
-func (p *eligibilitySlotsResp) VisitGetEligibilitySlotsNodeEpochResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/json")
-	w.Header().Add("x-spacemesh-atx-nonce", fmt.Sprintf("%d", p.nonce))
-	w.WriteHeader(200)
-
-	if err := json.NewEncoder(w).Encode(p); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
-		return err
-	}
-	return nil
-}
-
 func (s *Server) GetEligibilitySlotsNodeEpoch(
 	ctx context.Context,
 	request GetEligibilitySlotsNodeEpochRequestObject,
@@ -399,5 +381,8 @@ func (s *Server) GetEligibilitySlotsNodeEpoch(
 		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
 	}
 
-	return &eligibilitySlotsResp{Slots: slots, nonce: nonce}, nil
+	return GetEligibilitySlotsNodeEpoch200JSONResponse{
+		Slots: slots,
+		Nonce: uint64(nonce),
+	}, nil
 }
