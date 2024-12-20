@@ -51,6 +51,7 @@ jobs:
           filters: |
             nondoc:
               - '!**/*.md'
+              - '!.github/CODEOWNERS'
 
   build-docker-images:
     runs-on: ubuntu-22.04
