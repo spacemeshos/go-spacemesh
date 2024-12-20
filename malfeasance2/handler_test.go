@@ -3,6 +3,7 @@ package malfeasance2_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"strconv"
 	"testing"
 	"time"
@@ -102,7 +103,8 @@ func TestHandler_Info(t *testing.T) {
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		properties := map[string]string{
-			"key": "value",
+			"type": "DoubleMarry",
+			"key":  "value",
 		}
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Info(validProof).Return(properties, nil)
@@ -112,14 +114,8 @@ func TestHandler_Info(t *testing.T) {
 		err := malfeasance.AddProof(h.db, nodeID, nil, validProof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
-		expectedProperties := map[string]string{
-			"domain": strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10),
-			"key":    "value",
-		}
-
-		for k, v := range properties {
-			expectedProperties[k] = v
-		}
+		expectedProperties := maps.Clone(properties)
+		expectedProperties["domain"] = strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10)
 
 		info, err := h.Info(context.Background(), nodeID)
 		require.NoError(t, err)
@@ -130,7 +126,8 @@ func TestHandler_Info(t *testing.T) {
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		properties := map[string]string{
-			"key": "value",
+			"type": "InvalidPost",
+			"key":  "value",
 		}
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Info(validProof).Return(properties, nil)
@@ -165,15 +162,9 @@ func TestHandler_Info(t *testing.T) {
 		err = malfeasance.SetMalicious(h.db, maliciousID, id, time.Now())
 		require.NoError(t, err)
 
-		expectedProperties := map[string]string{
-			"domain":       strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10),
-			"key":          "value",
-			"malicious_id": maliciousID.String(),
-		}
-
-		for k, v := range properties {
-			expectedProperties[k] = v
-		}
+		expectedProperties := maps.Clone(properties)
+		expectedProperties["domain"] = strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10)
+		expectedProperties["malicious_id"] = maliciousID.String()
 
 		info, err := h.Info(context.Background(), maliciousID)
 		require.NoError(t, err)
