@@ -27,14 +27,16 @@ import (
 type testHandler struct {
 	*malfeasance2.Handler
 
-	db sql.StateDatabase
+	observedLogs *observer.ObservedLogs
+	ctrl         *gomock.Controller
+	db           sql.StateDatabase
 }
 
 func newTestHandler(tb testing.TB) *testHandler {
 	db := statesql.InMemory()
 	edVerifier := signing.NewEdVerifier()
 
-	observer, _ := observer.New(zap.WarnLevel)
+	observer, observedLogs := observer.New(zap.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -55,8 +57,40 @@ func newTestHandler(tb testing.TB) *testHandler {
 	return &testHandler{
 		Handler: h,
 
-		db: db,
+		observedLogs: observedLogs,
+		ctrl:         ctrl,
+		db:           db,
 	}
+}
+
+func TestRegister(t *testing.T) {
+	t.Parallel()
+
+	t.Run("register", func(t *testing.T) {
+		t.Parallel()
+		th := newTestHandler(t)
+
+		handler := malfeasance2.NewMockMalfeasanceHandler(th.ctrl)
+		th.RegisterHandler(malfeasance2.InvalidActivation, handler)
+	})
+
+	t.Run("already registered", func(t *testing.T) {
+		t.Parallel()
+		th := newTestHandler(t)
+
+		handler := malfeasance2.NewMockMalfeasanceHandler(th.ctrl)
+		th.RegisterHandler(malfeasance2.InvalidActivation, handler)
+
+		require.Panics(t, func() {
+			th.RegisterHandler(malfeasance2.InvalidActivation, handler)
+		})
+
+		logs := th.observedLogs.FilterLevelExact(zap.PanicLevel)
+
+		require.Equal(t, 1, logs.Len())
+		require.Equal(t, zap.PanicLevel, logs.All()[0].Level)
+		require.Contains(t, logs.All()[0].Message, "handler already registered")
+	})
 }
 
 func TestHandler_Info(t *testing.T) {
