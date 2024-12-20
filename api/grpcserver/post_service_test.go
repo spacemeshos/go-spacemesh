@@ -53,11 +53,11 @@ func launchPostSupervisor(
 		AnyTimes()
 
 	syncer := activation.NewMockSyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	//syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+	//	ch := make(chan struct{})
+	//	close(ch)
+	//	return ch
+	//})
 	db := statesql.InMemoryTest(tb)
 	logger := log.Named("post manager")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
