@@ -192,7 +192,6 @@ func (s *ProposalPublished) APIStateInfo() *pb.IdentityStateInfo {
 }
 
 type Eligible struct {
-	Epoch  uint32
 	Layers map[types.LayerID][]types.VotingEligibility
 }
 
@@ -209,7 +208,6 @@ func (s *Eligible) APIStateInfo() *pb.IdentityStateInfo {
 		State: pb.IdentityState_ELIGIBLE,
 		Metadata: &pb.IdentityStateInfo_Eligible{
 			Eligible: &pb.Eligible{
-				Epoch:  s.Epoch,
 				Layers: rst,
 			},
 		},

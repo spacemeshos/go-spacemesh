@@ -45,6 +45,9 @@ type ServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(w http.ResponseWriter, r *http.Request, publishEpoch externalRef0.EpochID)
+	// Get epoch eligibility slots for a given node id
+	// (GET /eligibility/slots/{node}/{epoch})
+	GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.NodeID, epoch externalRef0.EpochID)
 	// Get the beacon value for an epoch
 	// (GET /hare/beacon/{epoch})
 	GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
@@ -143,6 +146,40 @@ func (siw *ServerInterfaceWrapper) GetActivationPositioningAtxPublishEpoch(w htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetActivationPositioningAtxPublishEpoch(w, r, publishEpoch)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetEligibilitySlotsNodeEpoch operation middleware
+func (siw *ServerInterfaceWrapper) GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "node" -------------
+	var node externalRef0.NodeID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "node", r.PathValue("node"), &node, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "node", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "epoch" -------------
+	var epoch externalRef0.EpochID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetEligibilitySlotsNodeEpoch(w, r, node, epoch)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -475,6 +512,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/activation/atx/{atx_id}", wrapper.GetActivationAtxAtxId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/last_atx/{node_id}", wrapper.GetActivationLastAtxNodeId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/positioning_atx/{publish_epoch}", wrapper.GetActivationPositioningAtxPublishEpoch)
+	m.HandleFunc("GET "+options.BaseURL+"/eligibility/slots/{node}/{epoch}", wrapper.GetEligibilitySlotsNodeEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/beacon/{epoch}", wrapper.GetHareBeaconEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/round_template/{layer}/{iter}/{round}", wrapper.GetHareRoundTemplateLayerIterRound)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight/{layer}", wrapper.GetHareTotalWeightLayer)
@@ -572,6 +610,34 @@ func (response GetActivationPositioningAtxPublishEpoch200JSONResponse) VisitGetA
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEligibilitySlotsNodeEpochRequestObject struct {
+	Node  externalRef0.NodeID  `json:"node"`
+	Epoch externalRef0.EpochID `json:"epoch"`
+}
+
+type GetEligibilitySlotsNodeEpochResponseObject interface {
+	VisitGetEligibilitySlotsNodeEpochResponse(w http.ResponseWriter) error
+}
+
+type GetEligibilitySlotsNodeEpoch200JSONResponse struct {
+	Slots uint32 `json:"Slots"`
+}
+
+func (response GetEligibilitySlotsNodeEpoch200JSONResponse) VisitGetEligibilitySlotsNodeEpochResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetEligibilitySlotsNodeEpoch500Response struct {
+}
+
+func (response GetEligibilitySlotsNodeEpoch500Response) VisitGetEligibilitySlotsNodeEpochResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
+	return nil
 }
 
 type GetHareBeaconEpochRequestObject struct {
@@ -824,6 +890,9 @@ type StrictServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, request GetActivationPositioningAtxPublishEpochRequestObject) (GetActivationPositioningAtxPublishEpochResponseObject, error)
+	// Get epoch eligibility slots for a given node id
+	// (GET /eligibility/slots/{node}/{epoch})
+	GetEligibilitySlotsNodeEpoch(ctx context.Context, request GetEligibilitySlotsNodeEpochRequestObject) (GetEligibilitySlotsNodeEpochResponseObject, error)
 	// Get the beacon value for an epoch
 	// (GET /hare/beacon/{epoch})
 	GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error)
@@ -947,6 +1016,33 @@ func (sh *strictHandler) GetActivationPositioningAtxPublishEpoch(w http.Response
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetActivationPositioningAtxPublishEpochResponseObject); ok {
 		if err := validResponse.VisitGetActivationPositioningAtxPublishEpochResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetEligibilitySlotsNodeEpoch operation middleware
+func (sh *strictHandler) GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.NodeID, epoch externalRef0.EpochID) {
+	var request GetEligibilitySlotsNodeEpochRequestObject
+
+	request.Node = node
+	request.Epoch = epoch
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetEligibilitySlotsNodeEpoch(ctx, request.(GetEligibilitySlotsNodeEpochRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetEligibilitySlotsNodeEpoch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetEligibilitySlotsNodeEpochResponseObject); ok {
+		if err := validResponse.VisitGetEligibilitySlotsNodeEpochResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

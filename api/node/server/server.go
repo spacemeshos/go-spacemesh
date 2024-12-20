@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -37,6 +38,7 @@ type hare interface {
 
 type proposalBuilder interface {
 	BuildFor(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error)
+	CalculateEligibilitySlotsFor(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error)
 }
 
 type Server struct {
@@ -361,4 +363,40 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 		return &proposalResp{}, nil
 	}
 	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, nil
+}
+
+type eligibilitySlotsResp struct {
+	Slots uint32
+	nonce types.VRFPostIndex
+}
+
+func (p *eligibilitySlotsResp) VisitGetEligibilitySlotsNodeEpochResponse(w http.ResponseWriter) error {
+	w.Header().Add("content-type", "application/json")
+	w.Header().Add("x-spacemesh-atx-nonce", fmt.Sprintf("%d", p.nonce))
+	w.WriteHeader(200)
+
+	if err := json.NewEncoder(w).Encode(p); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		return err
+	}
+	return nil
+}
+
+func (s *Server) GetEligibilitySlotsNodeEpoch(
+	ctx context.Context,
+	request GetEligibilitySlotsNodeEpochRequestObject,
+) (GetEligibilitySlotsNodeEpochResponseObject, error) {
+	hexBuf, err := hex.DecodeString(request.Node)
+	if err != nil {
+		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
+	}
+	id := types.BytesToNodeID(hexBuf)
+	epoch := types.EpochID(request.Epoch)
+
+	slots, nonce, err := s.proposals.CalculateEligibilitySlotsFor(ctx, id, epoch)
+	if err != nil {
+		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
+	}
+
+	return &eligibilitySlotsResp{Slots: slots, nonce: nonce}, nil
 }

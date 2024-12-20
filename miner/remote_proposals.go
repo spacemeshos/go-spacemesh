@@ -22,6 +22,9 @@ import (
 
 type proposalService interface {
 	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error)
+	CalculateEligibilitySlotsFor(
+		ctx context.Context, node types.NodeID, epoch types.EpochID,
+	) (uint32, types.VRFPostIndex, error)
 }
 
 type beaconService interface {
@@ -175,7 +178,36 @@ func (pb *RemoteProposalBuilder) build(
 
 	for _, signer := range signers {
 		nodeId := signer.signer.NodeID()
-		proposal, nonce, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
+
+		var proofs map[types.LayerID][]types.VotingEligibility
+		if layer.FirstInEpoch() {
+			slots, nonce, err := pb.proposalSvc.CalculateEligibilitySlotsFor(ctx, nodeId, epoch)
+			if err != nil {
+				pb.logger.Error("calculate eligibility slots error", zap.Error(err))
+				continue
+			}
+
+			nodeElig, ok := eligibilities[nodeId]
+			if !ok {
+				proofs = calcEligibilityProofs(
+					signer.signer.VRFSigner(),
+					epoch,
+					bcn,
+					nonce,
+					slots,
+					pb.cfg.layersPerEpoch,
+				)
+				eligibilities[nodeId] = proofs
+				pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
+				pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.Eligible{
+					Layers: proofs,
+				})
+			} else {
+				proofs = nodeElig
+			}
+		}
+
+		proposal, _, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
 			continue
@@ -184,34 +216,6 @@ func (pb *RemoteProposalBuilder) build(
 			// this node signer isn't eligible this epoch, continue
 			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
-		}
-
-		var proofs map[types.LayerID][]types.VotingEligibility
-		if proposal.Ballot.EpochData != nil {
-			nodeElig, ok := eligibilities[nodeId]
-			if !ok {
-				proofs = calcEligibilityProofs(
-					signer.signer.VRFSigner(),
-					epoch,
-					bcn,
-					types.VRFPostIndex(nonce),
-					proposal.Ballot.EpochData.EligibilityCount,
-					pb.cfg.layersPerEpoch,
-				)
-				eligibilities[nodeId] = proofs
-				pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
-				pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.Eligible{
-					Epoch:  epoch.Uint32(),
-					Layers: proofs,
-				})
-			} else {
-				proofs = nodeElig
-			}
-		} else {
-			proofs, ok = eligibilities[nodeId]
-			if !ok {
-				panic("missing node epoch eligibilities")
-			}
 		}
 
 		eligibilities, ok := proofs[layer]
