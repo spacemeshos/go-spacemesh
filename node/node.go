@@ -1464,9 +1464,12 @@ func (app *App) launchStandalone(ctx context.Context) error {
 		log.Uint32("epoch", epoch.Uint32()),
 		log.Stringer("beacon", value),
 	)
-	if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
-		return fmt.Errorf("update standalone beacon: %w", err)
+	if app.beaconProtocol != nil {
+		if err := app.beaconProtocol.UpdateBeacon(epoch, value); err != nil {
+			return fmt.Errorf("update standalone beacon: %w", err)
+		}
 	}
+
 	cfg := server.DefaultConfig()
 	cfg.PoetDir = filepath.Join(app.Config.DataDir(), "poet")
 

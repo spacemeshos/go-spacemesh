@@ -190,3 +190,28 @@ func (s *ProposalPublished) APIStateInfo() *pb.IdentityStateInfo {
 		},
 	}
 }
+
+type Eligible struct {
+	Epoch  uint32
+	Layers map[types.LayerID][]types.VotingEligibility
+}
+
+func (s *Eligible) APIStateInfo() *pb.IdentityStateInfo {
+	rst := make([]*pb.Eligibility, 0, len(s.Layers))
+	for lid, eligs := range s.Layers {
+		rst = append(rst, &pb.Eligibility{
+			Layer: lid.Uint32(),
+			Count: uint32(len(eligs)),
+		})
+	}
+
+	return &pb.IdentityStateInfo{
+		State: pb.IdentityState_ELIGIBLE,
+		Metadata: &pb.IdentityStateInfo_Eligible{
+			Eligible: &pb.Eligible{
+				Epoch:  s.Epoch,
+				Layers: rst,
+			},
+		},
+	}
+}
