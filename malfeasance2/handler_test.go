@@ -108,11 +108,11 @@ func TestHandler_Info(t *testing.T) {
 
 		nodeID := types.RandomNodeID()
 		proofBytes := types.RandomBytes(100)
-		err := malfeasance.AddProof(h.db, nodeID, nil, proofBytes, 1, time.Now())
+		err := malfeasance.AddProof(h.db, nodeID, nil, proofBytes, 999, time.Now())
 		require.NoError(t, err)
 
 		info, err := h.Info(context.Background(), nodeID)
-		require.ErrorContains(t, err, "unknown malfeasance domain 1")
+		require.ErrorContains(t, err, "unknown malfeasance domain 999")
 		require.Nil(t, info)
 	})
 
@@ -120,7 +120,7 @@ func TestHandler_Info(t *testing.T) {
 		h := newTestHandler(t)
 		invalidProof := []byte("invalid")
 		infoError := errors.New("invalid proof")
-		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(h.ctrl)
 		mockHandler.EXPECT().Info(invalidProof).Return(nil, infoError)
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
@@ -140,7 +140,7 @@ func TestHandler_Info(t *testing.T) {
 			"type": "DoubleMarry",
 			"key":  "value",
 		}
-		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(h.ctrl)
 		mockHandler.EXPECT().Info(validProof).Return(properties, nil)
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
@@ -163,7 +163,7 @@ func TestHandler_Info(t *testing.T) {
 			"type": "InvalidPost",
 			"key":  "value",
 		}
-		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(h.ctrl)
 		mockHandler.EXPECT().Info(validProof).Return(properties, nil)
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
