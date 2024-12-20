@@ -9,3 +9,8 @@ import (
 type tortoise interface {
 	OnMalfeasance(types.NodeID)
 }
+
+type MalfeasanceHandler interface {
+	// Info returns a map of key-value pairs that serve as metadata for the proof
+	Info(data []byte) (map[string]string, error)
+}

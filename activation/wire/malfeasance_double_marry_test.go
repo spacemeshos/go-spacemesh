@@ -117,8 +117,8 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		// manually construct an invalid proof
 		proof = &ProofDoubleMarry{
-			ATX1: atx1.ID(),
-			ATX2: atx1.ID(),
+			ATXID1: atx1.ID(),
+			ATXID2: atx1.ID(),
 		}
 
 		ctrl := gomock.NewController(t)
@@ -189,17 +189,17 @@ func Test_DoubleMarryProof(t *testing.T) {
 		proof.SmesherID2 = atx2.SmesherID
 
 		// invalid ATX ID for ATX1
-		proof.ATX1 = types.RandomATXID()
+		proof.ATXID1 = types.RandomATXID()
 		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX1")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.ATX1 = atx1.ID()
+		proof.ATXID1 = atx1.ID()
 
 		// invalid ATX ID for ATX2
-		proof.ATX2 = types.RandomATXID()
+		proof.ATXID2 = types.RandomATXID()
 		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX2")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.ATX2 = atx2.ID()
+		proof.ATXID2 = atx2.ID()
 	})
 }

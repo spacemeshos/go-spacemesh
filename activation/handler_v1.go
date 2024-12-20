@@ -438,7 +438,6 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, err
 	}
 	if v != types.AtxV1 {
-		// TODO(mafa): update when V2 is introduced
 		return nil, fmt.Errorf("ATX %s with same prev ATX as %s is not version 1", atx2ID, atx.PrevATXID)
 	}
 
@@ -511,9 +510,8 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		}
 	}
 
-	added := h.cacheAtx(ctx, atx, malicious || proof != nil)
 	h.beacon.OnAtx(atx)
-	if added != nil {
+	if added := h.cacheAtx(ctx, atx, malicious || proof != nil); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
@@ -521,6 +519,12 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		zap.Stringer("atx_id", atx.ID()),
 		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
 	)
+
+	if proof != nil {
+		if err := h.malPublisher.PublishProof(ctx, atx.SmesherID, proof); err != nil {
+			return fmt.Errorf("publishing malfeasance proof: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -631,4 +635,29 @@ func collectAtxDeps(goldenAtxId types.ATXID, atx *wire.ActivationTxV1) (types.Ha
 	}
 
 	return types.BytesToHash(atx.NIPost.PostMetadata.Challenge), maps.Keys(filtered)
+}
+
+// Obtain the atxSignature of the given ATX.
+func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
+	var blob sql.Blob
+	v, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
+	if err != nil {
+		return types.EmptyEdSignature, err
+	}
+
+	if len(blob.Bytes) == 0 {
+		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
+		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
+	}
+
+	switch v {
+	case types.AtxV1:
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return types.EmptyEdSignature, fmt.Errorf("decoding atx v1: %w", err)
+		}
+		return atx.Signature, nil
+	default: // only needed for V1 ATXs
+		return types.EmptyEdSignature, fmt.Errorf("unsupported ATX version: %v", v)
+	}
 }

@@ -64,7 +64,7 @@ func launchPostSupervisor(
 	require.NoError(tb, err)
 
 	// start post supervisor
-	builder := activation.NewMockAtxBuilder(ctrl)
+	builder := activation.NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))
@@ -108,7 +108,7 @@ func launchPostSupervisorTLS(
 	require.NoError(tb, err)
 
 	// start post supervisor
-	builder := activation.NewMockAtxBuilder(ctrl)
+	builder := activation.NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))

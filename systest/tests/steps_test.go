@@ -189,10 +189,10 @@ func TestStepReplaceNodes(t *testing.T) {
 	require.NoError(t, err)
 
 	var (
-		delete   = rand.Intn(cctx.ClusterSize*2/10) + 1
+		toDelete   = rand.Intn(cctx.ClusterSize*2/10) + 1
 		deleting []*cluster.NodeClient
 	)
-	for i := cl.Bootnodes(); i < cl.Total() && len(deleting) < delete; i++ {
+	for i := cl.Bootnodes(); i < cl.Total() && len(deleting) < toDelete; i++ {
 		node := cl.Client(i)
 		// don't replace non-synced nodes
 		if !isSynced(cctx, node) {
