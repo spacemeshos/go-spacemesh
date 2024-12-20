@@ -251,4 +251,39 @@ paths:
           description: no eligibilities for this node in this epoch
         "500":
           description: could not generate proposal
+  /eligibility/slots/{node}/{epoch}:
+    get:
+      summary: Get epoch eligibility slots for a given node id
+      tags:
+        - "proposals"
+      parameters:
+        - in: path
+          name: node
+          required: true
+          schema:
+              $ref: "models/components.yaml#/components/schemas/NodeID"
+        - in: path
+          name: epoch
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/EpochID"
+      responses:
+        "200":
+          description: successfully calculated the slots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  Slots:
+                    type: integer
+                    format: uint32
+                  Nonce:
+                    type: integer
+                    format: uint64
+                required:
+                  - Slots
+                  - Nonce
+        "500":
+            description: could not calculate eligibility slots
 

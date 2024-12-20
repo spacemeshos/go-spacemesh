@@ -322,3 +322,43 @@ func (c *MockproposalBuilderBuildForCall) DoAndReturn(f func(context.Context, ty
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// CalculateEligibilitySlotsFor mocks base method.
+func (m *MockproposalBuilder) CalculateEligibilitySlotsFor(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CalculateEligibilitySlotsFor", ctx, node, epoch)
+	ret0, _ := ret[0].(uint32)
+	ret1, _ := ret[1].(types.VRFPostIndex)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// CalculateEligibilitySlotsFor indicates an expected call of CalculateEligibilitySlotsFor.
+func (mr *MockproposalBuilderMockRecorder) CalculateEligibilitySlotsFor(ctx, node, epoch any) *MockproposalBuilderCalculateEligibilitySlotsForCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalculateEligibilitySlotsFor", reflect.TypeOf((*MockproposalBuilder)(nil).CalculateEligibilitySlotsFor), ctx, node, epoch)
+	return &MockproposalBuilderCalculateEligibilitySlotsForCall{Call: call}
+}
+
+// MockproposalBuilderCalculateEligibilitySlotsForCall wrap *gomock.Call
+type MockproposalBuilderCalculateEligibilitySlotsForCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockproposalBuilderCalculateEligibilitySlotsForCall) Return(arg0 uint32, arg1 types.VRFPostIndex, arg2 error) *MockproposalBuilderCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockproposalBuilderCalculateEligibilitySlotsForCall) Do(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalBuilderCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockproposalBuilderCalculateEligibilitySlotsForCall) DoAndReturn(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalBuilderCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

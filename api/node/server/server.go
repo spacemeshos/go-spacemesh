@@ -37,6 +37,8 @@ type hare interface {
 
 type proposalBuilder interface {
 	BuildFor(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error)
+	CalculateEligibilitySlotsFor(
+		ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error)
 }
 
 type Server struct {
@@ -361,4 +363,26 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 		return &proposalResp{}, nil
 	}
 	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, nil
+}
+
+func (s *Server) GetEligibilitySlotsNodeEpoch(
+	ctx context.Context,
+	request GetEligibilitySlotsNodeEpochRequestObject,
+) (GetEligibilitySlotsNodeEpochResponseObject, error) {
+	hexBuf, err := hex.DecodeString(request.Node)
+	if err != nil {
+		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
+	}
+	id := types.BytesToNodeID(hexBuf)
+	epoch := types.EpochID(request.Epoch)
+
+	slots, nonce, err := s.proposals.CalculateEligibilitySlotsFor(ctx, id, epoch)
+	if err != nil {
+		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
+	}
+
+	return GetEligibilitySlotsNodeEpoch200JSONResponse{
+		Slots: slots,
+		Nonce: uint64(nonce),
+	}, nil
 }

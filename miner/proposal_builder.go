@@ -577,6 +577,16 @@ func (pb *ProposalBuilder) initSignerSessionData(
 	return nil
 }
 
+func (pb *ProposalBuilder) CalculateEligibilitySlotsFor(
+	ctx context.Context, node types.NodeID, epoch types.EpochID,
+) (uint32, types.VRFPostIndex, error) {
+	var ss session
+	if err := pb.initSignerSessionData(&ss, epoch.FirstLayer(), node); err != nil {
+		return 0, 0, err
+	}
+	return ss.eligibilities.slots, ss.nonce, nil
+}
+
 func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 	lid types.LayerID,
 	nodeID types.NodeID,
