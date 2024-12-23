@@ -6,6 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
+//go:generate scalegen
+
 // MerkleTreeIndex is the index of the leaf containing the given field in the merkle tree.
 type MerkleTreeIndex uint64
 
@@ -87,7 +89,6 @@ type ATXProof struct {
 	Version ProofVersion
 	// ProofType is the type of proof that is being provided.
 	ProofType ProofType
-
 	// Proof is the actual proof. Its type depends on the ProofType.
 	Proof []byte `scale:"max=1048576"` // max size of proof is 1MiB
 }
