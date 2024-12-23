@@ -51,6 +51,10 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	store := atxsdata.New()
 	cdb := datastore.NewCachedDB(db, logger, datastore.WithConsensusCache(store))
 	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
+
+	numProofs.Reset()
+	numInvalidProofs.Reset()
+
 	h := NewHandler(
 		cdb,
 		logger,
@@ -124,11 +128,11 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
 		expected := `
-# HELP spacemesh_malfeasance_num_invalid_proofs number of malfeasance proofs
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
 spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected), invalidProofName))
+		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -165,11 +169,11 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		require.Equal(t, codec.MustEncode(&gossip.MalfeasanceProof), blob.Bytes)
 
 		expected := `
-# HELP spacemesh_malfeasance_num_invalid_proofs number of malfeasance proofs
-# TYPE spacemesh_malfeasance_num_invalid_proofs counter
-spacemesh_malfeasance_num_valid_proofs{type="multiATXs"} 1
+# HELP spacemesh_malfeasance_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance_num_proofs counter
+spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected), validProofName))
+		require.NoError(t, testutil.CollectAndCompare(numProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
@@ -291,11 +295,11 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		require.Equal(t, p2p.Peer("peer").String(), log.ContextMap()["peer"])
 
 		expected := `
-# HELP spacemesh_malfeasance_num_invalid_proofs number of malfeasance proofs
-# TYPE spacemesh_malfeasance_num_invalid_proofs counter
-spacemesh_malfeasance_num_valid_proofs{type="multiATXs"} 1
+# HELP spacemesh_malfeasance_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance_num_proofs counter
+spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected), validProofName))
+		require.NoError(t, testutil.CollectAndCompare(numProofs, strings.NewReader(expected))) // proof is still valid
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -331,11 +335,11 @@ spacemesh_malfeasance_num_valid_proofs{type="multiATXs"} 1
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
 		expected := `
-# HELP spacemesh_malfeasance_num_invalid_proofs number of malfeasance proofs
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
 spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected), invalidProofName))
+		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -375,7 +379,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 # TYPE spacemesh_malfeasance_num_proofs counter
 spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numProofs, strings.NewReader(expected), validProofName))
+		require.NoError(t, testutil.CollectAndCompare(numProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
