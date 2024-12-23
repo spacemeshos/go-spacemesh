@@ -5,9 +5,11 @@ import (
 	"errors"
 	"maps"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -50,6 +52,9 @@ func newTestHandler(tb testing.TB) *testHandler {
 
 	ctrl := gomock.NewController(tb)
 	mockTrt := malfeasance2.NewMocktortoise(ctrl)
+
+	malfeasance2.NumValidProofs().Reset()
+	malfeasance2.NumInvalidProofs().Reset()
 
 	h := malfeasance2.NewHandler(
 		db,
@@ -158,6 +163,18 @@ func TestHandler_HandleSync(t *testing.T) {
 		err := h.HandleSynced(context.Background(), types.EmptyHash32, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, handlerError)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_invalid_proofs counter
+spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
+`
+		err = testutil.CollectAndCompare(
+			malfeasance2.NumInvalidProofs().WithLabelValues("ATX", "invalidPost"),
+			strings.NewReader(expected),
+			"spacemesh_malfeasance2_num_invalid_proofs",
+		)
+		require.NoError(t, err)
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -177,6 +194,18 @@ func TestHandler_HandleSync(t *testing.T) {
 		}
 
 		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		require.NoError(t, err)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_proofs counter
+spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
+`
+		err = testutil.CollectAndCompare(
+			malfeasance2.NumValidProofs().WithLabelValues("ATX", "invalidPost"),
+			strings.NewReader(expected),
+			"spacemesh_malfeasance2_num_proofs",
+		)
 		require.NoError(t, err)
 
 		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
@@ -210,6 +239,18 @@ func TestHandler_HandleSync(t *testing.T) {
 		require.Contains(t, log.Message, "malfeasance proof for wrong identity")
 		require.Equal(t, expectedHash.ShortString(), log.ContextMap()["expected"])
 		require.Equal(t, p2p.Peer("peer").String(), log.ContextMap()["peer"])
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_invalid_proofs counter
+spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
+`
+		err = testutil.CollectAndCompare(
+			malfeasance2.NumInvalidProofs().WithLabelValues("ATX", "invalidPost"),
+			strings.NewReader(expected),
+			"spacemesh_malfeasance2_num_invalid_proofs",
+		)
+		require.NoError(t, err)
 	})
 }
 
@@ -273,6 +314,18 @@ func TestHandler_HandleGossip(t *testing.T) {
 		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, handlerError)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_invalid_proofs counter
+spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
+`
+		err = testutil.CollectAndCompare(
+			malfeasance2.NumInvalidProofs().WithLabelValues("ATX", "invalidPost"),
+			strings.NewReader(expected),
+			"spacemesh_malfeasance2_num_invalid_proofs",
+		)
+		require.NoError(t, err)
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -292,6 +345,18 @@ func TestHandler_HandleGossip(t *testing.T) {
 		}
 
 		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		require.NoError(t, err)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_proofs counter
+spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
+`
+		err = testutil.CollectAndCompare(
+			malfeasance2.NumValidProofs().WithLabelValues("ATX", "invalidPost"),
+			strings.NewReader(expected),
+			"spacemesh_malfeasance2_num_proofs",
+		)
 		require.NoError(t, err)
 	})
 
@@ -316,6 +381,18 @@ func TestHandler_HandleGossip(t *testing.T) {
 		require.NoError(t, err)
 
 		err = h.HandleGossip(context.Background(), "peer", proofBytes)
+		require.NoError(t, err)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_proofs counter
+spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
+`
+		err = testutil.CollectAndCompare(
+			malfeasance2.NumValidProofs().WithLabelValues("ATX", "invalidPost"),
+			strings.NewReader(expected),
+			"spacemesh_malfeasance2_num_proofs",
+		)
 		require.NoError(t, err)
 	})
 }

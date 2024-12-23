@@ -3,7 +3,9 @@ package malfeasance2
 import "github.com/spacemeshos/go-spacemesh/metrics"
 
 const (
-	namespace = "malfeasance2"
+	MetricNamespace        = "malfeasance2"
+	MetricValidProofName   = "num_proofs"
+	MetricInvalidProofName = "num_invalid_proofs"
 
 	domainLabel = "domain"
 	typeLabel   = "type"
@@ -11,8 +13,8 @@ const (
 
 var (
 	numProofs = metrics.NewCounter(
-		"num_proofs",
-		namespace,
+		MetricValidProofName,
+		MetricNamespace,
 		"number of malfeasance proofs",
 		[]string{
 			domainLabel,
@@ -21,8 +23,8 @@ var (
 	)
 
 	numInvalidProofs = metrics.NewCounter(
-		"num_invalid_proofs",
-		namespace,
+		MetricInvalidProofName,
+		MetricNamespace,
 		"number of invalid malfeasance proofs",
 		[]string{
 			domainLabel,
