@@ -5,14 +5,16 @@ import (
 )
 
 const (
-	namespace = "malfeasance"
+	validProofName   = "num_proofs"
+	invalidProofName = "num_invalid_proofs"
+	namespace        = "malfeasance"
 
 	typeLabel = "type"
 )
 
 var (
 	numProofs = metrics.NewCounter(
-		"num_proofs",
+		validProofName,
 		namespace,
 		"number of malfeasance proofs",
 		[]string{
@@ -21,7 +23,7 @@ var (
 	)
 
 	numInvalidProofs = metrics.NewCounter(
-		"num_invalid_proofs",
+		invalidProofName,
 		namespace,
 		"number of invalid malfeasance proofs",
 		[]string{

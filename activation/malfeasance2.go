@@ -38,6 +38,14 @@ func (mh *MalfeasanceHandlerV2) Info(data []byte) (map[string]string, error) {
 	return info, nil
 }
 
+func (mh *MalfeasanceHandlerV2) ReportLabels(data []byte) []string {
+	proof, err := mh.decodeProof(data)
+	if err != nil {
+		return []string{"ATX", "unknown"}
+	}
+	return []string{"ATX", proof.String()}
+}
+
 func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
 	// TODO(mafa): implement me
 	return nil

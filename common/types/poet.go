@@ -67,7 +67,7 @@ func (p *PoetProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 type PoetProofMessage struct {
 	PoetProof
 	PoetServiceID []byte `scale:"max=32"` // public key of the PoET service
-	RoundID       string `scale:"max=32"`
+	RoundID       string `scale:"max=32"` // round ID
 	// The input to Poet's POSW.
 	// It's the root of a merkle tree built from all of the members
 	// that are included in the proof.

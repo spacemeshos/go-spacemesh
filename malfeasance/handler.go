@@ -86,11 +86,13 @@ func (h *Handler) reportMalfeasance(smesher types.NodeID) {
 }
 
 func (h *Handler) countProof(mp *wire.MalfeasanceProof) {
-	h.handlers[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
+	label := h.handlers[MalfeasanceType(mp.Proof.Type)].ReportLabel()
+	numProofs.WithLabelValues(label).Inc()
 }
 
 func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
-	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+	label := h.handlers[MalfeasanceType(p.Proof.Type)].ReportLabel()
+	numInvalidProofs.WithLabelValues(label).Inc()
 }
 
 func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error) {
