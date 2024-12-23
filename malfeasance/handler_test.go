@@ -54,6 +54,7 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 
 	numProofs.Reset()
 	numInvalidProofs.Reset()
+	numMalformed = numInvalidProofs.WithLabelValues("mal") // I don't like globals
 
 	h := NewHandler(
 		cdb,
@@ -104,6 +105,13 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
 		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -137,6 +145,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 		expected := `
 # HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 0
 spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 `
 		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected)))
@@ -265,6 +274,13 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 		)
 		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof for wrong nodeID", func(t *testing.T) {
@@ -351,6 +367,7 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 		expected := `
 # HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 0
 spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 `
 		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected)))
