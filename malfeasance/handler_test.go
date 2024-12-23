@@ -79,6 +79,13 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", []byte{0x01})
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("unknown malfeasance type", func(t *testing.T) {
@@ -230,6 +237,13 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("unknown malfeasance type", func(t *testing.T) {
