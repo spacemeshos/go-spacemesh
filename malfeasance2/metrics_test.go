@@ -2,14 +2,14 @@ package malfeasance2
 
 import "github.com/prometheus/client_golang/prometheus"
 
-func NumValidProofs() *prometheus.CounterVec {
-	return numProofs
+func (h *Handler) NumValidProofs() *prometheus.CounterVec {
+	return h.numProofs
 }
 
-func NumInvalidProofs() *prometheus.CounterVec {
-	return numInvalidProofs
+func (h *Handler) NumInvalidProofs() *prometheus.CounterVec {
+	return h.numInvalidProofs
 }
 
-func NumMalProof() prometheus.Counter {
-	return numMalformed
+func (h *Handler) NumMalProof() prometheus.Counter {
+	return h.numMalformed
 }

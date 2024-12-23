@@ -53,9 +53,6 @@ func newTestHandler(tb testing.TB) *testHandler {
 	ctrl := gomock.NewController(tb)
 	mockTrt := malfeasance2.NewMocktortoise(ctrl)
 
-	malfeasance2.NumValidProofs().Reset()
-	malfeasance2.NumInvalidProofs().Reset()
-
 	h := malfeasance2.NewHandler(
 		db,
 		logger,
@@ -124,7 +121,7 @@ func TestHandler_HandleSync(t *testing.T) {
 # TYPE spacemesh_malfeasance2_num_invalid_proofs counter
 spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumMalProof(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumMalProof(), strings.NewReader(expected)))
 	})
 
 	t.Run("unknown version", func(t *testing.T) {
@@ -175,8 +172,9 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 # HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
 # TYPE spacemesh_malfeasance2_num_invalid_proofs counter
 spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
+spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumInvalidProofs(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumInvalidProofs(), strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -203,7 +201,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
 # TYPE spacemesh_malfeasance2_num_proofs counter
 spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumValidProofs(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
 
 		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
 		require.NoError(t, err)
@@ -241,8 +239,9 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 # HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
 # TYPE spacemesh_malfeasance2_num_invalid_proofs counter
 spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
+spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumInvalidProofs(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumInvalidProofs(), strings.NewReader(expected)))
 	})
 }
 
@@ -259,7 +258,7 @@ func TestHandler_HandleGossip(t *testing.T) {
 # TYPE spacemesh_malfeasance2_num_invalid_proofs counter
 spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumMalProof(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumMalProof(), strings.NewReader(expected)))
 	})
 
 	t.Run("self peer", func(t *testing.T) {
@@ -318,8 +317,9 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 # HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
 # TYPE spacemesh_malfeasance2_num_invalid_proofs counter
 spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
+spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumInvalidProofs(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumInvalidProofs(), strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -346,7 +346,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="ATX",type="invalidPost"} 1
 # TYPE spacemesh_malfeasance2_num_proofs counter
 spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumValidProofs(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
 		require.NoError(t, err)
 	})
 
@@ -378,7 +378,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 # TYPE spacemesh_malfeasance2_num_proofs counter
 spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumValidProofs(), strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
 	})
 }
 

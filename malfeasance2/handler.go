@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -38,6 +40,11 @@ type Handler struct {
 	tortoise   tortoise
 
 	handlers map[ProofDomain]MalfeasanceHandler
+
+	// metrics
+	numProofs        *prometheus.CounterVec
+	numInvalidProofs *prometheus.CounterVec
+	numMalformed     prometheus.Counter
 }
 
 func NewHandler(
@@ -48,6 +55,31 @@ func NewHandler(
 	edVerifier *signing.EdVerifier,
 	tortoise tortoise,
 ) *Handler {
+	proofCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.Namespace,
+			Subsystem: namespace,
+			Name:      validProofName,
+			Help:      "number of malfeasance proofs",
+		},
+		[]string{
+			domainLabel,
+			typeLabel,
+		},
+	)
+	invalidProofCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.Namespace,
+			Subsystem: namespace,
+			Name:      invalidProofName,
+			Help:      "number of invalid malfeasance proofs",
+		},
+		[]string{
+			domainLabel,
+			typeLabel,
+		},
+	)
+
 	return &Handler{
 		db:         db,
 		logger:     lg,
@@ -57,6 +89,10 @@ func NewHandler(
 		tortoise:   tortoise,
 
 		handlers: make(map[ProofDomain]MalfeasanceHandler),
+
+		numProofs:        proofCounter,
+		numInvalidProofs: invalidProofCounter,
+		numMalformed:     invalidProofCounter.WithLabelValues("mal", "unknown"),
 	}
 }
 
@@ -69,12 +105,12 @@ func (h *Handler) RegisterHandler(malfeasanceType ProofDomain, handler Malfeasan
 
 func (h *Handler) countProof(mp MalfeasanceProof) {
 	labels := h.handlers[mp.Domain].ReportLabels(mp.Proof)
-	numProofs.WithLabelValues(labels...).Inc()
+	h.numProofs.WithLabelValues(labels...).Inc()
 }
 
 func (h *Handler) countInvalidProof(mp MalfeasanceProof) {
 	labels := h.handlers[mp.Domain].ReportLabels(mp.Proof)
-	numInvalidProofs.WithLabelValues(labels...).Inc()
+	h.numInvalidProofs.WithLabelValues(labels...).Inc()
 }
 
 func (h *Handler) reportMalfeasance(smesher types.NodeID) {
@@ -123,7 +159,7 @@ func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]str
 func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, peer p2p.Peer, msg []byte) error {
 	var proof MalfeasanceProof
 	if err := codec.Decode(msg, &proof); err != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		return ErrMalformedData
 	}
 
@@ -182,7 +218,7 @@ func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, msg []byte) e
 
 	var proof MalfeasanceProof
 	if err := codec.Decode(msg, &proof); err != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		return ErrMalformedData
 	}
 
