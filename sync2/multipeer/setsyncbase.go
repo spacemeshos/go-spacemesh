@@ -80,10 +80,11 @@ func (ssb *SetSyncBase) syncPeer(
 		if err := ssb.handler.Commit(ctx, p, ssb.os, sr); err != nil {
 			return fmt.Errorf("commit: %w", err)
 		}
+		ssb.mtx.Lock()
+		defer ssb.mtx.Unlock()
+		return ssb.os.Advance()
 	}
-	ssb.mtx.Lock()
-	defer ssb.mtx.Unlock()
-	return ssb.os.Advance()
+	return nil
 }
 
 func (ssb *SetSyncBase) Sync(ctx context.Context, p p2p.Peer, x, y rangesync.KeyBytes) error {

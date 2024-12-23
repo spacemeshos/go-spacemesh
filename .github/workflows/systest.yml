@@ -48,9 +48,11 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          predicate-quantifier: 'every'
           filters: |
             nondoc:
               - '!**/*.md'
+              - '!.github/CODEOWNERS'
 
   build-docker-images:
     runs-on: ubuntu-22.04

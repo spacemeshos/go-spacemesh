@@ -328,10 +328,10 @@ func TestNodeIDProof(t *testing.T) {
 		err := malfeasance.AddProof(db, nodeID, nil, proof, 1, time.Now())
 		require.NoError(t, err)
 
-		domain, p, err := malfeasance.NodeIDProof(db, nodeID)
+		p, domain, err := malfeasance.NodeIDProof(db, nodeID)
 		require.NoError(t, err)
-		require.Equal(t, byte(1), domain)
 		require.Equal(t, proof, p)
+		require.Equal(t, 1, domain)
 	})
 
 	t.Run("node with proof and marriage ID returns no proof", func(t *testing.T) {
@@ -396,7 +396,7 @@ func TestMarriageProof(t *testing.T) {
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 
-	t.Run("marriage ID with proof has proof", func(t *testing.T) {
+	t.Run("known marriage ID has proof", func(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
@@ -415,12 +415,14 @@ func TestMarriageProof(t *testing.T) {
 		require.NoError(t, err)
 
 		proof := types.RandomBytes(100)
-		err = malfeasance.AddProof(db, nodeID, &id, proof, 1, time.Now())
-		require.NoError(t, err)
+		require.NoError(t, malfeasance.AddProof(db, nodeID, &id, proof, 1, time.Now()))
 
-		domain, p, err := malfeasance.MarriageProof(db, id)
+		nodeID2 := types.RandomNodeID()
+		require.NoError(t, malfeasance.SetMalicious(db, nodeID2, id, time.Now()))
+
+		p, domain, err := malfeasance.MarriageProof(db, id)
 		require.NoError(t, err)
-		require.Equal(t, byte(1), domain)
 		require.Equal(t, proof, p)
+		require.Equal(t, 1, domain)
 	})
 }

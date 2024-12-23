@@ -3,6 +3,7 @@ package malfeasance2_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"strconv"
 	"testing"
 	"time"
@@ -30,6 +31,7 @@ type testHandler struct {
 	*malfeasance2.Handler
 
 	observedLogs *observer.ObservedLogs
+	ctrl         *gomock.Controller
 	db           sql.StateDatabase
 	self         p2p.Peer
 	mockTrt      *malfeasance2.Mocktortoise
@@ -61,10 +63,41 @@ func newTestHandler(tb testing.TB) *testHandler {
 		Handler: h,
 
 		observedLogs: observedLogs,
+		ctrl:         ctrl,
 		db:           db,
 		self:         "self",
 		mockTrt:      mockTrt,
 	}
+}
+
+func TestRegister(t *testing.T) {
+	t.Parallel()
+
+	t.Run("register", func(t *testing.T) {
+		t.Parallel()
+		th := newTestHandler(t)
+
+		handler := malfeasance2.NewMockMalfeasanceHandler(th.ctrl)
+		th.RegisterHandler(malfeasance2.InvalidActivation, handler)
+	})
+
+	t.Run("already registered", func(t *testing.T) {
+		t.Parallel()
+		th := newTestHandler(t)
+
+		handler := malfeasance2.NewMockMalfeasanceHandler(th.ctrl)
+		th.RegisterHandler(malfeasance2.InvalidActivation, handler)
+
+		require.Panics(t, func() {
+			th.RegisterHandler(malfeasance2.InvalidActivation, handler)
+		})
+
+		logs := th.observedLogs.FilterLevelExact(zap.PanicLevel)
+
+		require.Equal(t, 1, logs.Len())
+		require.Equal(t, zap.PanicLevel, logs.All()[0].Level)
+		require.Contains(t, logs.All()[0].Message, "handler already registered")
+	})
 }
 
 // TODO(mafa): missing tests
@@ -302,11 +335,11 @@ func TestHandler_Info(t *testing.T) {
 
 		nodeID := types.RandomNodeID()
 		proofBytes := types.RandomBytes(100)
-		err := malfeasance.AddProof(h.db, nodeID, nil, proofBytes, 1, time.Now())
+		err := malfeasance.AddProof(h.db, nodeID, nil, proofBytes, 999, time.Now())
 		require.NoError(t, err)
 
 		info, err := h.Info(context.Background(), nodeID)
-		require.ErrorContains(t, err, "unknown malfeasance domain 1")
+		require.ErrorContains(t, err, "unknown malfeasance domain 999")
 		require.Nil(t, info)
 	})
 
@@ -314,7 +347,7 @@ func TestHandler_Info(t *testing.T) {
 		h := newTestHandler(t)
 		invalidProof := []byte("invalid")
 		infoError := errors.New("invalid proof")
-		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(h.ctrl)
 		mockHandler.EXPECT().Info(invalidProof).Return(nil, infoError)
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
@@ -331,9 +364,10 @@ func TestHandler_Info(t *testing.T) {
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		properties := map[string]string{
-			"key": "value",
+			"type": "DoubleMarry",
+			"key":  "value",
 		}
-		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(h.ctrl)
 		mockHandler.EXPECT().Info(validProof).Return(properties, nil)
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
@@ -341,14 +375,8 @@ func TestHandler_Info(t *testing.T) {
 		err := malfeasance.AddProof(h.db, nodeID, nil, validProof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
-		expectedProperties := map[string]string{
-			"domain": strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10),
-			"key":    "value",
-		}
-
-		for k, v := range properties {
-			expectedProperties[k] = v
-		}
+		expectedProperties := maps.Clone(properties)
+		expectedProperties["domain"] = strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10)
 
 		info, err := h.Info(context.Background(), nodeID)
 		require.NoError(t, err)
@@ -359,9 +387,10 @@ func TestHandler_Info(t *testing.T) {
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		properties := map[string]string{
-			"key": "value",
+			"type": "InvalidPost",
+			"key":  "value",
 		}
-		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(h.ctrl)
 		mockHandler.EXPECT().Info(validProof).Return(properties, nil)
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 
@@ -394,15 +423,9 @@ func TestHandler_Info(t *testing.T) {
 		err = malfeasance.SetMalicious(h.db, maliciousID, id, time.Now())
 		require.NoError(t, err)
 
-		expectedProperties := map[string]string{
-			"domain":       strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10),
-			"key":          "value",
-			"malicious_id": maliciousID.String(),
-		}
-
-		for k, v := range properties {
-			expectedProperties[k] = v
-		}
+		expectedProperties := maps.Clone(properties)
+		expectedProperties["domain"] = strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10)
+		expectedProperties["malicious_id"] = maliciousID.String()
 
 		info, err := h.Info(context.Background(), maliciousID)
 		require.NoError(t, err)

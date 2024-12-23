@@ -98,10 +98,10 @@ func IterateOps(
 
 // Proof returns the malfeasance proof for the given node ID. Returns sql.ErrNotFound if no proof for the given node ID
 // exists. To return a proof for a marriage set use MarriageProof instead.
-func NodeIDProof(db sql.Executor, nodeID types.NodeID) (byte, []byte, error) {
+func NodeIDProof(db sql.Executor, nodeID types.NodeID) ([]byte, int, error) {
 	var (
-		domain byte
 		proof  []byte
+		domain int
 	)
 	rows, err := db.Exec(`
 		SELECT proof, domain
@@ -112,24 +112,24 @@ func NodeIDProof(db sql.Executor, nodeID types.NodeID) (byte, []byte, error) {
 	}, func(stmt *sql.Statement) bool {
 		proof = make([]byte, stmt.ColumnLen(0))
 		stmt.ColumnBytes(0, proof)
-		domain = byte(stmt.ColumnInt64(1))
+		domain = int(stmt.ColumnInt64(1))
 		return false
 	})
 	if err != nil {
-		return 0, nil, fmt.Errorf("proof %v: %w", nodeID, err)
+		return nil, 0, fmt.Errorf("proof %v: %w", nodeID, err)
 	}
 	if rows == 0 {
-		return 0, nil, sql.ErrNotFound
+		return nil, 0, sql.ErrNotFound
 	}
-	return domain, proof, nil
+	return proof, domain, nil
 }
 
 // MarriageProof returns the malfeasance proof for the marriage set. Returns sql.ErrNotFound if no proof for the given
 // marriage ID exists. To return a proof for a node ID use NodeIDProof instead.
-func MarriageProof(db sql.Executor, marriageID marriage.ID) (byte, []byte, error) {
+func MarriageProof(db sql.Executor, marriageID marriage.ID) ([]byte, int, error) {
 	var (
-		domain byte
 		proof  []byte
+		domain int
 	)
 	rows, err := db.Exec(`
 		SELECT proof, domain
@@ -140,14 +140,14 @@ func MarriageProof(db sql.Executor, marriageID marriage.ID) (byte, []byte, error
 	}, func(stmt *sql.Statement) bool {
 		proof = make([]byte, stmt.ColumnLen(0))
 		stmt.ColumnBytes(0, proof)
-		domain = byte(stmt.ColumnInt64(1))
+		domain = int(stmt.ColumnInt64(1))
 		return false
 	})
 	if err != nil {
-		return 0, nil, fmt.Errorf("marriage proof %v: %w", marriageID, err)
+		return nil, 0, fmt.Errorf("marriage proof %v: %w", marriageID, err)
 	}
 	if rows == 0 {
-		return 0, nil, sql.ErrNotFound
+		return nil, 0, sql.ErrNotFound
 	}
-	return domain, proof, nil
+	return proof, domain, nil
 }

@@ -839,9 +839,9 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(syncer)
 	hOracle.SetSync(syncer)
 
-	legacyMalLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	legacyMalfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
-		legacyMalLogger,
+		legacyMalfeasanceLogger,
 		app.cachedDB,
 		syncer,
 		trtl,
@@ -1158,18 +1158,18 @@ func (app *App) initServices(ctx context.Context) error {
 
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
-		legacyMalLogger,
+		legacyMalfeasanceLogger,
 		app.edVerifier,
 	)
 	meshMH := mesh.NewMalfeasanceHandler(
 		app.cachedDB,
 		app.edVerifier,
-		mesh.WithMalfeasanceLogger(legacyMalLogger),
+		mesh.WithMalfeasanceLogger(legacyMalfeasanceLogger),
 	)
 	hareMH := hare3.NewMalfeasanceHandler(
 		app.cachedDB,
 		app.edVerifier,
-		hare3.WithMalfeasanceLogger(legacyMalLogger),
+		hare3.WithMalfeasanceLogger(legacyMalfeasanceLogger),
 	)
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
@@ -1184,7 +1184,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	malHandler := malfeasance.NewHandler(
 		app.cachedDB,
-		legacyMalLogger,
+		legacyMalfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
 		trtl,
