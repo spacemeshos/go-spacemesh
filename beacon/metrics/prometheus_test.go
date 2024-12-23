@@ -6,6 +6,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/spacemeshos/fixed"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -37,7 +38,7 @@ func TestBeaconMetrics(t *testing.T) {
 		return observed, calculated
 	}, nil)
 
-	deviceExpected := `
+	expected := `
 # HELP spacemesh_beacons_beacon_calculated_weight Weight of the beacon calculated by the node for each epoch
 # TYPE spacemesh_beacons_beacon_calculated_weight counter
 spacemesh_beacons_beacon_calculated_weight{beacon="speck",epoch="11"} 0
@@ -50,7 +51,5 @@ spacemesh_beacons_beacon_observed_total{beacon="rashers",epoch="10"} 321
 spacemesh_beacons_beacon_observed_weight{beacon="canadian",epoch="10"} 32100
 spacemesh_beacons_beacon_observed_weight{beacon="rashers",epoch="10"} 12300
 `
-	if err := testutil.CollectAndCompare(bmc, strings.NewReader(deviceExpected)); err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, testutil.CollectAndCompare(bmc, strings.NewReader(expected)))
 }
