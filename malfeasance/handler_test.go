@@ -52,10 +52,6 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	cdb := datastore.NewCachedDB(db, logger, datastore.WithConsensusCache(store))
 	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 
-	numProofs.Reset()
-	numInvalidProofs.Reset()
-	numMalformed = numInvalidProofs.WithLabelValues("mal") // I don't like globals
-
 	h := NewHandler(
 		cdb,
 		logger,
@@ -86,7 +82,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
 spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("unknown malfeasance type", func(t *testing.T) {
@@ -111,7 +107,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
 spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -148,7 +144,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 spacemesh_malfeasance_num_invalid_proofs{type="mal"} 0
 spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numInvalidProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -189,7 +185,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 # TYPE spacemesh_malfeasance_num_proofs counter
 spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numProofs, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
@@ -252,7 +248,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
 spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("unknown malfeasance type", func(t *testing.T) {
@@ -280,7 +276,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 # TYPE spacemesh_malfeasance_num_invalid_proofs counter
 spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numMalformed, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof for wrong nodeID", func(t *testing.T) {
@@ -329,7 +325,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 # TYPE spacemesh_malfeasance_num_proofs counter
 spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numProofs, strings.NewReader(expected))) // proof is still valid
+		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected))) // proof is still valid
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -370,7 +366,7 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 spacemesh_malfeasance_num_invalid_proofs{type="mal"} 0
 spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numInvalidProofs, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numInvalidProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -410,7 +406,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 # TYPE spacemesh_malfeasance_num_proofs counter
 spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
-		require.NoError(t, testutil.CollectAndCompare(numProofs, strings.NewReader(expected)))
+		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
