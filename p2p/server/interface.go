@@ -21,6 +21,7 @@ type Host interface {
 	NewStream(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
 	Network() network.Network
 	ConnManager() connmgr.ConnManager
+	Mux() protocol.Switch
 }
 
 type PeerInfoHost interface {

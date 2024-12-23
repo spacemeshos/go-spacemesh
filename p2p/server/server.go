@@ -243,6 +243,22 @@ func (s *Server) peerInfo() peerinfo.PeerInfo {
 }
 
 func (s *Server) Run(ctx context.Context) error {
+	startCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	for {
+		select {
+		case <-startCtx.Done():
+			close(s.stopped)
+			return errors.New("failed to start server")
+		case <-time.After(10 * time.Millisecond):
+		}
+
+		if len(s.h.Mux().Protocols()) > 0 {
+			cancel()
+			break
+		}
+	}
+
 	var eg errgroup.Group
 	for {
 		select {
