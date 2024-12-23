@@ -9,3 +9,7 @@ func NumValidProofs() *prometheus.CounterVec {
 func NumInvalidProofs() *prometheus.CounterVec {
 	return numInvalidProofs
 }
+
+func NumMalProof() prometheus.Counter {
+	return numMalformed
+}

@@ -118,6 +118,13 @@ func TestHandler_HandleSync(t *testing.T) {
 		err := h.HandleSynced(context.Background(), types.EmptyHash32, "peer", []byte("malformed"))
 		require.ErrorIs(t, err, malfeasance2.ErrMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_invalid_proofs counter
+spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumMalProof(), strings.NewReader(expected)))
 	})
 
 	t.Run("unknown version", func(t *testing.T) {
@@ -246,6 +253,13 @@ func TestHandler_HandleGossip(t *testing.T) {
 		err := h.HandleGossip(context.Background(), "peer", []byte("malformed"))
 		require.ErrorIs(t, err, malfeasance2.ErrMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_invalid_proofs counter
+spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(malfeasance2.NumMalProof(), strings.NewReader(expected)))
 	})
 
 	t.Run("self peer", func(t *testing.T) {
