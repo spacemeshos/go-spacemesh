@@ -2,5 +2,5 @@ package wallet
 
 import _ "embed"
 
-//go:embed wallet.bin
+//go:embed elf/wallet
 var PROGRAM []byte
