@@ -17,6 +17,8 @@ func TestConnectedPersist(t *testing.T) {
 	dir := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	const n = 3
+	// We can use FullMeshConnected here b/c we don't need to query peers' protocols,
+	// and thus there are no issues with identify service race.
 	mock, err := mocknet.FullMeshConnected(n)
 	require.NoError(t, err)
 	var eg errgroup.Group
@@ -46,6 +48,8 @@ func TestConnectedBrokenCRC(t *testing.T) {
 	dir := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	const n = 3
+	// We can use FullMeshConnected here b/c we don't need to query peers' protocols,
+	// and thus there are no issues with identify service race.
 	mock, err := mocknet.FullMeshConnected(n)
 	require.NoError(t, err)
 	var eg errgroup.Group

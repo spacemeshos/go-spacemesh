@@ -25,12 +25,14 @@ import (
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
+	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/quicreuse"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -282,6 +284,8 @@ func New(
 		return nil, fmt.Errorf("can't set up connection gater: %w", err)
 	}
 
+	var identifyConn func(network.Conn)
+
 	pt := peerinfo.NewPeerInfoTracker()
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
@@ -295,6 +299,11 @@ func New(
 			cfg.AutoNATServer.PeerMax,
 			cfg.AutoNATServer.ResetPeriod),
 		libp2p.ConnectionGater(g),
+		libp2p.WithFxOption(fx.Invoke(func(ids identify.IDService) {
+			identifyConn = func(c network.Conn) {
+				ids.IdentifyConn(c)
+			}
+		})),
 	}
 	if cfg.EnableTCPTransport {
 		lopts = append(lopts,
@@ -413,6 +422,9 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
+	if identifyConn == nil {
+		panic("BUG: identify service not set")
+	}
 	g.updateHost(h)
 	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
 	pt.Start(h.Network())
@@ -427,6 +439,7 @@ func New(
 		WithBootnodes(bootnodesMap),
 		WithDirectNodes(g.direct),
 		WithPeerInfo(pt),
+		WithIdentifyConn(identifyConn),
 	)
 	return Upgrade(h, opts...)
 }

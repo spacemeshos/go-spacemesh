@@ -68,7 +68,8 @@ func fakeRequesterGetter(t *testing.T) getRequesterFunc {
 }
 
 func p2pRequesterGetter(tb testing.TB) getRequesterFunc {
-	mesh, err := mocknet.FullMeshConnected(2)
+	// Don't connect immediately to avoid identify race.
+	mesh, err := mocknet.FullMeshLinked(2)
 	require.NoError(tb, err)
 	proto := "itest"
 	opts := []server.Opt{
@@ -85,14 +86,9 @@ func p2pRequesterGetter(tb testing.TB) getRequesterFunc {
 			return server.New(mesh.Hosts()[0], proto, handler, opts...), mesh.Hosts()[0].ID()
 		}
 		s := server.New(mesh.Hosts()[1], proto, handler, opts...)
-		require.Eventually(tb, func() bool {
-			for _, h := range mesh.Hosts()[0:] {
-				if len(h.Mux().Protocols()) == 0 {
-					return false
-				}
-			}
-			return true
-		}, time.Second, 10*time.Millisecond)
+		// Connect the P2P mesh only after the servers is configured.
+		// This way, we avoid the race causing bad protocol identification.
+		require.NoError(tb, mesh.ConnectAllButSelf())
 		return s, mesh.Hosts()[1].ID()
 	}
 }

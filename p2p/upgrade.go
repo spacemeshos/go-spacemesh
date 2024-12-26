@@ -15,6 +15,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
 	ma "github.com/multiformats/go-multiaddr"
 	"go.uber.org/zap"
@@ -75,6 +76,12 @@ func WithPeerInfo(pi peerinfo.PeerInfo) Opt {
 	}
 }
 
+func WithIdentifyConn(identifyConn func(network.Conn)) Opt {
+	return func(fh *Host) {
+		fh.identifyConn = identifyConn
+	}
+}
+
 // Host is a convenience wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -112,7 +119,8 @@ type Host struct {
 		value network.Reachability
 	}
 
-	ping *Ping
+	ping         *Ping
+	identifyConn func(network.Conn)
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -127,6 +135,15 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	}
 	for _, opt := range opts {
 		opt(fh)
+	}
+	if fh.identifyConn == nil {
+		// If no IDService is provided, which may be the case in the tests,
+		// we can try to get it from the host, assuming it's a *basichost.BasicHost.
+		if bh, ok := h.(*basichost.BasicHost); ok {
+			fh.identifyConn = func(conn network.Conn) {
+				bh.IDService().IdentifyConn(conn)
+			}
+		}
 	}
 	cfg := fh.cfg
 	bootnodes, err := parseIntoAddr(fh.cfg.Bootnodes)
@@ -503,4 +520,20 @@ func (fh *Host) trackNetEvents() error {
 
 func (fh *Host) PeerInfo() peerinfo.PeerInfo {
 	return fh.peerInfo
+}
+
+// Identify ensures that the given peer is identified via libp2p identify protocol.
+// Identification is initiated after connecting to the peer, and the set of protocols for
+// the peer in the ProtoBook is not guaranteed to be correct until identification
+// finishes.
+// Note that the set of the protocols in the ProtoBook for a particular peer may also
+// change via a push identity notification when the peer adds a new handler via
+// SetStreamHandler (e.g. sets up a new Server).
+func (fh *Host) Identify(p peer.ID) {
+	for _, c := range fh.Network().ConnsToPeer(p) {
+		// IDService.IdentifyConn is a no-op if the connection is already
+		// identified, but otherwise we need to wait for identification to finish
+		// to have proper set of protocols.
+		fh.identifyConn(c)
+	}
 }

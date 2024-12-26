@@ -966,9 +966,6 @@ func TestFetch_GetCert(t *testing.T) {
 
 // Test if GetAtxs() limits the number of concurrent requests to `cfg.GetAtxsConcurrency`.
 func Test_GetAtxsLimiting(t *testing.T) {
-	mesh, err := mocknet.FullMeshConnected(2)
-	require.NoError(t, err)
-
 	const (
 		totalRequests     = 100
 		getAtxConcurrency = 10
@@ -976,6 +973,9 @@ func Test_GetAtxsLimiting(t *testing.T) {
 
 	for _, withLimiting := range []bool{false, true} {
 		t.Run(fmt.Sprintf("with limiting: %v", withLimiting), func(t *testing.T) {
+			// Do not connect immediately in order to avoid identify race.
+			mesh, err := mocknet.FullMeshLinked(2)
+			require.NoError(t, err)
 			srv := server.New(
 				wrapHost(mesh.Hosts()[1]),
 				hashProtocol,
@@ -1037,6 +1037,10 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			}
 			require.NoError(t, f.Start())
 			t.Cleanup(f.Stop)
+
+			// Connect the P2P mesh only after the server is configured.
+			// This way, we avoid the race causing bad protocol identification.
+			require.NoError(t, mesh.ConnectAllButSelf())
 
 			var atxIds []types.ATXID
 			for i := 0; i < totalRequests; i++ {

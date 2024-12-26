@@ -300,6 +300,12 @@ func NewFetch(
 	if host != nil {
 		connectedf := func(peer p2p.Peer) {
 			protocols := func() []protocol.ID {
+				// Make sure that the protocol list for the peer is correct.
+				// This is similar to what Host.NewStream does to make
+				// sure it is possible to use one of the specified
+				// protocols. If we don't do this, there may be a race causing
+				// some peers to be unnecessarily ignored.
+				host.Identify(peer)
 				ps, err := host.Peerstore().GetProtocols(peer)
 				if err != nil {
 					f.logger.Debug("failed to get protocols for peer",
