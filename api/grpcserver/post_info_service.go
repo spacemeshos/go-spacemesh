@@ -29,11 +29,6 @@ func (s *PostInfoService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterPostInfoServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *PostInfoService) String() string {
-	return "PostInfoService"
-}
-
 // NewPostInfoService creates a new instance of the post info grpc service.
 func NewPostInfoService(states postState) *PostInfoService {
 	return &PostInfoService{

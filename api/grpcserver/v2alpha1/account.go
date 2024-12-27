@@ -43,11 +43,6 @@ func (s *AccountService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterAccountServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the service name.
-func (s *AccountService) String() string {
-	return "AccountService"
-}
-
 func (s *AccountService) List(
 	_ context.Context,
 	request *spacemeshv2alpha1.AccountRequest,

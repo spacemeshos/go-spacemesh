@@ -44,11 +44,6 @@ func (s *SmesherService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterSmesherServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *SmesherService) String() string {
-	return "SmesherService"
-}
-
 // NewSmesherService creates a new grpc service using config data.
 func NewSmesherService(
 	smeshing activation.SmeshingProvider,
