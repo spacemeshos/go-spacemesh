@@ -354,6 +354,7 @@ func TestProxyingJsonService(t *testing.T) {
 
 	// Start client proxying to the server
 	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
+	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Alpha1}
 	clientApp := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	clientApp.idStates = identity.NewIdentityStateStorage()
 

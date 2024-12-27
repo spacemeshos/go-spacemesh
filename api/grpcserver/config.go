@@ -29,7 +29,8 @@ type Config struct {
 	DatabaseConnections int `mapstructure:"db-connections"`
 
 	// Address of the Node API V2 to connect to
-	ProxyApiV2Address string `mapstructure:"proxy-api-v2-address"`
+	ProxyApiV2Address  string    `mapstructure:"proxy-api-v2-address"`
+	NonProxiedServices []Service `mapstructure:"grpc-local-services"`
 }
 
 type Service = string

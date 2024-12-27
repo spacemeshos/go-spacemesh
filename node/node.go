@@ -1990,17 +1990,24 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			return errors.New("start json server without public services")
 		}
 		if len(app.Config.API.ProxyApiV2Address) > 0 {
-			// Expose SmeshingIdentities service locally
-			smeshingSvc, err := app.grpcService(grpcserver.SmeshingIdentitiesV2Alpha1, logger)
-			if err != nil {
-				return fmt.Errorf("creating smeshing id service: %w", err)
+			var localSvcs []proxy.Service
+			for _, svcName := range app.Config.API.NonProxiedServices {
+				svc, err := app.grpcService(svcName, logger)
+				if err != nil {
+					return fmt.Errorf("creating smeshing id service: %w", err)
+				}
+				if svc, ok := svc.(proxy.Service); ok {
+					localSvcs = append(localSvcs, svc)
+				} else {
+					return fmt.Errorf("cannot use service %q as non-proxied local service", svcName)
+				}
 			}
 
 			p, err := proxy.NewServer(
 				app.Config.API.JSONListener,
 				app.Config.API.ProxyApiV2Address,
 				logger.Zap(),
-				smeshingSvc.(proxy.Service),
+				localSvcs...,
 			)
 			if err != nil {
 				return err
