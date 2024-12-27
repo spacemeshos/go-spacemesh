@@ -41,8 +41,7 @@ type QueryCache interface {
 	// IsCached returns true if the requests are being cached.
 	IsCached() bool
 	// GetValue retrieves the specified value from the cache. If the entry is absent
-	// from cache, it's populated by calling retrieve func.  Note that the retrieve
-	// func should never cause UpdateSlice to be called for this cache.
+	// from cache, it's populated by calling retrieve func.
 	GetValue(
 		ctx context.Context,
 		key QueryCacheItemKey,
@@ -60,8 +59,7 @@ func IsCached(db any) bool {
 }
 
 // WithCachedValue retrieves the specified value from the cache. If the entry is
-// absent from the cache, it's populated by calling retrieve func. Note that the
-// retrieve func should never cause UpdateSlice to be called.
+// absent from the cache, it's populated by calling retrieve func.
 func WithCachedValue[T any](
 	ctx context.Context,
 	db any,
