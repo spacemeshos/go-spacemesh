@@ -116,9 +116,9 @@ func TestSyncTerminateOnError(t *testing.T) {
 	}
 	getter.EXPECT().GetPeers().Return(peers)
 
+	require.NoError(t, mesh.ConnectAllButSelf())
 	sync.Start()
 	t.Cleanup(sync.Stop)
-	require.NoError(t, mesh.ConnectAllButSelf())
 	errors := make(chan error, 1)
 	go func() {
 		errors <- sync.Wait()
@@ -160,11 +160,11 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		)
 		instances = append(instances, sync)
 	}
+	require.NoError(t, mesh.ConnectAllButSelf())
 	for _, sync := range instances {
 		sync.Start()
 		t.Cleanup(sync.Stop)
 	}
-	require.NoError(t, mesh.ConnectAllButSelf())
 	for i, inst := range instances {
 		if errors[i] == nil {
 			continue
