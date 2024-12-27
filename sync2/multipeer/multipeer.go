@@ -167,15 +167,16 @@ func DefaultConfig() MultiPeerReconcilerConfig {
 
 // MultiPeerReconciler reconcilies the local set against multiple remote sets.
 type MultiPeerReconciler struct {
-	logger   *zap.Logger
-	cfg      MultiPeerReconcilerConfig
-	syncBase SyncBase
-	peers    *peers.Peers
-	clock    clockwork.Clock
-	keyLen   int
-	maxDepth int
-	runner   syncRunner
-	sl       *syncList
+	logger         *zap.Logger
+	cfg            MultiPeerReconcilerConfig
+	syncBase       SyncBase
+	peers          *peers.Peers
+	clock          clockwork.Clock
+	keyLen         int
+	maxDepth       int
+	runner         syncRunner
+	sl             *syncList
+	syncCycleCount atomic.Uint32
 }
 
 func newMultiPeerReconciler(
@@ -363,6 +364,7 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 }
 
 func (mpr *MultiPeerReconciler) syncOnce(ctx context.Context, lastWasSplit bool) (full bool, err error) {
+	defer mpr.syncCycleCount.Add(1)
 	var s syncability
 	for {
 		syncPeers := mpr.peers.SelectBestWithProtocols(int(mpr.cfg.SyncPeerCount), []protocol.ID{Protocol})
@@ -500,4 +502,10 @@ LOOP:
 // number of full syncs has happened within the specified duration of time.
 func (mpr *MultiPeerReconciler) Synced() bool {
 	return mpr.sl.Synced()
+}
+
+// SyncCycleCount returns the number of sync cycles that have happened,
+// no matter if they were successful or not.
+func (mpr *MultiPeerReconciler) SyncCycleCount() int {
+	return int(mpr.syncCycleCount.Load())
 }

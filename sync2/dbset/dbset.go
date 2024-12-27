@@ -2,6 +2,7 @@ package dbset
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
 	"sync"
@@ -118,16 +119,12 @@ func (d *DBSet) Receive(k rangesync.KeyBytes) error {
 	return nil
 }
 
-func (d *DBSet) firstItem() (rangesync.KeyBytes, error) {
-	if err := d.EnsureLoaded(); err != nil {
-		return nil, err
-	}
-	return d.ft.All().First()
-}
-
-// GetRangeInfo returns information about the range of items in the DBSet.
+// RangeInfo returns information about the range of items in the DBSet.
 // Implements rangesync.OrderedSet.
-func (d *DBSet) GetRangeInfo(x, y rangesync.KeyBytes) (rangesync.RangeInfo, error) {
+func (d *DBSet) RangeInfo(x, y rangesync.KeyBytes) (rangesync.RangeInfo, error) {
+	if x == nil || y == nil {
+		return rangesync.RangeInfo{}, errors.New("bad range")
+	}
 	if err := d.EnsureLoaded(); err != nil {
 		return rangesync.RangeInfo{}, err
 	}
@@ -135,17 +132,6 @@ func (d *DBSet) GetRangeInfo(x, y rangesync.KeyBytes) (rangesync.RangeInfo, erro
 		return rangesync.RangeInfo{
 			Items: rangesync.EmptySeqResult(),
 		}, nil
-	}
-	if x == nil || y == nil {
-		if x != nil || y != nil {
-			panic("BUG: GetRangeInfo called with one of x/y nil but not both")
-		}
-		var err error
-		x, err = d.firstItem()
-		if err != nil {
-			return rangesync.RangeInfo{}, fmt.Errorf("getting first item: %w", err)
-		}
-		y = x
 	}
 	fpr, err := d.ft.FingerprintInterval(x, y, -1)
 	if err != nil {
@@ -189,6 +175,20 @@ func (d *DBSet) SplitRange(x, y rangesync.KeyBytes, count int) (rangesync.SplitI
 			},
 		},
 		Middle: sr.Middle,
+	}, nil
+}
+
+// SetInfo returns RangeInfo for the whole DBSet.
+// Implements rangesync.OrderedSet.
+func (d *DBSet) SetInfo() (rangesync.RangeInfo, error) {
+	if err := d.EnsureLoaded(); err != nil {
+		return rangesync.RangeInfo{}, err
+	}
+	fpr := d.ft.FingerprintAll()
+	return rangesync.RangeInfo{
+		Fingerprint: fpr.FP,
+		Count:       int(fpr.Count),
+		Items:       fpr.Items,
 	}, nil
 }
 

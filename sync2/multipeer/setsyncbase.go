@@ -38,19 +38,10 @@ func NewSetSyncBase(
 
 // Count implements SyncBase.
 func (ssb *SetSyncBase) Count() (int, error) {
-	// TODO: don't lock on db-bound operations
+	// TODO: don't lock on potentially db-bound operations
 	ssb.mtx.Lock()
 	defer ssb.mtx.Unlock()
-	if empty, err := ssb.os.Empty(); err != nil {
-		return 0, fmt.Errorf("check if the set is empty: %w", err)
-	} else if empty {
-		return 0, nil
-	}
-	x, err := ssb.os.Items().First()
-	if err != nil {
-		return 0, fmt.Errorf("get first item: %w", err)
-	}
-	info, err := ssb.os.GetRangeInfo(x, x)
+	info, err := ssb.os.SetInfo()
 	if err != nil {
 		return 0, fmt.Errorf("get range info: %w", err)
 	}
