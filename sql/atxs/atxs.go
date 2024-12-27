@@ -502,12 +502,6 @@ func AddBlob(db sql.Executor, id types.ATXID, blob []byte, version types.AtxVers
 	return nil
 }
 
-// AtxAdded updates epoch query cache with new ATX, if the query cache is enabled.
-func AtxAdded(db sql.Executor, atx *types.ActivationTx) {
-	epochCacheKey := sql.QueryCacheKey(CacheKindEpochATXs, atx.PublishEpoch.String())
-	sql.AppendToCachedSlice(db, epochCacheKey, atx.ID())
-}
-
 type Filter func(types.ATXID) bool
 
 func FilterAll(types.ATXID) bool { return true }

@@ -23,10 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-const (
-	fetchSubKey sql.QueryCacheSubKey = "epoch-info-req"
-)
-
 type handler struct {
 	logger *zap.Logger
 	cdb    *datastore.CachedDB
@@ -82,25 +78,22 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, _ p2p.Peer, msg []byte
 		return nil, err
 	}
 
-	cacheKey := sql.QueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
-	return sql.WithCachedSubKey(ctx, h.cdb, cacheKey, fetchSubKey, func(ctx context.Context) ([]byte, error) {
-		atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
-		if err != nil {
-			return nil, fmt.Errorf("getting ATX IDs: %w", err)
-		}
-		ed := EpochData{
-			AtxIDs: atxids,
-		}
-		bts, err := codec.Encode(&ed)
-		if err != nil {
-			h.logger.Fatal("failed to serialize EpochData",
-				zap.Uint32("epoch", epoch.Uint32()),
-				log.ZContext(ctx),
-				zap.Error(err),
-			)
-		}
-		return bts, nil
-	})
+	atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
+	if err != nil {
+		return nil, fmt.Errorf("getting ATX IDs: %w", err)
+	}
+	ed := EpochData{
+		AtxIDs: atxids,
+	}
+	bts, err := codec.Encode(&ed)
+	if err != nil {
+		h.logger.Fatal("failed to serialize EpochData",
+			zap.Uint32("epoch", epoch.Uint32()),
+			log.ZContext(ctx),
+			zap.Error(err),
+		)
+	}
+	return bts, nil
 }
 
 // handleEpochInfoReq streams the ATXs published in the specified epoch.
