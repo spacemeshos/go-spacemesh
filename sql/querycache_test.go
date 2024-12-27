@@ -62,14 +62,14 @@ func TestCacheEviction(t *testing.T) {
 		require.Equal(t, i, v)
 	}
 
-	// This should cause the oldest key to be evicted with all of its subkeys
+	// This should cause the oldest key to be evicted
 	v, err := WithCachedValue(ctx, c, QueryCacheKey("kind1", "6"), func(context.Context) (int, error) {
 		return 6, nil
 	})
 	require.NoError(t, err)
 	require.Equal(t, 6, v)
 
-	// ... other keys and subkeys stay in place.
+	// ... other keys stay in place.
 	for i := 2; i <= 5; i++ {
 		k := strconv.Itoa(i)
 		v, err := WithCachedValue(ctx, c, QueryCacheKey("kind1", k), func(context.Context) (int, error) {
