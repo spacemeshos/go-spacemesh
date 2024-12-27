@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	basichost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	"github.com/libp2p/go-libp2p/p2p/host/eventbus"
+	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	ma "github.com/multiformats/go-multiaddr"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -76,9 +77,9 @@ func WithPeerInfo(pi peerinfo.PeerInfo) Opt {
 	}
 }
 
-func WithIdentifyConn(identifyConn func(network.Conn)) Opt {
+func WithIDService(idService identify.IDService) Opt {
 	return func(fh *Host) {
-		fh.identifyConn = identifyConn
+		fh.idService = idService
 	}
 }
 
@@ -119,8 +120,8 @@ type Host struct {
 		value network.Reachability
 	}
 
-	ping         *Ping
-	identifyConn func(network.Conn)
+	ping      *Ping
+	idService identify.IDService
 }
 
 // Upgrade creates Host instance from host.Host.
@@ -136,13 +137,15 @@ func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	for _, opt := range opts {
 		opt(fh)
 	}
-	if fh.identifyConn == nil {
+	if fh.idService == nil {
 		// If no IDService is provided, which may be the case in the tests,
 		// we can try to get it from the host, assuming it's a *basichost.BasicHost.
+		// *basichost.BasicHost is expected when libp2p mocknet is being used
+		// instead of libp2p.New().
 		if bh, ok := h.(*basichost.BasicHost); ok {
-			fh.identifyConn = func(conn network.Conn) {
-				bh.IDService().IdentifyConn(conn)
-			}
+			fh.idService = bh.IDService()
+		} else {
+			return nil, errors.New("no IDService provided")
 		}
 	}
 	cfg := fh.cfg
@@ -534,6 +537,6 @@ func (fh *Host) Identify(p peer.ID) {
 		// IDService.IdentifyConn is a no-op if the connection is already
 		// identified, but otherwise we need to wait for identification to finish
 		// to have proper set of protocols.
-		fh.identifyConn(c)
+		fh.idService.IdentifyConn(c)
 	}
 }

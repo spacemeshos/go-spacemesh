@@ -284,8 +284,7 @@ func New(
 		return nil, fmt.Errorf("can't set up connection gater: %w", err)
 	}
 
-	var identifyConn func(network.Conn)
-
+	var idService identify.IDService
 	pt := peerinfo.NewPeerInfoTracker()
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
@@ -299,10 +298,10 @@ func New(
 			cfg.AutoNATServer.PeerMax,
 			cfg.AutoNATServer.ResetPeriod),
 		libp2p.ConnectionGater(g),
+		// Obtain the IDService via fx dependency injection.
+		// This function is always called by libp2p.New().
 		libp2p.WithFxOption(fx.Invoke(func(ids identify.IDService) {
-			identifyConn = func(c network.Conn) {
-				ids.IdentifyConn(c)
-			}
+			idService = ids
 		})),
 	}
 	if cfg.EnableTCPTransport {
@@ -422,9 +421,6 @@ func New(
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
-	if identifyConn == nil {
-		panic("BUG: identify service not set")
-	}
 	g.updateHost(h)
 	h.Network().Notify(p2pmetrics.NewConnectionsMeeter())
 	pt.Start(h.Network())
@@ -439,7 +435,7 @@ func New(
 		WithBootnodes(bootnodesMap),
 		WithDirectNodes(g.direct),
 		WithPeerInfo(pt),
-		WithIdentifyConn(identifyConn),
+		WithIDService(idService),
 	)
 	return Upgrade(h, opts...)
 }
