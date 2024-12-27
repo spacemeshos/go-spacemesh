@@ -332,6 +332,46 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 }
 
+func TestProxyingJsonService(t *testing.T) {
+	cfg := config.Config{
+		API: grpcserver.Config{
+			JSONListener:    "127.0.0.1:0",
+			PublicListener:  "127.0.0.1:0",
+			PublicServices:  []grpcserver.Service{grpcserver.Node},
+			PrivateServices: nil,
+			PostServices:    nil,
+			TLSServices:     nil,
+		}}
+
+	// Start server
+	serverApp := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	err := serverApp.startAPIServices(context.Background())
+	require.NoError(t, err)
+	defer serverApp.stopServices(context.Background())
+
+	// Start client proxying to the server
+	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
+	clientApp := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	require.NoError(t, clientApp.startAPIServices(context.Background()))
+	defer clientApp.stopServices(context.Background())
+
+	var (
+		respBody   []byte
+		respStatus int
+	)
+	const message = "hello world"
+	endpoint := fmt.Sprintf("http://%s/v1/node/echo", clientApp.apiProxy.BoundAddress)
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	require.Eventually(t, func() bool {
+		respBody, respStatus = callEndpoint(t, endpoint, payload)
+		return respStatus == http.StatusOK
+	}, 2*time.Second, 100*time.Millisecond)
+	var msg pb.EchoResponse
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
+	require.Equal(t, http.StatusOK, respStatus)
+}
+
 type noopHook struct{}
 
 func (f *noopHook) OnWrite(*zapcore.CheckedEntry, []zapcore.Field) {}

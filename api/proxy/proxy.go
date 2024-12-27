@@ -13,6 +13,8 @@ import (
 )
 
 type Server struct {
+	BoundAddress string
+
 	logger     *zap.Logger
 	listener   string
 	httpServer *http.Server
@@ -59,6 +61,7 @@ func (s *Server) Start() error {
 		s.logger.Error("start proxy listen server", zap.Error(err))
 		return err
 	}
+	s.BoundAddress = lis.Addr().String()
 
 	s.errGroup.Go(func() error {
 		return s.httpServer.Serve(lis)

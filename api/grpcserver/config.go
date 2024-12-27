@@ -30,9 +30,6 @@ type Config struct {
 
 	// Address of the Node API V2 to connect to
 	ProxyApiV2Address string `mapstructure:"proxy-api-v2-address"`
-
-	// Endpoint to expose proxy via HTTP/JSON
-	ProxyListener string `mapstructure:"proxy-listener"`
 }
 
 type Service = string

@@ -7,8 +7,7 @@ services:
       "-c", "/config.json",
       "--node-service-address", "http://node-service:9099",
       "--grpc-json-listener", "0.0.0.0:9071",
-      "--proxy-api-v2-address", "http://node-service:9070",
-      "--proxy-listener", "0.0.0.0:9072"
+      "--proxy-api-v2-address", "http://node-service:9070"
     ]
     volumes:
       - /tmp/spacemesh-client:/tmp/spacemesh-client
