@@ -201,7 +201,7 @@ func NewBuilder(
 		logger:            log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postStates:        NewPostStates(log),
-		identitiesStates:  identity.NewIdentityStateStorage(),
+		identitiesStates:  identity.NewIdentityStateStorage(localDB),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
 			logger: log,
@@ -453,7 +453,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		b.identitiesStates.Set(sig.NodeID(), nil,
 			&identity.Retrying{
-				Error: err,
+				ErrorMsg: err.Error(),
 			},
 		)
 

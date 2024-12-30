@@ -143,10 +143,10 @@ func (c *MockidentityStateAllCall) DoAndReturn(f func() map[types.NodeID][]ident
 }
 
 // AllEligibilities mocks base method.
-func (m *MockidentityState) AllEligibilities() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility {
+func (m *MockidentityState) AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AllEligibilities")
-	ret0, _ := ret[0].(map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility)
+	ret0, _ := ret[0].(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
 	return ret0
 }
 
@@ -163,19 +163,19 @@ type MockidentityStateAllEligibilitiesCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockidentityStateAllEligibilitiesCall) Return(arg0 map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
+func (c *MockidentityStateAllEligibilitiesCall) Return(arg0 map[types.NodeID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockidentityStateAllEligibilitiesCall) Do(f func() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
+func (c *MockidentityStateAllEligibilitiesCall) Do(f func() map[types.NodeID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStateAllEligibilitiesCall) DoAndReturn(f func() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
+func (c *MockidentityStateAllEligibilitiesCall) DoAndReturn(f func() map[types.NodeID]map[types.LayerID][]types.VotingEligibility) *MockidentityStateAllEligibilitiesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

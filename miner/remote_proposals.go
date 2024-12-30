@@ -32,10 +32,7 @@ type beaconService interface {
 }
 
 type identityStates interface {
-	SetEligibilitiesForEpoch(
-		id types.NodeID,
-		epoch types.EpochID,
-		eligibilities map[types.LayerID][]types.VotingEligibility)
+	SetEligibilities(id types.NodeID, eligibilities map[types.LayerID][]types.VotingEligibility)
 	AddProposal(id types.NodeID, proposals *types.Proposal)
 	Set(id types.NodeID, publishEpoch *types.EpochID, newState smesherIdentity.State)
 }
@@ -171,8 +168,8 @@ func (pb *RemoteProposalBuilder) build(
 		bcn, err = pb.beaconSvc.Beacon(ctx, epoch)
 		if err != nil {
 			pb.identityStates.Set(types.EmptyNodeID, &epoch, &smesherIdentity.ProposalBuildFailed{
-				Error: fmt.Errorf("beacon: %v", err),
-				Layer: layer,
+				ErrorMsg: fmt.Sprintf("beacon: %v", err),
+				Layer:    layer,
 			})
 			return fmt.Errorf("beacon: %w", err)
 		}
@@ -199,7 +196,7 @@ func (pb *RemoteProposalBuilder) build(
 				pb.cfg.layersPerEpoch,
 			)
 			eligibilities[nodeId] = proofs
-			pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
+			pb.identityStates.SetEligibilities(nodeId, proofs)
 			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.Eligible{
 				Layers: proofs,
 			})
@@ -211,8 +208,8 @@ func (pb *RemoteProposalBuilder) build(
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
 			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalBuildFailed{
-				Error: fmt.Errorf("get partial proposal: %v", err),
-				Layer: layer,
+				ErrorMsg: fmt.Sprintf("get partial proposal: %v", err),
+				Layer:    layer,
 			})
 			continue
 		}
@@ -236,8 +233,8 @@ func (pb *RemoteProposalBuilder) build(
 		if err != nil {
 			pb.logger.Error("failed to initialize proposal", zap.Error(err))
 			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalBuildFailed{
-				Error: fmt.Errorf("failed to initialize proposal: %v", err),
-				Layer: layer,
+				ErrorMsg: fmt.Sprintf("failed to initialize proposal: %v", err),
+				Layer:    layer,
 			})
 			continue
 		}
@@ -250,7 +247,7 @@ func (pb *RemoteProposalBuilder) build(
 				zap.Error(err),
 			)
 			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalPublishFailed{
-				Error:    err,
+				ErrorMsg: err.Error(),
 				Proposal: proposal.ID(),
 				Layer:    proposal.Layer,
 			})

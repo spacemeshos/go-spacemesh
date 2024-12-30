@@ -1,4 +1,4 @@
-PRAGMA user_version = 10;
+PRAGMA user_version = 11;
 CREATE TABLE atx_blobs
 (
     id         CHAR(32) PRIMARY KEY,
@@ -88,5 +88,24 @@ CREATE TABLE prepared_activeset
     data          BLOB NOT NULL,
     PRIMARY KEY (kind, epoch)
 ) WITHOUT ROWID;
+CREATE TABLE state_eligibilities
+(
+    id        CHAR(32) NOT NULL,
+    layer     INTEGER NOT NULL,
+    j         INTEGER NOT NULL,
+    signature CHAR(80)
+);
+CREATE TABLE state_proposals
+(
+    id       CHAR(32) NOT NULL,
+    layer    INTEGER NOT NULL,
+    proposal BLOB NOT NULL
+);
+CREATE TABLE states
+(
+    id        CHAR(32) NOT NULL,
+    timestamp INTEGER NOT NULL,
+    state     TEXT NOT NULL
+);
 CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
 CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);

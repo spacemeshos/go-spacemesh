@@ -2,10 +2,13 @@ package identity
 
 import (
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/states"
 )
 
 var ErrIdentityStateUnknown = errors.New("identity state is unknown")
@@ -17,24 +20,55 @@ type StateInfo struct {
 }
 
 type StateStorage struct {
-	mu            sync.RWMutex
-	identities    map[types.NodeID][]StateInfo
-	eligibilities map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility
-	proposals     map[types.NodeID][]*types.Proposal
+	db         sql.Executor
+	mu         sync.RWMutex
+	identities map[types.NodeID][]StateInfo
 }
 
-func NewIdentityStateStorage() *StateStorage {
+func NewIdentityStateStorage(db sql.Executor) *StateStorage {
 	return &StateStorage{
-		identities:    make(map[types.NodeID][]StateInfo),
-		eligibilities: make(map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility),
-		proposals:     make(map[types.NodeID][]*types.Proposal),
+		db:         db,
+		identities: make(map[types.NodeID][]StateInfo),
 	}
+}
+
+func NewFromDb(db sql.Executor) *StateStorage {
+	s := NewIdentityStateStorage(db)
+	states.InterateAllStates(db, func(id types.NodeID, timestamp time.Time, stateBytes []byte) bool {
+		state, err := unmarshalState(stateBytes)
+		if err != nil {
+			panic(fmt.Sprintf("unmarshaling state from DB for id %s with time=%v: %v", id, timestamp, err))
+		}
+		s.set(id, *state)
+		return true
+	})
+	return s
 }
 
 func (s *StateStorage) Set(
 	id types.NodeID,
 	publishEpoch *types.EpochID,
 	newState State,
+) {
+	info := StateInfo{
+		State:        newState,
+		PublishEpoch: publishEpoch,
+		Time:         time.Now(),
+	}
+	s.set(id, info)
+
+	stateBytes, err := marshalState(&info)
+	if err != nil {
+		panic(fmt.Sprintf("marhsaling state: %v", err))
+	}
+	if err := states.InsertStateEvent(s.db, id, info.Time, stateBytes); err != nil {
+		panic(fmt.Sprintf("inserting state into local DB: %v", err))
+	}
+}
+
+func (s *StateStorage) set(
+	id types.NodeID,
+	info StateInfo,
 ) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -45,12 +79,6 @@ func (s *StateStorage) Set(
 
 	if len(s.identities[id]) > 100 {
 		s.identities[id] = s.identities[id][1:]
-	}
-
-	info := StateInfo{
-		State:        newState,
-		PublishEpoch: publishEpoch,
-		Time:         time.Now(),
 	}
 
 	s.identities[id] = append(s.identities[id], info)
@@ -73,60 +101,55 @@ func (s *StateStorage) All() map[types.NodeID][]StateInfo {
 	return s.identities
 }
 
-func (s *StateStorage) SetEligibilitiesForEpoch(
+func (s *StateStorage) SetEligibilities(
 	id types.NodeID,
-	epoch types.EpochID,
 	eligibilities map[types.LayerID][]types.VotingEligibility,
 ) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.eligibilities[id]; !exists {
-		s.eligibilities[id] = make(map[types.EpochID]map[types.LayerID][]types.VotingEligibility)
+	for layer, eligibilities := range eligibilities {
+		for _, eligibility := range eligibilities {
+			if err := states.InsertEligibility(s.db, id, layer, &eligibility); err != nil {
+				panic(fmt.Sprintf("inserting eligibility: %v", err))
+			}
+		}
 	}
-
-	if len(s.eligibilities[id]) > 100 {
-		delete(s.eligibilities[id], epoch-100)
-	}
-
-	if _, exists := s.eligibilities[id][epoch]; !exists {
-		s.eligibilities[id][epoch] = make(map[types.LayerID][]types.VotingEligibility)
-	}
-
-	s.eligibilities[id][epoch] = eligibilities
 }
 
 func (s *StateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.identities[id]; !exists {
-		s.proposals[id] = []*types.Proposal{}
+	if err := states.InsertProposal(s.db, proposal); err != nil {
+		panic(fmt.Sprintf("failed to insert proposal: %v", err))
 	}
-
-	if len(s.identities[id]) > 100 {
-		s.proposals[id] = s.proposals[id][1:]
-	}
-
-	s.proposals[id] = append(s.proposals[id], proposal)
-	s.identities[id] = append(s.identities[id], StateInfo{
-		State: &ProposalPublished{
-			Proposal: proposal.ID(),
-			Layer:    proposal.Layer,
-		},
-		Time: time.Now(),
+	s.Set(proposal.SmesherID, nil, &ProposalPublished{
+		Proposal: proposal.ID(),
+		Layer:    proposal.Layer,
 	})
 }
 
 func (s *StateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.proposals
+	proposals := make(map[types.NodeID][]*types.Proposal)
+	states.InterateAllProposals(s.db, func(p types.Proposal) bool {
+		if _, ok := proposals[p.SmesherID]; !ok {
+			proposals[p.SmesherID] = make([]*types.Proposal, 0)
+		}
+		proposals[p.SmesherID] = append(proposals[p.SmesherID], &p)
+		return true
+	})
+	return proposals
 }
 
-//nolint:lll
-func (s *StateStorage) AllEligibilities() map[types.NodeID]map[types.EpochID]map[types.LayerID][]types.VotingEligibility {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.eligibilities
+func (s *StateStorage) AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility {
+	eligibilities := make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
+	states.InterateAllEligibilities(
+		s.db,
+		func(id types.NodeID, layer types.LayerID, eligibility *types.VotingEligibility) bool {
+			if _, ok := eligibilities[id]; !ok {
+				eligibilities[id] = make(map[types.LayerID][]types.VotingEligibility)
+			}
+			if _, ok := eligibilities[id][layer]; !ok {
+				eligibilities[id][layer] = make([]types.VotingEligibility, 0)
+			}
+			eligibilities[id][layer] = append(eligibilities[id][layer], *eligibility)
+			return true
+		},
+	)
+	return eligibilities
 }
