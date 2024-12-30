@@ -1,0 +1,39 @@
+upstream node.api {
+    server 127.0.0.1:${NODE_PORT};
+    keepalive 1;
+}
+upstream smesher.api {
+    server 127.0.0.1:${SMESHER_PORT};
+    keepalive 1;
+}
+
+server {
+    listen 0.0.0.0:${NGINX_PORT};
+    server_name _;
+    access_log /var/log/nginx/example.org.log;
+
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header Host $http_host;
+    proxy_set_header X-NginX-Proxy true;
+
+    proxy_redirect off;
+
+    location / {
+        proxy_pass http://node.api;
+        add_header Access-Control-Allow-Origin *;
+        add_header access-control-allow-headers *;
+        add_header access-control-allow-methods *;
+        add_header access-control-expose-headers server,date,content-type,content-length,connection,vary,x-final-url,access-control-allow-origin;
+
+    }
+
+    location /spacemesh.v2alpha1.SmeshingIdentitiesService {
+        proxy_pass http://smesher.api;
+        add_header Access-Control-Allow-Origin *;
+        add_header access-control-allow-headers *;
+        add_header access-control-allow-methods *;
+        add_header access-control-expose-headers server,date,content-type,content-length,connection,vary,x-final-url,access-control-allow-origin;
+
+    }
+ }

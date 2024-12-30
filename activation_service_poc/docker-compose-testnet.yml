@@ -3,7 +3,7 @@ version: "3"
 services:
   activation-service:
     network_mode: "host"
-    image: spacemeshos/go-spacemesh-dev:417d5b489
+    image: spacemeshos/go-spacemesh-dev:e5ee083f7
     command:
       [
         "-c",
@@ -35,7 +35,7 @@ services:
 
   node-service:
     network_mode: "host"
-    image: spacemeshos/go-spacemesh-dev:417d5b489
+    image: spacemeshos/go-spacemesh-dev:e5ee083f7
     command: [
         "-c",
         "/config.json",

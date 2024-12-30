@@ -23,7 +23,7 @@
         "servers-metrics": true
     },
     "genesis": {
-        "genesis-time": "2024-08-20T13:00:00.000Z"
+        "genesis-time": "2024-12-21T13:00:00.000Z"
     },
     "hare3": {
         "enable": true,
@@ -51,15 +51,15 @@
         "pprof-listener": "localhost:6060",
         "poet-servers": [
             {
-                "address": "https://testnet-15-poet-0.spacemesh.network",
+                "address": "https://testnet-16-poet-0.spacemesh.network",
                 "pubkey": "cBDiEhk9Q+MfVgWh5anDDgyyEKi4x2ORrSvd4YwWoX4="
             },
             {
-                "address": "https://testnet-15-poet-1.spacemesh.network",
+                "address": "https://testnet-16-poet-1.spacemesh.network",
                 "pubkey": "Yl8KPls3OSQWwfJfg6ekI5Tl4k76wgkMj3Ki6Ji3+mI="
             },
             {
-                "address": "https://testnet-15-poet-2.spacemesh.network",
+                "address": "https://testnet-16-poet-2.spacemesh.network",
                 "pubkey": "Om4YBKakqZYYtrDzmgzaGdjpj36PWoww8bJt5Mt17rY="
             }
         ]
@@ -84,9 +84,9 @@
         "p2p-metrics": true,
         "p2p-reachability": "public",
         "bootnodes": [
-            "/dns4/testnet-15-bootnode-0.spacemesh.network/tcp/5000/p2p/12D3KooWQMAAL9nkgXJgTM2psJLMbWRgZLjAxJozx7dNkKYczs2V",
-            "/dns4/testnet-15-bootnode-4.spacemesh.network/tcp/5000/p2p/12D3KooWE1YEa3roqamhPt3CNiVRBzS7Lbv8HRbByE7fpSyLAZis",
-            "/dns4/testnet-15-bootnode-7.spacemesh.network/tcp/5000/p2p/12D3KooWRvAVZrK3EURQBh1wdMPRDgjtowU84div3YxWYKuGDaFU"
+            "/dns4/testnet-16-bootnode-0.spacemesh.network/tcp/5000/p2p/12D3KooWQMAAL9nkgXJgTM2psJLMbWRgZLjAxJozx7dNkKYczs2V",
+            "/dns4/testnet-16-bootnode-4.spacemesh.network/tcp/5000/p2p/12D3KooWE1YEa3roqamhPt3CNiVRBzS7Lbv8HRbByE7fpSyLAZis",
+            "/dns4/testnet-16-bootnode-7.spacemesh.network/tcp/5000/p2p/12D3KooWRvAVZrK3EURQBh1wdMPRDgjtowU84div3YxWYKuGDaFU"
         ]
     },
     "post": {
@@ -101,7 +101,7 @@
         "beacon-rounds-number": 0
     },
     "bootstrap": {
-        "bootstrap-url": "https://bootstrap.spacemesh.network/testnet-15"
+        "bootstrap-url": "https://bootstrap.spacemesh.network/testnet-16"
     },
     "preset": "testnet"
 }
