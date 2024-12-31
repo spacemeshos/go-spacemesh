@@ -8,103 +8,104 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type state int
+type tag int
 
 const (
-	stateRetrying state = iota
-	stateWaitforATXSynced
-	stateWaitForPoetRegistrationWindow
-	statePoetChallengeReady
-	statePoetRegistered
-	stateWaitForPoetRoundEnd
-	statePoetProofReceived
-	stateGeneratingPostProof
-	statePostProofReady
-	stateAtxReady
-	stateAtxBroadcasted
-	stateProposalBuildFailed
-	stateProposalPublishFailed
-	stateProposalPublished
-	stateEligibile
+	tagRetrying tag = iota
+	tagWaitforATXSynced
+	tagWaitForPoetRegistrationWindow
+	tagPoetChallengeReady
+	tagPoetRegistered
+	tagWaitForPoetRoundEnd
+	tagPoetProofReceived
+	tagGeneratingPostProof
+	tagPostProofReady
+	tagAtxReady
+	tagAtxBroadcasted
+	tagProposalBuildFailed
+	tagProposalPublishFailed
+	tagProposalPublished
+	tagEligibile
 )
 
 type serializableStateInfo struct {
-	Desc         state
+	// The tag is used to determine how to deserialize the raw state.
+	Tag          tag
 	PublishEpoch *types.EpochID
 	Time         time.Time
 
 	RawState json.RawMessage
 }
 
-func stateDescToState(s state) State {
+func tagToState(s tag) State {
 	switch s {
-	case stateRetrying:
+	case tagRetrying:
 		return new(Retrying)
-	case stateWaitforATXSynced:
+	case tagWaitforATXSynced:
 		return new(WaitForATXSynced)
-	case stateWaitForPoetRegistrationWindow:
+	case tagWaitForPoetRegistrationWindow:
 		return new(WaitingForPoetRegistrationWindow)
-	case statePoetChallengeReady:
+	case tagPoetChallengeReady:
 		return new(PoetChallengeReady)
-	case statePoetRegistered:
+	case tagPoetRegistered:
 		return new(PoetRegistered)
-	case stateWaitForPoetRoundEnd:
+	case tagWaitForPoetRoundEnd:
 		return new(WaitForPoetRoundEnd)
-	case statePoetProofReceived:
+	case tagPoetProofReceived:
 		return new(PoetProofReceived)
-	case stateGeneratingPostProof:
+	case tagGeneratingPostProof:
 		return new(GeneratingPostProof)
-	case statePostProofReady:
+	case tagPostProofReady:
 		return new(PostProofReady)
-	case stateAtxReady:
+	case tagAtxReady:
 		return new(ATXReady)
-	case stateAtxBroadcasted:
+	case tagAtxBroadcasted:
 		return new(ATXBroadcasted)
-	case stateProposalBuildFailed:
+	case tagProposalBuildFailed:
 		return new(ProposalBuildFailed)
-	case stateProposalPublishFailed:
+	case tagProposalPublishFailed:
 		return new(ProposalPublishFailed)
-	case stateProposalPublished:
+	case tagProposalPublished:
 		return new(ProposalPublished)
-	case stateEligibile:
+	case tagEligibile:
 		return new(Eligible)
 	default:
 		panic(fmt.Sprintf("missing implementation for %v", s))
 	}
 }
 
-func stateToDesc(s State) state {
+func stateToTag(s State) tag {
 	switch s.(type) {
 	case *Retrying:
-		return stateRetrying
+		return tagRetrying
 	case *WaitForATXSynced:
-		return stateWaitforATXSynced
+		return tagWaitforATXSynced
 	case *WaitingForPoetRegistrationWindow:
-		return stateWaitForPoetRegistrationWindow
+		return tagWaitForPoetRegistrationWindow
 	case *PoetChallengeReady:
-		return statePoetChallengeReady
+		return tagPoetChallengeReady
 	case *PoetRegistered:
-		return statePoetRegistered
+		return tagPoetRegistered
 	case *WaitForPoetRoundEnd:
-		return stateWaitForPoetRoundEnd
+		return tagWaitForPoetRoundEnd
 	case *PoetProofReceived:
-		return statePoetProofReceived
+		return tagPoetProofReceived
 	case *GeneratingPostProof:
-		return stateGeneratingPostProof
+		return tagGeneratingPostProof
 	case *PostProofReady:
-		return statePostProofReady
+		return tagPostProofReady
 	case *ATXReady:
-		return stateAtxReady
+		return tagAtxReady
 	case *ATXBroadcasted:
-		return stateAtxBroadcasted
+		return tagAtxBroadcasted
 	case *ProposalBuildFailed:
-		return stateProposalBuildFailed
+		return tagProposalBuildFailed
 	case *ProposalPublishFailed:
-		return stateProposalPublishFailed
+		return tagProposalPublishFailed
 	case *ProposalPublished:
-		return stateProposalPublished
+		return tagProposalPublished
 	case *Eligible:
-		return stateEligibile
+		return tagEligibile
 	default:
 		panic(fmt.Sprintf("missing implementation for %T", s))
 	}
@@ -115,15 +116,15 @@ func unmarshalState(b []byte) (*StateInfo, error) {
 	if err := json.Unmarshal(b, &s); err != nil {
 		return nil, err
 	}
-	state := stateDescToState(s.Desc)
-	if err := json.Unmarshal(s.RawState, state); err != nil {
-		return nil, err
-	}
-	return &StateInfo{
-		State:        state,
+	info := &StateInfo{
+		State:        tagToState(s.Tag),
 		PublishEpoch: s.PublishEpoch,
 		Time:         s.Time,
-	}, nil
+	}
+	if err := json.Unmarshal(s.RawState, info.State); err != nil {
+		return nil, err
+	}
+	return info, nil
 }
 
 func marshalState(state *StateInfo) ([]byte, error) {
@@ -132,7 +133,7 @@ func marshalState(state *StateInfo) ([]byte, error) {
 		return nil, err
 	}
 	s := serializableStateInfo{
-		Desc:         stateToDesc(state.State),
+		Tag:          stateToTag(state.State),
 		PublishEpoch: state.PublishEpoch,
 		Time:         state.Time,
 		RawState:     json.RawMessage(rawState),
