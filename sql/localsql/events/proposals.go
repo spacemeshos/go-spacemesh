@@ -1,4 +1,4 @@
-package states
+package events
 
 import (
 	"bytes"
@@ -21,33 +21,36 @@ func InsertProposal(db sql.Executor, proposal *types.Proposal) error {
 		stmt.BindBytes(3, encoded)
 	}
 	if _, err := db.Exec(
-		`INSERT into state_proposals (id, layer, proposal) values (?1, ?2, ?3);`,
+		`INSERT into proposals (id, layer, proposal) values (?1, ?2, ?3);`,
 		enc,
 		nil,
 	); err != nil {
-		return fmt.Errorf("inserting state for %s: %w", proposal.SmesherID.ShortString(), err)
+		return fmt.Errorf("inserting proposal for %s: %w", proposal.SmesherID.ShortString(), err)
 	}
 	return nil
 }
 
 func InterateAllProposals(
 	db sql.Executor,
-	fn func(state types.Proposal) bool,
+	fn func(p types.Proposal) bool,
 ) error {
 	var stateBuf bytes.Buffer
 	_, err := db.Exec(
-		`SELECT proposal FROM state_proposals`,
+		`SELECT proposal FROM proposals ORDER BY layer ASC`,
 		nil,
 		func(stmt *sql.Statement) bool {
 			stateBuf.Reset()
-			stateBuf.Grow(stmt.ColumnLen(0))
+			stateBuf.ReadFrom(stmt.ColumnReader(0))
 			var proposal types.Proposal
 			codec.MustDecode(stateBuf.Bytes(), &proposal)
+			if err := proposal.Initialize(); err != nil {
+				panic(fmt.Sprintf("initializing proposal: %v", err))
+			}
 			return fn(proposal)
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("iterate atx fields: %w", err)
+		return fmt.Errorf("iterating proposals: %w", err)
 	}
 	return nil
 }

@@ -1,4 +1,4 @@
-package states
+package events
 
 import (
 	"bytes"
@@ -9,19 +9,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func InsertStateEvent(db sql.Executor, id types.NodeID, timestamp time.Time, state []byte) error {
+func InsertEvent(db sql.Executor, id types.NodeID, timestamp time.Time, state []byte) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 		stmt.BindInt64(2, timestamp.UnixMicro())
 		stmt.BindBytes(3, state)
 	}
-	if _, err := db.Exec(`INSERT into states (id, timestamp, state) values (?1, ?2, ?3);`, enc, nil); err != nil {
-		return fmt.Errorf("inserting state for %s: %w", id.ShortString(), err)
+	if _, err := db.Exec(`INSERT into events (id, timestamp, state) values (?1, ?2, ?3);`, enc, nil); err != nil {
+		return fmt.Errorf("inserting event for %s: %w", id.ShortString(), err)
 	}
 	return nil
 }
 
-func InterateAllStates(
+func IterateAllEvents(
 	db sql.Executor,
 	fn func(
 		id types.NodeID,
@@ -43,7 +43,7 @@ func InterateAllStates(
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("iterate atx fields: %w", err)
+		return fmt.Errorf("iterate events: %w", err)
 	}
 	return nil
 }

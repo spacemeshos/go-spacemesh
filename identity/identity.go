@@ -8,7 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql/states"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql/events"
 )
 
 var ErrIdentityStateUnknown = errors.New("identity state is unknown")
@@ -34,7 +34,7 @@ func NewIdentityStateStorage(db sql.Executor) *StateStorage {
 
 func NewFromDb(db sql.Executor) *StateStorage {
 	s := NewIdentityStateStorage(db)
-	states.InterateAllStates(db, func(id types.NodeID, timestamp time.Time, stateBytes []byte) bool {
+	events.IterateAllEvents(db, func(id types.NodeID, timestamp time.Time, stateBytes []byte) bool {
 		state, err := unmarshalState(stateBytes)
 		if err != nil {
 			panic(fmt.Sprintf("unmarshaling state from DB for id %s with time=%v: %v", id, timestamp, err))
@@ -61,7 +61,7 @@ func (s *StateStorage) Set(
 	if err != nil {
 		panic(fmt.Sprintf("marhsaling state: %v", err))
 	}
-	if err := states.InsertStateEvent(s.db, id, info.Time, stateBytes); err != nil {
+	if err := events.InsertEvent(s.db, id, info.Time, stateBytes); err != nil {
 		panic(fmt.Sprintf("inserting state into local DB: %v", err))
 	}
 }
@@ -107,7 +107,7 @@ func (s *StateStorage) SetEligibilities(
 ) {
 	for layer, eligibilities := range eligibilities {
 		for _, eligibility := range eligibilities {
-			if err := states.InsertEligibility(s.db, id, layer, &eligibility); err != nil {
+			if err := events.InsertEligibility(s.db, id, layer, &eligibility); err != nil {
 				panic(fmt.Sprintf("inserting eligibility: %v", err))
 			}
 		}
@@ -115,7 +115,7 @@ func (s *StateStorage) SetEligibilities(
 }
 
 func (s *StateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
-	if err := states.InsertProposal(s.db, proposal); err != nil {
+	if err := events.InsertProposal(s.db, proposal); err != nil {
 		panic(fmt.Sprintf("failed to insert proposal: %v", err))
 	}
 	s.Set(proposal.SmesherID, nil, &ProposalPublished{
@@ -126,7 +126,7 @@ func (s *StateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
 
 func (s *StateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
 	proposals := make(map[types.NodeID][]*types.Proposal)
-	states.InterateAllProposals(s.db, func(p types.Proposal) bool {
+	events.InterateAllProposals(s.db, func(p types.Proposal) bool {
 		if _, ok := proposals[p.SmesherID]; !ok {
 			proposals[p.SmesherID] = make([]*types.Proposal, 0)
 		}
@@ -138,7 +138,7 @@ func (s *StateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
 
 func (s *StateStorage) AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility {
 	eligibilities := make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
-	states.InterateAllEligibilities(
+	events.InterateAllEligibilities(
 		s.db,
 		func(id types.NodeID, layer types.LayerID, eligibility *types.VotingEligibility) bool {
 			if _, ok := eligibilities[id]; !ok {

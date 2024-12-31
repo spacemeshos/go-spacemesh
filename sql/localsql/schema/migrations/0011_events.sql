@@ -1,5 +1,5 @@
---- Table for storing identities' states.
-CREATE TABLE states
+--- Table for storing identities's events.
+CREATE TABLE events
 (
     id        CHAR(32) NOT NULL,
     timestamp INTEGER NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE states
 
 
 --- Table for storing identities' proposals.
-CREATE TABLE state_proposals
+CREATE TABLE proposals
 (
     id       CHAR(32) NOT NULL,
     layer    INTEGER NOT NULL,
@@ -16,7 +16,7 @@ CREATE TABLE state_proposals
 );
 
 --- Table for storing identities' eligibilities.
-CREATE TABLE state_eligibilities
+CREATE TABLE eligibilities
 (
     id        CHAR(32) NOT NULL,
     layer     INTEGER NOT NULL,

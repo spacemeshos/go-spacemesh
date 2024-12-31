@@ -1,4 +1,4 @@
-package states
+package events
 
 import (
 	"fmt"
@@ -20,11 +20,11 @@ func InsertEligibility(
 		stmt.BindBytes(4, eligibility.Sig.Bytes())
 	}
 	if _, err := db.Exec(
-		`INSERT into state_proposals (id, layer, j, signature) values (?1, ?2, ?3, ?4);`,
+		`INSERT into eligibilities (id, layer, j, signature) values (?1, ?2, ?3, ?4);`,
 		enc,
 		nil,
 	); err != nil {
-		return fmt.Errorf("inserting state for %s: %w", id.ShortString(), err)
+		return fmt.Errorf("inserting eligibility for %s: %w", id.ShortString(), err)
 	}
 	return nil
 }
@@ -34,7 +34,7 @@ func InterateAllEligibilities(
 	fn func(id types.NodeID, layer types.LayerID, eligibility *types.VotingEligibility) bool,
 ) error {
 	_, err := db.Exec(
-		`SELECT id, layer, j, signature FROM state_eligibilities`,
+		`SELECT id, layer, j, signature FROM eligibilities ORDER BY layer ASC`,
 		nil,
 		func(stmt *sql.Statement) bool {
 			var (
@@ -49,7 +49,7 @@ func InterateAllEligibilities(
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("iterate atx fields: %w", err)
+		return fmt.Errorf("iterating eligibilities: %w", err)
 	}
 	return nil
 }
