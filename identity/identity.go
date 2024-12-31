@@ -3,7 +3,6 @@ package identity
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -20,29 +19,13 @@ type StateInfo struct {
 }
 
 type StateStorage struct {
-	db         sql.Executor
-	mu         sync.RWMutex
-	identities map[types.NodeID][]StateInfo
+	db sql.Executor
 }
 
 func NewIdentityStateStorage(db sql.Executor) *StateStorage {
 	return &StateStorage{
-		db:         db,
-		identities: make(map[types.NodeID][]StateInfo),
+		db: db,
 	}
-}
-
-func NewFromDb(db sql.Executor) *StateStorage {
-	s := NewIdentityStateStorage(db)
-	events.IterateAllEvents(db, func(id types.NodeID, timestamp time.Time, stateBytes []byte) bool {
-		state, err := unmarshalState(stateBytes)
-		if err != nil {
-			panic(fmt.Sprintf("unmarshaling state from DB for id %s with time=%v: %v", id, timestamp, err))
-		}
-		s.set(id, *state)
-		return true
-	})
-	return s
 }
 
 func (s *StateStorage) Set(
@@ -55,7 +38,6 @@ func (s *StateStorage) Set(
 		PublishEpoch: publishEpoch,
 		Time:         time.Now(),
 	}
-	s.set(id, info)
 
 	stateBytes, err := marshalState(&info)
 	if err != nil {
@@ -66,39 +48,39 @@ func (s *StateStorage) Set(
 	}
 }
 
-func (s *StateStorage) set(
-	id types.NodeID,
-	info StateInfo,
-) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	if _, exists := s.identities[id]; !exists {
-		s.identities[id] = []StateInfo{}
-	}
-
-	if len(s.identities[id]) > 100 {
-		s.identities[id] = s.identities[id][1:]
-	}
-
-	s.identities[id] = append(s.identities[id], info)
-}
-
 func (s *StateStorage) Get(id types.NodeID) ([]StateInfo, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	state, exists := s.identities[id]
-	if !exists {
+	var allEvents []StateInfo
+	err := events.IterateEventsForID(s.db, id, func(timestamp time.Time, eventBytes []byte) bool {
+		event, err := unmarshalState(eventBytes)
+		if err != nil {
+			panic(fmt.Sprintf("unmarshaling event from DB for id %s with time=%v: %v", id, timestamp, err))
+		}
+		allEvents = append(allEvents, *event)
+		return true
+	})
+	if err != nil {
+		return nil, fmt.Errorf("iterating over events for ID %s: %w", id.ShortString(), err)
+	}
+	if len(allEvents) == 0 {
 		return nil, ErrIdentityStateUnknown
 	}
-	return state, nil
+	return allEvents, nil
 }
 
 func (s *StateStorage) All() map[types.NodeID][]StateInfo {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.identities
+	allEvents := make(map[types.NodeID][]StateInfo)
+	events.IterateAllEvents(s.db, func(id types.NodeID, timestamp time.Time, eventBytes []byte) bool {
+		event, err := unmarshalState(eventBytes)
+		if err != nil {
+			panic(fmt.Sprintf("unmarshaling event from DB for id %s with time=%v: %v", id, timestamp, err))
+		}
+		if _, ok := allEvents[id]; !ok {
+			allEvents[id] = make([]StateInfo, 0)
+		}
+		allEvents[id] = append(allEvents[id], *event)
+		return true
+	})
+	return allEvents
 }
 
 func (s *StateStorage) SetEligibilities(

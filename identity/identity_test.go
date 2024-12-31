@@ -11,7 +11,7 @@ import (
 func Test_StatesPersistance(t *testing.T) {
 	db := localsql.InMemoryTest(t)
 
-	storage1 := identity.NewFromDb(db)
+	storage1 := identity.NewIdentityStateStorage(db)
 
 	// Set some states
 	id1 := types.NodeID{1}
@@ -49,7 +49,7 @@ func Test_StatesPersistance(t *testing.T) {
 	states1 := storage1.All()
 
 	// Create new storage instance with same DB
-	storage2 := identity.NewFromDb(db)
+	storage2 := identity.NewIdentityStateStorage(db)
 	states2 := storage2.All()
 
 	for id, states1 := range states1 {

@@ -6,10 +6,11 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/events"
-	"github.com/stretchr/testify/require"
 )
 
 func TestInsertProposalsAndIterate(t *testing.T) {
@@ -40,5 +41,4 @@ func TestInsertProposalsAndIterate(t *testing.T) {
 		return true
 	})
 	require.Equal(t, len(proposals), counter)
-
 }
