@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5"
 	"errors"
+	"fmt"
 	"slices"
 	"sync"
 	"time"
@@ -239,16 +240,15 @@ func (ds *DumbSet) getRangeInfo(
 	x, y KeyBytes,
 	count int,
 ) (r RangeInfo, end KeyBytes, err error) {
-	if x == nil && y == nil {
+	if x == nil || y == nil {
 		if len(ds.keys) == 0 {
 			return RangeInfo{
 				Fingerprint: EmptyFingerprint(),
+				Items:       EmptySeqResult(),
 			}, nil, nil
 		}
 		x = ds.keys[0]
 		y = x
-	} else if x == nil || y == nil {
-		panic("BUG: bad X or Y")
 	}
 	rangeItems, start, end := naiveRange(ds.keys, x, y, count)
 	fpFunc := ds.FPFunc
@@ -270,8 +270,11 @@ func (ds *DumbSet) getRangeInfo(
 	return r, end, nil
 }
 
-// GetRangeInfo implements OrderedSet.
-func (ds *DumbSet) GetRangeInfo(x, y KeyBytes) (RangeInfo, error) {
+// RangeInfo implements OrderedSet.
+func (ds *DumbSet) RangeInfo(x, y KeyBytes) (RangeInfo, error) {
+	if x == nil || y == nil {
+		return RangeInfo{}, errors.New("bad range")
+	}
 	ri, _, err := ds.getRangeInfo(x, y, -1)
 	return ri, err
 }
@@ -298,14 +301,13 @@ func (ds *DumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 	}, nil
 }
 
-// Empty implements OrderedSet.
-func (ds *DumbSet) Empty() (bool, error) {
-	return len(ds.keys) == 0, nil
-}
-
-// Items implements OrderedSet.
-func (ds *DumbSet) Items() SeqResult {
-	return MakeSeqResult(ds.keys)
+// SetInfo implements OrderedSet.
+func (ds *DumbSet) SetInfo() (RangeInfo, error) {
+	ri, _, err := ds.getRangeInfo(nil, nil, -1)
+	if err != nil {
+		panic("unexpected error in SetInfo: " + err.Error())
+	}
+	return ri, nil
 }
 
 // WithCopy implements OrderedSet.
@@ -342,13 +344,16 @@ func (ds *DumbSet) Advance() error {
 
 // Has implements OrderedSet.
 func (ds *DumbSet) Has(k KeyBytes) (bool, error) {
-	sr := ds.Items()
-	for cur := range sr.Seq {
+	info, err := ds.SetInfo()
+	if err != nil {
+		return false, fmt.Errorf("set info: %w", err)
+	}
+	for cur := range info.Items.Seq {
 		if k.Compare(cur) == 0 {
-			return true, sr.Error()
+			return true, info.Items.Error()
 		}
 	}
-	return false, sr.Error()
+	return false, info.Items.Error()
 }
 
 // Release implements OrderedSet.

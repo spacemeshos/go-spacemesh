@@ -139,13 +139,15 @@ func NewRangeSetReconciler(logger *zap.Logger, cfg RangeSetReconcilerConfig, os 
 }
 
 func (rsr *RangeSetReconciler) defaultRange() (x, y KeyBytes, err error) {
-	if empty, err := rsr.os.Empty(); err != nil {
-		return nil, nil, fmt.Errorf("checking for empty set: %w", err)
-	} else if empty {
+	info, err := rsr.os.SetInfo()
+	if err != nil {
+		return nil, nil, fmt.Errorf("set info: %w", err)
+	}
+	if info.Count == 0 {
 		return nil, nil, nil
 	}
 
-	x, err = rsr.os.Items().First()
+	x, err = info.Items.First()
 	if err != nil {
 		return nil, nil, fmt.Errorf("get items: %w", err)
 	}
@@ -328,10 +330,13 @@ func (rsr *RangeSetReconciler) messageRange(
 			return nil, nil, errors.New("EmptySet message should not contain a range")
 		}
 		return rsr.defaultRange()
-	case MessageTypeProbe, MessageTypeRecent:
+	case MessageTypeRecent:
 		if x == nil {
 			return rsr.defaultRange()
 		}
+	case MessageTypeProbe:
+		// We can allow x=nil and y=nil for probe messages.
+		// This means probing the whole set and helps avoiding database access.
 	default:
 		if x == nil {
 			return nil, nil, fmt.Errorf("no range for message of type %s", msg.Type())
@@ -403,30 +408,27 @@ func (rsr *RangeSetReconciler) handleMessage(
 		}
 	}
 
+	var info RangeInfo
 	if x == nil {
-		switch msg.Type() {
-		case MessageTypeProbe:
-			rsr.logger.Debug("handleMessage: send empty probe response")
-			if err := s.SendSample(
-				x, y, EmptyFingerprint(), 0, 0, EmptySeqResult(),
-			); err != nil {
-				return false, err
-			}
-		case MessageTypeRecent:
-			return false, rsr.handleRecent(s, msg, x, y, receivedKeys)
+		info, err = rsr.os.SetInfo()
+		if err != nil {
+			return false, fmt.Errorf("set info: %w", err)
 		}
-		return true, nil
+		rsr.logger.Debug("handleMessage: range info for the whole set",
+			zap.Array("items", info.Items),
+			zap.Int("count", info.Count),
+			log.ZShortStringer("fingerprint", info.Fingerprint))
+	} else {
+		info, err = rsr.os.RangeInfo(x, y)
+		if err != nil {
+			return false, fmt.Errorf("range info: %w", err)
+		}
+		rsr.logger.Debug("handleMessage: range info",
+			log.ZShortStringer("x", x), log.ZShortStringer("y", y),
+			zap.Array("items", info.Items),
+			zap.Int("count", info.Count),
+			log.ZShortStringer("fingerprint", info.Fingerprint))
 	}
-
-	info, err := rsr.os.GetRangeInfo(x, y)
-	if err != nil {
-		return false, err
-	}
-	rsr.logger.Debug("handleMessage: range info",
-		log.ZShortStringer("x", x), log.ZShortStringer("y", y),
-		zap.Array("items", info.Items),
-		zap.Int("count", info.Count),
-		log.ZShortStringer("fingerprint", info.Fingerprint))
 
 	switch msg.Type() {
 	case MessageTypeEmptyRange, MessageTypeRangeContents, MessageTypeEmptySet:
@@ -463,7 +465,7 @@ func (rsr *RangeSetReconciler) handleMessage(
 			items = EmptySeqResult()
 			sampleSize = 0
 		}
-		if err := s.SendSample(x, y, info.Fingerprint, info.Count, sampleSize, items); err != nil {
+		if err = s.SendSample(x, y, info.Fingerprint, info.Count, sampleSize, items); err != nil {
 			return false, err
 		}
 		return true, nil
@@ -506,7 +508,7 @@ func (rsr *RangeSetReconciler) initiate(s sender, x, y KeyBytes, haveRecent bool
 		rsr.logger.Debug("initiate: send empty set")
 		return s.SendEmptySet()
 	}
-	info, err := rsr.os.GetRangeInfo(x, y)
+	info, err := rsr.os.RangeInfo(x, y)
 	if err != nil {
 		return fmt.Errorf("get range info: %w", err)
 	}
@@ -560,9 +562,20 @@ func (rsr *RangeSetReconciler) InitiateProbe(
 	x, y KeyBytes,
 ) (RangeInfo, error) {
 	s := sender{c}
-	info, err := rsr.os.GetRangeInfo(x, y)
-	if err != nil {
-		return RangeInfo{}, err
+	var (
+		info RangeInfo
+		err  error
+	)
+	if x == nil {
+		info, err = rsr.os.SetInfo()
+		if err != nil {
+			return RangeInfo{}, fmt.Errorf("set info: %w", err)
+		}
+	} else {
+		info, err = rsr.os.RangeInfo(x, y)
+		if err != nil {
+			return RangeInfo{}, fmt.Errorf("range info: %w", err)
+		}
 	}
 	if err := s.SendProbe(x, y, info.Fingerprint, int(rsr.cfg.SampleSize)); err != nil {
 		return RangeInfo{}, err

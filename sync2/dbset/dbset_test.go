@@ -44,13 +44,13 @@ func TestDBSet_Empty(t *testing.T) {
 	requireEmpty(t, s.Items())
 	requireEmpty(t, s.Received())
 
-	info, err := s.GetRangeInfo(nil, nil)
+	info, err := s.SetInfo()
 	require.NoError(t, err)
 	require.Equal(t, 0, info.Count)
 	require.Equal(t, "000000000000000000000000", info.Fingerprint.String())
 	requireEmpty(t, info.Items)
 
-	info, err = s.GetRangeInfo(
+	info, err = s.RangeInfo(
 		rangesync.MustParseHexKeyBytes("0000000000000000000000000000000000000000000000000000000000000000"),
 		rangesync.MustParseHexKeyBytes("0000000000000000000000000000000000000000000000000000000000000000"))
 	require.NoError(t, err)
@@ -58,7 +58,7 @@ func TestDBSet_Empty(t *testing.T) {
 	require.Equal(t, "000000000000000000000000", info.Fingerprint.String())
 	requireEmpty(t, info.Items)
 
-	info, err = s.GetRangeInfo(
+	info, err = s.RangeInfo(
 		rangesync.MustParseHexKeyBytes("0000000000000000000000000000000000000000000000000000000000000000"),
 		rangesync.MustParseHexKeyBytes("9999000000000000000000000000000000000000000000000000000000000000"))
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestDBSet_Empty(t *testing.T) {
 
 func TestDBSet(t *testing.T) {
 	ids := []rangesync.KeyBytes{
-		rangesync.MustParseHexKeyBytes("0000000000000000000000000000000000000000000000000000000000000000"),
+		rangesync.MustParseHexKeyBytes("1111111111111111111111111111111111111111111111111111111111111111"),
 		rangesync.MustParseHexKeyBytes("123456789abcdef0000000000000000000000000000000000000000000000000"),
 		rangesync.MustParseHexKeyBytes("5555555555555555555555555555555555555555555555555555555555555555"),
 		rangesync.MustParseHexKeyBytes("8888888888888888888888888888888888888888888888888888888888888888"),
@@ -81,94 +81,126 @@ func TestDBSet(t *testing.T) {
 		IDColumn:  "id",
 	}
 	s := dbset.NewDBSet(db, st, testKeyLen, testDepth)
-	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
+	require.Equal(t, "1111111111111111111111111111111111111111111111111111111111111111",
 		firstKey(t, s.Items()).String())
 	has, err := s.Has(
 		rangesync.MustParseHexKeyBytes("9876000000000000000000000000000000000000000000000000000000000000"))
 	require.NoError(t, err)
 	require.False(t, has)
 
-	for _, tc := range []struct {
-		xIdx, yIdx       int
-		limit            int
-		fp               string
-		count            int
-		startIdx, endIdx int
-	}{
-		{
-			xIdx:     1,
-			yIdx:     1,
-			limit:    -1,
-			fp:       "642464b773377bbddddddddd",
-			count:    5,
-			startIdx: 1,
-			endIdx:   1,
-		},
-		{
-			xIdx:     -1,
-			yIdx:     -1,
-			limit:    -1,
-			fp:       "642464b773377bbddddddddd",
-			count:    5,
-			startIdx: 0,
-			endIdx:   0,
-		},
-		{
-			xIdx:     0,
-			yIdx:     3,
-			limit:    -1,
-			fp:       "4761032dcfe98ba555555555",
-			count:    3,
-			startIdx: 0,
-			endIdx:   3,
-		},
-		{
-			xIdx:     2,
-			yIdx:     0,
-			limit:    -1,
-			fp:       "761032cfe98ba54ddddddddd",
-			count:    3,
-			startIdx: 2,
-			endIdx:   0,
-		},
-		{
-			xIdx:     3,
-			yIdx:     2,
-			limit:    3,
-			fp:       "2345679abcdef01888888888",
-			count:    3,
-			startIdx: 3,
-			endIdx:   1,
-		},
-	} {
-		name := fmt.Sprintf("%d-%d_%d", tc.xIdx, tc.yIdx, tc.limit)
-		t.Run(name, func(t *testing.T) {
-			var x, y rangesync.KeyBytes
-			if tc.xIdx >= 0 {
+	t.Run("RangeInfo", func(t *testing.T) {
+		for _, tc := range []struct {
+			xIdx, yIdx       int
+			fp               string
+			count            int
+			startIdx, endIdx int
+		}{
+			{
+				xIdx:     1,
+				yIdx:     1,
+				fp:       "753575a662266aaccccccccc",
+				count:    5,
+				startIdx: 1,
+				endIdx:   1,
+			},
+			{
+				xIdx:     0,
+				yIdx:     3,
+				fp:       "5670123cdef89ab444444444",
+				count:    3,
+				startIdx: 0,
+				endIdx:   3,
+			},
+			{
+				xIdx:     2,
+				yIdx:     0,
+				fp:       "761032cfe98ba54ddddddddd",
+				count:    3,
+				startIdx: 2,
+				endIdx:   0,
+			},
+		} {
+			name := fmt.Sprintf("%d-%d", tc.xIdx, tc.yIdx)
+			t.Run(name, func(t *testing.T) {
+				var x, y rangesync.KeyBytes
 				x = ids[tc.xIdx]
 				y = ids[tc.yIdx]
-			}
-			t.Logf("x %v y %v limit %d", x, y, tc.limit)
-			var info rangesync.RangeInfo
-			if tc.limit < 0 {
-				info, err = s.GetRangeInfo(x, y)
+				t.Logf("x %v y %v", x, y)
+				var info rangesync.RangeInfo
+				info, err = s.RangeInfo(x, y)
 				require.NoError(t, err)
-			} else {
+				require.Equal(t, tc.count, info.Count)
+				require.Equal(t, tc.fp, info.Fingerprint.String())
+				require.Equal(t, ids[tc.startIdx], firstKey(t, info.Items))
+				has, err := s.Has(ids[tc.startIdx])
+				require.NoError(t, err)
+				require.True(t, has)
+				has, err = s.Has(ids[tc.endIdx])
+				require.NoError(t, err)
+				require.True(t, has)
+			})
+		}
+	})
+
+	t.Run("SplitRange", func(t *testing.T) {
+		for _, tc := range []struct {
+			xIdx, yIdx       int
+			limit            int
+			fp               string
+			count            int
+			startIdx, endIdx int
+		}{
+			{
+				xIdx:     3,
+				yIdx:     2,
+				limit:    3,
+				fp:       "3254768badcfe10999999999",
+				count:    3,
+				startIdx: 3,
+				endIdx:   1,
+			},
+			{
+				xIdx:     3,
+				yIdx:     3,
+				limit:    2,
+				fp:       "2345679abcdef01888888888",
+				count:    2,
+				startIdx: 3,
+				endIdx:   3,
+			},
+		} {
+			name := fmt.Sprintf("%d-%d_%d", tc.xIdx, tc.yIdx, tc.limit)
+			t.Run(name, func(t *testing.T) {
+				var x, y rangesync.KeyBytes
+				x = ids[tc.xIdx]
+				y = ids[tc.yIdx]
+				t.Logf("x %v y %v limit %d", x, y, tc.limit)
+				var info rangesync.RangeInfo
 				sr, err := s.SplitRange(x, y, tc.limit)
 				require.NoError(t, err)
 				info = sr.Parts[0]
-			}
-			require.Equal(t, tc.count, info.Count)
-			require.Equal(t, tc.fp, info.Fingerprint.String())
-			require.Equal(t, ids[tc.startIdx], firstKey(t, info.Items))
-			has, err := s.Has(ids[tc.startIdx])
-			require.NoError(t, err)
-			require.True(t, has)
-			has, err = s.Has(ids[tc.endIdx])
-			require.NoError(t, err)
-			require.True(t, has)
-		})
-	}
+				require.Equal(t, tc.count, info.Count)
+				require.Equal(t, tc.fp, info.Fingerprint.String())
+				require.Equal(t, ids[tc.startIdx], firstKey(t, info.Items))
+				has, err := s.Has(ids[tc.startIdx])
+				require.NoError(t, err)
+				require.True(t, has)
+				has, err = s.Has(ids[tc.endIdx])
+				require.NoError(t, err)
+				require.True(t, has)
+			})
+		}
+	})
+
+	t.Run("SetInfo", func(t *testing.T) {
+		info, err := s.SetInfo()
+		require.NoError(t, err)
+		require.Equal(t, 5, info.Count)
+		require.Equal(t, "753575a662266aaccccccccc", info.Fingerprint.String())
+		items, err := info.Items.Collect()
+		require.NoError(t, err)
+		require.Equal(t, ids, items)
+	})
 }
 
 func TestDBSet_Receive(t *testing.T) {
@@ -195,7 +227,7 @@ func TestDBSet_Receive(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []rangesync.KeyBytes{newID}, items)
 
-	info, err := s.GetRangeInfo(ids[2], ids[0])
+	info, err := s.RangeInfo(ids[2], ids[0])
 	require.NoError(t, err)
 	require.Equal(t, 2, info.Count)
 	require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.String())
@@ -218,7 +250,7 @@ func TestDBSet_Copy(t *testing.T) {
 		firstKey(t, s.Items()).String())
 
 	require.NoError(t, s.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
-		info, err := copy.GetRangeInfo(ids[2], ids[0])
+		info, err := copy.RangeInfo(ids[2], ids[0])
 		require.NoError(t, err)
 		require.Equal(t, 2, info.Count)
 		require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.String())
@@ -228,7 +260,7 @@ func TestDBSet_Copy(t *testing.T) {
 			"abcdef1234567890000000000000000000000000000000000000000000000000")
 		require.NoError(t, copy.Receive(newID))
 
-		info, err = s.GetRangeInfo(ids[2], ids[0])
+		info, err = s.RangeInfo(ids[2], ids[0])
 		require.NoError(t, err)
 		require.Equal(t, 2, info.Count)
 		require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.String())
@@ -236,7 +268,7 @@ func TestDBSet_Copy(t *testing.T) {
 
 		requireEmpty(t, s.Received())
 
-		info, err = s.GetRangeInfo(ids[2], ids[0])
+		info, err = s.RangeInfo(ids[2], ids[0])
 		require.NoError(t, err)
 		require.Equal(t, 2, info.Count)
 		require.Equal(t, "dddddddddddddddddddddddd", info.Fingerprint.String())
@@ -267,13 +299,13 @@ func TestDBItemStore_Advance(t *testing.T) {
 		require.NoError(t, os.EnsureLoaded())
 
 		require.NoError(t, os.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
-			info, err := os.GetRangeInfo(ids[0], ids[0])
+			info, err := os.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 4, info.Count)
 			require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
 			require.Equal(t, ids[0], firstKey(t, info.Items))
 
-			info, err = copy.GetRangeInfo(ids[0], ids[0])
+			info, err = copy.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 4, info.Count)
 			require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
@@ -284,13 +316,13 @@ func TestDBItemStore_Advance(t *testing.T) {
 					"abcdef1234567890000000000000000000000000000000000000000000000000"),
 			})
 
-			info, err = os.GetRangeInfo(ids[0], ids[0])
+			info, err = os.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 4, info.Count)
 			require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
 			require.Equal(t, ids[0], firstKey(t, info.Items))
 
-			info, err = copy.GetRangeInfo(ids[0], ids[0])
+			info, err = copy.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 4, info.Count)
 			require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
@@ -298,13 +330,13 @@ func TestDBItemStore_Advance(t *testing.T) {
 
 			require.NoError(t, os.Advance())
 
-			info, err = os.GetRangeInfo(ids[0], ids[0])
+			info, err = os.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 5, info.Count)
 			require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.String())
 			require.Equal(t, ids[0], firstKey(t, info.Items))
 
-			info, err = copy.GetRangeInfo(ids[0], ids[0])
+			info, err = copy.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 4, info.Count)
 			require.Equal(t, "cfe98ba54761032ddddddddd", info.Fingerprint.String())
@@ -314,7 +346,7 @@ func TestDBItemStore_Advance(t *testing.T) {
 		}))
 
 		require.NoError(t, os.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
-			info, err := copy.GetRangeInfo(ids[0], ids[0])
+			info, err := copy.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 5, info.Count)
 			require.Equal(t, "642464b773377bbddddddddd", info.Fingerprint.String())
