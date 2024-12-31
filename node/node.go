@@ -775,7 +775,7 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("create hare oracle: %w", err)
 	}
 
-	if app.Config.Certificate.CommitteeSize == 0 || !onMainNet(app.Config) {
+	if app.Config.Certificate.CommitteeSize == 0 {
 		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
 			log.Uint16("size", app.Config.HARE3.Committee),
 		)
