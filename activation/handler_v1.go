@@ -504,7 +504,6 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		return fmt.Errorf("store atx: %w", err)
 	}
 
-	atxs.AtxAdded(h.cdb, atx)
 	if proof != nil {
 		if err := h.malPublisher.PublishProof(ctx, atx.SmesherID, proof); err != nil {
 			return fmt.Errorf("publishing malfeasance proof: %w", err)
