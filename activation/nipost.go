@@ -203,7 +203,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	postChallenge *types.NIPostChallenge,
 ) (*nipost.NIPostState, error) {
 	logger := nb.logger.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
-	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
+	// NOTE: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
 	//   We can still publish an ATX late (i.e. within publish epoch) and receive rewards, but we will miss one
 	//   epoch because we didn't submit the challenge to PoET in time for next round.
 	//                                 PoST
@@ -243,7 +243,9 @@ func (nb *NIPostBuilder) BuildNIPost(
 		ctx,
 		signer,
 		poetProofDeadline,
-		poetRoundStart, challenge.Bytes(),
+		poetRoundStart,
+		challenge.Bytes(),
+		postChallenge.PublishEpoch,
 	)
 	regErr := &PoetRegistrationMismatchError{}
 	switch {
@@ -259,11 +261,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
-	nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
-		&identity.PoetRegistered{
-			Registrations: submittedRegistrations,
-		},
-	)
 	// Phase 1: query PoET services for proofs
 	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -427,6 +424,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	poetProofDeadline time.Time,
 	curPoetRoundStartDeadline time.Time,
 	challenge []byte,
+	publishEpoch types.EpochID,
 ) ([]nipost.PoETRegistration, error) {
 	// check if some registrations missing or were removed
 	nodeID := signer.NodeID()
@@ -535,6 +533,11 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		}
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 	}
+	nb.identityStates.Set(signer.NodeID(), &publishEpoch,
+		&identity.PoetRegistered{
+			Registrations: existingRegistrations,
+		},
+	)
 
 	return existingRegistrations, nil
 }

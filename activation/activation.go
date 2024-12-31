@@ -623,6 +623,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
+	b.identitiesStates.Set(nodeID, &challenge.PublishEpoch, &identity.PoetChallengeReady{})
 	return challenge, nil
 }
 
@@ -741,7 +742,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
 		zap.Object("challenge", challenge),
 	)
-	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, &identity.PoetChallengeReady{})
 
 	targetEpoch := challenge.PublishEpoch.Add(1)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
