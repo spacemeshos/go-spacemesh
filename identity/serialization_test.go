@@ -141,7 +141,7 @@ func TestStateSerializationErrors(t *testing.T) {
 	})
 
 	t.Run("invalid state type", func(t *testing.T) {
-		require.Panics(t, func() { unmarshalState([]byte(`{"Desc": 999, "Time": "2023-01-01T00:00:00Z"}`)) })
+		require.Panics(t, func() { unmarshalState([]byte(`{"Tag": 999, "Time": "2023-01-01T00:00:00Z"}`)) })
 	})
 
 	t.Run("invalid state data", func(t *testing.T) {
