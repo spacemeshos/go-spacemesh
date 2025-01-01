@@ -697,7 +697,6 @@ func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func
 		}
 	}()
 	if err := exec(tx); err != nil {
-		tx.queryCache.ClearCache()
 		return err
 	}
 	return tx.Commit()
