@@ -259,44 +259,6 @@ func (c *MockProofInfoCall) DoAndReturn(f func() map[string]string) *MockProofIn
 	return c
 }
 
-// String mocks base method.
-func (m *MockProof) String() string {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "String")
-	ret0, _ := ret[0].(string)
-	return ret0
-}
-
-// String indicates an expected call of String.
-func (mr *MockProofMockRecorder) String() *MockProofStringCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "String", reflect.TypeOf((*MockProof)(nil).String))
-	return &MockProofStringCall{Call: call}
-}
-
-// MockProofStringCall wrap *gomock.Call
-type MockProofStringCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockProofStringCall) Return(arg0 string) *MockProofStringCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockProofStringCall) Do(f func() string) *MockProofStringCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockProofStringCall) DoAndReturn(f func() string) *MockProofStringCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Type mocks base method.
 func (m *MockProof) Type() ProofType {
 	m.ctrl.T.Helper()
@@ -331,6 +293,44 @@ func (c *MockProofTypeCall) Do(f func() ProofType) *MockProofTypeCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockProofTypeCall) DoAndReturn(f func() ProofType) *MockProofTypeCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// TypeName mocks base method.
+func (m *MockProof) TypeName() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TypeName")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// TypeName indicates an expected call of TypeName.
+func (mr *MockProofMockRecorder) TypeName() *MockProofTypeNameCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TypeName", reflect.TypeOf((*MockProof)(nil).TypeName))
+	return &MockProofTypeNameCall{Call: call}
+}
+
+// MockProofTypeNameCall wrap *gomock.Call
+type MockProofTypeNameCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofTypeNameCall) Return(arg0 string) *MockProofTypeNameCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofTypeNameCall) Do(f func() string) *MockProofTypeNameCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofTypeNameCall) DoAndReturn(f func() string) *MockProofTypeNameCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
