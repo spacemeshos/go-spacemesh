@@ -504,20 +504,22 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		return fmt.Errorf("store atx: %w", err)
 	}
 
-	atxs.AtxAdded(h.cdb, atx)
-	h.beacon.OnAtx(atx)
 	if added := h.cacheAtx(ctx, atx, malicious || proof != nil); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
-	h.logger.Debug("finished storing atx in epoch",
-		zap.Stringer("atx_id", atx.ID()),
-		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
-	)
+	h.beacon.OnAtx(atx)
+
 	if proof != nil {
 		if err := h.malPublisher.PublishProof(ctx, atx.SmesherID, proof); err != nil {
 			return fmt.Errorf("publishing malfeasance proof: %w", err)
 		}
 	}
+
+	h.logger.Debug("finished storing atx in epoch",
+		zap.Stringer("atx_id", atx.ID()),
+		zap.Uint32("epoch_id", atx.PublishEpoch.Uint32()),
+	)
+
 	return nil
 }
 

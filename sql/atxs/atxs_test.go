@@ -2,7 +2,6 @@ package atxs_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -381,80 +380,6 @@ func TestGetIDsByEpoch(t *testing.T) {
 	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
-}
-
-func TestGetIDsByEpochCached(t *testing.T) {
-	db := statesql.InMemoryTest(t, sql.WithQueryCache(true))
-	ctx := context.Background()
-
-	sig1, err := signing.NewEdSigner()
-	require.NoError(t, err)
-	sig2, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	e1 := types.EpochID(1)
-	e2 := types.EpochID(2)
-	e3 := types.EpochID(3)
-
-	atx1 := newAtx(t, sig1, withPublishEpoch(e1))
-	atx2 := newAtx(t, sig1, withPublishEpoch(e2))
-	atx3 := newAtx(t, sig2, withPublishEpoch(e2))
-	atx4 := newAtx(t, sig2, withPublishEpoch(e3))
-	atx5 := newAtx(t, sig2, withPublishEpoch(e3))
-	atx6 := newAtx(t, sig2, withPublishEpoch(e3))
-
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
-		atxs.AtxAdded(db, atx)
-	}
-
-	// insert atx + insert blob for each ATX
-	require.Equal(t, 8, db.QueryCount())
-
-	for i := 0; i < 3; i++ {
-		ids1, err := atxs.GetIDsByEpoch(ctx, db, e1)
-		require.NoError(t, err)
-		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids1)
-		require.Equal(t, 9, db.QueryCount())
-	}
-
-	for i := 0; i < 3; i++ {
-		ids2, err := atxs.GetIDsByEpoch(ctx, db, e2)
-		require.NoError(t, err)
-		require.Contains(t, ids2, atx2.ID())
-		require.Contains(t, ids2, atx3.ID())
-		require.Equal(t, 10, db.QueryCount())
-	}
-
-	for i := 0; i < 3; i++ {
-		ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
-		require.NoError(t, err)
-		require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
-		require.Equal(t, 11, db.QueryCount())
-	}
-
-	require.NoError(t, db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-		atxs.Add(tx, atx5, types.AtxBlob{})
-		return nil
-	}))
-	atxs.AtxAdded(db, atx5)
-	require.Equal(t, 13, db.QueryCount())
-
-	ids3, err := atxs.GetIDsByEpoch(ctx, db, e3)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids3)
-	require.Equal(t, 13, db.QueryCount()) // not incremented after Add
-
-	require.Error(t, db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-		atxs.Add(tx, atx6, types.AtxBlob{})
-		return errors.New("fail") // rollback
-	}))
-
-	// atx6 should not be in the cache
-	ids4, err := atxs.GetIDsByEpoch(ctx, db, e3)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []types.ATXID{atx4.ID(), atx5.ID()}, ids4)
-	require.Equal(t, 16, db.QueryCount()) // not incremented after Add
 }
 
 func Test_IterateAtxsWithMalfeasance(t *testing.T) {
