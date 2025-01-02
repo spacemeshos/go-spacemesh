@@ -216,6 +216,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 
 	mocks := newTestHandlerMocks(tb, goldenATXID)
 	// TODO(mafa): make mandatory parameter when real publisher is available
+	opts = append(opts, func(h *Handler) { h.v1.malPublisher2 = mocks.mMalPublish })
 	opts = append(opts, func(h *Handler) { h.v2.malPublisher = mocks.mMalPublish })
 	atxHdlr := NewHandler(
 		"localID",
