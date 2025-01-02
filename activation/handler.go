@@ -126,7 +126,7 @@ func NewHandler(
 			beacon:          beacon,
 			tortoise:        tortoise,
 			malPublisher:    legacyMalPublisher,
-			malPublisher2:   &MalfeasancePublisher{}, // TODO(mafa): pass real publisher when available
+			malPublisher2:   &MalfeasanceHandlerV2{}, // TODO(mafa): pass real publisher when available
 			signers:         make(map[types.NodeID]*signing.EdSigner),
 		},
 
