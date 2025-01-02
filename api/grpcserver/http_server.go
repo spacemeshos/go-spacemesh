@@ -117,12 +117,21 @@ func (s *JSONHTTPServer) StartService(
 	if s.corsEverywhere {
 		s.logger.Info("enabling CORS for all origins")
 		c = cors.New(cors.Options{
-			AllowedOrigins:      []string{"*"},
-			AllowedMethods:      []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
-			AllowedHeaders:      []string{"*"},
-			ExposedHeaders:      []string{"Server", "Date", "Content-Type", "Content-Length", "Connection", "Vary", "X-Final-Url", "Access-Control-Allow-Origin"},
-			AllowCredentials:    false,
-			MaxAge:             300,
+			AllowedOrigins: []string{"*"},
+			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+			AllowedHeaders: []string{"*"},
+			ExposedHeaders: []string{
+				"Server",
+				"Date",
+				"Content-Type",
+				"Content-Length",
+				"Connection",
+				"Vary",
+				"X-Final-Url",
+				"Access-Control-Allow-Origin",
+			},
+			AllowCredentials: false,
+			MaxAge:           300,
 		})
 	} else {
 		c = cors.New(cors.Options{
