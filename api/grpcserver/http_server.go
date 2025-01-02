@@ -35,7 +35,8 @@ type JSONHTTPServer struct {
 	eg           errgroup.Group
 
 	// basic CORS support
-	origins []string
+	origins        []string
+	corsEverywhere bool
 }
 
 // NewJSONHTTPServer creates a new json http server.
@@ -43,12 +44,14 @@ func NewJSONHTTPServer(
 	lg *zap.Logger,
 	listener string,
 	corsAllowedOrigins []string,
+	corsEverywhere bool,
 	collectMetrics bool,
 ) *JSONHTTPServer {
 	return &JSONHTTPServer{
 		logger:         lg,
 		listener:       listener,
 		origins:        corsAllowedOrigins,
+		corsEverywhere: corsEverywhere,
 		collectMetrics: collectMetrics,
 	}
 }
@@ -109,10 +112,23 @@ func (s *JSONHTTPServer) StartService(
 		}
 	}
 
+	var c *cors.Cors
 	// enable cors
-	c := cors.New(cors.Options{
-		AllowedOrigins: s.origins,
-	})
+	if s.corsEverywhere {
+		s.logger.Info("enabling CORS for all origins")
+		c = cors.New(cors.Options{
+			AllowedOrigins:      []string{"*"},
+			AllowedMethods:      []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+			AllowedHeaders:      []string{"*"},
+			ExposedHeaders:      []string{"Server", "Date", "Content-Type", "Content-Length", "Connection", "Vary", "X-Final-Url", "Access-Control-Allow-Origin"},
+			AllowCredentials:    false,
+			MaxAge:             300,
+		})
+	} else {
+		c = cors.New(cors.Options{
+			AllowedOrigins: s.origins,
+		})
+	}
 
 	s.logger.Info("starting grpc gateway server", zap.String("address", s.listener))
 	lis, err := net.Listen("tcp", s.listener)

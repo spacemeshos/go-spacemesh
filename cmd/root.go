@@ -189,6 +189,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.StringSliceVar(&cfg.API.JSONCorsAllowedOrigins, "grpc-cors-allowed-origin",
 		cfg.API.JSONCorsAllowedOrigins, "(Optional) CORS Allowed Origin, can be specified multiple times")
 
+	flagSet.BoolVar(&cfg.API.JSONCorsEverywhere, "json-cors-everywhere",
+		cfg.API.JSONCorsEverywhere, "(Optional) Enable CORS for all origins")
+
 	flagSet.StringVar(&cfg.API.ProxyApiV2Address, "proxy-api-v2-address", "",
 		"address of the Node API V2 to connect to")
 	flagSet.StringVar(&cfg.API.ProxyListener, "proxy-listener", "",

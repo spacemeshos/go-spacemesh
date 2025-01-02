@@ -21,6 +21,7 @@ type Config struct {
 	GrpcRecvMsgSize        int       `mapstructure:"grpc-recv-msg-size"`
 	JSONListener           string    `mapstructure:"grpc-json-listener"`
 	JSONCorsAllowedOrigins []string  `mapstructure:"grpc-cors-allowed-origins"`
+	JSONCorsEverywhere     bool      `mapstructure:"json-cors-everywhere"`
 
 	NodeServiceListener string `mapstructure:"node-service-listener"`
 
@@ -85,6 +86,7 @@ func DefaultConfig() Config {
 		TLSListener:            "",
 		JSONListener:           "",
 		JSONCorsAllowedOrigins: []string{""},
+		JSONCorsEverywhere:     false,
 		GrpcSendMsgSize:        1024 * 1024 * 10,
 		GrpcRecvMsgSize:        1024 * 1024 * 10,
 		SmesherStreamInterval:  time.Second,
