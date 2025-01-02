@@ -438,6 +438,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		return nil, err
 	}
 	if v != types.AtxV1 {
+		// TODO(mafa): update when V2 is introduced
 		return nil, fmt.Errorf("ATX %s with same prev ATX as %s is not version 1", atx2ID, atx.PrevATXID)
 	}
 
