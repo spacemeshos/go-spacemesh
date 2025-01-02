@@ -16,7 +16,6 @@ func Test_StatesPersistance(t *testing.T) {
 	// Set some states
 	id1 := types.NodeID{1}
 	id2 := types.NodeID{2}
-	epoch := types.EpochID(42)
 
 	states := []struct {
 		id    types.NodeID
@@ -44,7 +43,7 @@ func Test_StatesPersistance(t *testing.T) {
 
 	// Store states in first storage
 	for _, s := range states {
-		storage1.Set(s.id, &epoch, s.state)
+		storage1.Set(s.id, s.state)
 	}
 	states1 := storage1.All()
 

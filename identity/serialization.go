@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type tag int
@@ -30,9 +28,8 @@ const (
 
 type serializableStateInfo struct {
 	// The tag is used to determine how to deserialize the raw state.
-	Tag          tag
-	PublishEpoch *types.EpochID
-	Time         time.Time
+	Tag  tag
+	Time time.Time
 
 	RawState json.RawMessage
 }
@@ -117,9 +114,8 @@ func unmarshalState(b []byte) (*StateInfo, error) {
 		return nil, err
 	}
 	info := &StateInfo{
-		State:        tagToState(s.Tag),
-		PublishEpoch: s.PublishEpoch,
-		Time:         s.Time,
+		State: tagToState(s.Tag),
+		Time:  s.Time,
 	}
 	if err := json.Unmarshal(s.RawState, info.State); err != nil {
 		return nil, err
@@ -133,10 +129,9 @@ func marshalState(state *StateInfo) ([]byte, error) {
 		return nil, err
 	}
 	s := serializableStateInfo{
-		Tag:          stateToTag(state.State),
-		PublishEpoch: state.PublishEpoch,
-		Time:         state.Time,
-		RawState:     json.RawMessage(rawState),
+		Tag:      stateToTag(state.State),
+		Time:     state.Time,
+		RawState: json.RawMessage(rawState),
 	}
 	return json.Marshal(s)
 }
