@@ -39,7 +39,7 @@ type ProofInvalidPost struct {
 	InvalidPostProof InvalidPostProof
 }
 
-func (p ProofInvalidPost) String() string {
+func (p ProofInvalidPost) TypeName() string {
 	return "InvalidPoSTProof"
 }
 

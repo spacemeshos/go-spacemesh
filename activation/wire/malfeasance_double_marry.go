@@ -42,7 +42,7 @@ type ProofDoubleMarry struct {
 	Proof2 MarryProof
 }
 
-func (p ProofDoubleMarry) String() string {
+func (p ProofDoubleMarry) TypeName() string {
 	return "DoubleMarryProof"
 }
 
