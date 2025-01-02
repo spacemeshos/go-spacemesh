@@ -59,7 +59,7 @@ type ProofDoubleMerge struct {
 	SmesherID2MarryProof MarryProof
 }
 
-func (p ProofDoubleMerge) String() string {
+func (p ProofDoubleMerge) TypeName() string {
 	return "DoubleMergeProof"
 }
 

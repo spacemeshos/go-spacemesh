@@ -115,7 +115,7 @@ func (mh *MalfeasanceHandlerV2) Info(data []byte) (map[string]string, error) {
 		return nil, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
 	}
 	info := proof.Info()
-	info["type"] = proof.String()
+	info["type"] = proof.TypeName()
 	return info, nil
 }
 
@@ -124,7 +124,7 @@ func (mh *MalfeasanceHandlerV2) ReportLabels(data []byte) []string {
 	if err != nil {
 		return []string{"ATX", "unknown"}
 	}
-	return []string{"ATX", proof.String()}
+	return []string{"ATX", proof.TypeName()}
 }
 
 func (mh *MalfeasanceHandlerV2) PostIndex(

@@ -2,7 +2,6 @@ package wire
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -34,9 +33,9 @@ type MalfeasanceValidator interface {
 type Proof interface {
 	scale.Encodable
 	scale.Decodable
-	fmt.Stringer
 
 	Type() ProofType
+	TypeName() string
 	Info() map[string]string
 	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
 }

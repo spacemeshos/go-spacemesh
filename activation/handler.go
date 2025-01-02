@@ -127,6 +127,7 @@ func NewHandler(
 			beacon:          beacon,
 			tortoise:        tortoise,
 			malPublisher:    legacyMalPublisher,
+			malPublisher2:   malPublisher,
 			signers:         make(map[types.NodeID]*signing.EdSigner),
 		},
 

@@ -1003,8 +1003,6 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		return fmt.Errorf("store atx: %w", err)
 	}
 
-	atxs.AtxAdded(h.cdb, atx)
-
 	malicious := false
 	err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
