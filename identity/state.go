@@ -23,7 +23,7 @@ func (s *WaitForATXSynced) APIStateInfo() *pb.IdentityStateInfo {
 }
 
 type Retrying struct {
-	Error error
+	ErrorMsg string
 }
 
 func (s *Retrying) APIStateInfo() *pb.IdentityStateInfo {
@@ -31,7 +31,7 @@ func (s *Retrying) APIStateInfo() *pb.IdentityStateInfo {
 		State: pb.IdentityState_RETRYING,
 		Metadata: &pb.IdentityStateInfo_Retrying{
 			Retrying: &pb.RetryingState{
-				Message: s.Error.Error(),
+				Message: s.ErrorMsg,
 			},
 		},
 	}
@@ -156,8 +156,8 @@ func (s *ATXBroadcasted) APIStateInfo() *pb.IdentityStateInfo {
 
 // proposal.
 type ProposalBuildFailed struct {
-	Error error
-	Layer types.LayerID
+	ErrorMsg string
+	Layer    types.LayerID
 }
 
 func (s *ProposalBuildFailed) APIStateInfo() *pb.IdentityStateInfo {
@@ -165,7 +165,7 @@ func (s *ProposalBuildFailed) APIStateInfo() *pb.IdentityStateInfo {
 		State: pb.IdentityState_PROPOSAL_BUILD_FAILED,
 		Metadata: &pb.IdentityStateInfo_ProposalBuildFailed{
 			ProposalBuildFailed: &pb.ProposalBuildFailedState{
-				Message: s.Error.Error(),
+				Message: s.ErrorMsg,
 				Layer:   s.Layer.Uint32(),
 			},
 		},
@@ -173,7 +173,7 @@ func (s *ProposalBuildFailed) APIStateInfo() *pb.IdentityStateInfo {
 }
 
 type ProposalPublishFailed struct {
-	Error    error
+	ErrorMsg string
 	Proposal types.ProposalID
 	Layer    types.LayerID
 }
@@ -183,7 +183,7 @@ func (s *ProposalPublishFailed) APIStateInfo() *pb.IdentityStateInfo {
 		State: pb.IdentityState_PROPOSAL_PUBLISH_FAILED,
 		Metadata: &pb.IdentityStateInfo_ProposalPublishFailed{
 			ProposalPublishFailed: &pb.ProposalPublishFailedState{
-				Message:  s.Error.Error(),
+				Message:  s.ErrorMsg,
 				Proposal: s.Proposal.Bytes(),
 				Layer:    s.Layer.Uint32(),
 			},

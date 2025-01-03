@@ -98,31 +98,28 @@ func (s *SmeshingIdentitiesService) Eligibilities(
 	eligibilities := s.states.AllEligibilities()
 
 	pbEpochEligibilities := make(map[string]*pb.EpochEligibilities)
-	for nodeId, epochMap := range eligibilities {
-		pbEpochEligibilities[nodeId.String()] = &pb.EpochEligibilities{
-			Epochs: make(map[uint32]*pb.Eligibilities),
-		}
-		for epoch, eli := range epochMap {
-			pbEpochEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
-				Eligibilities: castEligibilities(eli),
+	for nodeId, layersMap := range eligibilities {
+		id := nodeId.String()
+		epochs := make(map[uint32]*pb.Eligibilities)
+		for layer, eligibilitiesInLayer := range layersMap {
+			epoch := layer.GetEpoch().Uint32()
+			if _, ok := epochs[epoch]; !ok {
+				epochs[epoch] = new(pb.Eligibilities)
 			}
+			epochs[epoch].Eligibilities = append(
+				epochs[epoch].Eligibilities,
+				&pb.ProposalEligibility{
+					Layer: layer.Uint32(),
+					Count: uint32(len(eligibilitiesInLayer)),
+				},
+			)
 		}
+		pbEpochEligibilities[id] = &pb.EpochEligibilities{Epochs: epochs}
 	}
 
 	return &pb.EligibilitiesResponse{
 		Identities: pbEpochEligibilities,
 	}, nil
-}
-
-func castEligibilities(proofs map[types.LayerID][]types.VotingEligibility) []*pb.ProposalEligibility {
-	rst := make([]*pb.ProposalEligibility, 0, len(proofs))
-	for lid, eligs := range proofs {
-		rst = append(rst, &pb.ProposalEligibility{
-			Layer: lid.Uint32(),
-			Count: uint32(len(eligs)),
-		})
-	}
-	return rst
 }
 
 func (s *SmeshingIdentitiesService) Proposals(

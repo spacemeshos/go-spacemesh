@@ -32,10 +32,7 @@ type beaconService interface {
 }
 
 type identityStates interface {
-	SetEligibilitiesForEpoch(
-		id types.NodeID,
-		epoch types.EpochID,
-		eligibilities map[types.LayerID][]types.VotingEligibility)
+	SetEligibilities(id types.NodeID, eligibilities map[types.LayerID][]types.VotingEligibility)
 	AddProposal(id types.NodeID, proposals *types.Proposal)
 	Set(id types.NodeID, publishEpoch *types.EpochID, newState smesherIdentity.State)
 }
@@ -165,16 +162,19 @@ func (pb *RemoteProposalBuilder) build(
 	pb.signers.mu.Lock()
 	signers := maps.Values(pb.signers.signers)
 	pb.signers.mu.Unlock()
-	var err error
 	bcn, ok := beacons[epoch]
 	if !ok {
+		var err error
 		bcn, err = pb.beaconSvc.Beacon(ctx, epoch)
 		if err != nil {
-			pb.identityStates.Set(types.EmptyNodeID, &epoch, &smesherIdentity.ProposalBuildFailed{
-				Error: fmt.Errorf("beacon: %v", err),
-				Layer: layer,
-			})
-			return fmt.Errorf("beacon: %w", err)
+			err = fmt.Errorf("getting beacon: %w", err)
+			for _, s := range signers {
+				pb.identityStates.Set(s.signer.NodeID(), nil, &smesherIdentity.ProposalBuildFailed{
+					ErrorMsg: err.Error(),
+					Layer:    layer,
+				})
+			}
+			return err
 		}
 		beacons[epoch] = bcn
 	}
@@ -199,8 +199,8 @@ func (pb *RemoteProposalBuilder) build(
 				pb.cfg.layersPerEpoch,
 			)
 			eligibilities[nodeId] = proofs
-			pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
-			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.Eligible{
+			pb.identityStates.SetEligibilities(nodeId, proofs)
+			pb.identityStates.Set(nodeId, nil, &smesherIdentity.Eligible{
 				Layers: proofs,
 			})
 		} else {
@@ -210,9 +210,9 @@ func (pb *RemoteProposalBuilder) build(
 		proposal, _, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
-			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalBuildFailed{
-				Error: fmt.Errorf("get partial proposal: %v", err),
-				Layer: layer,
+			pb.identityStates.Set(nodeId, nil, &smesherIdentity.ProposalBuildFailed{
+				ErrorMsg: fmt.Sprintf("get partial proposal: %v", err),
+				Layer:    layer,
 			})
 			continue
 		}
@@ -235,9 +235,9 @@ func (pb *RemoteProposalBuilder) build(
 		err = proposal.Initialize()
 		if err != nil {
 			pb.logger.Error("failed to initialize proposal", zap.Error(err))
-			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalBuildFailed{
-				Error: fmt.Errorf("failed to initialize proposal: %v", err),
-				Layer: layer,
+			pb.identityStates.Set(nodeId, nil, &smesherIdentity.ProposalBuildFailed{
+				ErrorMsg: fmt.Sprintf("failed to initialize proposal: %v", err),
+				Layer:    layer,
 			})
 			continue
 		}
@@ -249,8 +249,8 @@ func (pb *RemoteProposalBuilder) build(
 				zap.Stringer("id", proposal.ID()),
 				zap.Error(err),
 			)
-			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalPublishFailed{
-				Error:    err,
+			pb.identityStates.Set(nodeId, nil, &smesherIdentity.ProposalPublishFailed{
+				ErrorMsg: err.Error(),
 				Proposal: proposal.ID(),
 				Layer:    proposal.Layer,
 			})

@@ -1,4 +1,4 @@
-PRAGMA user_version = 10;
+PRAGMA user_version = 11;
 CREATE TABLE atx_blobs
 (
     id         CHAR(32) PRIMARY KEY,
@@ -32,6 +32,19 @@ CREATE TABLE "challenge"
     post_indices  VARCHAR,
     post_pow      UNSIGNED LONG INT
 , poet_proof_ref        CHAR(32), poet_proof_membership VARCHAR) WITHOUT ROWID;
+CREATE TABLE eligibilities
+(
+    id        CHAR(32) NOT NULL,
+    layer     INTEGER NOT NULL,
+    j         INTEGER NOT NULL,
+    signature CHAR(80)
+);
+CREATE TABLE events
+(
+    id        CHAR(32) NOT NULL,
+    timestamp INTEGER NOT NULL,
+    event     TEXT NOT NULL
+);
 CREATE TABLE malfeasance_sync_state
 (
   id INT NOT NULL PRIMARY KEY,
@@ -88,5 +101,14 @@ CREATE TABLE prepared_activeset
     data          BLOB NOT NULL,
     PRIMARY KEY (kind, epoch)
 ) WITHOUT ROWID;
+CREATE TABLE proposals
+(
+    id       CHAR(32) NOT NULL,
+    layer    INTEGER NOT NULL,
+    proposal BLOB NOT NULL
+);
 CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
+CREATE INDEX eligibilities_by_id_layer ON eligibilities (id, layer);
+CREATE INDEX events_by_id_timestamp ON events (id, timestamp);
 CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);
+CREATE INDEX proposals_by_id_layer ON proposals (id, layer);

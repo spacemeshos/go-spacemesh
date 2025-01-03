@@ -879,7 +879,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			sig,
 			time.Now().Add(10*time.Second),
 			time.Now().Add(5*time.Second),
-			challengeHash.Bytes())
+			challengeHash.Bytes(),
+			0,
+		)
 
 		require.NoError(t, err)
 		require.Len(t, existingRegistrations, 1)
@@ -925,7 +927,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			sig,
 			time.Now().Add(10*time.Second),
 			time.Now().Add(5*time.Second),
-			challengeHash.Bytes())
+			challengeHash.Bytes(),
+			0,
+		)
 
 		require.NoError(t, err)
 		require.Len(t, existingRegistrations, 2)
@@ -968,7 +972,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 			sig,
 			time.Now().Add(10*time.Second),
 			time.Now().Add(5*time.Second),
-			challengeHash.Bytes())
+			challengeHash.Bytes(),
+			0,
+		)
 
 		require.NoError(t, err)
 		require.Len(t, existingRegistrations, 1)
@@ -1012,7 +1018,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 				sig,
 				time.Now().Add(10*time.Second),
 				time.Now().Add(-5*time.Second), // poet round started
-				challengeHash.Bytes())
+				challengeHash.Bytes(),
+				0,
+			)
 
 			require.NoError(t, err)
 			require.Len(t, existingRegistrations, 1)
@@ -1062,7 +1070,9 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 				sig,
 				time.Now().Add(10*time.Second),
 				time.Now().Add(-5*time.Second), // poet round started
-				challengeHash.Bytes())
+				challengeHash.Bytes(),
+				0,
+			)
 
 			require.NoError(t, err)
 			require.Len(t, existingRegistrations, 1)
@@ -1105,6 +1115,7 @@ func TestNIPoSTBuilder_PoETConfigChange(t *testing.T) {
 				time.Now().Add(10*time.Second),
 				time.Now().Add(-5*time.Second), // poet round started
 				challengeHash.Bytes(),
+				0,
 			)
 			poetErr := &PoetRegistrationMismatchError{}
 			require.ErrorAs(t, err, &poetErr)
