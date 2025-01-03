@@ -304,10 +304,7 @@ func (ds *DumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 // SetInfo implements OrderedSet.
 func (ds *DumbSet) SetInfo() (RangeInfo, error) {
 	ri, _, err := ds.getRangeInfo(nil, nil, -1)
-	if err != nil {
-		panic("unexpected error in SetInfo: " + err.Error())
-	}
-	return ri, nil
+	return ri, err
 }
 
 // WithCopy implements OrderedSet.
