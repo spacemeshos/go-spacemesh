@@ -99,7 +99,7 @@ type testerActiveSetGenerator struct {
 	localdb   sql.LocalDatabase
 	atxsdata  *atxsdata.Data
 	clock     *mocks.MocklayerClock
-	wallclock clockwork.FakeClock
+	wallclock *clockwork.FakeClock
 }
 
 func TestActiveSetGenerate(t *testing.T) {
@@ -319,7 +319,7 @@ func TestActiveSetEnsure(t *testing.T) {
 	}()
 	go func() {
 		for i := 0; i < tries; i++ {
-			tester.wallclock.BlockUntil(1)
+			tester.wallclock.BlockUntilContext(context.Background(), 1)
 			tester.wallclock.Advance(tester.gen.cfg.activeSet.RetryInterval)
 		}
 	}()
