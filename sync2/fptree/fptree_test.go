@@ -813,6 +813,26 @@ func TestFPTreeNoIDStoreCalls(t *testing.T) {
 	}
 }
 
+func TestFPTreeFingerprintAll(t *testing.T) {
+	ft := fptree.NewFPTreeWithValues(0, testKeyLen)
+	hashes := []rangesync.KeyBytes{
+		rangesync.MustParseHexKeyBytes("1111111111111111111111111111111111111111111111111111111111111111"),
+		rangesync.MustParseHexKeyBytes("2222222222222222222222222222222222222222222222222222222222222222"),
+		rangesync.MustParseHexKeyBytes("4444444444444444444444444444444444444444444444444444444444444444"),
+		rangesync.MustParseHexKeyBytes("8888888888888888888888888888888888888888888888888888888888888888"),
+	}
+	for _, h := range hashes {
+		ft.RegisterKey(h)
+	}
+	fpr := ft.FingerprintAll()
+	require.Equal(t, "ffffffffffffffffffffffff", fpr.FP.String(), "fp")
+	require.Equal(t, uint32(4), fpr.Count, "count")
+	require.Zero(t, fpr.IType, "itype")
+	items, err := fpr.Items.Limit(int(fpr.Count)).Collect()
+	require.NoError(t, err)
+	require.ElementsMatch(t, hashes, items)
+}
+
 func TestFPTreeClone(t *testing.T) {
 	store := fptree.NewFPTreeWithValues(10, testKeyLen)
 	ft1 := fptree.NewFPTree(10, store, testKeyLen, testDepth)

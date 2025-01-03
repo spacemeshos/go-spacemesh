@@ -48,7 +48,7 @@ type OrderedSet interface {
 	// OrderedSet passed to WithCopy callback is expected to be valid outside of the
 	// callback as well.
 	Received() SeqResult
-	// GetRangeInfo returns RangeInfo for the item range in the ordered set,
+	// RangeInfo returns RangeInfo for the item range in the ordered set,
 	// bounded by [x, y).
 	// x == y indicates the whole set.
 	// x < y indicates a normal range starting with x and ending below y.
@@ -56,16 +56,12 @@ type OrderedSet interface {
 	// of the set and from the beginning of the set to y, non-inclusive.
 	// If count >= 0, at most count items are returned, and RangeInfo
 	// is returned for the corresponding subrange of the requested range.
-	// If both x and y are nil, the information for the entire set is returned.
-	// If any of x or y is nil, the other one must be nil as well.
-	GetRangeInfo(x, y KeyBytes) (RangeInfo, error)
+	RangeInfo(x, y KeyBytes) (RangeInfo, error)
 	// SplitRange splits the range roughly after the specified count of items,
 	// returning RangeInfo for the first half and the second half of the range.
 	SplitRange(x, y KeyBytes, count int) (SplitInfo, error)
-	// Items returns the sequence of items in the set.
-	Items() SeqResult
-	// Empty returns true if the set is empty.
-	Empty() (bool, error)
+	// SetInfo returns RangeInfo for the whole set.
+	SetInfo() (RangeInfo, error)
 	// WithCopy runs the specified function, passing to it a temporary shallow copy of
 	// the OrderedSet. The copy is discarded after the function returns, releasing
 	// any resources associated with it.
