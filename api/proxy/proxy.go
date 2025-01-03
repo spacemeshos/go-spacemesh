@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/rs/cors"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -29,7 +30,12 @@ type Service interface {
 	Path() string
 }
 
-func NewServer(proxyListener, apiAddress string, logger *zap.Logger, local ...Service) (*Server, error) {
+func NewServer(
+	proxyListener, apiAddress string,
+	corsEverywhere bool,
+	logger *zap.Logger,
+	local ...Service,
+) (*Server, error) {
 	// Validate the API server URL
 	targetURL, err := url.Parse(apiAddress)
 	if err != nil {
@@ -39,6 +45,28 @@ func NewServer(proxyListener, apiAddress string, logger *zap.Logger, local ...Se
 	// Create a reverse proxy
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
 	mux := http.NewServeMux()
+	var handler http.Handler = mux
+	if corsEverywhere {
+		logger.Info("enabling CORS on PROXY for all origins")
+		c := cors.New(cors.Options{
+			AllowedOrigins: []string{"*"},
+			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+			AllowedHeaders: []string{"*"},
+			ExposedHeaders: []string{
+				"Server",
+				"Date",
+				"Content-Type",
+				"Content-Length",
+				"Connection",
+				"Vary",
+				"X-Final-Url",
+				"Access-Control-Allow-Origin",
+			},
+			AllowCredentials: false,
+			MaxAge:           300,
+		})
+		handler = c.Handler(mux)
+	}
 
 	// Register GRPC services handled locally
 	grpcMux := runtime.NewServeMux()
@@ -57,7 +85,7 @@ func NewServer(proxyListener, apiAddress string, logger *zap.Logger, local ...Se
 	// Initialize the HTTP server
 	server := &http.Server{
 		Addr:         proxyListener,
-		Handler:      mux,
+		Handler:      handler,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
