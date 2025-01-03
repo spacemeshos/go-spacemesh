@@ -27,15 +27,6 @@ const (
 	numSyncPeers = 6
 )
 
-// FIXME: BlockUntilContext is not included in FakeClock interface.
-// This will be fixed in a post-0.4.0 clockwork release, but with a breaking change that
-// makes FakeClock a struct instead of an interface.
-// See: https://github.com/jonboulle/clockwork/pull/71
-type fakeClock interface {
-	clockwork.FakeClock
-	BlockUntilContext(ctx context.Context, n int) error
-}
-
 type peerList struct {
 	sync.Mutex
 	peers []p2p.Peer
@@ -63,7 +54,7 @@ type multiPeerSyncTester struct {
 	syncBase   *MockSyncBase
 	syncRunner *MocksyncRunner
 	peers      *peers.Peers
-	clock      fakeClock
+	clock      *clockwork.FakeClock
 	reconciler *multipeer.MultiPeerReconciler
 	cancel     context.CancelFunc
 	eg         errgroup.Group
@@ -81,7 +72,7 @@ func newMultiPeerSyncTester(t *testing.T, addPeers int) *multiPeerSyncTester {
 		syncBase:   NewMockSyncBase(ctrl),
 		syncRunner: NewMocksyncRunner(ctrl),
 		peers:      peers.New(),
-		clock:      clockwork.NewFakeClock().(fakeClock),
+		clock:      clockwork.NewFakeClock(),
 		kickCh:     make(chan struct{}, 1),
 	}
 	cfg := multipeer.DefaultConfig()

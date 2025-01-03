@@ -362,12 +362,7 @@ func (ft *FPTree) traverseFrom(
 	}
 }
 
-// All returns all the items currently in the tree (including those in the IDStore).
-// The sequence in SeqResult is either empty or infinite.
-// Implements sqlstore.All.
-func (ft *FPTree) All() rangesync.SeqResult {
-	ft.np.lockRead()
-	defer ft.np.unlockRead()
+func (ft *FPTree) all() rangesync.SeqResult {
 	switch {
 	case ft.root == noIndex:
 		return rangesync.EmptySeqResult()
@@ -384,6 +379,15 @@ func (ft *FPTree) All() rangesync.SeqResult {
 		}
 	}
 	return ft.idStore.All()
+}
+
+// All returns all the items currently in the tree (including those in the IDStore).
+// The sequence in SeqResult is either empty or infinite.
+// Implements sqlstore.All.
+func (ft *FPTree) All() rangesync.SeqResult {
+	ft.np.lockRead()
+	defer ft.np.unlockRead()
+	return ft.all()
 }
 
 // From returns all the items in the tree that are greater than or equal to the given key.
@@ -1154,6 +1158,24 @@ func (ft *FPTree) fingerprintInterval(
 	// We apply limit after we have retrieved the next item
 	fpr.Items = fpr.Items.Limit(int(fpr.Count))
 	return fpr, nil
+}
+
+// FingerprintAll returns FingerprintResult for all items in the tree.
+// Unlike FingerprintInterval, it is guaranteed not to query the underlying idStore, so it
+// will never cause database access.
+func (ft *FPTree) FingerprintAll() FPResult {
+	ft.np.lockRead()
+	defer ft.np.unlockRead()
+	if ft.root == noIndex {
+		return FPResult{Items: rangesync.EmptySeqResult()}
+	}
+	count, fp, _ := ft.np.info(ft.root)
+	return FPResult{
+		FP:    fp,
+		Count: count,
+		IType: 0,
+		Items: ft.all().Limit(int(count)),
+	}
 }
 
 // easySplit splits an interval in two parts trying to do it in such way that the first
