@@ -61,10 +61,6 @@ func (s *SmeshingIdentitiesService) States(
 
 			identityStateInfo := info.State.APIStateInfo()
 			identityStateInfo.Time = timestamppb.New(info.Time)
-			if info.PublishEpoch != nil {
-				epoch := info.PublishEpoch.Uint32()
-				identityStateInfo.PublishEpoch = &epoch
-			}
 
 			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)
 		}

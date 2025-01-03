@@ -16,9 +16,8 @@ import (
 var ErrIdentityStateUnknown = errors.New("identity state is unknown")
 
 type StateInfo struct {
-	State        State
-	PublishEpoch *types.EpochID
-	Time         time.Time
+	State State
+	Time  time.Time
 }
 
 type StateStorage struct {
@@ -33,15 +32,10 @@ func NewIdentityStateStorage(db sql.Executor, logger *zap.Logger) *StateStorage 
 	}
 }
 
-func (s *StateStorage) Set(
-	id types.NodeID,
-	publishEpoch *types.EpochID,
-	newState State,
-) {
+func (s *StateStorage) Set(id types.NodeID, newState State) {
 	info := StateInfo{
-		State:        newState,
-		PublishEpoch: publishEpoch,
-		Time:         time.Now(),
+		State: newState,
+		Time:  time.Now(),
 	}
 
 	stateBytes, err := marshalState(&info)
@@ -115,7 +109,7 @@ func (s *StateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
 	if err := events.InsertProposal(s.db, proposal); err != nil {
 		s.logger.Panic("failed to insert proposal", zap.Error(err))
 	}
-	s.Set(proposal.SmesherID, nil, &ProposalPublished{
+	s.Set(proposal.SmesherID, &ProposalPublished{
 		Proposal: proposal.ID(),
 		Layer:    proposal.Layer,
 	})

@@ -34,7 +34,7 @@ type beaconService interface {
 type identityStates interface {
 	SetEligibilities(id types.NodeID, eligibilities map[types.LayerID][]types.VotingEligibility)
 	AddProposal(id types.NodeID, proposals *types.Proposal)
-	Set(id types.NodeID, publishEpoch *types.EpochID, newState smesherIdentity.State)
+	Set(id types.NodeID, newState smesherIdentity.State)
 }
 
 type RemoteProposalBuilder struct {
@@ -169,7 +169,7 @@ func (pb *RemoteProposalBuilder) build(
 		if err != nil {
 			err = fmt.Errorf("getting beacon: %w", err)
 			for _, s := range signers {
-				pb.identityStates.Set(s.signer.NodeID(), nil, &smesherIdentity.ProposalBuildFailed{
+				pb.identityStates.Set(s.signer.NodeID(), &smesherIdentity.ProposalBuildFailed{
 					ErrorMsg: err.Error(),
 					Layer:    layer,
 				})
@@ -200,7 +200,7 @@ func (pb *RemoteProposalBuilder) build(
 			)
 			eligibilities[nodeId] = proofs
 			pb.identityStates.SetEligibilities(nodeId, proofs)
-			pb.identityStates.Set(nodeId, nil, &smesherIdentity.Eligible{
+			pb.identityStates.Set(nodeId, &smesherIdentity.Eligible{
 				Layers: proofs,
 			})
 		} else {
@@ -210,7 +210,7 @@ func (pb *RemoteProposalBuilder) build(
 		proposal, _, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
-			pb.identityStates.Set(nodeId, nil, &smesherIdentity.ProposalBuildFailed{
+			pb.identityStates.Set(nodeId, &smesherIdentity.ProposalBuildFailed{
 				ErrorMsg: fmt.Sprintf("get partial proposal: %v", err),
 				Layer:    layer,
 			})
@@ -235,7 +235,7 @@ func (pb *RemoteProposalBuilder) build(
 		err = proposal.Initialize()
 		if err != nil {
 			pb.logger.Error("failed to initialize proposal", zap.Error(err))
-			pb.identityStates.Set(nodeId, nil, &smesherIdentity.ProposalBuildFailed{
+			pb.identityStates.Set(nodeId, &smesherIdentity.ProposalBuildFailed{
 				ErrorMsg: fmt.Sprintf("failed to initialize proposal: %v", err),
 				Layer:    layer,
 			})
@@ -249,7 +249,7 @@ func (pb *RemoteProposalBuilder) build(
 				zap.Stringer("id", proposal.ID()),
 				zap.Error(err),
 			)
-			pb.identityStates.Set(nodeId, nil, &smesherIdentity.ProposalPublishFailed{
+			pb.identityStates.Set(nodeId, &smesherIdentity.ProposalPublishFailed{
 				ErrorMsg: err.Error(),
 				Proposal: proposal.ID(),
 				Layer:    proposal.Layer,

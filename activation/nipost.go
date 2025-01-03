@@ -284,10 +284,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 		events.EmitWaitingForPoETRoundEnd(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
 		nb.identityStates.Set(
 			signer.NodeID(),
-			&postChallenge.PublishEpoch,
 			&identity.WaitForPoetRoundEnd{
 				RoundEnd:        curPoetRoundEnd,
 				PublishEpochEnd: publishEpochEnd,
+				Publish:         postChallenge.PublishEpoch,
 			},
 		)
 
@@ -303,9 +303,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
+		nb.identityStates.Set(signer.NodeID(),
 			&identity.PoetProofReceived{
 				PoetUrl: poetUrl,
+				Publish: postChallenge.PublishEpoch,
 			},
 		)
 	}
@@ -332,14 +333,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 		defer cancel()
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.GeneratingPostProof{})
+		nb.identityStates.Set(signer.NodeID(), &identity.GeneratingPostProof{Publish: postChallenge.PublishEpoch})
 
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.PostProofReady{})
+		nb.identityStates.Set(signer.NodeID(), &identity.PostProofReady{Publish: postChallenge.PublishEpoch})
 
 		postGenDuration := time.Since(startTime)
 
@@ -533,9 +534,10 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 		}
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 	}
-	nb.identityStates.Set(signer.NodeID(), &publishEpoch,
+	nb.identityStates.Set(signer.NodeID(),
 		&identity.PoetRegistered{
 			Registrations: existingRegistrations,
+			Publish:       publishEpoch,
 		},
 	)
 
