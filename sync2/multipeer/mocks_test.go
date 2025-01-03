@@ -43,6 +43,44 @@ func (m *MockSyncBase) EXPECT() *MockSyncBaseMockRecorder {
 	return m.recorder
 }
 
+// Advance mocks base method.
+func (m *MockSyncBase) Advance() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Advance")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Advance indicates an expected call of Advance.
+func (mr *MockSyncBaseMockRecorder) Advance() *MockSyncBaseAdvanceCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Advance", reflect.TypeOf((*MockSyncBase)(nil).Advance))
+	return &MockSyncBaseAdvanceCall{Call: call}
+}
+
+// MockSyncBaseAdvanceCall wrap *gomock.Call
+type MockSyncBaseAdvanceCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockSyncBaseAdvanceCall) Return(arg0 error) *MockSyncBaseAdvanceCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockSyncBaseAdvanceCall) Do(f func() error) *MockSyncBaseAdvanceCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockSyncBaseAdvanceCall) DoAndReturn(f func() error) *MockSyncBaseAdvanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Count mocks base method.
 func (m *MockSyncBase) Count() (int, error) {
 	m.ctrl.T.Helper()

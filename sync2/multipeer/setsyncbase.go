@@ -38,7 +38,8 @@ func NewSetSyncBase(
 
 // Count implements SyncBase.
 func (ssb *SetSyncBase) Count() (int, error) {
-	// TODO: don't lock on potentially db-bound operations
+	// In most cases ssb.os.SetInfo will not access the database, so we're not holding
+	// the lock for long here.
 	ssb.mtx.Lock()
 	defer ssb.mtx.Unlock()
 	info, err := ssb.os.SetInfo()
@@ -46,6 +47,13 @@ func (ssb *SetSyncBase) Count() (int, error) {
 		return 0, fmt.Errorf("get range info: %w", err)
 	}
 	return info.Count, nil
+}
+
+// Advance implements SyncBase.
+func (ssb *SetSyncBase) Advance() error {
+	ssb.mtx.Lock()
+	defer ssb.mtx.Unlock()
+	return ssb.os.Advance()
 }
 
 func (ssb *SetSyncBase) syncPeer(
