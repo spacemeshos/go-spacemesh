@@ -24,6 +24,8 @@ be compatible to other versions. Mainnet was not affected by this bug and this r
 
 * [#6575](https://github.com/spacemeshos/go-spacemesh/pull/6575) Removal of a possible deadlock in query cache.
 
+* [#6576](https://github.com/spacemeshos/go-spacemesh/pull/6576) More reductions in the number of DB queries in syncv2.
+
 ## v1.7.9
 
 ### Upgrade information
