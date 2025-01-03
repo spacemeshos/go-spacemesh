@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
@@ -92,12 +91,8 @@ func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData)
 	return types.EmptyNodeID, errors.New("invalid atx malfeasance proof")
 }
 
-func (mh *MalfeasanceHandler) ReportProof(numProofs *prometheus.CounterVec) {
-	numProofs.WithLabelValues(multiATXs).Inc()
-}
-
-func (mh *MalfeasanceHandler) ReportInvalidProof(numInvalidProofs *prometheus.CounterVec) {
-	numInvalidProofs.WithLabelValues(multiATXs).Inc()
+func (mh *MalfeasanceHandler) ReportLabel() string {
+	return multiATXs
 }
 
 type InvalidPostIndexHandler struct {
@@ -169,12 +164,8 @@ func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.Proof
 	return types.EmptyNodeID, errors.New("invalid post index malfeasance proof - POST is valid")
 }
 
-func (mh *InvalidPostIndexHandler) ReportProof(numProofs *prometheus.CounterVec) {
-	numProofs.WithLabelValues(invalidPostIndex).Inc()
-}
-
-func (mh *InvalidPostIndexHandler) ReportInvalidProof(numInvalidProofs *prometheus.CounterVec) {
-	numInvalidProofs.WithLabelValues(invalidPostIndex).Inc()
+func (mh *InvalidPostIndexHandler) ReportLabel() string {
+	return invalidPostIndex
 }
 
 type InvalidPrevATXHandler struct {
@@ -241,10 +232,6 @@ func (mh *InvalidPrevATXHandler) Validate(ctx context.Context, data wire.ProofDa
 	return atx1.SmesherID, nil
 }
 
-func (mh *InvalidPrevATXHandler) ReportProof(numProofs *prometheus.CounterVec) {
-	numProofs.WithLabelValues(invalidPrevATX).Inc()
-}
-
-func (mh *InvalidPrevATXHandler) ReportInvalidProof(numInvalidProofs *prometheus.CounterVec) {
-	numInvalidProofs.WithLabelValues(invalidPrevATX).Inc()
+func (mh *InvalidPrevATXHandler) ReportLabel() string {
+	return invalidPrevATX
 }

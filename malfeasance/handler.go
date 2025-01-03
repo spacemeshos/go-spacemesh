@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -16,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -49,6 +51,11 @@ type Handler struct {
 	tortoise tortoise
 
 	handlers map[MalfeasanceType]MalfeasanceHandler
+
+	// metrics
+	numProofs        *prometheus.CounterVec
+	numInvalidProofs *prometheus.CounterVec
+	numMalformed     prometheus.Counter
 }
 
 func NewHandler(
@@ -58,6 +65,28 @@ func NewHandler(
 	nodeIDs []types.NodeID,
 	tortoise tortoise,
 ) *Handler {
+	proofCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.Namespace,
+			Subsystem: namespace,
+			Name:      validProofName,
+			Help:      "number of malfeasance proofs",
+		},
+		[]string{
+			typeLabel,
+		})
+	invalidProofCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.Namespace,
+			Subsystem: namespace,
+			Name:      invalidProofName,
+			Help:      "number of invalid malfeasance proofs",
+		},
+		[]string{
+			typeLabel,
+		},
+	)
+
 	return &Handler{
 		logger:   lg,
 		cdb:      cdb,
@@ -66,6 +95,10 @@ func NewHandler(
 		tortoise: tortoise,
 
 		handlers: make(map[MalfeasanceType]MalfeasanceHandler),
+
+		numProofs:        proofCounter,
+		numInvalidProofs: invalidProofCounter,
+		numMalformed:     invalidProofCounter.WithLabelValues("mal"),
 	}
 }
 
@@ -86,11 +119,13 @@ func (h *Handler) reportMalfeasance(smesher types.NodeID) {
 }
 
 func (h *Handler) countProof(mp *wire.MalfeasanceProof) {
-	h.handlers[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
+	label := h.handlers[MalfeasanceType(mp.Proof.Type)].ReportLabel()
+	h.numProofs.WithLabelValues(label).Inc()
 }
 
 func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
-	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+	label := h.handlers[MalfeasanceType(p.Proof.Type)].ReportLabel()
+	h.numInvalidProofs.WithLabelValues(label).Inc()
 }
 
 func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error) {
@@ -125,7 +160,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 ) error {
 	var p wire.MalfeasanceProof
 	if err := codec.Decode(data, &p); err != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		h.logger.Error("malformed message (sync)", log.ZContext(ctx), zap.Error(err))
 		return errMalformedData
 	}
@@ -156,12 +191,12 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, data []byte) error {
 	var p wire.MalfeasanceGossip
 	if err := codec.Decode(data, &p); err != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		h.logger.Error("malformed message", log.ZContext(ctx), zap.Error(err))
 		return errMalformedData
 	}
 	if p.Eligibility != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		return fmt.Errorf("%w: eligibility field was deprecated with hare3", pubsub.ErrValidationReject)
 	}
 	if peer == h.self {
@@ -193,7 +228,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 	nodeID, err := h.Validate(ctx, p)
 	switch {
 	case errors.Is(err, errUnknownProof):
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		return types.EmptyNodeID, err
 	case err != nil:
 		h.countInvalidProof(p)

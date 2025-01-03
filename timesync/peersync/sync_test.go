@@ -51,7 +51,7 @@ func TestSyncGetOffset(t *testing.T) {
 			require.NotNil(t, New(h, nil, WithTime(adjustedTime(peerResponse))))
 		}
 		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
-		offset, err := sync.GetOffset(context.TODO(), 0, peers)
+		offset, err := sync.GetOffset(context.Background(), 0, peers)
 		require.NoError(t, err)
 		require.Equal(t, 5*time.Second, offset)
 	})
@@ -70,7 +70,7 @@ func TestSyncGetOffset(t *testing.T) {
 		}
 
 		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
-		offset, err := sync.GetOffset(context.TODO(), 0, peers)
+		offset, err := sync.GetOffset(context.Background(), 0, peers)
 		require.ErrorIs(t, err, errTimesyncFailed)
 		require.Empty(t, offset)
 	})

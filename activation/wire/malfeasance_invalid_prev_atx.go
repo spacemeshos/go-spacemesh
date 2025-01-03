@@ -32,7 +32,7 @@ type ProofInvalidPrevAtxV2 struct {
 	Proofs [2]InvalidPrevAtxProof
 }
 
-func (p ProofInvalidPrevAtxV2) String() string {
+func (p ProofInvalidPrevAtxV2) TypeName() string {
 	return "InvalidPreviousATXProofV2"
 }
 
@@ -209,7 +209,7 @@ type ProofInvalidPrevAtxV1 struct {
 	ATXv1 ActivationTxV1
 }
 
-func (p ProofInvalidPrevAtxV1) String() string {
+func (p ProofInvalidPrevAtxV1) TypeName() string {
 	return "InvalidPreviousATXProofV1"
 }
 

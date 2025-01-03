@@ -34,8 +34,16 @@ func (mh *MalfeasanceHandlerV2) Info(data []byte) (map[string]string, error) {
 		return nil, fmt.Errorf("decoding ATX malfeasance proof: %w", err)
 	}
 	info := proof.Info()
-	info["type"] = proof.String()
+	info["type"] = proof.TypeName()
 	return info, nil
+}
+
+func (mh *MalfeasanceHandlerV2) ReportLabels(data []byte) []string {
+	proof, err := mh.decodeProof(data)
+	if err != nil {
+		return []string{"ATX", "unknown"}
+	}
+	return []string{"ATX", proof.TypeName()}
 }
 
 func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {

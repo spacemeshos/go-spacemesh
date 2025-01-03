@@ -81,7 +81,7 @@ func TestHandler_Info(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedInfo := tc.proof.Info()
-			expectedInfo["type"] = tc.proof.String()
+			expectedInfo["type"] = tc.proof.TypeName()
 
 			info, err := th.Info(data)
 			require.NoError(t, err)
