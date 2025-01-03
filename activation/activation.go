@@ -201,7 +201,7 @@ func NewBuilder(
 		logger:            log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postStates:        NewPostStates(log),
-		identitiesStates:  identity.NewIdentityStateStorage(localDB),
+		identitiesStates:  identity.NewIdentityStateStorage(localDB, log),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
 			logger: log,
@@ -451,11 +451,9 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		b.logger.Warn("failed to publish atx", zap.Error(err))
 
-		b.identitiesStates.Set(sig.NodeID(), nil,
-			&identity.Retrying{
-				ErrorMsg: err.Error(),
-			},
-		)
+		b.identitiesStates.Set(sig.NodeID(), &identity.Retrying{
+			ErrorMsg: err.Error(),
+		})
 
 		poetErr := &PoetSvcUnstableError{}
 		switch {
@@ -520,7 +518,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	select {
 	case <-atxSyncedCh:
 	default:
-		b.identitiesStates.Set(nodeID, nil, &identity.WaitForATXSynced{})
+		b.identitiesStates.Set(nodeID, &identity.WaitForATXSynced{})
 	}
 
 	select {
@@ -576,7 +574,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
 		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
-		b.identitiesStates.Set(nodeID, &publishEpochId, &identity.WaitingForPoetRegistrationWindow{})
+		b.identitiesStates.Set(nodeID, &identity.WaitingForPoetRegistrationWindow{Publish: publishEpochId})
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -623,7 +621,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
-	b.identitiesStates.Set(nodeID, &challenge.PublishEpoch, &identity.PoetChallengeReady{})
+	b.identitiesStates.Set(nodeID, &identity.PoetChallengeReady{Publish: challenge.PublishEpoch})
 	return challenge, nil
 }
 
@@ -757,7 +755,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_layer", b.layerClock.CurrentLayer().Uint32()),
 		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
-	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, &identity.ATXReady{})
+	b.identitiesStates.Set(sig.NodeID(), &identity.ATXReady{Publish: challenge.PublishEpoch})
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("wait for publication epoch: %w", ctx.Err())
@@ -808,9 +806,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	)
 	b.identitiesStates.Set(
 		sig.NodeID(),
-		&challenge.PublishEpoch,
 		&identity.ATXBroadcasted{
-			AtxId: atx.ID(),
+			AtxId:   atx.ID(),
+			Publish: challenge.PublishEpoch,
 		},
 	)
 	return nil

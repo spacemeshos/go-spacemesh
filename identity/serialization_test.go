@@ -14,7 +14,7 @@ import (
 
 func RequireEqual(t *testing.T, expected, value *StateInfo) {
 	t.Helper()
-	// NOTE: The `require` doesn't support comparing time.Time after marhsaling
+	// NOTE: The `require` doesn't support comparing time.Time after marshaling
 	// (the monotonic counter is dropped in the process of serialization).
 	// We need to compare the values manually for some types.
 	// See: https://github.com/stretchr/testify/issues/502
@@ -37,18 +37,15 @@ func RequireEqual(t *testing.T, expected, value *StateInfo) {
 		require.EqualValues(t, expected.State, value.State)
 	}
 	require.EqualValues(t, expected.Time.UnixNano(), value.Time.UnixNano())
-	require.EqualValues(t, expected.PublishEpoch, value.PublishEpoch)
 }
 
 func testRoundTrip(t *testing.T, state State) {
 	t.Helper()
 	t.Parallel()
-	epoch := types.EpochID(8)
 	time := time.Now()
 	expected := &StateInfo{
-		State:        state,
-		PublishEpoch: &epoch,
-		Time:         time,
+		State: state,
+		Time:  time,
 	}
 	bytes, err := marshalState(expected)
 	require.NoError(t, err)
@@ -67,13 +64,14 @@ func TestSerializationRoundTrip(t *testing.T) {
 		testRoundTrip(t, &WaitForATXSynced{})
 	})
 	t.Run("state WaitingForPoetRegistrationWindow", func(t *testing.T) {
-		testRoundTrip(t, &WaitingForPoetRegistrationWindow{})
+		testRoundTrip(t, &WaitingForPoetRegistrationWindow{Publish: 5})
 	})
 	t.Run("state PoetChallengeReady", func(t *testing.T) {
-		testRoundTrip(t, &PoetChallengeReady{})
+		testRoundTrip(t, &PoetChallengeReady{Publish: 6})
 	})
 	t.Run("state PoetRegistered", func(t *testing.T) {
 		testRoundTrip(t, &PoetRegistered{
+			Publish: 7,
 			Registrations: []nipost.PoETRegistration{
 				{
 					ChallengeHash: types.RandomHash(),
@@ -86,26 +84,36 @@ func TestSerializationRoundTrip(t *testing.T) {
 	})
 	t.Run("state WaitForPoetRoundEnd", func(t *testing.T) {
 		testRoundTrip(t, &WaitForPoetRoundEnd{
+			Publish:         8,
 			RoundEnd:        time.Now().Add(time.Hour),
 			PublishEpochEnd: time.Now().Add(time.Hour * 10),
 		})
 	})
 	t.Run("state PoetProofReceived", func(t *testing.T) {
 		testRoundTrip(t, &PoetProofReceived{
+			Publish: 9,
 			PoetUrl: "http://poet.sm",
 		})
 	})
 	t.Run("state GeneratingPostProof", func(t *testing.T) {
-		testRoundTrip(t, &GeneratingPostProof{})
+		testRoundTrip(t, &GeneratingPostProof{
+			Publish: 10,
+		})
 	})
 	t.Run("state PostProofReady", func(t *testing.T) {
-		testRoundTrip(t, &PostProofReady{})
+		testRoundTrip(t, &PostProofReady{
+			Publish: 11,
+		})
 	})
 	t.Run("state AtxReady", func(t *testing.T) {
-		testRoundTrip(t, &ATXReady{})
+		testRoundTrip(t, &ATXReady{
+			Publish: 11,
+		})
 	})
 	t.Run("state ATXBroadcasted", func(t *testing.T) {
-		testRoundTrip(t, &WaitingForPoetRegistrationWindow{})
+		testRoundTrip(t, &WaitingForPoetRegistrationWindow{
+			Publish: 12,
+		})
 	})
 	t.Run("state ProposalBuildFailed", func(t *testing.T) {
 		testRoundTrip(t, &ProposalBuildFailed{

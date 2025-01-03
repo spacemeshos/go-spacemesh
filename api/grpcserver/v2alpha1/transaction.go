@@ -70,10 +70,6 @@ func (s *TransactionStreamService) Stream(
 	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
-func (s *TransactionStreamService) String() string {
-	return "TransactionStreamService"
-}
-
 func NewTransactionService(db sql.Executor, conState transactionConState,
 	syncer transactionSyncer, validator transactionValidator,
 	publisher pubsub.Publisher,
@@ -101,11 +97,6 @@ func (s *TransactionService) RegisterService(server *grpc.Server) {
 
 func (s *TransactionService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterTransactionServiceHandlerServer(context.Background(), mux, s)
-}
-
-// String returns the service name.
-func (s *TransactionService) String() string {
-	return "TransactionService"
 }
 
 func (s *TransactionService) List(

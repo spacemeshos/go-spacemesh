@@ -50,10 +50,6 @@ func (s *MalfeasanceService) RegisterHandlerService(mux *runtime.ServeMux) error
 	return spacemeshv2alpha1.RegisterMalfeasanceServiceHandlerServer(context.Background(), mux, s)
 }
 
-func (s *MalfeasanceService) String() string {
-	return "MalfeasanceService"
-}
-
 func (s *MalfeasanceService) List(
 	ctx context.Context,
 	request *spacemeshv2alpha1.MalfeasanceRequest,
@@ -103,10 +99,6 @@ func (s *MalfeasanceStreamService) RegisterService(server *grpc.Server) {
 
 func (s *MalfeasanceStreamService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterMalfeasanceStreamServiceHandlerServer(context.Background(), mux, s)
-}
-
-func (s *MalfeasanceStreamService) String() string {
-	return "MalfeasanceStreamService"
 }
 
 func (s *MalfeasanceStreamService) Stream(

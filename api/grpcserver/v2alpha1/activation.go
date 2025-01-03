@@ -44,10 +44,6 @@ func (s *ActivationStreamService) RegisterHandlerService(mux *runtime.ServeMux) 
 	return spacemeshv2alpha1.RegisterActivationStreamServiceHandlerServer(context.Background(), mux, s)
 }
 
-func (s *ActivationStreamService) String() string {
-	return "ActivationStreamService"
-}
-
 func (s *ActivationStreamService) Stream(
 	request *spacemeshv2alpha1.ActivationStreamRequest,
 	stream spacemeshv2alpha1.ActivationStreamService_StreamServer,
@@ -180,11 +176,6 @@ func (s *ActivationService) RegisterService(server *grpc.Server) {
 
 func (s *ActivationService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterActivationServiceHandlerServer(context.Background(), mux, s)
-}
-
-// String returns the service name.
-func (s *ActivationService) String() string {
-	return "ActivationService"
 }
 
 func (s *ActivationService) List(

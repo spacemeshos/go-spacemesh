@@ -3,6 +3,8 @@ package identity_test
 import (
 	"testing"
 
+	"go.uber.org/zap/zaptest"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -11,12 +13,11 @@ import (
 func Test_StatesPersistance(t *testing.T) {
 	db := localsql.InMemoryTest(t)
 
-	storage1 := identity.NewIdentityStateStorage(db)
+	storage1 := identity.NewIdentityStateStorage(db, zaptest.NewLogger(t))
 
 	// Set some states
 	id1 := types.NodeID{1}
 	id2 := types.NodeID{2}
-	epoch := types.EpochID(42)
 
 	states := []struct {
 		id    types.NodeID
@@ -44,12 +45,12 @@ func Test_StatesPersistance(t *testing.T) {
 
 	// Store states in first storage
 	for _, s := range states {
-		storage1.Set(s.id, &epoch, s.state)
+		storage1.Set(s.id, s.state)
 	}
 	states1 := storage1.All()
 
 	// Create new storage instance with same DB
-	storage2 := identity.NewIdentityStateStorage(db)
+	storage2 := identity.NewIdentityStateStorage(db, zaptest.NewLogger(t))
 	states2 := storage2.All()
 
 	for id, states1 := range states1 {

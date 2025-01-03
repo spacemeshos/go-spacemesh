@@ -30,7 +30,7 @@ func InsertProposal(db sql.Executor, proposal *types.Proposal) error {
 	return nil
 }
 
-func InterateAllProposals(
+func IterateAllProposals(
 	db sql.Executor,
 	fn func(p types.Proposal) bool,
 ) error {

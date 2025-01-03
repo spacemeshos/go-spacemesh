@@ -40,11 +40,6 @@ func (d *DebugService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterDebugServiceHandlerServer(context.Background(), mux, d)
 }
 
-// String returns the name of this service.
-func (d *DebugService) String() string {
-	return "DebugService"
-}
-
 // NewDebugService creates a new grpc service using config data.
 func NewDebugService(db sql.StateDatabase, conState conservativeState, host networkInfo, oracle oracle,
 	loggers map[string]*zap.AtomicLevel,

@@ -246,15 +246,15 @@ func (c *MockidentityStatesAddProposalCall) DoAndReturn(f func(types.NodeID, *ty
 }
 
 // Set mocks base method.
-func (m *MockidentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State) {
+func (m *MockidentityStates) Set(id types.NodeID, newState identity.State) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Set", id, publishEpoch, newState)
+	m.ctrl.Call(m, "Set", id, newState)
 }
 
 // Set indicates an expected call of Set.
-func (mr *MockidentityStatesMockRecorder) Set(id, publishEpoch, newState any) *MockidentityStatesSetCall {
+func (mr *MockidentityStatesMockRecorder) Set(id, newState any) *MockidentityStatesSetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockidentityStates)(nil).Set), id, publishEpoch, newState)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockidentityStates)(nil).Set), id, newState)
 	return &MockidentityStatesSetCall{Call: call}
 }
 
@@ -270,13 +270,13 @@ func (c *MockidentityStatesSetCall) Return() *MockidentityStatesSetCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockidentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, identity.State)) *MockidentityStatesSetCall {
+func (c *MockidentityStatesSetCall) Do(f func(types.NodeID, identity.State)) *MockidentityStatesSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, identity.State)) *MockidentityStatesSetCall {
+func (c *MockidentityStatesSetCall) DoAndReturn(f func(types.NodeID, identity.State)) *MockidentityStatesSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

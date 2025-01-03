@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net"
 	"net/http"
 	"net/url"
@@ -31,7 +32,6 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -638,7 +638,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 
-	app.idStates = identity.NewIdentityStateStorage(app.localDB)
+	app.idStates = identity.NewIdentityStateStorage(app.localDB, app.log.Zap())
 
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
@@ -1848,7 +1848,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.Config.API.PublicListener,
 			logger.Zap(),
 			app.Config.API,
-			maps.Values(publicSvcs),
+			slices.Collect(maps.Values(publicSvcs)),
 			// public server needs restriction on max connection age to prevent attacks
 			grpc.KeepaliveParams(keepalive.ServerParameters{
 				MaxConnectionIdle:     2 * time.Hour,
@@ -1867,9 +1867,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("public grpc service started",
 			log.String("address", app.Config.API.PublicListener),
 			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				services := maps.Keys(publicSvcs)
-				slices.Sort(services)
-				for _, svc := range services {
+				for _, svc := range slices.Sorted(maps.Keys(publicSvcs)) {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1882,7 +1880,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.Config.API.PrivateListener,
 			logger.Zap(),
 			app.Config.API,
-			maps.Values(privateSvcs),
+			slices.Collect(maps.Values(privateSvcs)),
 		)
 		if err != nil {
 			return err
@@ -1893,9 +1891,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("private grpc service started",
 			log.String("address", app.Config.API.PrivateListener),
 			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				services := maps.Keys(privateSvcs)
-				slices.Sort(services)
-				for _, svc := range services {
+				for _, svc := range slices.Sorted(maps.Keys(privateSvcs)) {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1908,7 +1904,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.Config.API.PostListener,
 			logger.Zap(),
 			app.Config.API,
-			maps.Values(postSvcs),
+			slices.Collect(maps.Values(postSvcs)),
 		)
 		if err != nil {
 			return err
@@ -1919,9 +1915,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("post grpc service started",
 			log.String("address", app.Config.API.PostListener),
 			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				services := maps.Keys(postSvcs)
-				slices.Sort(services)
-				for _, svc := range services {
+				for _, svc := range slices.Sorted(maps.Keys(postSvcs)) {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1969,7 +1963,11 @@ func (app *App) startAPIServices(ctx context.Context) error {
 
 	if len(authenticatedSvcs) > 0 && app.Config.API.TLSListener != "" {
 		var err error
-		app.grpcTLSServer, err = grpcserver.NewTLS(logger.Zap(), app.Config.API, maps.Values(authenticatedSvcs))
+		app.grpcTLSServer, err = grpcserver.NewTLS(
+			logger.Zap(),
+			app.Config.API,
+			slices.Collect(maps.Values(authenticatedSvcs)),
+		)
 		if err != nil {
 			return err
 		}
@@ -1979,9 +1977,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger.With().Info("authenticated grpc service started",
 			log.String("address", app.Config.API.TLSListener),
 			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				services := maps.Keys(authenticatedSvcs)
-				slices.Sort(services)
-				for _, svc := range services {
+				for _, svc := range slices.Sorted(maps.Keys(authenticatedSvcs)) {
 					encoder.AppendString(svc)
 				}
 				return nil
@@ -1993,28 +1989,66 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		if len(publicSvcs) == 0 {
 			return errors.New("start json server without public services")
 		}
-		app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
-			logger.Zap().Named("JSON"),
-			app.Config.API.JSONListener,
-			app.Config.API.JSONCorsAllowedOrigins,
-			app.Config.API.JSONCorsEverywhere,
-			app.Config.CollectMetrics,
-		)
-
-		if err := app.jsonAPIServer.StartService(maps.Values(publicSvcs)...); err != nil {
-			return fmt.Errorf("start listen server: %w", err)
-		}
-		logger.With().Info("json listener started",
-			log.String("address", app.Config.API.JSONListener),
-			log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
-				services := maps.Keys(publicSvcs)
-				slices.Sort(services)
-				for _, svc := range services {
-					encoder.AppendString(svc)
+		if len(app.Config.API.ProxyApiV2Address) > 0 {
+			var localSvcs []proxy.Service
+			for _, svcName := range app.Config.API.NonProxiedServices {
+				svc, err := app.grpcService(svcName, logger)
+				if err != nil {
+					return fmt.Errorf("creating smeshing id service: %w", err)
 				}
-				return nil
-			})),
-		)
+				if svc, ok := svc.(proxy.Service); ok {
+					localSvcs = append(localSvcs, svc)
+				} else {
+					return fmt.Errorf("cannot use service %q as non-proxied local service", svcName)
+				}
+			}
+
+			p, err := proxy.NewServer(
+				app.Config.API.JSONListener,
+				app.Config.API.ProxyApiV2Address,
+				logger.Zap(),
+				localSvcs...,
+			)
+			if err != nil {
+				return err
+			}
+			app.apiProxy = p
+
+			if err = p.Start(); err != nil {
+				return err
+			}
+			logger.With().Info("json proxy listener started",
+				log.String("address", app.Config.API.JSONListener),
+				log.String("proxying to", app.Config.API.ProxyApiV2Address),
+				log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+					for _, svc := range slices.Sorted(maps.Keys(publicSvcs)) {
+						encoder.AppendString(svc)
+					}
+					return nil
+				})),
+			)
+		} else {
+			app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
+				logger.Zap().Named("JSON"),
+				app.Config.API.JSONListener,
+				app.Config.API.JSONCorsAllowedOrigins,
+				app.Config.API.JSONCorsEverywhere,
+				app.Config.CollectMetrics,
+			)
+
+			if err := app.jsonAPIServer.StartService(slices.Collect(maps.Values(publicSvcs))...); err != nil {
+				return fmt.Errorf("start listen server: %w", err)
+			}
+			logger.With().Info("json listener started",
+				log.String("address", app.Config.API.JSONListener),
+				log.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+					for _, svc := range slices.Sorted(maps.Keys(publicSvcs)) {
+						encoder.AppendString(svc)
+					}
+					return nil
+				})),
+			)
+		}
 	}
 
 	if len(app.Config.API.NodeServiceListener) > 0 {
@@ -2032,20 +2066,6 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			Handler: server.IntoHandler(http.NewServeMux()),
 		}
 		app.eg.Go(func() error { return app.nodeServiceServer.Serve(lis) })
-	}
-
-	if len(app.Config.NodeServiceAddress) > 0 &&
-		len(app.Config.API.ProxyListener) > 0 &&
-		len(app.Config.API.ProxyApiV2Address) > 0 {
-		p, err := proxy.NewServer(app.Config.API.ProxyListener, app.Config.API.ProxyApiV2Address, app.log.Zap())
-		if err != nil {
-			return nil
-		}
-		app.apiProxy = p
-
-		if err = p.Start(); err != nil {
-			return err
-		}
 	}
 
 	return nil

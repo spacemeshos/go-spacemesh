@@ -41,9 +41,8 @@ func (s *SmeshingIdentitiesService) RegisterHandlerService(mux *runtime.ServeMux
 	return pb.RegisterSmeshingIdentitiesServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *SmeshingIdentitiesService) String() string {
-	return "SmeshingIdentitiesService"
+func (s *SmeshingIdentitiesService) Path() string {
+	return "/spacemesh.v2alpha1.SmeshingIdentitiesService/"
 }
 
 func (s *SmeshingIdentitiesService) States(
@@ -62,10 +61,6 @@ func (s *SmeshingIdentitiesService) States(
 
 			identityStateInfo := info.State.APIStateInfo()
 			identityStateInfo.Time = timestamppb.New(info.Time)
-			if info.PublishEpoch != nil {
-				epoch := info.PublishEpoch.Uint32()
-				identityStateInfo.PublishEpoch = &epoch
-			}
 
 			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)
 		}

@@ -148,10 +148,6 @@ func (s *RewardStreamService) fetchFromDB(
 	return dbChan, errChan
 }
 
-func (s *RewardStreamService) String() string {
-	return "RewardStreamService"
-}
-
 func NewRewardService(db sql.Executor) *RewardService {
 	return &RewardService{db: db}
 }
@@ -166,11 +162,6 @@ func (s *RewardService) RegisterService(server *grpc.Server) {
 
 func (s *RewardService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterRewardServiceHandlerServer(context.Background(), mux, s)
-}
-
-// String returns the service name.
-func (s *RewardService) String() string {
-	return "RewardService"
 }
 
 func (s *RewardService) List(

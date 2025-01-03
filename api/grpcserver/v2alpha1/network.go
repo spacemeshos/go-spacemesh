@@ -42,11 +42,6 @@ func (s *NetworkService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterNetworkServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the service name.
-func (s *NetworkService) String() string {
-	return "NetworkService"
-}
-
 func (s *NetworkService) Info(context.Context,
 	*spacemeshv2alpha1.NetworkInfoRequest,
 ) (*spacemeshv2alpha1.NetworkInfoResponse, error) {

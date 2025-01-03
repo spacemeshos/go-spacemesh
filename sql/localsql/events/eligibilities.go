@@ -29,7 +29,7 @@ func InsertEligibility(
 	return nil
 }
 
-func InterateAllEligibilities(
+func IterateAllEligibilities(
 	db sql.Executor,
 	fn func(id types.NodeID, layer types.LayerID, eligibility *types.VotingEligibility) bool,
 ) error {
