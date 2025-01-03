@@ -44,11 +44,6 @@ func (s *PostService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterPostServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *PostService) String() string {
-	return "PostService"
-}
-
 type PostServiceOpt func(*PostService)
 
 func PostServiceQueryInterval(interval time.Duration) PostServiceOpt {

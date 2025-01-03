@@ -45,11 +45,6 @@ func (s *TransactionService) RegisterHandlerService(mux *runtime.ServeMux) error
 	return pb.RegisterTransactionServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *TransactionService) String() string {
-	return "TransactionService"
-}
-
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
 	db sql.StateDatabase,

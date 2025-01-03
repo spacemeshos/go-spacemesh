@@ -45,11 +45,6 @@ func (s *MeshService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterMeshServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *MeshService) String() string {
-	return "MeshService"
-}
-
 // NewMeshService creates a new service using config data.
 func NewMeshService(
 	cdb *datastore.CachedDB,

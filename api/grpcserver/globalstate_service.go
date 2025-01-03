@@ -32,11 +32,6 @@ func (s *GlobalStateService) RegisterHandlerService(mux *runtime.ServeMux) error
 	return pb.RegisterGlobalStateServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of the service.
-func (s *GlobalStateService) String() string {
-	return "GlobalStateService"
-}
-
 // NewGlobalStateService creates a new grpc service using config data.
 func NewGlobalStateService(msh meshAPI, conState conservativeState) *GlobalStateService {
 	return &GlobalStateService{

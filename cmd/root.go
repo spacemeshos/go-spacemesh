@@ -191,8 +191,6 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 
 	flagSet.StringVar(&cfg.API.ProxyApiV2Address, "proxy-api-v2-address", "",
 		"address of the Node API V2 to connect to")
-	flagSet.StringVar(&cfg.API.ProxyListener, "proxy-listener", "",
-		"endpoint to expose proxy via HTTP/JSON.")
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 

@@ -172,10 +172,6 @@ func toLayerRequest(filter *spacemeshv2alpha1.LayerStreamRequest) *spacemeshv2al
 	return req
 }
 
-func (s *LayerStreamService) String() string {
-	return "LayerStreamService"
-}
-
 func NewLayerService(db sql.Executor) *LayerService {
 	return &LayerService{
 		db: db,
@@ -192,11 +188,6 @@ func (s *LayerService) RegisterService(server *grpc.Server) {
 
 func (s *LayerService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterLayerServiceHandlerServer(context.Background(), mux, s)
-}
-
-// String returns the service name.
-func (s *LayerService) String() string {
-	return "LayerService"
 }
 
 func (s *LayerService) List(

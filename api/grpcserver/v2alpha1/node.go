@@ -56,11 +56,6 @@ func (s *NodeService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return spacemeshv2alpha1.RegisterNodeServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the service name.
-func (s *NodeService) String() string {
-	return "NodeService"
-}
-
 func (s *NodeService) Status(ctx context.Context, _ *spacemeshv2alpha1.NodeStatusRequest) (
 	*spacemeshv2alpha1.NodeStatusResponse, error,
 ) {

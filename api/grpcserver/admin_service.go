@@ -65,11 +65,6 @@ func (a *AdminService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterAdminServiceHandlerServer(context.Background(), mux, a)
 }
 
-// String returns the name of this service.
-func (a *AdminService) String() string {
-	return "AdminService"
-}
-
 func (a *AdminService) CheckpointStream(
 	req *pb.CheckpointStreamRequest,
 	stream pb.AdminService_CheckpointStreamServer,

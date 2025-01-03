@@ -41,9 +41,8 @@ func (s *SmeshingIdentitiesService) RegisterHandlerService(mux *runtime.ServeMux
 	return pb.RegisterSmeshingIdentitiesServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *SmeshingIdentitiesService) String() string {
-	return "SmeshingIdentitiesService"
+func (s *SmeshingIdentitiesService) Path() string {
+	return "/spacemesh.v2alpha1.SmeshingIdentitiesService/"
 }
 
 func (s *SmeshingIdentitiesService) States(
