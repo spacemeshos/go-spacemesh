@@ -168,7 +168,7 @@ func (s *P2PHashSync) start() (isWaiting bool) {
 					return ctx.Err()
 				case <-ticker.C:
 					s.logger.Debug("advancing OrderedSet on timer")
-					if err := s.os.Advance(); err != nil {
+					if err := s.syncBase.Advance(); err != nil {
 						s.logger.Error("error advancing the set", zap.Error(err))
 					}
 				}
