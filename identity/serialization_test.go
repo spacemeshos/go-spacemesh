@@ -14,7 +14,7 @@ import (
 
 func RequireEqual(t *testing.T, expected, value *StateInfo) {
 	t.Helper()
-	// NOTE: The `require` doesn't support comparing time.Time after marhsaling
+	// NOTE: The `require` doesn't support comparing time.Time after marshaling
 	// (the monotonic counter is dropped in the process of serialization).
 	// We need to compare the values manually for some types.
 	// See: https://github.com/stretchr/testify/issues/502

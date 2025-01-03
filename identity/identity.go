@@ -41,7 +41,7 @@ func (s *StateStorage) Set(
 
 	stateBytes, err := marshalState(&info)
 	if err != nil {
-		panic(fmt.Sprintf("marhsaling state: %v", err))
+		panic(fmt.Sprintf("marshaling state: %v", err))
 	}
 	if err := events.InsertEvent(s.db, id, info.Time, stateBytes); err != nil {
 		panic(fmt.Sprintf("inserting state into local DB: %v", err))
