@@ -108,7 +108,7 @@ func (s *StateStorage) AddProposal(id types.NodeID, proposal *types.Proposal) {
 
 func (s *StateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
 	proposals := make(map[types.NodeID][]*types.Proposal)
-	events.InterateAllProposals(s.db, func(p types.Proposal) bool {
+	events.IterateAllProposals(s.db, func(p types.Proposal) bool {
 		if _, ok := proposals[p.SmesherID]; !ok {
 			proposals[p.SmesherID] = make([]*types.Proposal, 0)
 		}
@@ -120,7 +120,7 @@ func (s *StateStorage) AllProposals() map[types.NodeID][]*types.Proposal {
 
 func (s *StateStorage) AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility {
 	eligibilities := make(map[types.NodeID]map[types.LayerID][]types.VotingEligibility)
-	events.InterateAllEligibilities(
+	events.IterateAllEligibilities(
 		s.db,
 		func(id types.NodeID, layer types.LayerID, eligibility *types.VotingEligibility) bool {
 			if _, ok := eligibilities[id]; !ok {

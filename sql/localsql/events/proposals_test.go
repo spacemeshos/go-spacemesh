@@ -35,7 +35,7 @@ func TestInsertProposalsAndIterate(t *testing.T) {
 	}
 	slices.SortFunc(proposals, func(a, b types.Proposal) int { return cmp.Compare(a.Layer, b.Layer) })
 	var counter int
-	events.InterateAllProposals(db, func(p types.Proposal) bool {
+	events.IterateAllProposals(db, func(p types.Proposal) bool {
 		require.Equal(t, proposals[counter], p)
 		counter += 1
 		return true

@@ -38,7 +38,7 @@ func TestInsertEligibilitiesAndIterate(t *testing.T) {
 
 	slices.SortFunc(eligibilities, func(a, b eligibility) int { return cmp.Compare(a.layer, b.layer) })
 	var counter int
-	events.InterateAllEligibilities(db, func(id types.NodeID, layer types.LayerID, e *types.VotingEligibility) bool {
+	events.IterateAllEligibilities(db, func(id types.NodeID, layer types.LayerID, e *types.VotingEligibility) bool {
 		got := eligibility{
 			VotingEligibility: *e,
 			id:                id,
