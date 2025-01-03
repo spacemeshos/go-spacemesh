@@ -16,6 +16,9 @@ import (
 type SyncBase interface {
 	// Count returns the number of items in the set.
 	Count() (int, error)
+	// Advance advances the underlying OrderedSet, loading the items since the last Advance call
+	// or when OrderedSet was first loaded.
+	Advance() error
 	// Sync synchronizes the set with the peer.
 	// It returns a sequence of new keys that were received from the peer and the
 	// number of received items.

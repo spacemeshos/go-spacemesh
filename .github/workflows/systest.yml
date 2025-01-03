@@ -118,7 +118,7 @@ jobs:
       - name: Push tests docker images
         run: make -C systest push
 
-  provision-gke-cluster:
+  provision-cluster:
     runs-on: ubuntu-22.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
@@ -174,7 +174,7 @@ jobs:
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
-      - provision-gke-cluster
+      - provision-cluster
       - build-docker-images
     timeout-minutes: 70
     permissions:
@@ -258,7 +258,7 @@ jobs:
           test_id: systest-${{ steps.vars.outputs.sha_short }}
         run: make -C systest clean
 
-  delete-gke-cluster-pool:
+  delete-pool:
     runs-on: ubuntu-22.04
     if: always()
     needs:
@@ -296,120 +296,19 @@ jobs:
             --quiet
           echo "Node pool deleted: $NODE_POOL_NAME"
 
-  systest-dedicated-cluster:
-    runs-on: ubuntu-22.04
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    needs:
-      - filter-changes
-      - build-docker-images
-    timeout-minutes: 70
-    permissions:
-      contents: 'read'
-      id-token: 'write'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
-      - name: Setup kubectl
-        uses: azure/setup-kubectl@v4
-        with:
-          version: "v1.27.16"
-
-      - name: Save cluster kubeconfig
-        run: |
-          mkdir -p ${{ github.workspace }}/.kube
-          echo "${{ secrets.CI_KUBECONFIG }}" | base64 -d > ${{ github.workspace }}/.kube/config
-          echo "KUBECONFIG=${{ github.workspace }}/.kube/config" >> $GITHUB_ENV
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - uses: extractions/netrc@v2
-        with:
-          machine: github.com
-          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
-          password: ${{ secrets.GH_ACTION_TOKEN }}
-        if: vars.GOPRIVATE
-
-      - name: Get commit hash
-        id: vars
-        shell: bash
-        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-
-      - uses: extractions/netrc@v2
-        with:
-          machine: github.com
-          username: ${{ secrets.GH_ACTION_TOKEN_USER }}
-          password: ${{ secrets.GH_ACTION_TOKEN }}
-        if: vars.GOPRIVATE
-
-      - name: set up go
-        uses: actions/setup-go@v5
-        with:
-          check-latest: true
-          go-version-file: "go.mod"
-
-      - name: Run tests
-        env:
-          test_id: systest-${{ steps.vars.outputs.sha_short }}
-          storage: default=10Gi
-          node_selector: cluster-type=baremetal
-          size: 20
-          bootstrap: 4m
-          level: ${{ inputs.log_level }}
-          clusters: 4
-          norbac: 1
-        run: make -C systest run test_name=${{ inputs.test_name }}
-
-      - name: Delete pod
-        if: always()
-        env:
-          test_id: systest-${{ steps.vars.outputs.sha_short }}
-        run: make -C systest clean
-
   systest-status:
     if: always()
     needs:
       - filter-changes
       - systest-gke
-      - systest-dedicated-cluster
     runs-on: ubuntu-22.04
+    env:
+      # short-circuit success if no non-doc files were modified
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest-gke.result == 'success') && 'success' || 'failure' }}
     steps:
-      - name: Check test status
-        id: check
-        run: |
-          if [[ "${{ needs.filter-changes.outputs.nondocchanges }}" == "false" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "reason=only documentation changes" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          if [[ "${{ needs.systest-gke.result }}" == "success" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "reason=GKE tests passed" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          if [[ "${{ needs.systest-dedicated-cluster.result }}" == "success" ]]; then
-            echo "status=success" >> $GITHUB_OUTPUT
-            echo "reason=dedicated cluster tests passed" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "status=failure" >> $GITHUB_OUTPUT
-          echo "reason=all tests failed" >> $GITHUB_OUTPUT
-
-      - name: Set final status
-        env:
-          STATUS: ${{ steps.check.outputs.status }}
-          REASON: ${{ steps.check.outputs.reason }}
-        run: |
-          echo "Final status: ${{ steps.check.outputs.status }}"
-          echo "Reason: ${{ steps.check.outputs.reason }}"
-          if [[ "${{ steps.check.outputs.status }}" == "failure" ]]; then
-            exit 1
-          fi
+      - name: Mark the job as succeeded
+        if: env.status == 'success'
+        run: exit 0
+      - name: Mark the job as failed
+        if: env.status != 'success'
+        run: exit 1
