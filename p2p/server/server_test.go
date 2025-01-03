@@ -64,7 +64,7 @@ func TestServer(t *testing.T) {
 	// called will always contain the protocol being added, but due to
 	// how libp2p works, the responses may be processed in reverse
 	// order, and the set of protocols from the initial message will
-	// override the set of protocols in the second mesage (from
+	// override the set of protocols in the second message (from
 	// SetStreamHandler). In this case, the peer will have a wrong
 	// idea about this node's protocols, and the test may fail.
 	mesh, err := mocknet.FullMeshLinked(5)
