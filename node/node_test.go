@@ -52,6 +52,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -347,7 +348,9 @@ func TestProxyingJsonService(t *testing.T) {
 	}
 
 	// Start server
-	serverApp := New(WithConfig(&cfg), WithLog(logtest.New(t)))
+	logger := logtest.New(t)
+	db := localsql.InMemoryTest(t)
+	serverApp := New(WithConfig(&cfg), WithLog(logger.Named("server")))
 	err := serverApp.startAPIServices(context.Background())
 	require.NoError(t, err)
 	defer serverApp.stopServices(context.Background())
@@ -355,8 +358,8 @@ func TestProxyingJsonService(t *testing.T) {
 	// Start client proxying to the server
 	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
 	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Alpha1}
-	clientApp := New(WithConfig(&cfg), WithLog(logtest.New(t)))
-	clientApp.idStates = identity.NewIdentityStateStorage()
+	clientApp := New(WithConfig(&cfg), WithLog(logger.Named("client")))
+	clientApp.idStates = identity.NewIdentityStateStorage(db, logger.Named("idStates").Zap())
 
 	require.NoError(t, clientApp.startAPIServices(context.Background()))
 	defer clientApp.stopServices(context.Background())
@@ -383,7 +386,7 @@ func TestProxyingJsonService(t *testing.T) {
 	)
 
 	nodeID := types.RandomNodeID()
-	clientApp.idStates.Set(nodeID, nil, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
+	clientApp.idStates.Set(nodeID, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
 	respBody, status := callEndpoint(t, endpoint, nil)
 	require.Equal(t, http.StatusOK, status)
 	var resp pbV2.IdentityStatesResponse

@@ -64,7 +64,7 @@ func launchServer(tb testing.TB, db sql.StateDatabase) (grpcserver.Config, func(
 	cfg := grpcserver.DefaultTestConfig()
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
 	jsonService := grpcserver.NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0",
-		[]string{}, false)
+		[]string{}, false, false)
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(tb))
 	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil,
