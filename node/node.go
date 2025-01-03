@@ -638,7 +638,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 
-	app.idStates = identity.NewIdentityStateStorage(app.localDB)
+	app.idStates = identity.NewIdentityStateStorage(app.localDB, app.log.Zap())
 
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),

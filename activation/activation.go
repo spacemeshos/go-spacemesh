@@ -201,7 +201,7 @@ func NewBuilder(
 		logger:            log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postStates:        NewPostStates(log),
-		identitiesStates:  identity.NewIdentityStateStorage(localDB),
+		identitiesStates:  identity.NewIdentityStateStorage(localDB, log),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
 			logger: log,

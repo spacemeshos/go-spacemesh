@@ -101,7 +101,7 @@ func NewNIPostBuilder(
 		layerClock:     layerClock,
 		postStates:     NewPostStates(lg),
 		validator:      validator,
-		identityStates: identity.NewIdentityStateStorage(db),
+		identityStates: identity.NewIdentityStateStorage(db, lg),
 	}
 
 	for _, opt := range opts {
