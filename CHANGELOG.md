@@ -6,8 +6,8 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 ### Upgrade information
 
-The previous release (v1.7.9) contained a bug where if used on other networks than mainnet hare consensus would not be
-compatible to other versions. Mainnet was not affected by this bug and this release fixes the issue.
+The previous release (v1.7.9) contained a bug where, if used on other networks than mainnet, hare consensus would not
+be compatible to other versions. Mainnet was not affected by this bug and this release fixes the issue.
 
 ### Improvements
 
