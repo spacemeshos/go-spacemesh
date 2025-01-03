@@ -2006,6 +2006,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			p, err := proxy.NewServer(
 				app.Config.API.JSONListener,
 				app.Config.API.ProxyApiV2Address,
+				app.Config.API.JSONCorsEverywhere,
 				logger.Zap(),
 				localSvcs...,
 			)

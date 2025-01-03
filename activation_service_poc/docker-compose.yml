@@ -7,7 +7,8 @@ services:
       "-c", "/config.json",
       "--node-service-address", "http://node-service:9099",
       "--grpc-json-listener", "0.0.0.0:9071",
-      "--proxy-api-v2-address", "http://node-service:9070"
+      "--proxy-api-v2-address", "http://node-service:9070",
+      "--json-cors-everywhere"
     ]
     volumes:
       - /tmp/spacemesh-client:/tmp/spacemesh-client
@@ -19,8 +20,10 @@ services:
 
   node-service:
     image: ${IMAGE}
-    command: ["-c", "/config.json",
-              "--grpc-json-listener", "0.0.0.0:9070"]
+    command: [
+      "-c", "/config.json",
+      "--grpc-json-listener", "0.0.0.0:9070",
+    ]
     volumes:
       - /tmp/spacemesh-node-service:/tmp/spacemesh-node-service
       - ./config.standalone.node-service.json:/config.json
