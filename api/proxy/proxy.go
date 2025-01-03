@@ -30,7 +30,12 @@ type Service interface {
 	Path() string
 }
 
-func NewServer(proxyListener, apiAddress string, corsEverywhere bool, logger *zap.Logger, local ...Service) (*Server, error) {
+func NewServer(
+	proxyListener, apiAddress string,
+	corsEverywhere bool,
+	logger *zap.Logger,
+	local ...Service,
+) (*Server, error) {
 	// Validate the API server URL
 	targetURL, err := url.Parse(apiAddress)
 	if err != nil {
