@@ -16,7 +16,7 @@ func (t *ProofDoubleMarry) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.ATX1[:])
+		n, err := scale.EncodeByteArray(enc, t.ATXID1[:])
 		if err != nil {
 			return total, err
 		}
@@ -44,7 +44,7 @@ func (t *ProofDoubleMarry) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.ATX2[:])
+		n, err := scale.EncodeByteArray(enc, t.ATXID2[:])
 		if err != nil {
 			return total, err
 		}
@@ -83,7 +83,7 @@ func (t *ProofDoubleMarry) DecodeScale(dec *scale.Decoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.ATX1[:])
+		n, err := scale.DecodeByteArray(dec, t.ATXID1[:])
 		if err != nil {
 			return total, err
 		}
@@ -111,7 +111,7 @@ func (t *ProofDoubleMarry) DecodeScale(dec *scale.Decoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.ATX2[:])
+		n, err := scale.DecodeByteArray(dec, t.ATXID2[:])
 		if err != nil {
 			return total, err
 		}

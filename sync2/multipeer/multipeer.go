@@ -165,7 +165,7 @@ func DefaultConfig() MultiPeerReconcilerConfig {
 	}
 }
 
-// MultiPeerReconciler reconcilies the local set against multiple remote sets.
+// MultiPeerReconciler reconciles the local set against multiple remote sets.
 type MultiPeerReconciler struct {
 	logger         *zap.Logger
 	cfg            MultiPeerReconcilerConfig

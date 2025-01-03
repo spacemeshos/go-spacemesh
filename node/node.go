@@ -138,6 +138,7 @@ const (
 	ConStateLogger         = "conState"
 	ExecutorLogger         = "executor"
 	MalfeasanceLogger      = "malfeasance"
+	Malfeasance2Logger     = "malfeasance2"
 	BootstrapLogger        = "bootstrap"
 )
 
@@ -838,14 +839,17 @@ func (app *App) initServices(ctx context.Context) error {
 	beaconProtocol.SetSyncState(syncer)
 	hOracle.SetSync(syncer)
 
-	malfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	legacyMalfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
-		malfeasanceLogger,
+		legacyMalfeasanceLogger,
 		app.cachedDB,
 		syncer,
 		trtl,
 		app.host,
 	)
+
+	malfeasanceLogger := app.addLogger(Malfeasance2Logger, lg).Zap()
+	atxMalHandler := activation.NewMalfeasanceHandlerV2()
 
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
@@ -1139,18 +1143,18 @@ func (app *App) initServices(ctx context.Context) error {
 
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,
-		malfeasanceLogger,
+		legacyMalfeasanceLogger,
 		app.edVerifier,
 	)
 	meshMH := mesh.NewMalfeasanceHandler(
 		app.cachedDB,
 		app.edVerifier,
-		mesh.WithMalfeasanceLogger(malfeasanceLogger),
+		mesh.WithMalfeasanceLogger(legacyMalfeasanceLogger),
 	)
 	hareMH := hare3.NewMalfeasanceHandler(
 		app.cachedDB,
 		app.edVerifier,
-		hare3.WithMalfeasanceLogger(malfeasanceLogger),
+		hare3.WithMalfeasanceLogger(legacyMalfeasanceLogger),
 	)
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
@@ -1165,7 +1169,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	malHandler := malfeasance.NewHandler(
 		app.cachedDB,
-		malfeasanceLogger,
+		legacyMalfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
 		trtl,
@@ -1184,6 +1188,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edVerifier,
 		trtl,
 	)
+	malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(

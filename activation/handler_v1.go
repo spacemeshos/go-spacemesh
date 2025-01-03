@@ -510,9 +510,8 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		return fmt.Errorf("store atx: %w", err)
 	}
 
-	added := h.cacheAtx(ctx, atx, malicious)
 	h.beacon.OnAtx(atx)
-	if added != nil {
+	if added := h.cacheAtx(ctx, atx, malicious); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
@@ -630,4 +629,29 @@ func collectAtxDeps(goldenAtxId types.ATXID, atx *wire.ActivationTxV1) (types.Ha
 	}
 
 	return types.BytesToHash(atx.NIPost.PostMetadata.Challenge), maps.Keys(filtered)
+}
+
+// Obtain the signature of the given ATX.
+func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
+	var blob sql.Blob
+	v, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
+	if err != nil {
+		return types.EmptyEdSignature, err
+	}
+
+	if len(blob.Bytes) == 0 {
+		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
+		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
+	}
+
+	switch v {
+	case types.AtxV1:
+		var atx wire.ActivationTxV1
+		if err := codec.Decode(blob.Bytes, &atx); err != nil {
+			return types.EmptyEdSignature, fmt.Errorf("decoding atx v1: %w", err)
+		}
+		return atx.Signature, nil
+	default: // only needed for V1 ATXs
+		return types.EmptyEdSignature, fmt.Errorf("unsupported ATX version: %v", v)
+	}
 }

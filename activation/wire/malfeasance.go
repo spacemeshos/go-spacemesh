@@ -1,11 +1,9 @@
 package wire
 
 import (
-	"context"
+	"fmt"
 
-	"github.com/spacemeshos/go-scale"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/codec"
 )
 
 //go:generate scalegen
@@ -62,15 +60,26 @@ type ProofType byte
 
 const (
 	// TODO(mafa): legacy types for future migration to new malfeasance proofs.
-	LegacyDoublePublish  ProofType = 0x00
-	LegacyInvalidPost    ProofType = 0x01
-	LegacyInvalidPrevATX ProofType = 0x02
+	LegacyDoublePublish  ProofType = 0x01
+	LegacyInvalidPost    ProofType = 0x02
+	LegacyInvalidPrevATX ProofType = 0x03
 
-	DoubleMarry     ProofType = 0x10
-	DoubleMerge     ProofType = 0x11
-	InvalidPost     ProofType = 0x12
-	InvalidPrevious ProofType = 0x13
+	DoubleMarry       ProofType = 0x11
+	DoubleMerge       ProofType = 0x12
+	InvalidPost       ProofType = 0x13
+	InvalidPreviousV1 ProofType = 0x14
+	InvalidPreviousV2 ProofType = 0x15
 )
+
+var proofTypes = map[ProofType]Proof{
+	// TODO(mafa): legacy proofs
+
+	DoubleMarry:       &ProofDoubleMarry{},
+	DoubleMerge:       &ProofDoubleMerge{},
+	InvalidPost:       &ProofInvalidPost{},
+	InvalidPreviousV1: &ProofInvalidPrevAtxV1{},
+	InvalidPreviousV2: &ProofInvalidPrevAtxV2{},
+}
 
 // ProofVersion is an identifier for the version of the proof that is encoded in the ATXProof.
 type ProofVersion byte
@@ -84,10 +93,13 @@ type ATXProof struct {
 	Proof []byte `scale:"max=1048576"` // max size of proof is 1MiB
 }
 
-// Proof is an interface for all types of proofs that can be provided in an ATXProof.
-// Generally the proof should be able to validate itself and be scale encoded.
-type Proof interface {
-	scale.Encodable
-
-	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
+func (p *ATXProof) Decode() (Proof, error) {
+	rst, ok := proofTypes[p.ProofType]
+	if !ok {
+		return nil, fmt.Errorf("unknown ATX malfeasance proof type: 0x%x", p.ProofType)
+	}
+	if err := codec.Decode(p.Proof, rst); err != nil {
+		return nil, fmt.Errorf("decoding ATX malfeasance proof of type 0x%x: %w", p.ProofType, err)
+	}
+	return rst, nil
 }

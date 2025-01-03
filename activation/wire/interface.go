@@ -2,6 +2,9 @@ package wire
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -24,4 +27,16 @@ type MalfeasanceValidator interface {
 
 	// Signature validates the given signature against the given message and public key.
 	Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool
+}
+
+// Proof is an interface for all types of proofs that can be provided in an ATXProof.
+// Generally the proof should be able to validate itself and be scale encoded.
+type Proof interface {
+	scale.Encodable
+	scale.Decodable
+	fmt.Stringer
+
+	Type() ProofType
+	Info() map[string]string
+	Valid(ctx context.Context, malHandler MalfeasanceValidator) (types.NodeID, error)
 }

@@ -163,7 +163,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	builder := activation.NewMockAtxBuilder(ctrl)
+	builder := activation.NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(signer)
 	postSupervisor := activation.NewPostSupervisor(
 		logger.Named("post-supervisor"),

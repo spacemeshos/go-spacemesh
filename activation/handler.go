@@ -20,8 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -128,7 +126,7 @@ func NewHandler(
 			beacon:          beacon,
 			tortoise:        tortoise,
 			malPublisher:    legacyMalPublisher,
-			malPublisher2:   &MalfeasancePublisher{}, // TODO(mafa): pass real publisher when available
+			malPublisher2:   &MalfeasanceHandlerV2{}, // TODO(mafa): pass real publisher when available
 			signers:         make(map[types.NodeID]*signing.EdSigner),
 		},
 
@@ -145,7 +143,7 @@ func NewHandler(
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
-			malPublisher:    &MalfeasancePublisher{}, // TODO(mafa): pass real publisher when available
+			malPublisher:    &MalfeasanceHandlerV2{}, // TODO(mafa): pass real publisher when available
 		},
 	}
 
@@ -291,29 +289,4 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	})
 	h.inProgress.Forget(key)
 	return err
-}
-
-// Obtain the atxSignature of the given ATX.
-func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
-	var blob sql.Blob
-	v, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
-	if err != nil {
-		return types.EmptyEdSignature, err
-	}
-
-	if len(blob.Bytes) == 0 {
-		// An empty blob indicates a golden ATX (after a checkpoint-recovery).
-		return types.EmptyEdSignature, fmt.Errorf("can't get signature for a golden (checkpointed) ATX: %s", id)
-	}
-
-	// TODO: implement for ATX V2
-	switch v {
-	case types.AtxV1:
-		var atx wire.ActivationTxV1
-		if err := codec.Decode(blob.Bytes, &atx); err != nil {
-			return types.EmptyEdSignature, fmt.Errorf("decoding atx v1: %w", err)
-		}
-		return atx.Signature, nil
-	}
-	return types.EmptyEdSignature, fmt.Errorf("unsupported ATX version: %v", v)
 }
