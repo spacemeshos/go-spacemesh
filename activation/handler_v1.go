@@ -631,7 +631,7 @@ func collectAtxDeps(goldenAtxId types.ATXID, atx *wire.ActivationTxV1) (types.Ha
 	return types.BytesToHash(atx.NIPost.PostMetadata.Challenge), maps.Keys(filtered)
 }
 
-// Obtain the atxSignature of the given ATX.
+// Obtain the signature of the given ATX.
 func atxSignature(ctx context.Context, db sql.Executor, id types.ATXID) (types.EdSignature, error) {
 	var blob sql.Blob
 	v, err := atxs.LoadBlob(ctx, db, id.Bytes(), &blob)
