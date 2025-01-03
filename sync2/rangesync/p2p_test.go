@@ -131,7 +131,11 @@ var startDate = time.Date(2024, 8, 29, 18, 0, 0, 0, time.UTC)
 func (frs *fakeRecentSet) registerAll(_ context.Context) error {
 	frs.timestamps = make(map[string]time.Time)
 	t := startDate
-	items, err := frs.OrderedSet.Items().Collect()
+	info, err := frs.OrderedSet.SetInfo()
+	if err != nil {
+		return err
+	}
+	items, err := info.Items.Collect()
 	if err != nil {
 		return err
 	}
@@ -153,8 +157,11 @@ func (frs *fakeRecentSet) Receive(k rangesync.KeyBytes) error {
 
 // Recent implements OrderedSet.
 func (frs *fakeRecentSet) Recent(since time.Time) (rangesync.SeqResult, int) {
-	var items []rangesync.KeyBytes
-	items, err := frs.OrderedSet.Items().Collect()
+	info, err := frs.OrderedSet.SetInfo()
+	if err != nil {
+		return rangesync.ErrorSeqResult(err), 0
+	}
+	items, err := info.Items.Collect()
 	if err != nil {
 		return rangesync.ErrorSeqResult(err), 0
 	}
@@ -291,10 +298,12 @@ func testWireProbe(t *testing.T, getRequester getRequesterFunc) {
 	logger := zap.NewNop()
 	cst, ctx := newClientServerTester(t, st.setA, getRequester, st.cfg, &tr, clock)
 	pss := rangesync.NewPairwiseSetSyncerInternal(logger, cst.client, "test", st.cfg, &tr, clock)
-	itemsA := st.setA.Items()
+	info, err := st.setA.SetInfo()
+	require.NoError(t, err)
+	itemsA := info.Items
 	x, err := itemsA.First()
 	require.NoError(t, err)
-	infoA, err := st.setA.GetRangeInfo(x, x)
+	infoA, err := st.setA.RangeInfo(x, x)
 	require.NoError(t, err)
 	prA, err := pss.Probe(ctx, cst.srvPeerID, st.setB, nil, nil)
 	require.NoError(t, err)

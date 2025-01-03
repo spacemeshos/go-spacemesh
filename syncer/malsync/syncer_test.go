@@ -141,7 +141,7 @@ type tester struct {
 	db           sql.StateDatabase
 	cfg          Config
 	fetcher      *mocks.Mockfetcher
-	clock        clockwork.FakeClock
+	clock        *clockwork.FakeClock
 	received     map[types.NodeID]bool
 	attempts     map[types.NodeID]int
 	peers        []p2p.Peer
@@ -280,16 +280,16 @@ func TestSyncer(t *testing.T) {
 			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
 			return nil
 		})
-		tester.clock.BlockUntil(1)
+		tester.clock.BlockUntilContext(context.Background(), 1)
 		tester.clock.Advance(tester.cfg.IDRequestInterval)
 		ch <- nil
-		tester.clock.BlockUntil(1)
+		tester.clock.BlockUntilContext(context.Background(), 1)
 		tester.clock.Advance(tester.cfg.IDRequestInterval)
 
 		tester.expectGetMaliciousIDs()
 		tester.expectGetProofs(nil)
 		ch <- tester.peers
-		tester.clock.BlockUntil(1)
+		tester.clock.BlockUntilContext(context.Background(), 1)
 		cancel()
 		eg.Wait()
 	})

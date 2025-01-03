@@ -96,8 +96,8 @@ func IterateOps(
 	return err
 }
 
-// Proof returns the malfeasance proof for the given node ID. Returns sql.ErrNotFound if no proof for the given node ID
-// exists. To return a proof for a marriage set use MarriageProof instead.
+// NodeIDProof returns the malfeasance proof and its domain for the given node ID. Returns sql.ErrNotFound if no proof
+// for the given node ID exists. To return a proof for a marriage set use MarriageProof instead.
 func NodeIDProof(db sql.Executor, nodeID types.NodeID) ([]byte, int, error) {
 	var (
 		proof  []byte

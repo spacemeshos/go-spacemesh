@@ -132,9 +132,9 @@ func (s *P2PHashSync) Load() error {
 	if err := s.os.EnsureLoaded(); err != nil {
 		return fmt.Errorf("load set: %w", err)
 	}
-	info, err := s.os.GetRangeInfo(nil, nil)
+	info, err := s.os.SetInfo()
 	if err != nil {
-		return fmt.Errorf("get range info: %w", err)
+		return fmt.Errorf("set info: %w", err)
 	}
 	s.logger.Info("done loading the set",
 		zap.Duration("elapsed", time.Since(start)),
@@ -228,4 +228,10 @@ func (s *P2PHashSync) WaitForSync(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+// SyncCycleCount returns the number of sync cycles that have happened,
+// no matter if they were successful or not.
+func (s *P2PHashSync) SyncCycleCount() int {
+	return s.reconciler.SyncCycleCount()
 }

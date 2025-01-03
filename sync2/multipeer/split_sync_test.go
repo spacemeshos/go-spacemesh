@@ -24,7 +24,7 @@ import (
 type splitSyncTester struct {
 	testing.TB
 	syncPeers     []p2p.Peer
-	clock         clockwork.FakeClock
+	clock         *clockwork.FakeClock
 	mtx           sync.Mutex
 	fail          map[hexRange]bool
 	expPeerRanges map[hexRange]int
@@ -174,7 +174,7 @@ func TestSplitSync_SlowPeers(t *testing.T) {
 		return len(tst.peerRanges) == 2
 	}, 10*time.Millisecond, time.Millisecond)
 	// Make sure all 4 grace period timers are started.
-	tst.clock.BlockUntil(4)
+	tst.clock.BlockUntilContext(context.Background(), 4)
 	tst.clock.Advance(time.Minute)
 	require.NoError(t, eg.Wait())
 	for pr, count := range tst.expPeerRanges {

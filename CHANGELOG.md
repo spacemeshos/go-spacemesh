@@ -2,6 +2,30 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.10
+
+### Upgrade information
+
+The previous release (v1.7.9) contained a bug where, if used on other networks than mainnet, hare consensus would not
+be compatible to other versions. Mainnet was not affected by this bug and this release fixes the issue.
+
+### Improvements
+
+* [#6552](https://github.com/spacemeshos/go-spacemesh/pull/6552) The ATX with the greatest height can now be fetched
+  via the v2alpha1 API.
+
+* [#6558](https://github.com/spacemeshos/go-spacemesh/pull/6558) Reduce the number of needed DB queries in syncv2.
+
+* [#6559](https://github.com/spacemeshos/go-spacemesh/pull/6559) Further reduce the number of needed DB queries in
+  syncv2.
+
+* [#6579](https://github.com/spacemeshos/go-spacemesh/pull/6579) Fix a bug where Hare Committee size was not correctly
+  set for non-mainnet networks.
+
+* [#6575](https://github.com/spacemeshos/go-spacemesh/pull/6575) Removal of a possible deadlock in query cache.
+
+* [#6576](https://github.com/spacemeshos/go-spacemesh/pull/6576) More reductions in the number of DB queries in syncv2.
+
 ## v1.7.9
 
 ### Upgrade information

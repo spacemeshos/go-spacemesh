@@ -118,45 +118,6 @@ func (c *MockOrderedSetAdvanceCall) DoAndReturn(f func() error) *MockOrderedSetA
 	return c
 }
 
-// Empty mocks base method.
-func (m *MockOrderedSet) Empty() (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Empty")
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Empty indicates an expected call of Empty.
-func (mr *MockOrderedSetMockRecorder) Empty() *MockOrderedSetEmptyCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Empty", reflect.TypeOf((*MockOrderedSet)(nil).Empty))
-	return &MockOrderedSetEmptyCall{Call: call}
-}
-
-// MockOrderedSetEmptyCall wrap *gomock.Call
-type MockOrderedSetEmptyCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetEmptyCall) Return(arg0 bool, arg1 error) *MockOrderedSetEmptyCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetEmptyCall) Do(f func() (bool, error)) *MockOrderedSetEmptyCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetEmptyCall) DoAndReturn(f func() (bool, error)) *MockOrderedSetEmptyCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // EnsureLoaded mocks base method.
 func (m *MockOrderedSet) EnsureLoaded() error {
 	m.ctrl.T.Helper()
@@ -191,45 +152,6 @@ func (c *MockOrderedSetEnsureLoadedCall) Do(f func() error) *MockOrderedSetEnsur
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockOrderedSetEnsureLoadedCall) DoAndReturn(f func() error) *MockOrderedSetEnsureLoadedCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// GetRangeInfo mocks base method.
-func (m *MockOrderedSet) GetRangeInfo(x, y rangesync.KeyBytes) (rangesync.RangeInfo, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRangeInfo", x, y)
-	ret0, _ := ret[0].(rangesync.RangeInfo)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRangeInfo indicates an expected call of GetRangeInfo.
-func (mr *MockOrderedSetMockRecorder) GetRangeInfo(x, y any) *MockOrderedSetGetRangeInfoCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRangeInfo", reflect.TypeOf((*MockOrderedSet)(nil).GetRangeInfo), x, y)
-	return &MockOrderedSetGetRangeInfoCall{Call: call}
-}
-
-// MockOrderedSetGetRangeInfoCall wrap *gomock.Call
-type MockOrderedSetGetRangeInfoCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetGetRangeInfoCall) Return(arg0 rangesync.RangeInfo, arg1 error) *MockOrderedSetGetRangeInfoCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetGetRangeInfoCall) Do(f func(rangesync.KeyBytes, rangesync.KeyBytes) (rangesync.RangeInfo, error)) *MockOrderedSetGetRangeInfoCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetGetRangeInfoCall) DoAndReturn(f func(rangesync.KeyBytes, rangesync.KeyBytes) (rangesync.RangeInfo, error)) *MockOrderedSetGetRangeInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -273,44 +195,6 @@ func (c *MockOrderedSetHasCall) DoAndReturn(f func(rangesync.KeyBytes) (bool, er
 	return c
 }
 
-// Items mocks base method.
-func (m *MockOrderedSet) Items() rangesync.SeqResult {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Items")
-	ret0, _ := ret[0].(rangesync.SeqResult)
-	return ret0
-}
-
-// Items indicates an expected call of Items.
-func (mr *MockOrderedSetMockRecorder) Items() *MockOrderedSetItemsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Items", reflect.TypeOf((*MockOrderedSet)(nil).Items))
-	return &MockOrderedSetItemsCall{Call: call}
-}
-
-// MockOrderedSetItemsCall wrap *gomock.Call
-type MockOrderedSetItemsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockOrderedSetItemsCall) Return(arg0 rangesync.SeqResult) *MockOrderedSetItemsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetItemsCall) Do(f func() rangesync.SeqResult) *MockOrderedSetItemsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetItemsCall) DoAndReturn(f func() rangesync.SeqResult) *MockOrderedSetItemsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Loaded mocks base method.
 func (m *MockOrderedSet) Loaded() bool {
 	m.ctrl.T.Helper()
@@ -345,6 +229,45 @@ func (c *MockOrderedSetLoadedCall) Do(f func() bool) *MockOrderedSetLoadedCall {
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockOrderedSetLoadedCall) DoAndReturn(f func() bool) *MockOrderedSetLoadedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// RangeInfo mocks base method.
+func (m *MockOrderedSet) RangeInfo(x, y rangesync.KeyBytes) (rangesync.RangeInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RangeInfo", x, y)
+	ret0, _ := ret[0].(rangesync.RangeInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RangeInfo indicates an expected call of RangeInfo.
+func (mr *MockOrderedSetMockRecorder) RangeInfo(x, y any) *MockOrderedSetRangeInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RangeInfo", reflect.TypeOf((*MockOrderedSet)(nil).RangeInfo), x, y)
+	return &MockOrderedSetRangeInfoCall{Call: call}
+}
+
+// MockOrderedSetRangeInfoCall wrap *gomock.Call
+type MockOrderedSetRangeInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockOrderedSetRangeInfoCall) Return(arg0 rangesync.RangeInfo, arg1 error) *MockOrderedSetRangeInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockOrderedSetRangeInfoCall) Do(f func(rangesync.KeyBytes, rangesync.KeyBytes) (rangesync.RangeInfo, error)) *MockOrderedSetRangeInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockOrderedSetRangeInfoCall) DoAndReturn(f func(rangesync.KeyBytes, rangesync.KeyBytes) (rangesync.RangeInfo, error)) *MockOrderedSetRangeInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -460,6 +383,45 @@ func (c *MockOrderedSetRecentCall) Do(f func(time.Time) (rangesync.SeqResult, in
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockOrderedSetRecentCall) DoAndReturn(f func(time.Time) (rangesync.SeqResult, int)) *MockOrderedSetRecentCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// SetInfo mocks base method.
+func (m *MockOrderedSet) SetInfo() (rangesync.RangeInfo, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetInfo")
+	ret0, _ := ret[0].(rangesync.RangeInfo)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetInfo indicates an expected call of SetInfo.
+func (mr *MockOrderedSetMockRecorder) SetInfo() *MockOrderedSetSetInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetInfo", reflect.TypeOf((*MockOrderedSet)(nil).SetInfo))
+	return &MockOrderedSetSetInfoCall{Call: call}
+}
+
+// MockOrderedSetSetInfoCall wrap *gomock.Call
+type MockOrderedSetSetInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockOrderedSetSetInfoCall) Return(arg0 rangesync.RangeInfo, arg1 error) *MockOrderedSetSetInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockOrderedSetSetInfoCall) Do(f func() (rangesync.RangeInfo, error)) *MockOrderedSetSetInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockOrderedSetSetInfoCall) DoAndReturn(f func() (rangesync.RangeInfo, error)) *MockOrderedSetSetInfoCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

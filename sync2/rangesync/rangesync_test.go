@@ -65,9 +65,13 @@ func makeSet(items string) *rangesync.DumbSet {
 }
 
 func setStr(os rangesync.OrderedSet) string {
-	ids, err := os.Items().Collect()
+	info, err := os.SetInfo()
 	if err != nil {
-		panic("set error: " + err.Error())
+		panic("set info error: " + err.Error())
+	}
+	ids, err := info.Items.Collect()
+	if err != nil {
+		panic("collect items error: " + err.Error())
 	}
 	var r strings.Builder
 	for _, id := range ids {
@@ -446,9 +450,13 @@ func newHashSyncTester(tb testing.TB, cfg hashSyncTestConfig) *hashSyncTester {
 }
 
 func (st *hashSyncTester) verify(setA, setB rangesync.OrderedSet) {
-	itemsA, err := setA.Items().Collect()
+	infoA, err := setA.SetInfo()
 	require.NoError(st.tb, err)
-	itemsB, err := setB.Items().Collect()
+	itemsA, err := infoA.Items.Collect()
+	require.NoError(st.tb, err)
+	infoB, err := setB.SetInfo()
+	require.NoError(st.tb, err)
+	itemsB, err := infoB.Items.Collect()
 	require.NoError(st.tb, err)
 	require.Equal(st.tb, itemsA, itemsB)
 	require.Equal(st.tb, st.src, itemsA)

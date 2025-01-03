@@ -66,7 +66,6 @@ func TestSetSyncBase(t *testing.T) {
 	t.Run("sync", func(t *testing.T) {
 		t.Parallel()
 		st := newSetSyncBaseTester(t, nil)
-
 		os := st.expectCopy()
 		x := rangesync.RandomKeyBytes(32)
 		y := rangesync.RandomKeyBytes(32)
@@ -90,27 +89,10 @@ func TestSetSyncBase(t *testing.T) {
 		st.ssb.Sync(context.Background(), p2p.Peer("p1"), x, y)
 	})
 
-	t.Run("count empty", func(t *testing.T) {
+	t.Run("count", func(t *testing.T) {
 		t.Parallel()
 		st := newSetSyncBaseTester(t, nil)
-
-		st.os.EXPECT().Empty().Return(true, nil)
-		count, err := st.ssb.Count()
-		require.NoError(t, err)
-		require.Zero(t, count)
-	})
-
-	t.Run("count non-empty", func(t *testing.T) {
-		t.Parallel()
-		st := newSetSyncBaseTester(t, nil)
-
-		st.os.EXPECT().Empty().Return(false, nil)
-		items := []rangesync.KeyBytes{
-			rangesync.RandomKeyBytes(32),
-			rangesync.RandomKeyBytes(32),
-		}
-		st.os.EXPECT().Items().Return(rangesync.MakeSeqResult(items))
-		st.os.EXPECT().GetRangeInfo(items[0], items[0]).Return(rangesync.RangeInfo{Count: 2}, nil)
+		st.os.EXPECT().SetInfo().Return(rangesync.RangeInfo{Count: 2}, nil)
 		count, err := st.ssb.Count()
 		require.NoError(t, err)
 		require.Equal(t, 2, count)
