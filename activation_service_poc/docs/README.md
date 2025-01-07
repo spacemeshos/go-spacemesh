@@ -51,11 +51,12 @@ docker-compose -f docker-compose-testnet-remote-node.yml [...]
 1. Clone the repository and switch to the `node-split-poc` branch
 ```
 git clone https://github.com/spacemeshos/go-spacemesh.git
+cd go-spacemesh
 git checkout node-split-poc
 ```
-2. Change directory to the repository and demo directory
+2. Change directory to the demo directory
 ```
-cd go-spacemesh/activation_service_poc/demo
+cd activation_service_poc/demo
 ```
 3. You should see the following files in the directory
 ```
@@ -75,7 +76,7 @@ docker compose ps
 //TODO add the output of the command @pigmej
 
 
-You'll also be able to connect to the node's UI by visiting `https://https://smesher-alpha.spacemesh.network/` in your browser. This is a PoC of the smesher service UI and is not intended to be a production-ready implementation. It uses the smesher service API directly to interact with the smesher service. It's fully open source and the code can be found [here](https://github.com/spacemeshos/smesher-app).
+You'll also be able to connect to the node's UI by visiting `https://smesher-alpha.spacemesh.network/` in your browser. This is a PoC of the smesher service UI and is not intended to be a production-ready implementation. It uses the smesher service API directly to interact with the smesher service. It's fully open source and the code can be found [here](https://github.com/spacemeshos/smesher-app).
 //TODO make sure that it actually is opened publicly already @pigmej
 
 The first time you open the UI it will be mostly empty as you're running a fresh smeshing service and therefore don't yet have eligibility. Testnet epochs are 24 hours long, so you'll need to wait for the next epoch to start smeshing. You can check the epoch number and exact timing in the UI.
