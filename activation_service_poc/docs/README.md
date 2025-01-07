@@ -78,6 +78,11 @@ docker compose ps
 You'll also be able to connect to the node's UI by visiting `https://https://smesher-alpha.spacemesh.network/` in your browser. This is a PoC of the smesher service UI and is not intended to be a production-ready implementation. It uses the smesher service API directly to interact with the smesher service. It's fully open source and the code can be found [here](https://github.com/spacemeshos/smesher-app).
 //TODO make sure that it actually is opened publicly already @pigmej
 
+The first time you open the UI it will be mostly empty as you're running a fresh smeshing service and therefore don't yet have eligibility. Testnet epochs are 24 hours long, so you'll need to wait for the next epoch to start smeshing. You can check the epoch number and exact timing in the UI.
+
+After a few epochs you should see a UI that looks similar to:
+![smesher-ui.png](smesher-ui.png)
+
 
 ## Interacting with the PoC
 
