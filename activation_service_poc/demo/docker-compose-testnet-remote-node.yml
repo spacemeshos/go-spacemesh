@@ -1,0 +1,281 @@
+services:
+  activation-service-remote-1:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://testnet-16-node-service.spacemesh.network:9099",
+        "--grpc-json-listener",
+        "0.0.0.0:19071",
+        "--proxy-api-v2-address",
+        "http://testnet-16-node-service.spacemesh.network",
+        "--grpc-public-listener",
+        "0.0.0.0:19082",
+        "--grpc-private-listener",
+        "0.0.0.0:19083",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-remote-1:/tmp/spacemesh-client
+      - ./config.testnet-16-smesher-service.json:/config.json
+    ports:
+      - 19071:19071
+      - 19072:19072
+      - 19082:19082
+      - 19083:19083
+
+  activation-service-remote-2:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://testnet-16-node-service.spacemesh.network:9099",
+        "--grpc-json-listener",
+        "0.0.0.0:19171",
+        "--proxy-api-v2-address",
+        "http://testnet-16-node-service.spacemesh.network",
+        "--grpc-public-listener",
+        "0.0.0.0:19182",
+        "--grpc-private-listener",
+        "0.0.0.0:19183",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-remote-2:/tmp/spacemesh-client
+      - ./config.testnet-16-smesher-service.json:/config.json
+    ports:
+      - 19171:19171
+      - 19172:19172
+      - 19182:19182
+      - 19183:19183
+
+  activation-service-3:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19371",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19060",
+        "--grpc-public-listener",
+        "0.0.0.0:19382",
+        "--grpc-private-listener",
+        "0.0.0.0:19383",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-3:/tmp/spacemesh-client
+      - ./config.testnet.client.merged.json:/config.json
+    ports:
+      - 19371:19371
+      - 19372:19372
+      - 19382:19382
+      - 19383:19383
+
+  activation-service-4:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19471",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19460",
+        "--grpc-public-listener",
+        "0.0.0.0:19482",
+        "--grpc-private-listener",
+        "0.0.0.0:19483",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-4:/tmp/spacemesh-client
+      - ./config.testnet.client.merged.json:/config.json
+    ports:
+      - 19471:19471
+      - 19472:19472
+      - 19482:19482
+      - 19483:19483
+
+  activation-service-5:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19571",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19560",
+        "--grpc-public-listener",
+        "0.0.0.0:19582",
+        "--grpc-private-listener",
+        "0.0.0.0:19583",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-5:/tmp/spacemesh-client
+      - ./config.testnet.client.merged.json:/config.json
+    ports:
+      - 19571:19571
+      - 19572:19572
+      - 19582:19582
+      - 19583:19583
+
+  activation-service-6:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19671",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19660",
+        "--grpc-public-listener",
+        "0.0.0.0:19682",
+        "--grpc-private-listener",
+        "0.0.0.0:19683",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-6:/tmp/spacemesh-client
+      - ./config.testnet.client.merged.json:/config.json
+    ports:
+      - 19671:19671
+      - 19672:19672
+      - 19682:19682
+      - 19683:19683
+
+  activation-service-7:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19771",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19760",
+        "--grpc-public-listener",
+        "0.0.0.0:19782",
+        "--grpc-private-listener",
+        "0.0.0.0:19783",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-7:/tmp/spacemesh-client
+      - ./config.testnet.client.merged.json:/config.json
+    ports:
+      - 19771:19771
+      - 19772:19772
+      - 19782:19782
+      - 19783:19783
+
+  activation-service-8:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19871",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19860",
+        "--grpc-public-listener",
+        "0.0.0.0:19882",
+        "--grpc-private-listener",
+        "0.0.0.0:19883",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-8:/tmp/spacemesh-client
+      - ./config.testnet.client.merged.json:/config.json
+    ports:
+      - 19871:19871
+      - 19872:19872
+      - 19882:19882
+      - 19883:19883
+
+  activation-service-9:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19971",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19960",
+        "--grpc-public-listener",
+        "0.0.0.0:19982",
+        "--grpc-private-listener",
+        "0.0.0.0:19983",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-9:/tmp/spacemesh-client
+      - ./config.testnet.client.merged.json:/config.json
+    ports:
+      - 19971:19971
+      - 19972:19972
+      - 19982:19982
+      - 19983:19983
+
+    # networks:
+    #   - spacemesh-testnet
+
+  node-service-multi:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    command: [
+        "-c",
+        "/config.json",
+        "--grpc-json-listener",
+        "0.0.0.0:19060",
+        "--grpc-public-listener",
+        "0.0.0.0:19062",
+        "--grpc-private-listener",
+        "0.0.0.0:19063",
+        # "--node-service-listener",
+        # "0.0.0.0:19099", ## this is somehow not exposed via CLI
+      ]
+    volumes:
+      - ./spacemesh-node-service-multi:/tmp/spacemesh-node-service
+      - ./config.testnet.node-service.merged-multi.json:/config.json
+    # networks:
+    #   - spacemesh-testnet
+    ports:
+      - 19062:19062
+      - 19063:19063
+      - 19060:19060
+      - 19099:19099
