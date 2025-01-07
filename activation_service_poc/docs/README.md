@@ -96,3 +96,32 @@ In addition to the existing v2 API, there is `spacemesh.v2alpha1.SmeshingIdentit
 
 >[!NOTE]
 Please note that currently the state persistence is implemented with some simplifications. States persist across restarts but you will see some duplicates in the list of states. This is a known issue that will be fixed in the final implementation.
+
+
+## Stopping the setup
+
+To stop all the containers you can use the following command:
+
+```docker compose -f docker-compose-testnet-both-local.yml down```
+
+
+## Extra content
+
+### What are these magic ports used in the docker-compose files?
+
+All ports except the one ending with `99` are standard ports used in normal/current go-spacemesh setups. The port ending with `99` is used by the node to expose its API for the smesher service. This port number may change in the future, as it was selected specifically for this PoC.
+These different APIs will likely be combined under the same endpoint later, but for simplicity and flexibility they are separated in this PoC.
+
+### What about the `--json-cors-everywhere` flag?
+
+This is a new flag introduced for the PoC. It configures the node to add CORS headers to all responses, which allows the browser-based UI to query the smesher service API.
+While this is not a final solution and will be replaced with a more secure one in the future, please note that this API does not expose any sensitive data.
+
+### Running the PoC without Docker
+
+Use the attached configs, replicate the command line and run the binary files:
+
+1. Download the most recent release of node-split-poc go-spacemesh from the [releases page](https://github.com/spacemeshos/go-spacemesh/releases).
+// TODO check the link to the releases @pigmej
+2. Extract the archive and copy the config files (*.json)
+3. Run the binary or binaries using the same commands specified in the docker-compose file.
