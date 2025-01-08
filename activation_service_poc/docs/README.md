@@ -67,20 +67,20 @@ docker-compose-testnet-remote-node.yml
 ```
 4. Run the docker-compose command according to your chosen setup. For example, to run the setup with locally running node and smesher service, run:
 ```
-docker-compose -f docker-compose-testnet-both-local.yml up -d
+docker-compose -f docker-compose-testnet-remote-node.yml up -d
 ```
 
 After all the steps are done please give each smesher service a while to initialize POST and generate inital post proof. This may take up to a few minutes.
 
 If all steps are followed correctly, you should see three new Docker containers running. You can check the status of the containers using:
 ```
-docker compose ps
+$ docker compose -f docker-compose-testnet-remote-node.yml ps
+NAME                                 IMAGE                                    COMMAND                  SERVICE                       CREATED          STATUS          PORTS
+demo-activation-service-remote-1-1   spacemeshos/go-spacemesh-dev:2c898bb30   "/bin/go-spacemesh -…"   activation-service-remote-1   39 minutes ago   Up 39 minutes
+demo-activation-service-remote-2-1   spacemeshos/go-spacemesh-dev:2c898bb30   "/bin/go-spacemesh -…"   activation-service-remote-2   39 minutes ago   Up 39 minutes
 ```
-//TODO add the output of the command @pigmej
-
 
 You'll also be able to connect to the node's UI by visiting `https://smesher-alpha.spacemesh.network/` in your browser. This is a PoC of the smesher service UI and is not intended to be a production-ready implementation. It uses the smesher service API directly to interact with the smesher service. It's fully open source and the code can be found [here](https://github.com/spacemeshos/smesher-app).
-//TODO make sure that it actually is opened publicly already @pigmej
 
 The first time you open the UI it will be mostly empty as you're running a fresh smeshing service and therefore don't yet have eligibility. Testnet epochs are 24 hours long, so you'll need to wait for the next epoch to start smeshing. You can check the epoch number and exact timing in the UI.
 
