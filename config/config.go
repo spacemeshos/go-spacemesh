@@ -122,6 +122,7 @@ type BaseConfig struct {
 	DatabaseQueryCache           bool                    `mapstructure:"db-query-cache"`
 	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
 	DatabaseSchemaAllowDrift     bool                    `mapstructure:"db-allow-schema-drift"`
+	DatabaseConnIdleTimeout      time.Duration           `mapstructure:"db-conn-idle-timeout"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -240,9 +241,10 @@ func defaultBaseConfig() BaseConfig {
 			ATXBlob:       10000,
 			ActiveSetBlob: 200,
 		},
-		NetworkHRP:     "sm",
-		ATXGradeDelay:  10 * time.Second,
-		PostValidDelay: 12 * time.Hour,
+		DatabaseConnIdleTimeout: 10 * time.Millisecond,
+		NetworkHRP:              "sm",
+		ATXGradeDelay:           10 * time.Second,
+		PostValidDelay:          12 * time.Hour,
 
 		PprofHTTPServerListener: "localhost:6060",
 	}

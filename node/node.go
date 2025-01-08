@@ -2019,6 +2019,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 			atxs.CacheKindATXBlob:             app.Config.DatabaseQueryCacheSizes.ATXBlob,
 			activesets.CacheKindActiveSetBlob: app.Config.DatabaseQueryCacheSizes.ActiveSetBlob,
 		}),
+		sql.WithConnIdleTimeout(app.Config.DatabaseConnIdleTimeout),
+		sql.WithDBName("state"),
 	}
 	sqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
 	if err != nil {
@@ -2033,6 +2035,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithConnections(app.Config.API.DatabaseConnections),
 		sql.WithNoCheckSchemaDrift(), // already checked above
 		sql.WithMigrationsDisabled(),
+		sql.WithConnIdleTimeout(app.Config.DatabaseConnIdleTimeout),
+		sql.WithDBName("state-api"),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db: %w", err)
@@ -2081,6 +2085,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		sql.WithDatabaseSchema(lSchema),
 		sql.WithConnections(app.Config.DatabaseConnections),
 		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
+		sql.WithConnIdleTimeout(app.Config.DatabaseConnIdleTimeout),
+		sql.WithDBName("local"),
 	)
 	if err != nil {
 		return fmt.Errorf("open sqlite db: %w", err)

@@ -19,6 +19,7 @@ import (
 	"github.com/go-llsqlite/crawshaw/sqlitex"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -70,6 +71,7 @@ func defaultConf() *conf {
 		schema:                     &Schema{},
 		checkSchemaDrift:           true,
 		handleIncompleteMigrations: true,
+		connIdleTimeout:            10 * time.Millisecond,
 	}
 }
 
@@ -91,6 +93,8 @@ type conf struct {
 	handleIncompleteMigrations bool
 	exclusive                  bool
 	readOnly                   bool
+	dbName                     string
+	connIdleTimeout            time.Duration
 }
 
 // WithConnections overwrites number of pooled connections.
@@ -191,6 +195,23 @@ func withForceFresh() Opt {
 func WithTemp() Opt {
 	return func(c *conf) {
 		c.temp = true
+	}
+}
+
+// WithDBName sets the name of the database which is used for metrics.
+func WithDBName(name string) Opt {
+	return func(c *conf) {
+		c.dbName = name
+	}
+}
+
+// WithConnIdleTimeout sets idle timeout for connections from the pool
+// which are acquired upon first statement executed against a Connection
+// passed to the callback of Database.WithConnection. After the timeout,
+// the connection is released back to the pool until the next statement.
+func WithConnIdleTimeout(timeout time.Duration) Opt {
+	return func(c *conf) {
+		c.connIdleTimeout = timeout
 	}
 }
 
@@ -307,7 +328,7 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 			return nil, fmt.Errorf("create db %s: %w", config.uri, err)
 		}
 	}
-	db = &sqliteDatabase{pool: pool}
+	db = &sqliteDatabase{pool: pool, connIdleTimeout: config.connIdleTimeout}
 	defer func() {
 		// If something goes wrong, close the database even in case of a
 		// panic. This is important for tests that verify incomplete migration.
@@ -322,6 +343,10 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 	if err != nil {
 		db.Close()
 		return nil, err
+	}
+	if config.dbName != "" {
+		actualDB.connWaitLatency = ConnWaitLatency.WithLabelValues(config.dbName)
+		actualDB.poolUsage = PoolUsage.WithLabelValues(config.dbName)
 	}
 	return actualDB, nil
 }
@@ -654,6 +679,11 @@ type sqliteDatabase struct {
 
 	interceptMtx sync.Mutex
 	interceptors map[string]Interceptor
+
+	connWaitLatency prometheus.Observer
+	poolUsage       prometheus.Gauge
+
+	connIdleTimeout time.Duration
 }
 
 var _ Database = &sqliteDatabase{}
@@ -661,10 +691,18 @@ var _ Database = &sqliteDatabase{}
 func (db *sqliteDatabase) getConn(ctx context.Context) *sqlite.Conn {
 	start := time.Now()
 	conn := db.pool.Get(ctx)
-	if conn != nil {
-		connWaitLatency.Observe(time.Since(start).Seconds())
+	if conn != nil && db.connWaitLatency != nil {
+		db.connWaitLatency.Observe(time.Since(start).Seconds())
+		db.poolUsage.Inc()
 	}
 	return conn
+}
+
+func (db *sqliteDatabase) putConn(conn *sqlite.Conn) {
+	db.pool.Put(conn)
+	if db.poolUsage != nil {
+		db.poolUsage.Dec()
+	}
 }
 
 func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx, error) {
@@ -680,7 +718,7 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	tx := &sqliteTx{queryCache: db.queryCache, db: db, conn: conn, freeConn: cancel}
 	if err := tx.begin(initstmt); err != nil {
 		cancel()
-		db.pool.Put(conn)
+		db.putConn(conn)
 		return nil, err
 	}
 	return tx, nil
@@ -707,7 +745,7 @@ func (db *sqliteDatabase) startExclusive() error {
 	if conn == nil {
 		return ErrNoConnection
 	}
-	defer db.pool.Put(conn)
+	defer db.putConn(conn)
 	// We don't need to wait for long if the database is busy
 	conn.SetBusyTimeout(1 * time.Millisecond)
 	// From SQLite docs:
@@ -787,7 +825,7 @@ func (db *sqliteDatabase) Exec(query string, encoder Encoder, decoder Decoder) (
 	if conn == nil {
 		return 0, ErrNoConnection
 	}
-	defer db.pool.Put(conn)
+	defer db.putConn(conn)
 	if db.latency != nil {
 		start := time.Now()
 		defer func() {
@@ -812,18 +850,17 @@ func (db *sqliteDatabase) Close() error {
 }
 
 // WithConnection implements Database.
-func (db *sqliteDatabase) WithConnection(ctx context.Context, exec func(Executor) error) error {
+func (db *sqliteDatabase) WithConnection(ctx context.Context, toCall func(Executor) error) error {
 	if db.closed {
 		return ErrClosed
 	}
 	conCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	conn := db.getConn(conCtx)
-	if conn == nil {
-		return ErrNoConnection
-	}
-	defer db.pool.Put(conn)
-	return exec(&sqliteConn{queryCache: db.queryCache, db: db, conn: conn})
+	c := newLazyConn(conCtx, db)
+	defer func() {
+		cancel()
+		c.release()
+	}()
+	return toCall(c)
 }
 
 // Intercept adds an interceptor function to the database. The interceptor functions
@@ -1120,7 +1157,7 @@ func (tx *sqliteTx) Commit() error {
 
 // Release transaction. Every transaction that was created must be released.
 func (tx *sqliteTx) Release() error {
-	defer tx.db.pool.Put(tx.conn)
+	defer tx.db.putConn(tx.conn)
 	if tx.committed {
 		tx.freeConn()
 		return nil
@@ -1147,13 +1184,83 @@ func (tx *sqliteTx) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 	return exec(tx.conn, query, encoder, decoder)
 }
 
-type sqliteConn struct {
+// lazyConn is a connection that is acquired lazily from the pool, that is, upon the first
+// query, and released after a certain period of inactivity.
+type lazyConn struct {
 	*queryCache
-	db   *sqliteDatabase
-	conn *sqlite.Conn
+	db      *sqliteDatabase
+	getConn func() *sqlite.Conn
+	eg      errgroup.Group
+	conn    *sqlite.Conn
+	timer   *time.Timer
+	doneCh  chan struct{}
+	connMtx sync.Mutex
 }
 
-func (c *sqliteConn) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
+func newLazyConn(ctx context.Context, db *sqliteDatabase) *lazyConn {
+	return &lazyConn{
+		queryCache: db.queryCache,
+		db:         db,
+		getConn: func() *sqlite.Conn {
+			return db.getConn(ctx)
+		},
+	}
+}
+
+func (c *lazyConn) ensureConn() *sqlite.Conn {
+	if c.conn != nil {
+		return c.conn
+	}
+
+	c.conn = c.getConn()
+	if c.timer == nil {
+		c.timer = time.NewTimer(c.db.connIdleTimeout)
+		c.eg.Go(func() error {
+			for {
+				select {
+				case <-c.timer.C:
+					// Although TryLock docs say that it's not recommended to use it
+					// in most cases, this use case is justified.
+					// If the mutex is already locked here, this means that an SQL
+					// statement is being executed on the connection, after which
+					// the idle timer will be restarted, or the connection is currently
+					// being released.
+					if c.connMtx.TryLock() {
+						c.releaseConn()
+						c.connMtx.Unlock()
+					}
+				case <-c.doneCh:
+					return nil
+				}
+			}
+		})
+		c.doneCh = make(chan struct{})
+	} else {
+		c.timer.Reset(c.db.connIdleTimeout)
+	}
+	return c.conn
+}
+
+func (c *lazyConn) releaseConn() {
+	if c.conn != nil {
+		c.timer.Stop()
+		c.db.putConn(c.conn)
+		c.conn = nil
+	}
+}
+
+func (c *lazyConn) release() {
+	// Lock the mutex so that we don't get concurrent releaseConn() from the timer handler.
+	c.connMtx.Lock()
+	defer c.connMtx.Unlock()
+	c.releaseConn()
+	if c.doneCh != nil {
+		close(c.doneCh)
+		c.eg.Wait()
+	}
+}
+
+func (c *lazyConn) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	if err := c.db.runInterceptors(query); err != nil {
 		return 0, fmt.Errorf("running query interceptors: %w", err)
 	}
@@ -1165,7 +1272,13 @@ func (c *sqliteConn) Exec(query string, encoder Encoder, decoder Decoder) (int, 
 			c.db.latency.WithLabelValues(query).Observe(float64(time.Since(start)))
 		}()
 	}
-	return exec(c.conn, query, encoder, decoder)
+	c.connMtx.Lock()
+	defer c.connMtx.Unlock()
+	conn := c.ensureConn()
+	defer func() {
+		c.timer.Reset(c.db.connIdleTimeout)
+	}()
+	return exec(conn, query, encoder, decoder)
 }
 
 func mapSqliteError(err error) error {

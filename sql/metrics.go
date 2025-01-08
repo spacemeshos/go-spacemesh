@@ -6,7 +6,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
-const namespace = "database"
+const (
+	namespace = "database"
+	dbLabel   = "db"
+)
 
 func newQueryLatency() *prometheus.HistogramVec {
 	return metrics.NewHistogramWithBuckets(
@@ -18,10 +21,19 @@ func newQueryLatency() *prometheus.HistogramVec {
 	)
 }
 
-var connWaitLatency = metrics.NewHistogramWithBuckets(
-	"conn_wait_seconds",
-	namespace,
-	"time spent in waiting for a connection from a pool",
-	[]string{},
-	prometheus.ExponentialBuckets(0.01, 2, 20),
-).WithLabelValues()
+var (
+	ConnWaitLatency = metrics.NewHistogramWithBuckets(
+		"conn_wait_seconds",
+		namespace,
+		"time spent in waiting for a connection from a pool",
+		[]string{dbLabel},
+		prometheus.ExponentialBuckets(0.01, 2, 20),
+	)
+
+	PoolUsage = metrics.NewGauge(
+		"pool_usage",
+		namespace,
+		"number of connections in use",
+		[]string{dbLabel},
+	)
+)
