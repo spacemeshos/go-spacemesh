@@ -854,11 +854,9 @@ func (db *sqliteDatabase) WithConnection(ctx context.Context, toCall func(Execut
 		return ErrClosed
 	}
 	conCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	c := newLazyConn(conCtx, db)
-	defer func() {
-		cancel()
-		c.release()
-	}()
+	defer c.release()
 	return toCall(c)
 }
 
