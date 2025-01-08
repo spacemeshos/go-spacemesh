@@ -72,6 +72,7 @@ func defaultConf() *conf {
 		checkSchemaDrift:           true,
 		handleIncompleteMigrations: true,
 		connIdleTimeout:            10 * time.Millisecond,
+		dbName:                     "sqlite",
 	}
 }
 
@@ -344,10 +345,8 @@ func openDB(config *conf) (db *sqliteDatabase, err error) {
 		db.Close()
 		return nil, err
 	}
-	if config.dbName != "" {
-		actualDB.connWaitLatency = ConnWaitLatency.WithLabelValues(config.dbName)
-		actualDB.poolUsage = PoolUsage.WithLabelValues(config.dbName)
-	}
+	actualDB.connWaitLatency = ConnWaitLatency.WithLabelValues(config.dbName)
+	actualDB.poolUsage = PoolUsage.WithLabelValues(config.dbName)
 	return actualDB, nil
 }
 
@@ -1215,6 +1214,7 @@ func (c *lazyConn) ensureConn() *sqlite.Conn {
 	c.conn = c.getConn()
 	if c.timer == nil {
 		c.timer = time.NewTimer(c.db.connIdleTimeout)
+		c.doneCh = make(chan struct{})
 		c.eg.Go(func() error {
 			for {
 				select {
@@ -1234,7 +1234,6 @@ func (c *lazyConn) ensureConn() *sqlite.Conn {
 				}
 			}
 		})
-		c.doneCh = make(chan struct{})
 	} else {
 		c.timer.Reset(c.db.connIdleTimeout)
 	}
@@ -1275,9 +1274,7 @@ func (c *lazyConn) Exec(query string, encoder Encoder, decoder Decoder) (int, er
 	c.connMtx.Lock()
 	defer c.connMtx.Unlock()
 	conn := c.ensureConn()
-	defer func() {
-		c.timer.Reset(c.db.connIdleTimeout)
-	}()
+	defer c.timer.Reset(c.db.connIdleTimeout)
 	return exec(conn, query, encoder, decoder)
 }
 
