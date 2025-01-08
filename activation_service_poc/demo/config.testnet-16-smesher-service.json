@@ -40,14 +40,7 @@
         "preround-delay": "25s",
         "round-duration": "12s"
     },
-    "logging": {
-        "trtl": "WARN",
-        "beacon": "ERROR",
-        "proposalBuilder": "DEBUG",
-        "atxBuilder": "ERROR",
-        "hare": "ERROR",
-        "nodeServiceClient": "ERROR"
-    },
+    "logging": {},
     "main": {
         "db-prune-interval": "30m",
         "db-query-cache": true,

@@ -126,3 +126,10 @@ Use the attached configs, replicate the command line and run the binary files:
 // TODO check the link to the releases @pigmej
 2. Extract the archive and copy the config files (*.json)
 3. Run the binary or binaries using the same commands specified in the docker-compose file.
+
+
+### Why the config is that big?
+
+The actual differences to the default config are pretty minimal.
+
+The most important are addition of `"node-service-address": "http://0.0.0.0:9099"` in the `main` section, and the definition of `"grpc-local-services": ["smeshing_identities_v2alpha1"]` in the `api` section.
