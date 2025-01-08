@@ -82,7 +82,7 @@ You'll also be able to connect to the node's UI by visiting `https://smesher-alp
 The first time you open the UI it will be mostly empty as you're running a fresh smeshing service and therefore don't yet have eligibility. Testnet epochs are 24 hours long, so you'll need to wait for the next epoch to start smeshing. You can check the epoch number and exact timing in the UI.
 
 After a few epochs you should see a UI that looks similar to:
-![smesher-ui.png](smesher-ui.png)
+![smesher-app.png](smesher-app.png)
 
 
 ## Interacting with the PoC
