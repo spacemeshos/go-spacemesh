@@ -21,11 +21,6 @@ services:
     volumes:
       - ./spacemesh-client-local-1:/tmp/spacemesh-client
       - ./config.testnet-16-smesher-service.json:/config.json
-    ports:
-      - 19271:19271
-      - 19272:19272
-      - 19282:19222
-      - 19283:19283
 
   activation-service-local-2:
     network_mode: "host"
@@ -49,11 +44,6 @@ services:
     volumes:
       - ./spacemesh-client-local-2:/tmp/spacemesh-client
       - ./config.testnet-16-smesher-service.json:/config.json
-    ports:
-      - 19371:19371
-      - 19372:19372
-      - 19382:19382
-      - 19383:19383
 
   node-service-local:
     network_mode: "host"
@@ -73,8 +63,3 @@ services:
     volumes:
       - ./spacemesh-node-service-multi:/tmp/spacemesh-node-service
       - ./config.testnet.node-service.json:/config.json
-    ports:
-      - 19062:19062
-      - 19063:19063
-      - 19060:19060
-      - 19099:19099
