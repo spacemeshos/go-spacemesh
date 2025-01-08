@@ -4,6 +4,8 @@ In our ongoing effort to lower the bar for smeshing, we're exploring a new direc
 
 We are demonstrating a PoC of the node split, where the smeshing logic is separated from the rest of the node. The PoC is based on the current go-spacemesh codebase and is intended to demonstrate the feasibility of the node split concept. The PoC is not intended to be a production-ready implementation.
 
+The PoC itself is still work in progress so please expect changes and improvement in the future.
+
 The architecture of the PoC is as follows:
 
 ![design.png](design.png)
@@ -31,7 +33,7 @@ Please use the `docker-compose-testnet-both-local.yml` file for this setup.
 
 The commands will be:
 ```
-docker-compose -f docker-compose-testnet-both-local.yml [...]
+docker compose -f docker-compose-testnet-both-local.yml [...]
 ```
 
 Since this will be a locally running node, it will need to sync with the network like all Spacemesh nodes. The testnet network is small, so the node should sync relatively quickly.
@@ -43,7 +45,7 @@ Please use the `docker-compose-testnet-remote-node.yml` file for this setup.
 
 The commands will be:
 ```
-docker-compose -f docker-compose-testnet-remote-node.yml [...]
+docker compose -f docker-compose-testnet-remote-node.yml [...]
 ```
 
 ### Starting the setup
@@ -68,6 +70,7 @@ docker-compose-testnet-remote-node.yml
 docker-compose -f docker-compose-testnet-both-local.yml up -d
 ```
 
+After all the steps are done please give each smesher service a while to initialize POST and generate inital post proof. This may take up to a few minutes.
 
 If all steps are followed correctly, you should see three new Docker containers running. You can check the status of the containers using:
 ```
@@ -80,6 +83,9 @@ You'll also be able to connect to the node's UI by visiting `https://smesher-alp
 //TODO make sure that it actually is opened publicly already @pigmej
 
 The first time you open the UI it will be mostly empty as you're running a fresh smeshing service and therefore don't yet have eligibility. Testnet epochs are 24 hours long, so you'll need to wait for the next epoch to start smeshing. You can check the epoch number and exact timing in the UI.
+
+Initially it will look like:
+![initial-app-state.png](initial-app-state.png)
 
 After a few epochs you should see a UI that looks similar to:
 ![smesher-app.png](smesher-app.png)
