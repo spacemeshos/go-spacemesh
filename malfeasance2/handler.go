@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -176,7 +178,7 @@ func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, peer p
 			log.ZShortStringer("expected", expHash),
 			zap.Array("got", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
 				for _, id := range nodeIDs {
-					arr.AppendString(id.ShortString())
+					arr.AppendString(id.String())
 				}
 				return nil
 			})),
@@ -189,7 +191,7 @@ func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, peer p
 		)
 	}
 
-	if err := h.storeProof(ctx, proof.Domain, msg); err != nil {
+	if err := h.storeProof(ctx, nodeIDs, proof.Proof, proof.Domain); err != nil {
 		return fmt.Errorf("store synced malfeasance proof: %w", err)
 	}
 
@@ -202,7 +204,7 @@ func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, peer p
 		log.ZShortStringer("requested", expHash),
 		zap.Array("valid_for", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
 			for _, id := range nodeIDs {
-				arr.AppendString(id.ShortString())
+				arr.AppendString(id.String())
 			}
 			return nil
 		})),
@@ -227,7 +229,7 @@ func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, msg []byte) e
 		return errors.Join(err, pubsub.ErrValidationReject)
 	}
 
-	if err := h.storeProof(ctx, proof.Domain, msg); err != nil {
+	if err := h.storeProof(ctx, nodeIDs, proof.Proof, proof.Domain); err != nil {
 		return fmt.Errorf("store gossiped malfeasance proof: %w", err)
 	}
 
@@ -239,7 +241,7 @@ func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, msg []byte) e
 		log.ZContext(ctx),
 		zap.Array("valid_for", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
 			for _, id := range nodeIDs {
-				arr.AppendString(id.ShortString())
+				arr.AppendString(id.String())
 			}
 			return nil
 		})),
@@ -265,28 +267,62 @@ func (h *Handler) handleProof(ctx context.Context, proof MalfeasanceProof) ([]ty
 		return nil, err
 	}
 
-	validIDs := make([]types.NodeID, 0, len(proof.Certificates)+1)
-	validIDs = append(validIDs, id) // id has already been proven to be malfeasant
+	validIDs := make(map[types.NodeID]struct{}, len(proof.Certificates)+1)
+	validIDs[id] = struct{}{} // id has already been proven to be malfeasant
 
 	// check certificates provided with the proof
-	// TODO(mafa): only works if the main identity becomes malfeasant - try different approach with merkle proofs
 	for _, cert := range proof.Certificates {
-		if id != cert.TargetID {
-			continue
-		}
 		if !h.edVerifier.Verify(signing.MARRIAGE, cert.TargetID, cert.SmesherID.Bytes(), cert.Signature) {
 			continue
 		}
-		validIDs = append(validIDs, cert.SmesherID)
+		validIDs[cert.TargetID] = struct{}{} // TODO(mafa): this doesn't confirm that `TargetID` agreed to the marriage!
+		validIDs[cert.SmesherID] = struct{}{}
 	}
 
-	return validIDs, nil
+	return maps.Keys(validIDs), nil
 }
 
-// TODO(mafa): store proof in db by
-//   - updating marriage information if needed (e.g. new smesher in the malfeasant marriage certificate set)
-//   - storing the proof for the identity that was proven to be malicious
-func (h *Handler) storeProof(ctx context.Context, domain ProofDomain, proof []byte) error {
-	_ = h.db
+func (h *Handler) storeProof(ctx context.Context, nodeIDs []types.NodeID, proof []byte, domain ProofDomain) error {
+	if len(nodeIDs) > 1 {
+		if err := h.updateMarriages(ctx, nodeIDs); err != nil {
+			h.logger.Error("failed to update marriage set for valid malfeasance proof",
+				log.ZContext(ctx),
+				zap.Array("valid_for", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
+					for _, id := range nodeIDs {
+						arr.AppendString(id.String())
+					}
+					return nil
+				})),
+				zap.Error(err),
+			)
+			return fmt.Errorf("update marriages: %w", err)
+		}
+	}
+
+	var mID *marriage.ID
+	if len(nodeIDs) > 1 {
+		var err error
+		id, err := marriage.FindIDByNodeID(h.db, nodeIDs[0])
+		if err != nil {
+			return fmt.Errorf("store malfeasance proof for %s: fetch marryID: %w", nodeIDs[0], err)
+		}
+		mID = new(marriage.ID)
+		*mID = id
+	}
+
+	if err := malfeasance.AddProof(h.db, nodeIDs[0], mID, proof, int(domain), time.Now()); err != nil {
+		return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0], err)
+	}
+	for _, nodeID := range nodeIDs[1:] {
+		if err := malfeasance.SetMalicious(h.db, nodeID, *mID, time.Now()); err != nil {
+			return fmt.Errorf("update malfeasance state for %s: %w", nodeID.ShortString(), err)
+		}
+	}
+
+	return nil
+}
+
+// TODO(mafa): updating marriage information.
+func (h *Handler) updateMarriages(ctx context.Context, nodeIDs []types.NodeID) error {
 	return nil
 }
