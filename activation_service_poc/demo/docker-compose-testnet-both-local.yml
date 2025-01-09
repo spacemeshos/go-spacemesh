@@ -1,0 +1,65 @@
+services:
+  activation-service-local-1:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19099",
+        "--grpc-json-listener",
+        "0.0.0.0:19171",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19060",
+        "--grpc-public-listener",
+        "0.0.0.0:19282",
+        "--grpc-private-listener",
+        "0.0.0.0:19283",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-local-1:/tmp/spacemesh-client
+      - ./config.testnet-16-smesher-service.json:/config.json
+
+  activation-service-local-2:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://127.0.0.1:19399",
+        "--grpc-json-listener",
+        "0.0.0.0:19371",
+        "--proxy-api-v2-address",
+        "http://127.0.0.1:19060",
+        "--grpc-public-listener",
+        "0.0.0.0:19382",
+        "--grpc-private-listener",
+        "0.0.0.0:19383",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-local-2:/tmp/spacemesh-client
+      - ./config.testnet-16-smesher-service.json:/config.json
+
+  node-service-local:
+    network_mode: "host"
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    command: [
+        "-c",
+        "/config.json",
+        "--grpc-json-listener",
+        "0.0.0.0:19060",
+        "--grpc-public-listener",
+        "0.0.0.0:19062",
+        "--grpc-private-listener",
+        "0.0.0.0:19063",
+        # "--node-service-listener",
+        # "0.0.0.0:19099", ## this is not exposed via CLI
+      ]
+    volumes:
+      - ./spacemesh-node-service-multi:/tmp/spacemesh-node-service
+      - ./config.testnet.node-service.json:/config.json
