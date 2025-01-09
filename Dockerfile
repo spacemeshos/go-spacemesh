@@ -64,9 +64,9 @@ COPY --from=builder /src/build/post-service /bin/
 COPY --from=builder /src/build/libpost.so /bin/
 COPY --from=builder /src/build/gen-p2p-identity /bin/
 COPY --from=builder /src/build/merge-nodes /bin/
-COPY --from=builder /src/build/libathenavmwrapper.so /bin/
+COPY --from=builder /src/build/libathenavm.so /bin/
 
-ENV ATHENA_LIB_PATH=/bin/libathenavmwrapper.so
+ENV ATHENA_LIB_PATH=/bin/libathenavm.so
 
 ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513
