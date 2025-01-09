@@ -17,6 +17,18 @@ The PoC consists of two separate processes:
 The easiest way to understand the setup is to try the PoC yourself. The following instructions will guide you through the process.
 
 
+## Why is this important?
+
+For the best understanding of the problem and our reasoning behind the node split, we recommend watching this [video](https://www.youtube.com/watch?v=d4jBz1krRHg).
+
+The current go-spacemesh node is a monolithic application that includes all the logic required for consensus, smeshing, and other services. This makes it difficult to run the node on low-resource devices, as the node requires a significant amount of resources to run. By splitting the node into two separate services, we can enable users to run the smeshing logic on a separate device while still connecting to a remote node for the rest of the services. This allows users to run the node on low-resource devices while still participating in the Spacemesh network.
+
+### Benefits
+1. **Lower system requirements**: Users can run the smesher service on low-resource devices while connecting to a more powerful node for the rest of the services.
+2. **Better failover and redundancy**: Currently, when you need to restart a node, you also need to restart the smesher service. With the node split, you can restart the node without affecting the smeshing process. Starting smeshing will also be much quicker because it will *not* need to wait for the node to sync, as the node will be running elsewhere. Multiple smesher services can be connected to the same node, and nodes can be hot-swapped without affecting the smeshing process.
+3. **Lower OpEx**: The smesher service can be shut down when not needed to save costs and resources.
+4. **Better node maintainability**: The node can be updated without affecting the smeshing process. This will allow for more frequent updates and bug fixes.
+
 ## Running the PoC
 
 There are two distinct configuration/setup methods possible:
@@ -128,8 +140,7 @@ While this is not a final solution and will be replaced with a more secure one i
 
 Use the attached configs, replicate the command line and run the binary files:
 
-1. Download the most recent release of node-split-poc go-spacemesh from the [releases page](https://github.com/spacemeshos/go-spacemesh/releases).
-// TODO check the link to the releases @pigmej
+1. Download the most recent release of node-split-poc go-spacemesh from the [releases page](https://github.com/spacemeshos/go-spacemesh/releases) and look for `node-split-poc` releases.
 2. Extract the archive and copy the config files (*.json)
 3. Run the binary or binaries using the same commands specified in the docker-compose file.
 
