@@ -17,7 +17,7 @@ const (
 
 	// Hardcoded Athena gas costs
 	// TODO(lane): remove hardcoded gas costs.
-	ATHENA_GAS_VERIFY = 12_000
+	ATHENA_GAS_VERIFY = 4_000
 )
 
 const (
@@ -43,5 +43,5 @@ func TxDataGas(size int) uint64 {
 }
 
 func MaxGas(inputSize int) uint64 {
-	return 10_000 + uint64(inputSize)*150
+	return 4_000 + uint64(inputSize)*100
 }

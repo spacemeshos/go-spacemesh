@@ -18,11 +18,11 @@ import (
 func libName() string {
 	switch runtime.GOOS {
 	case "windows":
-		return "libathenavmwrapper.dll"
+		return "libathenavm.dll"
 	case "darwin":
-		return "libathenavmwrapper.dylib"
+		return "libathenavm.dylib"
 	default:
-		return "libathenavmwrapper.so"
+		return "libathenavm.so"
 	}
 }
 

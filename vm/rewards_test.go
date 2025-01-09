@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/spacemeshos/economics/rewards"
@@ -34,19 +35,19 @@ func TestRewards(t *testing.T) {
 			desc: "sanity",
 			layers: []layertc{
 				{
-					rewards: []reward{{address: 1, share: 1}},
+					rewards: []reward{{address: 1, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						1: earned{amount: expected[0]},
 					},
 				},
 				{
-					rewards: []reward{{address: 2, share: 1}},
+					rewards: []reward{{address: 2, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						2: earned{amount: expected[1]},
 					},
 				},
 				{
-					rewards: []reward{{address: 3, share: 1}},
+					rewards: []reward{{address: 3, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						3: earned{amount: expected[2]},
 					},
@@ -57,21 +58,21 @@ func TestRewards(t *testing.T) {
 			desc: "empty layer",
 			layers: []layertc{
 				{
-					rewards: []reward{{address: 1, share: 1}},
+					rewards: []reward{{address: 1, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						1: earned{amount: expected[0]},
 					},
 				},
 				{},
 				{
-					rewards: []reward{{address: 3, share: 1}},
+					rewards: []reward{{address: 3, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						3: earned{amount: expected[2]},
 					},
 				},
 				{},
 				{
-					rewards: []reward{{address: 5, share: 1}},
+					rewards: []reward{{address: 5, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						5: earned{amount: expected[4]},
 					},
@@ -82,14 +83,14 @@ func TestRewards(t *testing.T) {
 			desc: "subsidy rounded down",
 			layers: []layertc{
 				{
-					rewards: []reward{{address: 1, share: 0.5}, {address: 2, share: 0.5}},
+					rewards: []reward{{address: 1, share: big.NewRat(1, 2)}, {address: 2, share: big.NewRat(1, 2)}},
 					expected: map[int]change{
 						1: earned{amount: (expected[0] - 1) / 2},
 						2: earned{amount: (expected[0] - 1) / 2},
 					},
 				},
 				{
-					rewards: []reward{{address: 1, share: 0.9}, {address: 2, share: 0.1}},
+					rewards: []reward{{address: 1, share: big.NewRat(9, 10)}, {address: 2, share: big.NewRat(1, 10)}},
 					expected: map[int]change{
 						1: earned{amount: expected[1] * 9 / 10},
 						2: earned{amount: expected[1] / 10},
@@ -102,7 +103,7 @@ func TestRewards(t *testing.T) {
 			layers: []layertc{
 				{
 					txs:     []testTx{&selfSpawnTx{8}},
-					rewards: []reward{{address: 1, share: 0.5}, {address: 2, share: 0.5}},
+					rewards: []reward{{address: 1, share: big.NewRat(1, 2)}, {address: 2, share: big.NewRat(1, 2)}},
 					expected: map[int]change{
 						1: earned{amount: (expected[0] - 1 + spawnFee) / 2},
 						2: earned{amount: (expected[0] - 1 + spawnFee) / 2},
@@ -110,7 +111,7 @@ func TestRewards(t *testing.T) {
 				},
 				{
 					txs:     []testTx{&selfSpawnTx{9}},
-					rewards: []reward{{address: 1, share: 0.9}, {address: 2, share: 0.1}},
+					rewards: []reward{{address: 1, share: big.NewRat(9, 10)}, {address: 2, share: big.NewRat(1, 10)}},
 					expected: map[int]change{
 						1: earned{amount: (expected[1] + spawnFee) * 9 / 10},
 						2: earned{amount: (expected[1] + spawnFee) / 10},

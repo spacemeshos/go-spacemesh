@@ -38,7 +38,7 @@ ifeq ($(configname),$(test_job_name))
 	run_deps = config
 endif
 
-command := ATHENA_LIB_PATH=/bin/libathenavmwrapper.so gotestsum -f standard-verbose --raw-command -- test2json -t -p systest \
+command := ATHENA_LIB_PATH=/bin/libathenavm.so gotestsum -f standard-verbose --raw-command -- test2json -t -p systest \
 	/bin/tests -test.v -test.count=$(count) -test.timeout=60m -test.run=$(test_name) -test.parallel=$(clusters) \
 	-test.failfast=$(failfast) -clusters=$(clusters) -level=$(level) -configname=$(configname)
 
