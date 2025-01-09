@@ -955,7 +955,6 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 						return fmt.Errorf("find marriage ID for node ID %s: %w", m.id.ShortString(), err)
 					}
 					marriageIDs = append(marriageIDs, id)
-					continue
 				case err != nil:
 					return fmt.Errorf("adding marriage: %w", err)
 				}
@@ -980,8 +979,12 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				newMarriageID = combinedID
 			}
 			if malicious {
-				for _, m := range watx.marriages {
-					if err := malfeasance.SetMalicious(tx, m.id, newMarriageID, time.Now()); err != nil {
+				nodeIDs, err := marriage.NodeIDsByID(tx, newMarriageID)
+				if err != nil {
+					return fmt.Errorf("fetching node IDs by marriage ID: %w", err)
+				}
+				for _, id := range nodeIDs {
+					if err := malfeasance.SetMalicious(tx, id, newMarriageID, time.Now()); err != nil {
 						return fmt.Errorf("marking node as malicious: %w", err)
 					}
 				}
