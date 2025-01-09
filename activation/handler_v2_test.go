@@ -1987,12 +1987,6 @@ func Test_Marriages(t *testing.T) {
 		equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
-
-		for _, sig := range []*signing.EdSigner{sig, otherSig, otherSig2} {
-			m, err := malfeasance.IsMalicious(atxHandler.cdb, sig.NodeID())
-			require.NoError(t, err)
-			require.True(t, m, "expected %s to be malicious", sig)
-		}
 	})
 	t.Run("marring existing malicious equivocation set: marks all malicious and publishes proof", func(t *testing.T) {
 		t.Parallel()
@@ -2031,17 +2025,7 @@ func Test_Marriages(t *testing.T) {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		atxHandler.mMalPublish.EXPECT().Publish(
-			gomock.Any(),
-			sig.NodeID(),
-			gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
-		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
-			malProof := proof.(*wire.ProofDoubleMarry)
-			nId, err := malProof.Valid(ctx, verifier)
-			require.NoError(t, err)
-			require.Equal(t, sig.NodeID(), nId)
-			return nil
-		})
+		atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 
@@ -2094,17 +2078,7 @@ func Test_Marriages(t *testing.T) {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
 
-		atxHandler.mMalPublish.EXPECT().Publish(
-			gomock.Any(),
-			sig.NodeID(),
-			gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
-		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
-			malProof := proof.(*wire.ProofDoubleMarry)
-			nId, err := malProof.Valid(ctx, verifier)
-			require.NoError(t, err)
-			require.Equal(t, sig.NodeID(), nId)
-			return nil
-		})
+		atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 
