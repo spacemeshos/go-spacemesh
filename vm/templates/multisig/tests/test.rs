@@ -1,8 +1,9 @@
 use std::error::Error;
 
 use athena_interface::{Address, MethodSelector};
-use athena_sdk::{AthenaStdin, ExecutionClient};
+use athena_sdk::{host::MockHostInterface, AthenaStdin, ExecutionClient};
 use athena_vm_sdk::Pubkey;
+use multisig::SpawnArguments;
 use parity_scale_codec::Encode;
 
 use ed25519_dalek::ed25519::signature::Signer;
@@ -10,12 +11,6 @@ use rand::rngs::OsRng;
 
 pub const PROGRAM: &[u8] = include_bytes!("../elf/multisig");
 pub const ADDRESS_ALICE: [u8; 24] = [1u8; 24];
-
-#[derive(Encode)]
-struct SpawnArguments {
-    required: u8,
-    keys: Vec<Pubkey>,
-}
 
 #[derive(Clone)]
 struct SigningKey {
@@ -26,7 +21,7 @@ struct SigningKey {
 fn spawn(required: u8, keys: Vec<Pubkey>) -> Result<(Address, Vec<u8>), Box<dyn Error>> {
     let mut stdin = AthenaStdin::new();
     let (state_w, state_r) = std::sync::mpsc::channel();
-    let mut host = athena_interface::MockHostInterface::new();
+    let mut host = MockHostInterface::new();
     host.expect_spawn().returning_st(move |s| {
         state_w.send(s).unwrap();
         Address::from(ADDRESS_ALICE)
@@ -48,7 +43,8 @@ fn spawn(required: u8, keys: Vec<Pubkey>) -> Result<(Address, Vec<u8>), Box<dyn 
     )?;
 
     let state = state_r.recv().unwrap();
-    Ok((result.read(), state))
+    let address: [u8; 24] = result.read();
+    Ok((Address(address), state))
 }
 
 fn verify(state: Vec<u8>, keys: &[SigningKey]) -> bool {
@@ -59,9 +55,11 @@ fn verify(state: Vec<u8>, keys: &[SigningKey]) -> bool {
     stdin.write_vec(tx.as_slice().encode());
 
     for key in keys.iter() {
-        let signature = key.key.sign(tx);
-        stdin.write_vec(key.id.encode());
-        stdin.write_vec(signature.to_bytes().encode());
+        let signature = multisig::Signature {
+            id: key.id,
+            sig: key.key.sign(tx).to_bytes(),
+        };
+        stdin.write_vec(signature.encode());
     }
 
     let result = ExecutionClient::new().execute_function(

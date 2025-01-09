@@ -1,5 +1,4 @@
 //! The Spacemesh standard multi-signature wallet template.
-extern crate alloc;
 
 use athena_interface::Address;
 use athena_vm_declare::{callable, template};
@@ -10,25 +9,13 @@ use parity_scale_codec::{Decode, Encode, IoReader};
 #[derive(Encode, Decode)]
 struct Contract {
     required: u8,
-    keys: alloc::vec::Vec<Pubkey>,
-}
-
-#[derive(Decode)]
-struct SpawnArguments {
-    required: u8,
-    keys: alloc::vec::Vec<Pubkey>,
-}
-
-#[derive(Encode, Decode)]
-struct Signature {
-    id: u8,
-    sig: [u8; 64],
+    keys: Vec<Pubkey>,
 }
 
 #[template]
 impl Contract {
     #[callable]
-    fn spawn(args: SpawnArguments) -> Address {
+    fn spawn(args: multisig::SpawnArguments) -> Address {
         let wallet = Contract {
             required: args.required,
             keys: args.keys,
@@ -43,7 +30,7 @@ impl Contract {
     }
 
     #[callable]
-    fn deploy(&self, code: alloc::vec::Vec<u8>) -> Address {
+    fn deploy(&self, code: Vec<u8>) -> Address {
         athena_vm_sdk::deploy(&code)
     }
 
@@ -56,11 +43,11 @@ impl Contract {
     fn verify() -> bool {
         let mut io = IoReader(athena_vm::io::Io::default());
         let state = Contract::decode(&mut io).unwrap();
-        let tx = alloc::vec::Vec::<u8>::decode(&mut io).unwrap();
+        let tx = Vec::<u8>::decode(&mut io).unwrap();
 
         let mut last_id = None;
         for _ in 0..state.required {
-            let sig = if let Ok(s) = Signature::decode(&mut io) {
+            let sig = if let Ok(s) = multisig::Signature::decode(&mut io) {
                 s
             } else {
                 return false;
