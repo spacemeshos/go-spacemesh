@@ -1988,7 +1988,7 @@ func Test_Marriages(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
 	})
-	t.Run("marring existing malicious equivocation set: marks all malicious and publishes proof", func(t *testing.T) {
+	t.Run("marring existing malicious equivocation set: marks all malicious and republishes proof", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 
@@ -2019,12 +2019,6 @@ func Test_Marriages(t *testing.T) {
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
 
-		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
-		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
-			}).AnyTimes()
-
 		atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
@@ -2042,7 +2036,7 @@ func Test_Marriages(t *testing.T) {
 			require.True(t, m, "expected %s to be malicious", sig)
 		}
 	})
-	t.Run("malicious marring existing equivocation set: marks all malicious and publishes proof", func(t *testing.T) {
+	t.Run("malicious marring existing equivocation set: marks all malicious and republishes proof", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 
@@ -2071,12 +2065,6 @@ func Test_Marriages(t *testing.T) {
 		}
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
-
-		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
-		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
-			}).AnyTimes()
 
 		atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
