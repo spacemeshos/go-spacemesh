@@ -97,11 +97,11 @@ func (a *singlesigAccount) spawn(
 }
 
 func (a *singlesigAccount) spendGas() int {
-	return 6276 + 9200
+	return 2052 + 3276
 }
 
 func (a *singlesigAccount) selfSpawnGas() int {
-	return 3488 + 9200
+	return 1228 + 3276
 }
 
 func (a *singlesigAccount) spendMaxGas() int {
@@ -170,11 +170,11 @@ func (a *multisigAccount) deploy(t *tester, nonce core.Nonce, blob []byte, opts 
 func (a *multisigAccount) verifyGas() int {
 	switch a.required {
 	case 1:
-		return 17828
+		return 7032
 	case 2:
-		return 23832
+		return 9464
 	case 5:
-		return 49176
+		return 21128
 	}
 	panic("unknown")
 }
@@ -185,9 +185,9 @@ func (a *multisigAccount) verifyGas() int {
 func (a *multisigAccount) spendGas() int {
 	switch len(a.pks) {
 	case 3:
-		return 13792 + a.verifyGas()
+		return 5168 + a.verifyGas()
 	case 7:
-		return 24432 + a.verifyGas()
+		return 9632 + a.verifyGas()
 	}
 	panic("unknown")
 }
@@ -198,9 +198,9 @@ func (a *multisigAccount) spendGas() int {
 func (a *multisigAccount) selfSpawnGas() int {
 	switch len(a.pks) {
 	case 3:
-		return 12420 + a.verifyGas()
+		return 5956 + a.verifyGas()
 	case 7:
-		return 25220 + a.verifyGas()
+		return 12804 + a.verifyGas()
 	}
 	panic("unknown")
 }
@@ -389,21 +389,20 @@ func (t *tester) spendWithNonce(from, to int, amount uint64, nonce core.Nonce, o
 
 type reward struct {
 	address int
-	share   float64
+	share   *big.Rat
 }
 
 func (t *tester) rewards(all ...reward) []types.CoinbaseReward {
 	var rst []types.CoinbaseReward
 	for _, rew := range all {
-		rat := new(big.Rat).SetFloat64(rew.share)
 		address := t.accounts[rew.address].getAddress()
 		rst = append(rst, types.CoinbaseReward{
 			Coinbase: address,
 			// smesherID doesn't matter but must be set. Derive it arbitrarily from the coinbase.
 			SmesherID: types.BytesToNodeID(address.Bytes()),
 			Weight: types.RatNum{
-				Num:   rat.Num().Uint64(),
-				Denom: rat.Denom().Uint64(),
+				Num:   rew.share.Num().Uint64(),
+				Denom: rew.share.Denom().Uint64(),
 			},
 		})
 	}
@@ -548,11 +547,12 @@ type earned struct {
 
 func (ch earned) verify(tb testing.TB, prev, current *core.Account) {
 	tb.Helper()
-	require.Equal(tb, ch.amount, int(current.Balance-prev.Balance),
-		"expected earn amount %d to equal balance diff %d (off by %d)",
+	earned := int(current.Balance) - int(prev.Balance)
+	require.Equalf(tb, ch.amount, earned,
+		"expected balance diff %d to equal %d (off by %d)",
+		earned,
 		ch.amount,
-		current.Balance-prev.Balance,
-		ch.amount-int(current.Balance-prev.Balance),
+		ch.amount-earned,
 	)
 
 	prev.Balance = current.Balance
@@ -898,7 +898,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&spendTx{0, 11, 100},
 						&spendTx{0, 12, 100},
 					},
-					gasLimit:    uint64(ref.estimateSpawnGas(0)) + uint64(ref.estimateSpendGas(0))*2,
+					gasLimit:    uint64(ref.estimateSpawnGas(0)) + uint64(ref.estimateSpendMaxGas(0)),
 					ineffective: []int{2, 3},
 					expected: map[int]change{
 						0:  spent{amount: 100 + ref.estimateSpawnGas(0) + ref.estimateSpendGas(0)},
@@ -980,7 +980,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					txs: []testTx{
 						&selfSpawnTx{0},
 					},
-					rewards: []reward{{address: 10, share: 1}},
+					rewards: []reward{{address: 10, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) + ref.estimateSpawnGas(0)},
 					},
@@ -989,7 +989,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					txs: []testTx{
 						&selfSpawnTx{10},
 					},
-					rewards: []reward{{address: 10, share: 1}},
+					rewards: []reward{{address: 10, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						10: spawned{template: template},
 					},
@@ -1000,7 +1000,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 			desc: "DistributeRewards",
 			layers: []layertc{
 				{
-					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
+					rewards: []reward{{address: 10, share: big.NewRat(1, 2)}, {address: 11, share: big.NewRat(1, 2)}},
 					expected: map[int]change{
 						10: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
 						11: earned{amount: int(rewards.TotalSubsidyAtLayer(0)) / 2},
@@ -1010,7 +1010,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					txs: []testTx{
 						&selfSpawnTx{0},
 					},
-					rewards: []reward{{address: 10, share: 0.5}, {address: 11, share: 0.5}},
+					rewards: []reward{{address: 10, share: big.NewRat(1, 2)}, {address: 11, share: big.NewRat(1, 2)}},
 					expected: map[int]change{
 						10: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(10)) / 2},
 						11: earned{amount: (int(rewards.TotalSubsidyAtLayer(1)) + ref.estimateSpawnGas(11)) / 2},
@@ -1034,7 +1034,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 					},
 					ineffective: []int{0, 1},
 					headers:     map[int]struct{}{0: {}, 1: {}},
-					rewards:     []reward{{address: 10, share: 1}},
+					rewards:     []reward{{address: 10, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						10: earned{amount: int(rewards.TotalSubsidyAtLayer(1))},
 					},
@@ -1168,7 +1168,7 @@ func singleWalletTestCases(defaultGasPrice int, template core.Address, ref *test
 						&selfSpawnTx{11},
 					},
 					failed:  map[int]error{2: core.ErrOutOfGas},
-					rewards: []reward{{address: 20, share: 1}},
+					rewards: []reward{{address: 20, share: big.NewRat(1, 1)}},
 					expected: map[int]change{
 						0: spent{amount: ref.estimateSpawnGas(0) +
 							ref.estimateSpendGas(0) +
