@@ -119,5 +119,7 @@ func fastnet() config.Config {
 	conf.POET.InfoCacheTTL = time.Minute
 	conf.POET.PowParamsCacheTTL = 10 * time.Second
 
+	conf.LOGGING.SyncLoggerLevel = "debug"
+
 	return conf
 }
