@@ -1217,6 +1217,44 @@ func (c *MockatxMalfeasancePublisherPublishCall) DoAndReturn(f func(context.Cont
 	return c
 }
 
+// Republish mocks base method.
+func (m *MockatxMalfeasancePublisher) Republish(ctx context.Context, nodeID types.NodeID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Republish", ctx, nodeID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Republish indicates an expected call of Republish.
+func (mr *MockatxMalfeasancePublisherMockRecorder) Republish(ctx, nodeID any) *MockatxMalfeasancePublisherRepublishCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Republish", reflect.TypeOf((*MockatxMalfeasancePublisher)(nil).Republish), ctx, nodeID)
+	return &MockatxMalfeasancePublisherRepublishCall{Call: call}
+}
+
+// MockatxMalfeasancePublisherRepublishCall wrap *gomock.Call
+type MockatxMalfeasancePublisherRepublishCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxMalfeasancePublisherRepublishCall) Return(arg0 error) *MockatxMalfeasancePublisherRepublishCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxMalfeasancePublisherRepublishCall) Do(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRepublishCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxMalfeasancePublisherRepublishCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRepublishCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockatxProvider is a mock of atxProvider interface.
 type MockatxProvider struct {
 	ctrl     *gomock.Controller

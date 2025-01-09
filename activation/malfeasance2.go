@@ -50,3 +50,8 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, id types.NodeID, pro
 	// TODO(mafa): implement me
 	return nil
 }
+
+func (p *MalfeasanceHandlerV2) Republish(ctx context.Context, id types.NodeID) error {
+	// TODO(mafa): implement me
+	return nil
+}

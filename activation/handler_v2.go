@@ -727,26 +727,16 @@ func (h *HandlerV2) validatePost(
 	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalid)
 }
 
-func (h *HandlerV2) checkMalicious(
-	ctx context.Context,
-	tx sql.Transaction,
-	atx *activationTx,
-	forceProofPublish bool,
-) (bool, error) {
-	if !forceProofPublish {
-		// normally if we already know that the smesher is malicious we don't need to check further and don't need to
-		// publish a proof, but sometimes we need to force the proof to be published. This is for example the case when
-		// a malicious smesher is double marrying and thereby marks other smeshers as malicious.
-		malicious, err := malfeasance.IsMalicious(tx, atx.SmesherID)
-		if err != nil {
-			return malicious, fmt.Errorf("checking if node is malicious: %w", err)
-		}
-		if malicious {
-			return true, nil
-		}
+func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
+	malicious, err := malfeasance.IsMalicious(tx, atx.SmesherID)
+	if err != nil {
+		return malicious, fmt.Errorf("checking if node is malicious: %w", err)
+	}
+	if malicious {
+		return true, nil
 	}
 
-	malicious, err := h.checkDoubleMarry(ctx, tx, atx)
+	malicious, err = h.checkDoubleMarry(ctx, tx, atx)
 	if err != nil {
 		return malicious, fmt.Errorf("checking double marry: %w", err)
 	}
@@ -940,7 +930,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
-	malProofNeeded := false
+	republishProof := false
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			newMarriageID, err := marriage.NewID(tx)
@@ -952,7 +942,9 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				ATX:    atx.ID(),
 				Target: atx.SmesherID,
 			}
-			marriageIDs := make([]marriage.ID, 0)
+			malicious := false
+			marriageIDs := make([]marriage.ID, 1)
+			marriageIDs[0] = newMarriageID
 			for i, m := range watx.marriages {
 				info.NodeID = m.id
 				info.MarriageIndex = i
@@ -968,9 +960,15 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				case err != nil:
 					return fmt.Errorf("adding marriage: %w", err)
 				}
+				if malicious {
+					continue
+				}
+				malicious, err = malfeasance.IsMalicious(tx, m.id)
+				if err != nil {
+					return fmt.Errorf("checking if node is malicious: %w", err)
+				}
 			}
-			if len(marriageIDs) != 0 {
-				marriageIDs := append(marriageIDs, newMarriageID)
+			if len(marriageIDs) > 1 {
 				newMarriageID = slices.Min(marriageIDs)
 				for _, id := range marriageIDs {
 					if id != newMarriageID {
@@ -979,6 +977,8 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 						}
 					}
 				}
+			}
+			if malicious {
 				nodeIDs, err := marriage.NodeIDsByID(tx, newMarriageID)
 				if err != nil {
 					return fmt.Errorf("fetching node IDs by marriage ID: %w", err)
@@ -989,7 +989,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 						return fmt.Errorf("checking if node ID is malicious: %w", err)
 					}
 					if !malicious {
-						malProofNeeded = true
+						republishProof = true
 					}
 					if err := malfeasance.SetMalicious(tx, id, newMarriageID, time.Now()); err != nil {
 						return fmt.Errorf("marking node as malicious: %w", err)
@@ -1021,8 +1021,13 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious
 		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
 		//    the gossip handler (not sync!)
+		if republishProof {
+			malicious = true
+			return h.malPublisher.Republish(ctx, atx.SmesherID)
+		}
+
 		var err error
-		malicious, err = h.checkMalicious(ctx, tx, watx, malProofNeeded)
+		malicious, err = h.checkMalicious(ctx, tx, watx)
 		return err
 	})
 	if err != nil {

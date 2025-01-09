@@ -2223,6 +2223,8 @@ func Test_MarryingMalicious(t *testing.T) {
 			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, malicious, nil, []byte("proof"), 0, time.Now()))
 
 			atxHandler.expectInitialAtxV2(atx)
+			atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
+
 			err := atxHandler.processATX(context.Background(), "", atx, time.Now())
 			require.NoError(t, err)
 
