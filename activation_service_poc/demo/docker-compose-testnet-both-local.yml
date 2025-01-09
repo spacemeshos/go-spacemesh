@@ -30,7 +30,7 @@ services:
         "-c",
         "/config.json",
         "--node-service-address",
-        "http://127.0.0.1:19399",
+        "http://127.0.0.1:19099",
         "--grpc-json-listener",
         "0.0.0.0:19371",
         "--proxy-api-v2-address",
