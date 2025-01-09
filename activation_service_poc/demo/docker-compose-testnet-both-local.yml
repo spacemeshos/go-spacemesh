@@ -1,7 +1,7 @@
 services:
   activation-service-local-1:
     network_mode: "host"
-    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command:
       [
         "-c",
@@ -24,7 +24,7 @@ services:
 
   activation-service-local-2:
     network_mode: "host"
-    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command:
       [
         "-c",
@@ -47,7 +47,7 @@ services:
 
   node-service-local:
     network_mode: "host"
-    image: spacemeshos/go-spacemesh-dev:2c898bb30
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command: [
         "-c",
         "/config.json",
