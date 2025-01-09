@@ -142,3 +142,8 @@ func (mh *MalfeasanceHandlerV2) PostIndex(
 func (mh *MalfeasanceHandlerV2) Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 	return mh.edVerifier.Verify(d, nodeID, m, sig)
 }
+
+func (p *MalfeasanceHandlerV2) Republish(ctx context.Context, id types.NodeID) error {
+	// TODO(mafa): implement me
+	return nil
+}

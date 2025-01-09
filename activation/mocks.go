@@ -1217,64 +1217,40 @@ func (c *MockatxMalfeasancePublisherPublishCall) DoAndReturn(f func(context.Cont
 	return c
 }
 
-// MockmalfeasancePublisher is a mock of malfeasancePublisher interface.
-type MockmalfeasancePublisher struct {
-	ctrl     *gomock.Controller
-	recorder *MockmalfeasancePublisherMockRecorder
-	isgomock struct{}
-}
-
-// MockmalfeasancePublisherMockRecorder is the mock recorder for MockmalfeasancePublisher.
-type MockmalfeasancePublisherMockRecorder struct {
-	mock *MockmalfeasancePublisher
-}
-
-// NewMockmalfeasancePublisher creates a new mock instance.
-func NewMockmalfeasancePublisher(ctrl *gomock.Controller) *MockmalfeasancePublisher {
-	mock := &MockmalfeasancePublisher{ctrl: ctrl}
-	mock.recorder = &MockmalfeasancePublisherMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorder {
-	return m.recorder
-}
-
-// PublishATXProof mocks base method.
-func (m *MockmalfeasancePublisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error {
+// Republish mocks base method.
+func (m *MockatxMalfeasancePublisher) Republish(ctx context.Context, nodeID types.NodeID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublishATXProof", ctx, nodeID, proof)
+	ret := m.ctrl.Call(m, "Republish", ctx, nodeID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// PublishATXProof indicates an expected call of PublishATXProof.
-func (mr *MockmalfeasancePublisherMockRecorder) PublishATXProof(ctx, nodeID, proof any) *MockmalfeasancePublisherPublishATXProofCall {
+// Republish indicates an expected call of Republish.
+func (mr *MockatxMalfeasancePublisherMockRecorder) Republish(ctx, nodeID any) *MockatxMalfeasancePublisherRepublishCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishATXProof", reflect.TypeOf((*MockmalfeasancePublisher)(nil).PublishATXProof), ctx, nodeID, proof)
-	return &MockmalfeasancePublisherPublishATXProofCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Republish", reflect.TypeOf((*MockatxMalfeasancePublisher)(nil).Republish), ctx, nodeID)
+	return &MockatxMalfeasancePublisherRepublishCall{Call: call}
 }
 
-// MockmalfeasancePublisherPublishATXProofCall wrap *gomock.Call
-type MockmalfeasancePublisherPublishATXProofCall struct {
+// MockatxMalfeasancePublisherRepublishCall wrap *gomock.Call
+type MockatxMalfeasancePublisherRepublishCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockmalfeasancePublisherPublishATXProofCall) Return(arg0 error) *MockmalfeasancePublisherPublishATXProofCall {
+func (c *MockatxMalfeasancePublisherRepublishCall) Return(arg0 error) *MockatxMalfeasancePublisherRepublishCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalfeasancePublisherPublishATXProofCall) Do(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishATXProofCall {
+func (c *MockatxMalfeasancePublisherRepublishCall) Do(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRepublishCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalfeasancePublisherPublishATXProofCall) DoAndReturn(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishATXProofCall {
+func (c *MockatxMalfeasancePublisherRepublishCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRepublishCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

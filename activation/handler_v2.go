@@ -930,6 +930,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
+	republishProof := false
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			newMarriageID, err := marriage.NewID(tx)
@@ -942,7 +943,8 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				Target: atx.SmesherID,
 			}
 			malicious := false
-			marriageIDs := make([]marriage.ID, 0)
+			marriageIDs := make([]marriage.ID, 1)
+			marriageIDs[0] = newMarriageID
 			for i, m := range watx.marriages {
 				info.NodeID = m.id
 				info.MarriageIndex = i
@@ -966,17 +968,15 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 					return fmt.Errorf("checking if node is malicious: %w", err)
 				}
 			}
-			if len(marriageIDs) != 0 {
-				marriageIDs := append(marriageIDs, newMarriageID)
-				combinedID := slices.Min(marriageIDs)
+			if len(marriageIDs) > 1 {
+				newMarriageID = slices.Min(marriageIDs)
 				for _, id := range marriageIDs {
-					if id != combinedID {
-						if err := marriage.UpdateMarriageID(tx, id, combinedID); err != nil {
+					if id != newMarriageID {
+						if err := marriage.UpdateMarriageID(tx, id, newMarriageID); err != nil {
 							return fmt.Errorf("updating marriage ID for %d: %w", id, err)
 						}
 					}
 				}
-				newMarriageID = combinedID
 			}
 			if malicious {
 				nodeIDs, err := marriage.NodeIDsByID(tx, newMarriageID)
@@ -984,6 +984,13 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 					return fmt.Errorf("fetching node IDs by marriage ID: %w", err)
 				}
 				for _, id := range nodeIDs {
+					malicious, err := malfeasance.IsMalicious(tx, id)
+					if err != nil {
+						return fmt.Errorf("checking if node ID is malicious: %w", err)
+					}
+					if !malicious {
+						republishProof = true
+					}
 					if err := malfeasance.SetMalicious(tx, id, newMarriageID, time.Now()); err != nil {
 						return fmt.Errorf("marking node as malicious: %w", err)
 					}
@@ -1010,9 +1017,15 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 	err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
+		//
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious
 		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
 		//    the gossip handler (not sync!)
+		if republishProof {
+			malicious = true
+			return h.malPublisher.Republish(ctx, atx.SmesherID)
+		}
+
 		var err error
 		malicious, err = h.checkMalicious(ctx, tx, watx)
 		return err

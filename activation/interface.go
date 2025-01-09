@@ -104,9 +104,10 @@ type legacyMalfeasancePublisher interface {
 // atxMalfeasancePublisher is an interface for publishing atx malfeasance proofs.
 //
 // It encapsulates a specific malfeasance proof into a generic ATX malfeasance proof and publishes it by calling
-// the underlying malfeasancePublisher.
+// the underlying malfeasancePublisher. It also allows republishing of existing proofs.
 type atxMalfeasancePublisher interface {
 	Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error
+	Republish(ctx context.Context, nodeID types.NodeID) error
 }
 
 // malfeasancePublisher is an interface for publishing malfeasance proofs.
