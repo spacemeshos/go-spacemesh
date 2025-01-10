@@ -5,6 +5,7 @@ package malfeasance2
 
 import (
 	"github.com/spacemeshos/go-scale"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func (t *MalfeasanceProof) EncodeScale(enc *scale.Encoder) (total int, err error) {
@@ -16,7 +17,7 @@ func (t *MalfeasanceProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.Certificates, 1024)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXs, 1024)
 		if err != nil {
 			return total, err
 		}
@@ -49,12 +50,12 @@ func (t *MalfeasanceProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.Version = ProofVersion(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[ProofCertificate](dec, 1024)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 1024)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.Certificates = field
+		t.MarriageATXs = field
 	}
 	{
 		field, n, err := scale.DecodeCompact8(dec)
@@ -71,56 +72,6 @@ func (t *MalfeasanceProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		}
 		total += n
 		t.Proof = field
-	}
-	return total, nil
-}
-
-func (t *ProofCertificate) EncodeScale(enc *scale.Encoder) (total int, err error) {
-	{
-		n, err := scale.EncodeByteArray(enc, t.TargetID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.SmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.EncodeByteArray(enc, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	return total, nil
-}
-
-func (t *ProofCertificate) DecodeScale(dec *scale.Decoder) (total int, err error) {
-	{
-		n, err := scale.DecodeByteArray(dec, t.TargetID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.SmesherID[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
-	}
-	{
-		n, err := scale.DecodeByteArray(dec, t.Signature[:])
-		if err != nil {
-			return total, err
-		}
-		total += n
 	}
 	return total, nil
 }

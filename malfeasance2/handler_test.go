@@ -22,11 +22,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/malfeasance2"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type testHandler struct {
@@ -41,7 +41,6 @@ type testHandler struct {
 
 func newTestHandler(tb testing.TB) *testHandler {
 	db := statesql.InMemory()
-	edVerifier := signing.NewEdVerifier()
 
 	observer, observedLogs := observer.New(zap.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
@@ -52,13 +51,14 @@ func newTestHandler(tb testing.TB) *testHandler {
 
 	ctrl := gomock.NewController(tb)
 	mockTrt := malfeasance2.NewMocktortoise(ctrl)
+	mockFetch := mocks.NewMockFetcher(ctrl)
 
 	h := malfeasance2.NewHandler(
 		db,
 		logger,
 		"self",
 		[]types.NodeID{types.RandomNodeID()},
-		edVerifier,
+		mockFetch,
 		mockTrt,
 	)
 	return &testHandler{

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -95,7 +96,13 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		publish = true
 	}
 
+	mATXs := make(map[types.ATXID]struct{})
 	for _, id := range set {
+		info, err := marriage.FindByNodeID(p.cdb, id)
+		if err != nil {
+			return fmt.Errorf("getting marriage info: %w", err)
+		}
+		mATXs[info.ATX] = struct{}{}
 		if id == nodeID {
 			// already handled
 			continue
@@ -108,7 +115,6 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 			p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", id.ShortString()))
 			continue
 		}
-
 		publish = true
 		if err := malfeasance.SetMalicious(p.cdb, id, marriageID, time.Now()); err != nil {
 			return fmt.Errorf("setting malicious: %w", err)
@@ -117,7 +123,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		// arguably this shouldn't be needed at all, API queries the handler for info about a proof
 		// handler can decided if this needs caching or not
 		//
-		// p.cdb.CacheMalfeasanceProof(id, proof)
+		p.cdb.CacheMalfeasanceProof(id, proof)
 		p.tortoise.OnMalfeasance(id)
 	}
 
@@ -126,10 +132,10 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		return nil
 	}
 
-	return p.publish(ctx, nodeID, nil, proof) // TODO(mafa): do not pass nil here for certificates
+	return p.publish(ctx, nodeID, maps.Keys(mATXs), proof)
 }
 
-func (p *Publisher) publish(ctx context.Context, nodeID types.NodeID, certs []ProofCertificate, proof []byte) error {
+func (p *Publisher) publish(ctx context.Context, nodeID types.NodeID, marriageATXs []types.ATXID, proof []byte) error {
 	// Only gossip the proof if we are synced (to not spam the network with proofs others probably already have).
 	if !p.sync.ListenToATXGossip() {
 		p.logger.Debug("not in sync, not broadcasting malfeasance proof",
@@ -140,7 +146,7 @@ func (p *Publisher) publish(ctx context.Context, nodeID types.NodeID, certs []Pr
 
 	malfeasanceProof := &MalfeasanceProof{
 		Version:      0,
-		Certificates: certs,
+		MarriageATXs: marriageATXs,
 		Domain:       InvalidActivation,
 		Proof:        proof,
 	}

@@ -1200,7 +1200,7 @@ func (app *App) initServices(ctx context.Context) error {
 		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
-		app.edVerifier,
+		fetcher,
 		trtl,
 	)
 	malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
