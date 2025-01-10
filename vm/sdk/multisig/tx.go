@@ -45,20 +45,15 @@ func (a *SignatureAggregator) Add(ref uint8, sig core.Signature) {
 
 // Raw returns full raw transaction including payload and signatures.
 func (a *SignatureAggregator) Raw() []byte {
-	var buf bytes.Buffer
-	enc := scale.NewEncoder(&buf)
+	buf := bytes.NewBuffer(a.unsigned)
+	enc := scale.NewEncoder(buf)
 	keys := slices.Sorted(maps.Keys(a.parts))
 	for _, ref := range keys {
 		if err := enc.Encode(a.parts[ref]); err != nil {
 			panic(err)
 		}
 	}
-	rawTxBuf := bytes.NewBuffer(a.unsigned)
-	enc = scale.NewEncoder(rawTxBuf)
-	if err := enc.Encode(buf.Bytes()); err != nil {
-		panic(err)
-	}
-	return rawTxBuf.Bytes()
+	return buf.Bytes()
 }
 
 func EncodeSpawnArgs(required uint8, pubkeys []core.PublicKey) []byte {

@@ -28,10 +28,6 @@ func SignedTx(tx *Tx, genesisID types.Hash20, pk signing.PrivateKey) ([]byte, er
 		return nil, fmt.Errorf("encoding deploy TX: %w", err)
 	}
 
-	sig := SignRawTx(encodedTx.Bytes(), genesisID, pk)
-	if _, err := scale.EncodeByteSlice(enc, sig); err != nil {
-		return nil, fmt.Errorf("encoding TX signature: %w", err)
-	}
-
+	encodedTx.Write(SignRawTx(encodedTx.Bytes(), genesisID, pk))
 	return encodedTx.Bytes(), nil
 }
