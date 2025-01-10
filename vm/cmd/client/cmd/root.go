@@ -6,8 +6,9 @@ import (
 	"math"
 	"os"
 
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spf13/cobra"
+
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var (

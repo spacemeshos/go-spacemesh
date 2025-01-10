@@ -4,6 +4,7 @@ import (
 	"context"
 
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 

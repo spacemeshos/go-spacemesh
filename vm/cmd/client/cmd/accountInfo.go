@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spf13/cobra"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/cmd/client/api"
-	"github.com/spf13/cobra"
 )
 
 var accountAddress string
@@ -37,5 +38,4 @@ var accountInfoCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(accountInfoCmd)
 	accountInfoCmd.Flags().StringVar(&accountAddress, "account", "", "account address to check")
-
 }

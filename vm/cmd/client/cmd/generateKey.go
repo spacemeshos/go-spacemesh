@@ -3,8 +3,9 @@ package cmd
 import (
 	"log"
 
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spf13/cobra"
+
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var file string
