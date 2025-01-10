@@ -83,6 +83,11 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID,
 	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof))
 }
 
+func (p *MalfeasanceHandlerV2) Republish(ctx context.Context, id types.NodeID) error {
+	// TODO(mafa): implement me
+	return nil
+}
+
 func (mh *MalfeasanceHandlerV2) decodeProof(data []byte) (wire.Proof, error) {
 	var atxProof wire.ATXProof
 	if err := codec.Decode(data, &atxProof); err != nil {
@@ -141,9 +146,4 @@ func (mh *MalfeasanceHandlerV2) PostIndex(
 
 func (mh *MalfeasanceHandlerV2) Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 	return mh.edVerifier.Verify(d, nodeID, m, sig)
-}
-
-func (p *MalfeasanceHandlerV2) Republish(ctx context.Context, id types.NodeID) error {
-	// TODO(mafa): implement me
-	return nil
 }
