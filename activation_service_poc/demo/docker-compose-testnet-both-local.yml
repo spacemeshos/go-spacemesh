@@ -62,4 +62,4 @@ services:
       ]
     volumes:
       - ./spacemesh-node-service-multi:/tmp/spacemesh-node-service
-      - ./config.testnet.node-service.json:/config.json
+      - ./config.testnet-16.node-service.json:/config.json
