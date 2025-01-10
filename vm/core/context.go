@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -23,23 +24,19 @@ const (
 // - maintains changes to the system state, that will be applied only after successful execution
 // - accumulates set of reusable objects and data.
 type Context struct {
-	Loader AccountLoader
+	loader  AccountLoader
+	layerID LayerID
 
-	// LayerID of the block.
-	LayerID   LayerID
-	GenesisID types.Hash20
-
-	PrincipalAccount  types.Account
-	PrincipalTemplate Template
-
-	TxPayload   []byte
-	TxData      []byte
-	WitnessData []byte
+	PrincipalAccount types.Account
+	TemplateCode     []byte
+	TxPayload        []byte
+	TxData           []byte
+	WitnessData      []byte
 
 	Header  Header
 	SpawnTx bool
 
-	Logger *zap.Logger
+	logger *zap.Logger
 
 	// consumed is in gas units and is actually subtracted from the principal account balance,
 	// i.e., it's a "hold" on the account funds. this includes a "hold" on maxspend.
@@ -72,12 +69,11 @@ func New(
 		)
 	}
 	logger.Debug("loaded principal account state", zap.Inline(&principalAccount))
-
+	_ = genesisID
 	return &Context{
-		GenesisID:        genesisID,
-		Loader:           loader,
-		LayerID:          layer,
-		Logger:           logger,
+		loader:           loader,
+		layerID:          layer,
+		logger:           logger,
 		PrincipalAccount: principalAccount,
 
 		changed: make(map[types.Address]*types.Account),
@@ -115,6 +111,10 @@ func (c *Context) TemplateAddress() Address {
 	return c.Header.TemplateAddress
 }
 
+func (c *Context) Template() []byte {
+	return c.TemplateCode
+}
+
 // MaxGas returns the maximum amount of gas that can be consumed by the transaction.
 func (c *Context) MaxGas() uint64 {
 	return c.Header.MaxGas
@@ -122,12 +122,7 @@ func (c *Context) MaxGas() uint64 {
 
 // Layer returns block layer id.
 func (c *Context) Layer() LayerID {
-	return c.LayerID
-}
-
-// GetGenesisID returns genesis id.
-func (c *Context) GetGenesisID() Hash20 {
-	return c.GenesisID
+	return c.layerID
 }
 
 // Balance returns the principal account balance.
@@ -135,15 +130,11 @@ func (c *Context) Balance() uint64 {
 	return c.PrincipalAccount.Balance
 }
 
-// Template of the principal account.
-func (c *Context) Template() Template {
-	return c.PrincipalTemplate
-}
-
 // Spawn account.
 func (c *Context) Spawn(template Address, blob []byte) (Address, error) {
 	// calculate new principal address
 	principalAddress := ComputePrincipalFromBlob(template, blob)
+	c.logger.Debug("spawning", zap.Stringer("template", template), zap.Stringer("address", principalAddress))
 
 	// check if the account is already spawned
 	account, err := c.load(principalAddress)
@@ -161,7 +152,7 @@ func (c *Context) Spawn(template Address, blob []byte) (Address, error) {
 	account.State = blob
 	account.TemplateAddress = &template
 	c.change(account)
-	c.Logger.Debug(
+	c.logger.Debug(
 		"spawn",
 		zap.Stringer("address", principalAddress),
 		zap.Stringer("template", template),
@@ -172,7 +163,7 @@ func (c *Context) Spawn(template Address, blob []byte) (Address, error) {
 
 func (c *Context) Deploy(code []byte) (Address, error) {
 	address := TemplateAddress(code)
-	c.Logger.Info(
+	c.logger.Info(
 		"deploying",
 		zap.Stringer("new template address", address),
 		zap.Stringer("principal", c.Principal()),
@@ -188,7 +179,7 @@ func (c *Context) Deploy(code []byte) (Address, error) {
 	account.State = code
 
 	c.change(account)
-	c.Logger.Info("deployed template", zap.Object("account", account))
+	c.logger.Info("deployed template", zap.Object("account", account))
 
 	return address, nil
 }
@@ -222,7 +213,7 @@ func (c *Context) IsSpawn() bool {
 // Transfer amount to the address after validation passes.
 func (c *Context) Transfer(to Address, amount uint64) error {
 	if amount == 0 {
-		c.Logger.Debug("ignoring zero-value transfer")
+		c.logger.Debug("ignoring zero-value transfer")
 		return nil
 	}
 	return c.transfer(&c.PrincipalAccount, to, amount, c.Header.MaxSpend)
@@ -263,7 +254,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 	from.Balance -= amount
 	c.change(from)
 	c.change(account)
-	c.Logger.Debug(
+	c.logger.Debug(
 		"transfer",
 		zap.Uint64("transfered", c.transferred),
 		zap.Uint64("amount", amount),
@@ -277,7 +268,7 @@ func (c *Context) transfer(from *Account, to Address, amount, max uint64) error 
 
 // SpendGas marks gas as consumed.
 func (c *Context) SpendGas(gas uint64) {
-	c.Logger.Debug("spent gas", zap.Uint64("gas", gas))
+	c.logger.Debug("spent gas", zap.Uint64("gas", gas))
 	c.gasSpent += gas
 }
 
@@ -303,7 +294,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 	c.PrincipalAccount.Balance -= amount
 	c.change(&c.PrincipalAccount)
 
-	c.Logger.Debug(
+	c.logger.Debug(
 		"consume",
 		zap.Error(err),
 		zap.Stringer("principal", c.Principal()),
@@ -321,7 +312,7 @@ func (c *Context) Consume(gas uint64) (err error) {
 // Refund refunds gas remaining after execution.
 func (c *Context) Refund() {
 	if c.gasSpent >= c.consumed {
-		c.Logger.Debug("spent more than consumed - nothing to refund")
+		c.logger.Debug("spent more than consumed - nothing to refund")
 		return
 	}
 	// TODO(lane): safe math
@@ -332,7 +323,7 @@ func (c *Context) Refund() {
 	c.PrincipalAccount.Balance += amount
 	c.change(&c.PrincipalAccount)
 
-	c.Logger.Debug(
+	c.logger.Debug(
 		"refund",
 		zap.Stringer("principal", c.Principal()),
 		zap.Uint64("consumed", c.consumed),
@@ -390,11 +381,18 @@ func (c *Context) Get(address types.Address) (*Account, error) {
 }
 
 func (c *Context) load(address types.Address) (*Account, error) {
+	c.logger.Info("loading", zap.Object("changed", zapcore.ObjectMarshalerFunc(func(oe zapcore.ObjectEncoder) error {
+		for a, c := range c.changed {
+			oe.AddObject(a.String(), c)
+		}
+		return nil
+	})), zap.Stringer("address", address))
+
 	account, exist := c.changed[address]
 	if exist {
 		return account, nil
 	}
-	loaded, err := c.Loader.Get(address)
+	loaded, err := c.loader.Get(address)
 	if err != nil {
 		return nil, fmt.Errorf("%w: error loading account: %w", ErrInternal, err)
 	}

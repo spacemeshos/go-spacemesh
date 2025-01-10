@@ -10,7 +10,7 @@ func HashTx(tx []byte) types.Hash32 {
 	defer hash.PutHasher(hasher)
 	hasher.Write(tx)
 	var hash types.Hash32
-	hasher.Sum(hash[0:])
+	hasher.Sum(hash[:0])
 	return hash
 }
 
