@@ -57,13 +57,6 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		if err := malfeasance.AddProof(p.cdb, nodeID, nil, proof, int(InvalidActivation), time.Now()); err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
-		// TODO(mafa): cache proof, right now caching it would clash with legacy malfeasance proofs
-		// arguably this shouldn't be needed at all, API queries the handler for info about a proof
-		// handler can decided if this needs caching or not
-		//
-		// p.cdb.CacheMalfeasanceProof(nodeID, proof)
-		p.tortoise.OnMalfeasance(nodeID)
-
 		return p.publish(ctx, nodeID, nil, proof) // pass nil for certificates
 	case err != nil:
 		return fmt.Errorf("getting equivocation set: %w", err)
@@ -86,13 +79,6 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		if err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
-		// TODO(mafa): cache proof, right now caching it would clash with legacy malfeasance proofs
-		// arguably this shouldn't be needed at all, API queries the handler for info about a proof
-		// handler can decided if this needs caching or not
-		//
-		// p.cdb.CacheMalfeasanceProof(nodeID, proof)
-		p.tortoise.OnMalfeasance(nodeID)
-
 		publish = true
 	}
 
@@ -119,23 +105,18 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		if err := malfeasance.SetMalicious(p.cdb, id, marriageID, time.Now()); err != nil {
 			return fmt.Errorf("setting malicious: %w", err)
 		}
-		// TODO(mafa): cache proof, right now caching it would clash with legacy malfeasance proofs
-		// arguably this shouldn't be needed at all, API queries the handler for info about a proof
-		// handler can decided if this needs caching or not
-		//
-		p.cdb.CacheMalfeasanceProof(id, proof)
-		p.tortoise.OnMalfeasance(id)
 	}
 
 	if !publish {
 		// all smeshers were already marked as malicious - no gossip to void spamming the network
 		return nil
 	}
-
 	return p.publish(ctx, nodeID, maps.Keys(mATXs), proof)
 }
 
 func (p *Publisher) publish(ctx context.Context, nodeID types.NodeID, marriageATXs []types.ATXID, proof []byte) error {
+	p.tortoise.OnMalfeasance(nodeID)
+
 	// Only gossip the proof if we are synced (to not spam the network with proofs others probably already have).
 	if !p.sync.ListenToATXGossip() {
 		p.logger.Debug("not in sync, not broadcasting malfeasance proof",
