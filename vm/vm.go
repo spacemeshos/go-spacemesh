@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"time"
 
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
@@ -537,14 +536,6 @@ func parse(
 	if tx.Version != 1 {
 		return nil, nil, fmt.Errorf("%w: %d", errWrongVersion, tx.Version)
 	}
-	// Decode witness data
-	witnessData, _, err := scale.DecodeByteSlice(decoder)
-	switch {
-	case errors.Is(err, io.EOF):
-		logger.Debug("witness data is empty")
-	case err != nil:
-		return nil, nil, fmt.Errorf("decoding witness data: %w", err)
-	}
 
 	ctx, err := core.New(cfg.GenesisID, lid, tx.Principal, loader, logger)
 	if err != nil {
@@ -602,7 +593,7 @@ func parse(
 	}
 	ctx.TxPayload = tx.Payload
 	ctx.TxData = raw[:n]
-	ctx.WitnessData = witnessData
+	ctx.WitnessData = raw[n:]
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
@@ -616,10 +607,10 @@ func parse(
 	logger.Debug(
 		"calculating max gas",
 		zap.Int("payload len", len(tx.Payload)),
-		zap.Int("witness data len", len(witnessData)),
+		zap.Int("witness data len", len(ctx.WitnessData)),
 	)
 	ctx.Header.MaxGas = core.MaxGas(
-		estimatedStateSize + max(len(tx.Payload), 6) - 6 + len(witnessData),
+		estimatedStateSize + max(len(tx.Payload), 6) - 6 + len(ctx.WitnessData),
 	) // skip bytes for method selector
 	ctx.Header.Principal = tx.Principal
 	ctx.Header.GasPrice = tx.Metadata.GasPrice
