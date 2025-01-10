@@ -74,7 +74,8 @@ func NewHandler(
 		},
 		[]string{
 			typeLabel,
-		})
+		},
+	)
 	invalidProofCounter := prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: metrics.Namespace,

@@ -495,8 +495,8 @@ func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
 
 func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error {
 	seen := make(map[uint32]struct{})
-	for _, niposts := range atx.NIPosts {
-		for _, post := range niposts.Posts {
+	for _, niPosts := range atx.NIPosts {
+		for _, post := range niPosts.Posts {
 			if _, ok := seen[post.MarriageIndex]; ok {
 				return fmt.Errorf("ID present twice (duplicated marriage index): %d", post.MarriageIndex)
 			}
@@ -528,7 +528,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			return nil, fmt.Errorf("fetching previous atx: %w", err)
 		}
 		if prevAtx.PublishEpoch >= atx.PublishEpoch {
-			err := fmt.Errorf("previous atx is too new (%d >= %d) (%s) ", prevAtx.PublishEpoch, atx.PublishEpoch, prev)
+			err := fmt.Errorf("previous atx (%s) is too new (%d >= %d)", prev, prevAtx.PublishEpoch, atx.PublishEpoch)
 			return nil, err
 		}
 		previousAtxs[i] = prevAtx
@@ -541,9 +541,9 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 
 	// validate previous ATXs
 	nipostSizes := make(nipostSizes, len(atx.NIPosts))
-	for i, niposts := range atx.NIPosts {
+	for i, niPosts := range atx.NIPosts {
 		nipostSizes[i] = new(nipostSize)
-		for _, post := range niposts.Posts {
+		for _, post := range niPosts.Posts {
 			if post.MarriageIndex >= uint32(len(equivocationSet)) {
 				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
 				return nil, err
@@ -563,11 +563,11 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate poet membership proofs
-	for i, niposts := range atx.NIPosts {
+	for i, niPosts := range atx.NIPosts {
 		// verify PoET memberships in a single go
 		indexedChallenges := make(map[uint64][]byte)
 
-		for _, post := range niposts.Posts {
+		for _, post := range niPosts.Posts {
 			if _, ok := indexedChallenges[post.MembershipLeafIndex]; ok {
 				continue
 			}
@@ -591,10 +591,10 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		}
 
 		membership := types.MultiMerkleProof{
-			Nodes:       niposts.Membership.Nodes,
+			Nodes:       niPosts.Membership.Nodes,
 			LeafIndices: leafIndices,
 		}
-		leaves, err := h.nipostValidator.PoetMembership(ctx, &membership, niposts.Challenge, poetChallenges)
+		leaves, err := h.nipostValidator.PoetMembership(ctx, &membership, niPosts.Challenge, poetChallenges)
 		if err != nil {
 			return nil, fmt.Errorf("validating poet membership: %w", err)
 		}
@@ -606,7 +606,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		return nil, err
 	}
 
-	// validate all niposts
+	// validate all NIPoSTs
 	if atx.Initial != nil {
 		commitment := atx.Initial.CommitmentATX
 		nipostIdx := 0
@@ -625,8 +625,8 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	var smesherCommitment *types.ATXID
-	for idx, niposts := range atx.NIPosts {
-		for _, post := range niposts.Posts {
+	for idx, niPosts := range atx.NIPosts {
+		for _, post := range niPosts.Posts {
 			id := equivocationSet[post.MarriageIndex]
 			commitment, err := atxs.CommitmentATX(h.cdb, id)
 			if err != nil {
@@ -635,7 +635,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			if id == atx.SmesherID {
 				smesherCommitment = &commitment
 			}
-			if err := h.validatePost(ctx, id, atx, commitment, niposts.Challenge, post, idx); err != nil {
+			if err := h.validatePost(ctx, id, atx, commitment, niPosts.Challenge, post, idx); err != nil {
 				return nil, err
 			}
 			result.ids[id] = idData{
@@ -847,7 +847,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 	if err != nil {
 		return true, fmt.Errorf("creating double merge proof: %w", err)
 	}
-	return true, h.malPublisher.Publish(ctx, atx.SmesherID, proof)
+	return true, h.malPublisher.Publish(ctx, atx.ActivationTxV2.SmesherID, proof)
 }
 
 func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
@@ -930,6 +930,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
+	republishProof := false
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			newMarriageID, err := marriage.NewID(tx)
@@ -942,7 +943,8 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				Target: atx.SmesherID,
 			}
 			malicious := false
-			marriageIDs := make([]marriage.ID, 0)
+			marriageIDs := make([]marriage.ID, 1)
+			marriageIDs[0] = newMarriageID
 			for i, m := range watx.marriages {
 				info.NodeID = m.id
 				info.MarriageIndex = i
@@ -955,7 +957,6 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 						return fmt.Errorf("find marriage ID for node ID %s: %w", m.id.ShortString(), err)
 					}
 					marriageIDs = append(marriageIDs, id)
-					continue
 				case err != nil:
 					return fmt.Errorf("adding marriage: %w", err)
 				}
@@ -967,21 +968,30 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 					return fmt.Errorf("checking if node is malicious: %w", err)
 				}
 			}
-			if len(marriageIDs) != 0 {
-				marriageIDs := append(marriageIDs, newMarriageID)
-				combinedID := slices.Min(marriageIDs)
+			if len(marriageIDs) > 1 {
+				newMarriageID = slices.Min(marriageIDs)
 				for _, id := range marriageIDs {
-					if id != combinedID {
-						if err := marriage.UpdateMarriageID(tx, id, combinedID); err != nil {
+					if id != newMarriageID {
+						if err := marriage.UpdateMarriageID(tx, id, newMarriageID); err != nil {
 							return fmt.Errorf("updating marriage ID for %d: %w", id, err)
 						}
 					}
 				}
-				newMarriageID = combinedID
 			}
 			if malicious {
-				for _, m := range watx.marriages {
-					if err := malfeasance.SetMalicious(tx, m.id, newMarriageID, time.Now()); err != nil {
+				nodeIDs, err := marriage.NodeIDsByID(tx, newMarriageID)
+				if err != nil {
+					return fmt.Errorf("fetching node IDs by marriage ID: %w", err)
+				}
+				for _, id := range nodeIDs {
+					malicious, err := malfeasance.IsMalicious(tx, id)
+					if err != nil {
+						return fmt.Errorf("checking if node ID is malicious: %w", err)
+					}
+					if !malicious {
+						republishProof = true
+					}
+					if err := malfeasance.SetMalicious(tx, id, newMarriageID, time.Now()); err != nil {
 						return fmt.Errorf("marking node as malicious: %w", err)
 					}
 				}
@@ -1007,9 +1017,15 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 	err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
+		//
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious
 		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
 		//    the gossip handler (not sync!)
+		if republishProof {
+			malicious = true
+			return h.malPublisher.Republish(ctx, atx.SmesherID)
+		}
+
 		var err error
 		malicious, err = h.checkMalicious(ctx, tx, watx)
 		return err
