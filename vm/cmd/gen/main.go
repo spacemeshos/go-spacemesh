@@ -1,11 +1,11 @@
 package main
 
 import (
-	"crypto/ed25519"
 	"encoding/hex"
 	"fmt"
 	"log"
-	"math/rand"
+	oldRand "math/rand"
+	"math/rand/v2"
 	"os"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -13,22 +13,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
 	walletSdk "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
-
-const MaxPubkeys = 3
-
-func getKeypair() (pub ed25519.PublicKey, priv ed25519.PrivateKey) {
-	// generate a random keypair
-	pubkey, privkey, err := ed25519.GenerateKey(rand.New(rand.NewSource(rand.Int63())))
-	if err != nil {
-		log.Fatal("failed to generate ed25519 key")
-	}
-	return pubkey, privkey
-}
 
 func main() {
 	t1 := table.NewWriter()
@@ -43,36 +33,49 @@ func main() {
 		"pubkey",
 		"privkey",
 		"principal",
-		"network",
+		"hrp",
 		"template",
 	}
 
 	// pregenerate keys
-	pubkeys := make([]ed25519.PublicKey, MaxPubkeys)
-	privkeys := make([]ed25519.PrivateKey, MaxPubkeys)
-	for i := range pubkeys {
-		pubkeys[i], privkeys[i] = getKeypair()
+	var signers []*signing.EdSigner
+	for i := range int64(3) {
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(oldRand.New(oldRand.NewSource(i))))
+		if err != nil {
+			log.Fatalf("failed to generate ed25519 key: %v", err)
+		}
+		signers = append(signers, signer)
 	}
 	t1.AppendHeader(t1Rows)
 	t2.AppendHeader(table.Row{
 		"method",
 		"principal",
-		"network",
+		"hrp",
 		"gasPrice",
 		"nonce",
 		"template",
-		"spawnArgs",
+		"arguments",
 		"recipient",
 		"amount",
 		"tx",
 	})
-	runNetwork("atest", pubkeys, privkeys, t1, t2)
+	runNetwork("atest", types.Hash20{}, signers, t1, t2)
 
 	t1.Render()
 	t2.Render()
 }
 
-func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.PrivateKey, t1, t2 table.Writer) {
+type Template interface {
+	Spawn(opts ...sdk.Opt) *core.Tx
+	Spend(recipient types.Address, amount, nonce uint64, opts ...sdk.Opt) *core.Tx
+	Deploy(nonce uint64, blob []byte) *core.Tx
+
+	Signed(tx *core.Tx, genesisID types.Hash20) []byte
+	TemplateAddress() types.Address
+}
+
+func runNetwork(hrp string, genesisID types.Hash20, signers []*signing.EdSigner, t1, t2 table.Writer) {
+	rng := rand.New(&rand.PCG{})
 	libPath, err := host.AthenaLibPath()
 	if err != nil {
 		panic(fmt.Errorf("loading Athena VM: %w", err))
@@ -85,16 +88,12 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 
 	types.SetNetworkHRP(hrp)
 
-	var addrs []types.Address
-
 	// first print the keys and addresses
-	for i, pubkey := range pubkeys {
-		addr := walletSdk.Address(pubkey)
-		addrs = append(addrs, addr)
+	for _, signer := range signers {
 		t1.AppendRow(table.Row{
-			hex.EncodeToString(pubkey),
-			hex.EncodeToString(privkeys[i]),
-			addr.String(),
+			hex.EncodeToString(signer.PublicKey().Bytes()),
+			hex.EncodeToString(signer.PrivateKey()),
+			walletSdk.Address(signer.PublicKey().Bytes()).String(),
 			hrp,
 			wallet.TemplateAddress.String(),
 		})
@@ -109,46 +108,73 @@ func runNetwork(hrp string, pubkeys []ed25519.PublicKey, privkeys []ed25519.Priv
 		log.Fatal("failed to generate method selector")
 	}
 
+	var contracts []Template
+	for _, signer := range signers {
+		contracts = append(contracts, &singleSig{signer})
+	}
+
+	contracts = append(contracts, newMultiSig(2, signers))
+
 	// next generate and print the transactions
-	for i, principal := range addrs {
-		tx, err := walletSdk.Spawn(signing.PrivateKey(privkeys[i]), 0)
-		if err != nil {
-			log.Fatalf("failed to generate spawn transaction: %s", err)
-		}
+	for _, template := range contracts {
 		// first generate a spawn transaction
+		tx := template.Spawn()
+		signedTx := template.Signed(tx, genesisID)
 		t2.AppendRow(table.Row{
 			fmt.Sprintf("spawn [%s]", hex.EncodeToString(spawnSelector[:])),
-			principal.String(),
+			tx.Principal.String(),
+			hrp,
+			tx.Metadata.GasPrice,
+			tx.Metadata.Nonce,
+			template.TemplateAddress().String(),
+			hex.EncodeToString(tx.Payload),
+			"-",
+			"-",
+			hex.EncodeToString(signedTx),
+		})
+
+		// generate a deploy transaction
+		deploySelector, err := athcon.FromString("athexp_deploy")
+		if err != nil {
+			log.Fatal("failed to generate deploy method selector")
+		}
+		nonce := rng.Uint64N(1000)
+		tx = template.Deploy(nonce, []byte("some code"))
+		signedTx = template.Signed(tx, genesisID)
+		t2.AppendRow(table.Row{
+			fmt.Sprintf("deploy [%s]", hex.EncodeToString(deploySelector[:])),
+			tx.Principal.String(),
 			hrp,
 			sdk.Defaults().GasPrice,
-			0,
-			wallet.TemplateAddress.String(),
-			hex.EncodeToString(vmlib.EncodeTxSpawn(athcon.Bytes32(pubkeys[i]))),
-			"",
-			"0",
-			hex.EncodeToString(tx),
+			tx.Metadata.Nonce,
+			template.TemplateAddress().String(),
+			hex.EncodeToString(tx.Payload),
+			"-",
+			"-",
+			hex.EncodeToString(signedTx),
 		})
 
 		// generate some spend txs
-		for _, recipient := range addrs[:min(len(addrs), 3)] {
-			// generate a random amount and nonce
-			amount := rand.Uint64()
-			nonce := rand.Uint64()
-			tx, err := walletSdk.Spend(signing.PrivateKey(privkeys[i]), recipient, amount, nonce)
-			if err != nil {
-				log.Fatalf("failed to generate spend transaction: %s", err)
+		for range 2 {
+			amount := rng.Uint64N(50000)
+			nonce := rng.Uint64N(1000)
+			var recipient types.Address
+			for i := range recipient {
+				recipient[i] = byte(rng.Uint32())
 			}
+			tx := template.Spend(recipient, amount, nonce)
+			signedTx := template.Signed(tx, genesisID)
 			t2.AppendRow(table.Row{
 				fmt.Sprintf("spend [%s]", hex.EncodeToString(spendSelector[:])),
-				principal.String(),
+				tx.Principal.String(),
 				hrp,
 				sdk.Defaults().GasPrice,
 				nonce,
-				wallet.TemplateAddress.String(),
-				"",
+				template.TemplateAddress().String(),
+				hex.EncodeToString(tx.Payload),
 				recipient.String(),
 				amount,
-				hex.EncodeToString(tx),
+				hex.EncodeToString(signedTx),
 			})
 		}
 	}
