@@ -50,7 +50,6 @@ func DeployTx(pubkey ed25519.PublicKey, nonce core.Nonce, blob []byte, opts ...s
 		},
 		Payload: payload,
 	}, nil
-
 }
 
 func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Opt) ([]byte, error) {
@@ -118,7 +117,13 @@ func Spawn(
 	return core.SignedTx(tx, options.GenesisID, pk)
 }
 
-func SpendTx(pubkey ed25519.PublicKey, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) (*core.Tx, error) {
+func SpendTx(
+	pubkey ed25519.PublicKey,
+	to types.Address,
+	amount uint64,
+	nonce types.Nonce,
+	opts ...sdk.Opt,
+) (*core.Tx, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)

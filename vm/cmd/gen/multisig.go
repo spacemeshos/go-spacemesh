@@ -62,5 +62,4 @@ func (m *multiSigWallet) Signed(tx *core.Tx, genesisID types.Hash20) []byte {
 		agg.Add(uint8(i), core.Signature(sig))
 	}
 	return agg.Raw()
-
 }
