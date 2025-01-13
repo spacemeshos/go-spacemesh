@@ -332,15 +332,18 @@ func (h *hostContext) Spawn(blob []byte) athcon.Address {
 	if h.staticContext.Principal == emptyAddress {
 		// staticContext is unused today, but will be needed to read principal in the future.
 		// see https://github.com/spacemeshos/go-spacemesh/issues/6420
+		h.logger.Debug("not spawning: staticContext.Principal is empty")
 		return athcon.Address(emptyAddress)
 	}
 	if h.dynamicContext.Template == emptyAddress {
+		h.logger.Debug("not spawning: dynamicContext.Template is empty")
 		return athcon.Address(emptyAddress)
 	}
 
-	if address, err := h.host.Spawn(types.Address(h.dynamicContext.Template), blob); err != nil {
+	address, err := h.host.Spawn(h.dynamicContext.Template, blob)
+	if err != nil {
+		h.logger.Debug("failed to spawn", zap.Error(err))
 		return athcon.Address(emptyAddress)
-	} else {
-		return athcon.Address(address)
 	}
+	return athcon.Address(address)
 }

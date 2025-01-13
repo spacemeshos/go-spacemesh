@@ -271,44 +271,6 @@ func (c *MockHostGetCall) DoAndReturn(f func(types.Address) (*types.Account, err
 	return c
 }
 
-// GetGenesisID mocks base method.
-func (m *MockHost) GetGenesisID() types.Hash20 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetGenesisID")
-	ret0, _ := ret[0].(types.Hash20)
-	return ret0
-}
-
-// GetGenesisID indicates an expected call of GetGenesisID.
-func (mr *MockHostMockRecorder) GetGenesisID() *MockHostGetGenesisIDCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGenesisID", reflect.TypeOf((*MockHost)(nil).GetGenesisID))
-	return &MockHostGetGenesisIDCall{Call: call}
-}
-
-// MockHostGetGenesisIDCall wrap *gomock.Call
-type MockHostGetGenesisIDCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockHostGetGenesisIDCall) Return(arg0 types.Hash20) *MockHostGetGenesisIDCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockHostGetGenesisIDCall) Do(f func() types.Hash20) *MockHostGetGenesisIDCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostGetGenesisIDCall) DoAndReturn(f func() types.Hash20) *MockHostGetGenesisIDCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Has mocks base method.
 func (m *MockHost) Has(arg0 types.Address) (bool, error) {
 	m.ctrl.T.Helper()
@@ -691,10 +653,10 @@ func (c *MockHostSpendGasCall) DoAndReturn(f func(uint64)) *MockHostSpendGasCall
 }
 
 // Template mocks base method.
-func (m *MockHost) Template() core.Template {
+func (m *MockHost) Template() []byte {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Template")
-	ret0, _ := ret[0].(core.Template)
+	ret0, _ := ret[0].([]byte)
 	return ret0
 }
 
@@ -711,19 +673,19 @@ type MockHostTemplateCall struct {
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockHostTemplateCall) Return(arg0 core.Template) *MockHostTemplateCall {
+func (c *MockHostTemplateCall) Return(arg0 []byte) *MockHostTemplateCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockHostTemplateCall) Do(f func() core.Template) *MockHostTemplateCall {
+func (c *MockHostTemplateCall) Do(f func() []byte) *MockHostTemplateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockHostTemplateCall) DoAndReturn(f func() core.Template) *MockHostTemplateCall {
+func (c *MockHostTemplateCall) DoAndReturn(f func() []byte) *MockHostTemplateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

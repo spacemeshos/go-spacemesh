@@ -115,45 +115,6 @@ func (c *MockTemplateLoadGasCall) DoAndReturn(f func() uint64) *MockTemplateLoad
 	return c
 }
 
-// MaxSpend mocks base method.
-func (m *MockTemplate) MaxSpend(arg0 []byte) (uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MaxSpend", arg0)
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MaxSpend indicates an expected call of MaxSpend.
-func (mr *MockTemplateMockRecorder) MaxSpend(arg0 any) *MockTemplateMaxSpendCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaxSpend", reflect.TypeOf((*MockTemplate)(nil).MaxSpend), arg0)
-	return &MockTemplateMaxSpendCall{Call: call}
-}
-
-// MockTemplateMaxSpendCall wrap *gomock.Call
-type MockTemplateMaxSpendCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockTemplateMaxSpendCall) Return(arg0 uint64, arg1 error) *MockTemplateMaxSpendCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockTemplateMaxSpendCall) Do(f func([]byte) (uint64, error)) *MockTemplateMaxSpendCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockTemplateMaxSpendCall) DoAndReturn(f func([]byte) (uint64, error)) *MockTemplateMaxSpendCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Verify mocks base method.
 func (m *MockTemplate) Verify(tx, witnessData []byte) error {
 	m.ctrl.T.Helper()
