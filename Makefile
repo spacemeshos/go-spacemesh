@@ -152,7 +152,8 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker buildx build \
+	docker buildx create --name multiarch --driver docker-container --use
+		docker buildx build \
 		--secret id=mynetrc,src=$(HOME)/.netrc \
 		--build-arg VERSION=${VERSION} \
 		--platform linux/amd64,linux/arm64 \
@@ -177,7 +178,8 @@ endif
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
-	DOCKER_BUILDKIT=1 docker buildx build \
+	docker buildx create --name multiarch --driver docker-container --use    
+		docker buildx build \
 		--secret id=mynetrc,src=$(HOME)/.netrc \
 		--platform linux/amd64,linux/arm64 \
 		-t go-spacemesh-bs:$(SHA) \
