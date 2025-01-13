@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	p2phost "github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/protocol"
@@ -1023,8 +1024,9 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
+			ps := peers.New()
 			f, err := NewFetch(cdb, store.New(), host,
-				peers.New(),
+				ps,
 				WithContext(context.Background()),
 				withServers(map[string]requester{hashProtocol: client}),
 				WithConfig(cfg),
@@ -1041,6 +1043,34 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			// Connect the P2P mesh only after the server is configured.
 			// This way, we avoid the race causing bad protocol identification.
 			require.NoError(t, mesh.ConnectAllButSelf())
+			// There are possibilities for race in go-libp2p when we connect early
+			// after server creation. IDService has its own snapshot which is updated
+			// upon EvtLocalProtocolsUpdated event. The events propagate over a channel
+			// and there's no way to see if IDService has already updated its snapshot.
+			// In case if the snapshot is outdated, a wrong list of supported protocols
+			// can be sent to the peers. The only way around it is apparently to re-connect
+			// if the necessary protocol is not supported.
+			require.Eventually(t, func() bool {
+				if ps.Total() == 0 {
+					return false
+				}
+				if len(ps.SelectBestWithProtocols(1, []protocol.ID{
+					hashProtocol,
+				})) != 0 {
+					return true
+				}
+				nets := mesh.Nets()
+				for _, n1 := range nets {
+					for _, n2 := range nets {
+						if n1 == n2 {
+							continue
+						}
+						require.NoError(t, mesh.DisconnectNets(n1, n2))
+					}
+				}
+				require.NoError(t, mesh.ConnectAllButSelf())
+				return false
+			}, 1*time.Second, 5*time.Millisecond)
 
 			var atxIds []types.ATXID
 			for i := 0; i < totalRequests; i++ {
