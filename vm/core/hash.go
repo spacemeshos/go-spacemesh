@@ -5,15 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
-func HashTx(tx []byte) types.Hash32 {
-	hasher := hash.GetHasher()
-	defer hash.PutHasher(hasher)
-	hasher.Write(tx)
-	var hash types.Hash32
-	hasher.Sum(hash[0:])
-	return hash
-}
-
 func SigningBody(genesis, tx []byte) []byte {
 	full := make([]byte, 0, len(genesis)+len(tx))
 	full = append(full, genesis...)

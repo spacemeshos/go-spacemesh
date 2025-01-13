@@ -8,11 +8,12 @@ import (
 	"github.com/spacemeshos/go-scale"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func SignRawTx(tx []byte, genesisID types.Hash20, pk signing.PrivateKey) []byte {
-	hash := HashTx(tx)
+	hash := hash.Sum(tx)
 	// FIXME: Prefix TX with genesis ID for signing.
 	// signedData := SigningBody(genesisID[:], hash[:])
 	signedData := hash[:]
