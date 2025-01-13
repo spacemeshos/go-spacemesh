@@ -177,8 +177,7 @@ endif
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64
 .PHONY: dockerpush-only
 
-dockerbuild-bs:
-	docker buildx create --name multiarch --driver docker-container --use    
+dockerbuild-bs:    
 		docker buildx build \
 		--secret id=mynetrc,src=$(HOME)/.netrc \
 		--platform linux/amd64,linux/arm64 \
