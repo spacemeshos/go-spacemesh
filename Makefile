@@ -152,11 +152,13 @@ list-versions:
 .PHONY: list-versions
 
 dockerbuild-go:
-	DOCKER_BUILDKIT=1 docker build \
+	DOCKER_BUILDKIT=1 docker buildx build \
 		--secret id=mynetrc,src=$(HOME)/.netrc \
 		--build-arg VERSION=${VERSION} \
+		--platform linux/amd64,linux/arm64 \
 		-t go-spacemesh:$(SHA) \
 		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64 \
 		.
 .PHONY: dockerbuild-go
 
@@ -168,14 +170,19 @@ ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
 	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64
+
 	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
-	DOCKER_BUILDKIT=1 docker build \
+	DOCKER_BUILDKIT=1 docker buildx build \
 		--secret id=mynetrc,src=$(HOME)/.netrc \
+		--platform linux/amd64,linux/arm64 \
 		-t go-spacemesh-bs:$(SHA) \
 		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64 \
 		-f ./bootstrap.Dockerfile \
 		.
 .PHONY: dockerbuild-bs
@@ -187,8 +194,11 @@ dockerpush-bs-only:
 ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
-	docker tag go-spacemesh-bs:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
-	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
+	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64
+
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64
 .PHONY: dockerpush-bs-only
 
 fuzz:
