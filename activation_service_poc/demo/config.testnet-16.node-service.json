@@ -1,8 +1,8 @@
 {
     "api": {
-        "grpc-public-listener": "0.0.0.0:19092",
-        "grpc-private-listener": "0.0.0.0:19093",
-        "node-service-listener": "0.0.0.0:19099"
+        "grpc-public-listener": "0.0.0.0:19492",
+        "grpc-private-listener": "0.0.0.0:19493",
+        "node-service-listener": "0.0.0.0:19499"
     },
     "cache": {
         "atx-size": 1000

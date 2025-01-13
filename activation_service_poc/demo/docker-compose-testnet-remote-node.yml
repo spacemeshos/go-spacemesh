@@ -1,6 +1,5 @@
 services:
   activation-service-remote-1:
-    network_mode: "host"
     image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command:
       [
@@ -21,9 +20,14 @@ services:
     volumes:
       - ./spacemesh-client-remote-1:/tmp/spacemesh-client
       - ./config.testnet-16-smesher-service.json:/config.json
+    networks:
+      - spacemesh-net-rn
+    ports:
+      - 19071:19071
+      - 19082:19082
+      - 19083:19083
 
   activation-service-remote-2:
-    network_mode: "host"
     image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command:
       [
@@ -44,3 +48,13 @@ services:
     volumes:
       - ./spacemesh-client-remote-2:/tmp/spacemesh-client
       - ./config.testnet-16-smesher-service.json:/config.json
+    networks:
+      - spacemesh-net-rn
+    ports:
+      - 19171:19171
+      - 19182:19182
+      - 19183:19183
+
+networks:
+  spacemesh-net-rn:
+    driver: bridge
