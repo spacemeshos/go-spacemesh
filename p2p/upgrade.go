@@ -532,11 +532,16 @@ func (fh *Host) PeerInfo() peerinfo.PeerInfo {
 // Note that the set of the protocols in the ProtoBook for a particular peer may also
 // change via a push identity notification when the peer adds a new handler via
 // SetStreamHandler (e.g. sets up a new Server).
-func (fh *Host) Identify(p peer.ID) {
+func (fh *Host) Identify(ctx context.Context, p peer.ID) error {
 	for _, c := range fh.Network().ConnsToPeer(p) {
 		// IDService.IdentifyConn is a no-op if the connection is already
 		// identified, but otherwise we need to wait for identification to finish
 		// to have proper set of protocols.
-		fh.idService.IdentifyConn(c)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-fh.idService.IdentifyWait(c):
+		}
 	}
+	return nil
 }

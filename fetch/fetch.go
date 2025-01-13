@@ -38,7 +38,8 @@ const (
 
 	cacheSize = 1000
 
-	RedundantPeers = 5
+	RedundantPeers  = 5
+	identifyTimeout = 3 * time.Second
 )
 
 var (
@@ -305,7 +306,13 @@ func NewFetch(
 				// sure it is possible to use one of the specified
 				// protocols. If we don't do this, there may be a race causing
 				// some peers to be unnecessarily ignored.
-				host.Identify(peer)
+				ctx, cancel := context.WithTimeout(context.Background(), identifyTimeout)
+				defer cancel()
+				if err := host.Identify(ctx, peer); err != nil {
+					f.logger.Debug("failed to identify peer",
+						zap.Stringer("id", peer), zap.Error(err))
+					return nil
+				}
 				ps, err := host.Peerstore().GetProtocols(peer)
 				if err != nil {
 					f.logger.Debug("failed to get protocols for peer",
