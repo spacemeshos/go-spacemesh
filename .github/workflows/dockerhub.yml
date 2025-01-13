@@ -20,7 +20,14 @@ on:
         default: ''
 jobs:
   dockerpush:
-    runs-on: ubuntu-22.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            outname_sufix: "linux-amd64"
+          - os: [self-hosted, macOS, ARM64, go-spacemesh]
+            outname_sufix: "mac-arm64"
     steps:
     - name: checkout
       uses: actions/checkout@v4
@@ -33,32 +40,42 @@ jobs:
         username: ${{ secrets.GH_ACTION_TOKEN_USER }}
         password: ${{ secrets.GH_ACTION_TOKEN }}
       if: vars.GOPRIVATE
+
+    - name: get tag end arm64
+      if: ${{ matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
+      run: |
+        echo "TAG_END=-arm64" >> $GITHUB_ENV
     
+    - name: get tag end amd64
+      if: ${{ matrix.os == 'ubuntu-22.04' }}
+      run: |
+        echo "TAG_END=" >> $GITHUB_ENV
+
     - name: Build docker images
       run: |
         export VERSION="${{ github.ref_name }}"
-        make dockerbuild-go
-        make dockerbuild-bs
+        make dockerbuild-go TAG_END=$TAG_END
+        make dockerbuild-bs TAG_END=$TAG_END
 
     - name: Push docker images to dockerhub
       run: |
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-only TAG_END=$TAG_END
+        make dockerpush-bs-only TAG_END=$TAG_END
 
     - name: Push docker images to dockerhub
       if: inputs.custom_image_tag
       run: |
         export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}"
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-only TAG_END=$TAG_END
+        make dockerpush-bs-only TAG_END=$TAG_END
 
     - name: Push docker images with version tag to dockerhub
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         export DOCKER_IMAGE_VERSION="${{ github.ref_name }}"
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-only TAG_END=$TAG_END
+        make dockerpush-bs-only TAG_END=$TAG_END
 
         export DOCKER_IMAGE_REPO="go-spacemesh"
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-only TAG_END=$TAG_END
+        make dockerpush-bs-only TAG_END=$TAG_END
