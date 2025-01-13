@@ -41,41 +41,41 @@ jobs:
         password: ${{ secrets.GH_ACTION_TOKEN }}
       if: vars.GOPRIVATE
 
-    - name: get tag end arm64
+    - name: get tag sufix arm64
       if: ${{ matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
       run: |
-        echo "TAG_END=-arm64" >> $GITHUB_ENV
+        echo "SUFIX=-arm64" >> $GITHUB_ENV
     
-    - name: get tag end amd64
+    - name: get tag sufix amd64
       if: ${{ matrix.os == 'ubuntu-22.04' }}
       run: |
-        echo "TAG_END=" >> $GITHUB_ENV
+        echo "SUFIX=" >> $GITHUB_ENV
 
     - name: Build docker images
       run: |
         export VERSION="${{ github.ref_name }}"
-        make dockerbuild-go TAG_END=$TAG_END
-        make dockerbuild-bs TAG_END=$TAG_END
+        make dockerbuild-go TAG_SUFIX=$SUFIX
+        make dockerbuild-bs TAG_SUFIX=$SUFIX
 
     - name: Push docker images to dockerhub
       run: |
-        make dockerpush-only TAG_END=$TAG_END
-        make dockerpush-bs-only TAG_END=$TAG_END
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
 
     - name: Push docker images to dockerhub
       if: inputs.custom_image_tag
       run: |
         export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}"
-        make dockerpush-only TAG_END=$TAG_END
-        make dockerpush-bs-only TAG_END=$TAG_END
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
 
     - name: Push docker images with version tag to dockerhub
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         export DOCKER_IMAGE_VERSION="${{ github.ref_name }}"
-        make dockerpush-only TAG_END=$TAG_END
-        make dockerpush-bs-only TAG_END=$TAG_END
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
 
         export DOCKER_IMAGE_REPO="go-spacemesh"
-        make dockerpush-only TAG_END=$TAG_END
-        make dockerpush-bs-only TAG_END=$TAG_END
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
