@@ -42,7 +42,7 @@ jobs:
       if: vars.GOPRIVATE
 
     - name: get tag sufix arm64
-      if: ${{ matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
+      if: ${{ matrix.os == 'self-hosted' || matrix.os == 'macOS' || matrix.os == 'ARM64' || matrix.os == 'go-spacemesh' }}
       run: |
         echo "SUFIX=-arm64" >> $GITHUB_ENV
     
