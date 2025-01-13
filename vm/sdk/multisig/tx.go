@@ -72,15 +72,22 @@ func EncodeSpendArgs(to types.Address, amount uint64) []byte {
 	return scale.MustMarshal(args)
 }
 
+func EncodeDeployArgs(blob []byte) []byte {
+	args := multisig.DeployArguments{
+		Code: blob,
+	}
+	return scale.MustMarshal(args)
+}
+
 // Spawn creates a raw SPAWN transaction, which needs to be signed by the required
 // number of signers.
-func Spawn(
+func SpawnTx(
 	template types.Address,
 	required uint8,
 	pubkeys []core.PublicKey,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
-) ([]byte, error) {
+) *core.Tx {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
@@ -91,7 +98,7 @@ func Spawn(
 		Selector: &selector,
 		Input:    encodedArgs,
 	}
-	tx := core.Tx{
+	return &core.Tx{
 		Version:   1,
 		Principal: core.ComputePrincipalFromBlob(template, encodedArgs),
 		Template:  &template,
@@ -101,12 +108,19 @@ func Spawn(
 		},
 		Payload: scale.MustMarshal(payload),
 	}
-	return codec.Encode(&tx)
 }
 
-// Spend creates a raw SPEND transaction, which needs to be signed by the required
-// number of signers.
-func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
+func Spawn(
+	template types.Address,
+	required uint8,
+	pubkeys []core.PublicKey,
+	nonce core.Nonce,
+	opts ...sdk.Opt,
+) ([]byte, error) {
+	return codec.Encode(SpawnTx(template, required, pubkeys, nonce, opts...))
+}
+
+func SpendTx(principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) *core.Tx {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
@@ -118,7 +132,7 @@ func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts .
 		Input:    EncodeSpendArgs(to, amount),
 	}
 
-	tx := core.Tx{
+	return &core.Tx{
 		Version:   uint8(sdk.TxVersion),
 		Principal: principal,
 		Metadata: core.Metadata{
@@ -127,5 +141,33 @@ func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts .
 		},
 		Payload: scale.MustMarshal(payload),
 	}
-	return codec.Encode(&tx)
+}
+
+// Spend creates a raw SPEND transaction, which needs to be signed by the required
+// number of signers.
+func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
+	return codec.Encode(SpendTx(principal, to, amount, nonce, opts...))
+}
+
+func DeployTx(principal types.Address, nonce types.Nonce, blob []byte, opts ...sdk.Opt) *core.Tx {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	selector, _ := athcon.FromString("athexp_deploy")
+	payload := athcon.Payload{
+		Selector: &selector,
+		Input:    EncodeDeployArgs(blob),
+	}
+
+	return &core.Tx{
+		Version:   uint8(sdk.TxVersion),
+		Principal: principal,
+		Metadata: core.Metadata{
+			Nonce:    nonce,
+			GasPrice: options.GasPrice,
+		},
+		Payload: scale.MustMarshal(payload),
+	}
 }

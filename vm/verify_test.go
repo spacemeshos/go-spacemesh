@@ -1,7 +1,6 @@
 package vm
 
 import (
-	"crypto/ed25519"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -59,7 +58,7 @@ func TestVerify(t *testing.T) {
 	t.Run("spawn TX", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 		loader := core.DBLoader{Executor: statesql.InMemoryTest(t)}
-		tx, err := sdkwallet.SpawnTx(ed25519.PublicKey(pubkey.PublicKey), 6)
+		tx, err := sdkwallet.SpawnTx(signing.Public(signer.PrivateKey()), 6)
 		require.NoError(t, err)
 		ctx, err := core.New(genesisID, 0, principal, loader, logger)
 		require.NoError(t, err)

@@ -2,11 +2,11 @@ package wallet
 
 import (
 	"bytes"
-	"crypto/ed25519"
 	"fmt"
 
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
+	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
-func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Opt) ([]byte, error) {
+func DeployTx(pubkey ed25519.PublicKey, nonce core.Nonce, blob []byte, opts ...sdk.Opt) (*core.Tx, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
@@ -41,17 +41,28 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	if template == nil {
 		template = &wallet.TemplateAddress
 	}
-	tx := core.Tx{
+	return &core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: core.ComputePrincipalFromBlob(*template, signing.Public(pk)),
+		Principal: core.ComputePrincipalFromBlob(*template, pubkey),
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
 		},
 		Payload: payload,
+	}, nil
+}
+
+func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Opt) ([]byte, error) {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+	tx, err := DeployTx(signing.Public(pk), nonce, blob, opts...)
+	if err != nil {
+		return nil, err
 	}
 
-	return core.SignedTx(&tx, options.GenesisID, pk)
+	return core.SignedTx(tx, options.GenesisID, pk)
 }
 
 func SpawnTx(pubkey ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) (*core.Tx, error) {
@@ -98,11 +109,51 @@ func Spawn(
 		opt(options)
 	}
 
-	tx, err := SpawnTx(ed25519.PublicKey(signing.Public(pk)), nonce, opts...)
+	tx, err := SpawnTx(signing.Public(pk), nonce, opts...)
 	if err != nil {
 		return nil, err
 	}
+
 	return core.SignedTx(tx, options.GenesisID, pk)
+}
+
+func SpendTx(
+	pubkey ed25519.PublicKey,
+	to types.Address,
+	amount uint64,
+	nonce types.Nonce,
+	opts ...sdk.Opt,
+) (*core.Tx, error) {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	// Encode using the VM
+	libPath, err := host.AthenaLibPath()
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	vmlib, err := athcon.LoadLibrary(libPath)
+	if err != nil {
+		panic(fmt.Errorf("loading Athena VM: %w", err))
+	}
+	defer vmlib.Close()
+
+	template := options.Template
+	if template == nil {
+		template = &wallet.TemplateAddress
+	}
+
+	return &core.Tx{
+		Version:   uint8(sdk.TxVersion),
+		Principal: core.ComputePrincipalFromBlob(*template, pubkey),
+		Metadata: core.Metadata{
+			Nonce:    nonce,
+			GasPrice: options.GasPrice,
+		},
+		Payload: vmlib.EncodeTxSpend(athcon.Address(to), amount),
+	}, nil
 }
 
 // Spend creates a spend transaction.
