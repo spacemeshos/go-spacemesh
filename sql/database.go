@@ -1210,31 +1210,31 @@ func (c *lazyConn) ensureConn() *sqlite.Conn {
 	}
 
 	c.conn = c.getConn()
-	if c.timer == nil {
-		c.timer = time.NewTimer(c.db.connIdleTimeout)
-		c.doneCh = make(chan struct{})
-		c.eg.Go(func() error {
-			for {
-				select {
-				case <-c.timer.C:
-					// Although TryLock docs say that it's not recommended to use it
-					// in most cases, this use case is justified.
-					// If the mutex is already locked here, this means that an SQL
-					// statement is being executed on the connection, after which
-					// the idle timer will be restarted, or the connection is currently
-					// being released.
-					if c.connMtx.TryLock() {
-						c.releaseConn()
-						c.connMtx.Unlock()
-					}
-				case <-c.doneCh:
-					return nil
-				}
-			}
-		})
-	} else {
+	if c.timer != nil {
 		c.timer.Reset(c.db.connIdleTimeout)
+		return c.conn
 	}
+	c.timer = time.NewTimer(c.db.connIdleTimeout)
+	c.doneCh = make(chan struct{})
+	c.eg.Go(func() error {
+		for {
+			select {
+			case <-c.timer.C:
+				// Although TryLock docs say that it's not recommended to use it
+				// in most cases, this use case is justified.
+				// If the mutex is already locked here, this means that an SQL
+				// statement is being executed on the connection, after which
+				// the idle timer will be restarted, or the connection is currently
+				// being released.
+				if c.connMtx.TryLock() {
+					c.releaseConn()
+					c.connMtx.Unlock()
+				}
+			case <-c.doneCh:
+				return nil
+			}
+		}
+	})
 	return c.conn
 }
 
