@@ -26,7 +26,7 @@ jobs:
         include:
           - os: ubuntu-22.04
             outname_sufix: "linux-amd64"
-          - os: [self-hosted, macOS, ARM64, go-spacemesh]
+          - os: [self-hosted, macOS, ARM64, go-spacemesh, m1]
             outname_sufix: "mac-arm64"
     steps:
     - name: checkout
