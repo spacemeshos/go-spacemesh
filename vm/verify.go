@@ -10,12 +10,13 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
 
+	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
 )
 
 func verify(ctx *core.Context, logger *zap.Logger) error {
-	hash := core.HashTx(ctx.TxData)
+	hash := hash.Sum(ctx.TxData)
 	// TODO(lane): re-add support for genesisID
 	// see https://github.com/athenavm/athena/issues/178
 	// signedData := core.SigningBody(host.GetGenesisID().Bytes(), raw[:len(raw)-n])
