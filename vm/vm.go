@@ -24,9 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
-	// FIXME: move Wallet methods New, MaxSpend and Verify out of 'templates/wallet'
-	// as they are generic.
-	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 // Opt is for changing VM during initialization.
@@ -329,7 +326,7 @@ func (v *VM) execute(
 			continue
 		}
 		balance := ctx.Balance()
-		intrinsic := core.IntrinsicGas(ctx.PrincipalTemplate.BaseGas(), 0) // we don't charge for TX storage yet
+		intrinsic := core.IntrinsicGas(baseGas(), 0) // we don't charge for TX storage yet
 		logger.Info("intrinsic gas check", zap.Uint64("balance", balance), zap.Uint64("intrinsic gas", intrinsic))
 		if balance < intrinsic {
 			logger.Warn("ineffective transaction. intrinsic gas not covered",
@@ -461,7 +458,7 @@ func (v *VM) execInVm(host *core.Context, payload []byte) error {
 	if maxgas < 0 {
 		return errors.New("gas limit exceeds maximum int64 value")
 	}
-	v.logger.Debug("executing", zap.Uint32("layer", host.LayerID.Uint32()), zap.Int64("maxgas", maxgas))
+	v.logger.Debug("executing", zap.Uint32("layer", host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
 	_, gasLeft, err := vmhost.Execute(
 		host.Layer(),
 		maxgas,
@@ -509,7 +506,7 @@ func (r *Request) Verify() error {
 		panic("Verify should be called after successful Parse")
 	}
 	start := time.Now()
-	rst := verify(r.ctx)
+	rst := verify(r.ctx, zap.NewNop())
 	transactionDurationVerify.Observe(float64(time.Since(start)))
 	return rst
 }
@@ -584,39 +581,40 @@ func parse(
 		ctx.Header.TemplateAddress = *ctx.PrincipalAccount.TemplateAddress
 	}
 
-	has, err := loader.Has(ctx.Header.TemplateAddress)
+	templateAccount, err := ctx.Get(ctx.Header.TemplateAddress)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: checking if template exists: %w", core.ErrInternal, err)
 	}
-	if !has {
+	if templateAccount == nil {
 		return nil, nil, fmt.Errorf("%w: %s", errUnknownTemplate, ctx.Header.TemplateAddress)
 	}
+	if len(templateAccount.State) == 0 {
+		return nil, nil, fmt.Errorf("template %q has no code", ctx.Header.TemplateAddress)
+	}
+	ctx.TemplateCode = templateAccount.State
 	ctx.TxPayload = tx.Payload
 	ctx.TxData = raw[:n]
 	ctx.WitnessData = raw[n:]
 
 	// At this point we've established that the transaction is correctly formed, but we haven't
 	// yet attempted to validate the signature. That happens later in Verify().
-	// FIXME: move New, Verify and MaxSpend methods out of `templates/wallet` package.
-	ctx.PrincipalTemplate, err = wallet.New(ctx, logger.Named("template"))
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: creating principal handler: %w", core.ErrInternal, err)
-	}
 
 	// FIXME: How to obtain a max gas? Should it be returned from Verify()?
-	logger.Debug(
-		"calculating max gas",
-		zap.Int("payload len", len(tx.Payload)),
-		zap.Int("witness data len", len(ctx.WitnessData)),
-	)
 	ctx.Header.MaxGas = core.MaxGas(
 		estimatedStateSize + max(len(tx.Payload), 6) - 6 + len(ctx.WitnessData),
 	) // skip bytes for method selector
+	logger.Debug(
+		"calculated max gas",
+		zap.Int("payload len", len(tx.Payload)),
+		zap.Int("witness data len", len(ctx.WitnessData)),
+		zap.Uint64("max gas", ctx.Header.MaxGas),
+	)
 	ctx.Header.Principal = tx.Principal
 	ctx.Header.GasPrice = tx.Metadata.GasPrice
 	ctx.Header.Nonce = tx.Metadata.Nonce
 
-	maxspend, err := ctx.PrincipalTemplate.MaxSpend(tx.Payload)
+	// FIXME: do we want to execute any code in `parse()`?
+	maxspend, err := maxSpend(ctx, &ctx.PrincipalAccount, tx.Payload, logger)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -624,6 +622,8 @@ func parse(
 	return &ctx.Header, ctx, nil
 }
 
-func verify(ctx *core.Context) error {
-	return ctx.PrincipalTemplate.Verify(ctx.TxData, ctx.WitnessData)
+func baseGas() uint64 {
+	// TODO(lane): depends on https://github.com/athenavm/athena/issues/127
+	// mock for now
+	return core.TX + core.ATHENA_GAS_VERIFY
 }

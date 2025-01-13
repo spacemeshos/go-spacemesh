@@ -29,23 +29,6 @@ type (
 	LayerID = types.LayerID
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/template.go github.com/spacemeshos/go-spacemesh/vm/core Template
-
-// Template is a concrete Template type initialized with mutable and immutable state.
-type Template interface {
-	// MaxSpend decodes MaxSpend value for the transaction. Transaction will fail
-	// if it spends more than that.
-	MaxSpend([]byte) (uint64, error)
-	// TODO(lane): update to use the VM
-	// BaseGas is an intrinsic cost for executing a transaction. If this cost is not covered
-	// transaction will be ineffective.
-	BaseGas() uint64
-	// LoadGas is a cost to load account from disk.
-	LoadGas() uint64
-	// Verify security of the transaction.
-	Verify(tx, witnessData []byte) error
-}
-
 //go:generate mockgen -typed -package=mocks -destination=./mocks/loader.go github.com/spacemeshos/go-spacemesh/vm/core AccountLoader
 
 // AccountLoader is an interface for loading accounts.
@@ -74,6 +57,7 @@ type Host interface {
 	Nonce() uint64
 	Payload() []byte
 	TemplateAddress() Address
+	Template() []byte
 	MaxGas() uint64
 	SpendGas(uint64)
 	GasSpent() uint64
@@ -82,9 +66,7 @@ type Host interface {
 	SetStorage(Address, [32]byte, [32]byte) (StorageStatus, error)
 	Has(Address) (bool, error)
 	Get(Address) (*Account, error)
-	Template() Template
 	Layer() LayerID
-	GetGenesisID() Hash20
 	Balance() uint64
 	IsSpawn() bool
 }

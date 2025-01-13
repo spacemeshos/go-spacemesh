@@ -102,7 +102,7 @@ func runNetwork(genesisID types.Hash20, t1, t2 table.Writer) {
 			"singlesig",
 			hex.EncodeToString(signer.PublicKey().Bytes()),
 			hex.EncodeToString(signer.PrivateKey()),
-			w.Spawn().Principal,
+			w.Spawn().Principal.String(),
 			"",
 			w.TemplateAddress().String(),
 		})
@@ -122,7 +122,7 @@ func runNetwork(genesisID types.Hash20, t1, t2 table.Writer) {
 		"multisig",
 		strings.Join(pubkeys, ","),
 		strings.Join(privkeys, ","),
-		w.Spawn().Principal,
+		w.Spawn().Principal.String(),
 		"requires 2 keys",
 		w.TemplateAddress().String(),
 	})
