@@ -7,6 +7,7 @@ import (
 	oldRand "math/rand"
 	"math/rand/v2"
 	"os"
+	"strings"
 
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 	"github.com/jedib0t/go-pretty/v6/table"
@@ -16,41 +17,27 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/host"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
-	walletSdk "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
-	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 func main() {
 	t1 := table.NewWriter()
 	t1.SetOutputMirror(os.Stdout)
 	t1.SetTitle("address test vectors")
+	t1.AppendHeader(table.Row{
+		"template",
+		"pubkey(s)",
+		"privkey(s)",
+		"principal",
+		"notes",
+		"template",
+	})
 
 	t2 := table.NewWriter()
 	t2.SetOutputMirror(os.Stdout)
 	t2.SetTitle("transaction test vectors")
-
-	t1Rows := table.Row{
-		"pubkey",
-		"privkey",
-		"principal",
-		"hrp",
-		"template",
-	}
-
-	// pregenerate keys
-	var signers []*signing.EdSigner
-	for i := range int64(3) {
-		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(oldRand.New(oldRand.NewSource(i))))
-		if err != nil {
-			log.Fatalf("failed to generate ed25519 key: %v", err)
-		}
-		signers = append(signers, signer)
-	}
-	t1.AppendHeader(t1Rows)
 	t2.AppendHeader(table.Row{
 		"method",
 		"principal",
-		"hrp",
 		"gasPrice",
 		"nonce",
 		"template",
@@ -59,7 +46,9 @@ func main() {
 		"amount",
 		"tx",
 	})
-	runNetwork("atest", types.Hash20{}, signers, t1, t2)
+
+	types.SetNetworkHRP("atest")
+	runNetwork(types.Hash20{}, t1, t2)
 
 	t1.Render()
 	t2.Render()
@@ -74,7 +63,16 @@ type Template interface {
 	TemplateAddress() types.Address
 }
 
-func runNetwork(hrp string, genesisID types.Hash20, signers []*signing.EdSigner, t1, t2 table.Writer) {
+func runNetwork(genesisID types.Hash20, t1, t2 table.Writer) {
+	var signers []*signing.EdSigner
+	for i := range int64(3) {
+		signer, err := signing.NewEdSigner(signing.WithKeyFromRand(oldRand.New(oldRand.NewSource(i))))
+		if err != nil {
+			log.Fatalf("failed to generate ed25519 key: %v", err)
+		}
+		signers = append(signers, signer)
+	}
+
 	rng := rand.New(&rand.PCG{})
 	libPath, err := host.AthenaLibPath()
 	if err != nil {
@@ -85,19 +83,6 @@ func runNetwork(hrp string, genesisID types.Hash20, signers []*signing.EdSigner,
 		panic(fmt.Errorf("loading Athena VM: %w", err))
 	}
 	defer vmlib.Close()
-
-	types.SetNetworkHRP(hrp)
-
-	// first print the keys and addresses
-	for _, signer := range signers {
-		t1.AppendRow(table.Row{
-			hex.EncodeToString(signer.PublicKey().Bytes()),
-			hex.EncodeToString(signer.PrivateKey()),
-			walletSdk.Address(signer.PublicKey().Bytes()).String(),
-			hrp,
-			wallet.TemplateAddress.String(),
-		})
-	}
 
 	spawnSelector, err := athcon.FromString("athexp_spawn")
 	if err != nil {
@@ -110,10 +95,37 @@ func runNetwork(hrp string, genesisID types.Hash20, signers []*signing.EdSigner,
 
 	var contracts []Template
 	for _, signer := range signers {
-		contracts = append(contracts, &singleSig{signer})
+		w := &singleSig{signer}
+		contracts = append(contracts, w)
+
+		t1.AppendRow(table.Row{
+			"singlesig",
+			hex.EncodeToString(signer.PublicKey().Bytes()),
+			hex.EncodeToString(signer.PrivateKey()),
+			w.Spawn().Principal,
+			"",
+			w.TemplateAddress().String(),
+		})
 	}
 
-	contracts = append(contracts, newMultiSig(2, signers))
+	w := newMultiSig(2, signers)
+	contracts = append(contracts, w)
+	var (
+		pubkeys  []string
+		privkeys []string
+	)
+	for _, signer := range signers {
+		pubkeys = append(pubkeys, hex.EncodeToString(signer.PublicKey().Bytes()))
+		privkeys = append(privkeys, hex.EncodeToString(signer.PrivateKey()))
+	}
+	t1.AppendRow(table.Row{
+		"multisig",
+		strings.Join(pubkeys, ","),
+		strings.Join(privkeys, ","),
+		w.Spawn().Principal,
+		"requires 2 keys",
+		w.TemplateAddress().String(),
+	})
 
 	// next generate and print the transactions
 	for _, template := range contracts {
@@ -121,9 +133,8 @@ func runNetwork(hrp string, genesisID types.Hash20, signers []*signing.EdSigner,
 		tx := template.Spawn()
 		signedTx := template.Signed(tx, genesisID)
 		t2.AppendRow(table.Row{
-			fmt.Sprintf("spawn [%s]", hex.EncodeToString(spawnSelector[:])),
+			fmt.Sprintf("spawn  [%s]", hex.EncodeToString(spawnSelector[:])),
 			tx.Principal.String(),
-			hrp,
 			tx.Metadata.GasPrice,
 			tx.Metadata.Nonce,
 			template.TemplateAddress().String(),
@@ -144,7 +155,6 @@ func runNetwork(hrp string, genesisID types.Hash20, signers []*signing.EdSigner,
 		t2.AppendRow(table.Row{
 			fmt.Sprintf("deploy [%s]", hex.EncodeToString(deploySelector[:])),
 			tx.Principal.String(),
-			hrp,
 			sdk.Defaults().GasPrice,
 			tx.Metadata.Nonce,
 			template.TemplateAddress().String(),
@@ -165,9 +175,8 @@ func runNetwork(hrp string, genesisID types.Hash20, signers []*signing.EdSigner,
 			tx := template.Spend(recipient, amount, nonce)
 			signedTx := template.Signed(tx, genesisID)
 			t2.AppendRow(table.Row{
-				fmt.Sprintf("spend [%s]", hex.EncodeToString(spendSelector[:])),
+				fmt.Sprintf("spend  [%s]", hex.EncodeToString(spendSelector[:])),
 				tx.Principal.String(),
-				hrp,
 				sdk.Defaults().GasPrice,
 				nonce,
 				template.TemplateAddress().String(),
