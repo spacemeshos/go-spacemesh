@@ -15,9 +15,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
+	vm "github.com/spacemeshos/go-spacemesh/genvm"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/compat"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
@@ -26,8 +26,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/malfeasance2"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
@@ -44,36 +44,36 @@ import (
 )
 
 type initState struct {
-	poetDb *activation.PoetDb
-	postStates *activation.PostStatesWrapper
-	stateDb *vm.VM
-	goldenATXID types.ATXID
-	vrfVerifier signing.VRFVerifier
-	beaconProtocol *beacon.ProtocolDriver
-	trtl *tortoise.Tortoise
-	executor *mesh.Executor
-	mesh *mesh.Mesh
-	pruner *prune.Pruner
-	proposalsStore *store.Store
-	fetcher *fetch.Fetch
-	peerCache *peers.Peers
-	hareOracle *eligibility.Oracle
-	certifier *blocks.Certifier
-	patrol *layerpatrol.LayerPatrol
-	syncer *syncer.Syncer
-	atxHandler *activation.Handler
-	updater *bootstrap.Updater
+	poetDb           *activation.PoetDb
+	postStates       *activation.PostStatesWrapper
+	stateDb          *vm.VM
+	goldenATXID      types.ATXID
+	vrfVerifier      signing.VRFVerifier
+	beaconProtocol   *beacon.ProtocolDriver
+	trtl             *tortoise.Tortoise
+	executor         *mesh.Executor
+	mesh             *mesh.Mesh
+	pruner           *prune.Pruner
+	proposalsStore   *store.Store
+	fetcher          *fetch.Fetch
+	peerCache        *peers.Peers
+	hareOracle       *eligibility.Oracle
+	certifier        *blocks.Certifier
+	patrol           *layerpatrol.LayerPatrol
+	syncer           *syncer.Syncer
+	atxHandler       *activation.Handler
+	updater          *bootstrap.Updater
 	proposalsHandler *proposals.Handler
-	proposalBuilder *miner.ProposalBuilder
-	postSetupMgr *activation.PostSetupManager
-	grpcPostService *grpcserver.PostService
-	poetClients []activation.PoetService
-	nipostBuilder *activation.NIPostBuilder
-	atxBuilder *activation.Builder
+	proposalBuilder  *miner.ProposalBuilder
+	postSetupMgr     *activation.PostSetupManager
+	grpcPostService  *grpcserver.PostService
+	poetClients      []activation.PoetService
+	nipostBuilder    *activation.NIPostBuilder
+	atxBuilder       *activation.Builder
 
-	mlog *zap.Logger
+	mlog                    *zap.Logger
 	legacyMalfeasanceLogger *zap.Logger
-	nipostLogger *zap.Logger
+	nipostLogger            *zap.Logger
 }
 
 type initializerFunc func(ctx context.Context, app *App, state *initState) error
