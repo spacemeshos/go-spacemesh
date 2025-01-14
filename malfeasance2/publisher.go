@@ -85,6 +85,8 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
 		publish = true
+	} else {
+		p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
 	}
 
 	mATXs := make(map[types.ATXID]struct{})

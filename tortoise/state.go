@@ -156,8 +156,12 @@ func (s *state) isMalfeasant(id types.NodeID) bool {
 	return exists
 }
 
-func (s *state) markMalfeasant(id types.NodeID) {
+func (s *state) markMalfeasant(id types.NodeID) bool {
+	if _, exists := s.malnodes[id]; exists {
+		return false
+	}
 	s.malnodes[id] = struct{}{}
+	return true
 }
 
 type layerInfo struct {

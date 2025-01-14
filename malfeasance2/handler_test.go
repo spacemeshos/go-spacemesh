@@ -629,6 +629,10 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			require.NoError(t, err)
 			require.True(t, malicious)
 		}
+		dbProof, domain, err := malfeasance.MarriageProof(th.db, mID)
+		require.NoError(t, err)
+		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
+		require.Equal(t, validProof, dbProof)
 	})
 
 	t.Run("valid proof, fail to fetch reference ATX", func(t *testing.T) {
