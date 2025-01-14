@@ -42,7 +42,7 @@ func (m *multiSigWallet) Spawn(opts ...sdk.Opt) *core.Tx {
 	for _, pk := range m.pks {
 		pubs = append(pubs, [32]byte(signing.Public(signing.PrivateKey(pk))))
 	}
-	return sdkmultisig.SpawnTx(multisig.TemplateAddress, m.required, pubs, 0, opts...)
+	return sdkmultisig.SpawnTx(m.required, pubs, 0, opts...)
 }
 
 func (m *multiSigWallet) Spend(recipient types.Address, amount, nonce uint64, opts ...sdk.Opt) *core.Tx {
