@@ -88,14 +88,15 @@ func MainnetConfig() Config {
 
 	return Config{
 		BaseConfig: BaseConfig{
-			DataDirParent:         defaultDataDir,
-			FileLock:              filepath.Join(os.TempDir(), "spacemesh.lock"),
-			MetricsPort:           1010,
-			DatabaseConnections:   16,
-			DatabasePruneInterval: 30 * time.Minute,
-			DatabaseVacuumState:   21,
-			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
-			NetworkHRP:            "sm",
+			DataDirParent:           defaultDataDir,
+			FileLock:                filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:             1010,
+			DatabaseConnections:     16,
+			DatabasePruneInterval:   30 * time.Minute,
+			DatabaseVacuumState:     21,
+			DatabaseConnIdleTimeout: 10 * time.Millisecond,
+			PruneActivesetsFrom:     12, // starting from epoch 13 activesets below 12 will be pruned
+			NetworkHRP:              "sm",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
