@@ -387,7 +387,7 @@ func TestProxyingJsonService(t *testing.T) {
 
 	nodeID := types.RandomNodeID()
 	clientApp.idStates.Set(nodeID, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
-	respBody, status := callEndpoint(t, endpoint, nil)
+	respBody, status := callEndpoint(t, endpoint, []byte(`{"limit": 1}`))
 	require.Equal(t, http.StatusOK, status)
 	var resp pbV2.IdentityStatesResponse
 	require.NoError(t, protojson.Unmarshal(respBody, &resp))
