@@ -1,17 +1,16 @@
 services:
   activation-service-local-1:
-    network_mode: "host"
     image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command:
       [
         "-c",
         "/config.json",
         "--node-service-address",
-        "http://127.0.0.1:19099",
+        "http://node-service-local:19499",
         "--grpc-json-listener",
-        "0.0.0.0:19171",
+        "0.0.0.0:19271",
         "--proxy-api-v2-address",
-        "http://127.0.0.1:19060",
+        "http://node-service-local:19460",
         "--grpc-public-listener",
         "0.0.0.0:19282",
         "--grpc-private-listener",
@@ -21,20 +20,25 @@ services:
     volumes:
       - ./spacemesh-client-local-1:/tmp/spacemesh-client
       - ./config.testnet-16-smesher-service.json:/config.json
+    ports:
+      - 19271:19271
+      - 19282:19282
+      - 19283:19283
+    networks:
+      - spacemesh-net-bl
 
   activation-service-local-2:
-    network_mode: "host"
     image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command:
       [
         "-c",
         "/config.json",
         "--node-service-address",
-        "http://127.0.0.1:19099",
+        "http://node-service-local:19499",
         "--grpc-json-listener",
         "0.0.0.0:19371",
         "--proxy-api-v2-address",
-        "http://127.0.0.1:19060",
+        "http://node-service-local:19460",
         "--grpc-public-listener",
         "0.0.0.0:19382",
         "--grpc-private-listener",
@@ -44,22 +48,37 @@ services:
     volumes:
       - ./spacemesh-client-local-2:/tmp/spacemesh-client
       - ./config.testnet-16-smesher-service.json:/config.json
+    ports:
+      - 19371:19371
+      - 19382:19382
+      - 19383:19383
+    networks:
+      - spacemesh-net-bl
 
   node-service-local:
-    network_mode: "host"
     image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
     command: [
         "-c",
         "/config.json",
         "--grpc-json-listener",
-        "0.0.0.0:19060",
+        "0.0.0.0:19460",
         "--grpc-public-listener",
-        "0.0.0.0:19062",
+        "0.0.0.0:19462",
         "--grpc-private-listener",
-        "0.0.0.0:19063",
+        "0.0.0.0:19463",
         # "--node-service-listener",
         # "0.0.0.0:19099", ## this is not exposed via CLI
       ]
     volumes:
       - ./spacemesh-node-service-multi:/tmp/spacemesh-node-service
       - ./config.testnet-16.node-service.json:/config.json
+    ports:
+      - 19462:19462
+      - 19463:10463
+      - 19460:19460
+    networks:
+      - spacemesh-net-bl
+
+networks:
+  spacemesh-net-bl:
+    driver: bridge
