@@ -101,6 +101,10 @@ func (mh *MalfeasanceHandlerV2) decodeProof(data []byte) (wire.Proof, error) {
 		return nil, err
 	}
 
+	if atxProof.Version != 0x01 {
+		return nil, fmt.Errorf("unsupported ATX malfeasance proof version: %d", atxProof.Version)
+	}
+
 	proof, err := atxProof.Decode()
 	if err != nil {
 		return nil, err
