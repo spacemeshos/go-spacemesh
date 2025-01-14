@@ -163,6 +163,69 @@ func TestHandler_Info(t *testing.T) {
 	}
 }
 
+func TestReportLabels(t *testing.T) {
+	t.Parallel()
+
+	t.Run("decode proof error", func(t *testing.T) {
+		t.Parallel()
+		th := newTestMalHandler(t)
+
+		labels := th.ReportLabels([]byte("invalid proof"))
+		require.Equal(t, []string{"ATX", "unknown"}, labels)
+	})
+
+	tt := []struct {
+		name      string
+		proofType wire.ProofType
+		proof     wire.Proof
+	}{
+		{
+			name:      "double marry proof",
+			proofType: wire.DoubleMarry,
+			proof:     &wire.ProofDoubleMarry{},
+		},
+		{
+			name:      "double merge proof",
+			proofType: wire.DoubleMerge,
+			proof:     &wire.ProofDoubleMerge{},
+		},
+		{
+			name:      "invalid post",
+			proofType: wire.InvalidPost,
+			proof:     &wire.ProofInvalidPost{},
+		},
+		{
+			name:      "invalid prev atx v1",
+			proofType: wire.InvalidPreviousV1,
+			proof:     &wire.ProofInvalidPrevAtxV1{},
+		},
+		{
+			name:      "invalid prev atx v2",
+			proofType: wire.InvalidPreviousV2,
+			proof:     &wire.ProofInvalidPrevAtxV2{},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			th := newTestMalHandler(t)
+
+			atxProof := &wire.ATXProof{
+				Version: wire.ProofVersion(1),
+
+				ProofType: tc.proofType,
+				Proof:     codec.MustEncode(tc.proof),
+			}
+			data, err := codec.Encode(atxProof)
+			require.NoError(t, err)
+
+			labels := th.ReportLabels(data)
+			require.Equal(t, []string{"ATX", tc.proof.TypeName()}, labels)
+		})
+	}
+}
+
 func TestPublish(t *testing.T) {
 	t.Parallel()
 
@@ -235,6 +298,48 @@ func TestPublish(t *testing.T) {
 		require.ErrorContains(t, err,
 			fmt.Sprintf("proof for %s does not match node ID %s", sig2.ShortString(), sig1.ShortString()),
 		)
+	})
+}
+
+func TestMalfeasanceRegossip(t *testing.T) {
+	t.Parallel()
+
+	t.Run("proof for self", func(t *testing.T) {
+		t.Parallel()
+
+		th := newTestMalHandler(t)
+
+		sig1, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		th.Register(sig1)
+
+		err = th.Regossip(context.Background(), sig1.NodeID())
+		require.ErrorContains(t, err, fmt.Sprintf("identity %s is managed by node", sig1.NodeID()))
+	})
+
+	t.Run("other nodeID", func(t *testing.T) {
+		t.Parallel()
+
+		th := newTestMalHandler(t)
+
+		nodeID := types.RandomNodeID()
+		th.mPublish.EXPECT().Regossip(gomock.Any(), nodeID).Return(nil)
+
+		err := th.Regossip(context.Background(), nodeID)
+		require.NoError(t, err)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		t.Parallel()
+
+		th := newTestMalHandler(t)
+
+		nodeID := types.RandomNodeID()
+		errRegossip := errors.New("regossip error")
+		th.mPublish.EXPECT().Regossip(gomock.Any(), nodeID).Return(errRegossip)
+
+		err := th.Regossip(context.Background(), nodeID)
+		require.ErrorIs(t, err, errRegossip)
 	})
 }
 
