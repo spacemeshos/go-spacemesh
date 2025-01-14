@@ -93,6 +93,7 @@ func (app *App) initServices(ctx context.Context) error {
 		initBeacon,
 		initTortoise,
 		initMesh,
+		initPruner,
 		initProposalsStore,
 		initFetcher,
 		initHareOracle,
