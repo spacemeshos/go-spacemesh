@@ -161,11 +161,11 @@ func (p *Publisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
 func (p *Publisher) publish(
 	ctx context.Context,
 	nodeID types.NodeID,
-	marriageATXs []types.ATXID,
+	refATXs []types.ATXID,
 	proof []byte,
 	domain ProofDomain,
 ) error {
-	p.tortoise.OnMalfeasance(nodeID)
+	p.tortoise.OnMalfeasance(nodeID) // TODO(mafa): should be called for all smeshers in the equivocation set
 
 	// Only gossip the proof if we are synced (to not spam the network with proofs others probably already have).
 	if !p.sync.ListenToATXGossip() {
@@ -176,10 +176,10 @@ func (p *Publisher) publish(
 	}
 
 	malfeasanceProof := &MalfeasanceProof{
-		Version:      0,
-		MarriageATXs: marriageATXs,
-		Domain:       domain,
-		Proof:        proof,
+		Version: 0,
+		RefATXs: refATXs,
+		Domain:  domain,
+		Proof:   proof,
 	}
 	if err := p.publisher.Publish(ctx, pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof)); err != nil {
 		p.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))

@@ -17,7 +17,7 @@ func (t *MalfeasanceProof) EncodeScale(enc *scale.Encoder) (total int, err error
 		total += n
 	}
 	{
-		n, err := scale.EncodeStructSliceWithLimit(enc, t.MarriageATXs, 1024)
+		n, err := scale.EncodeStructSliceWithLimit(enc, t.RefATXs, 64)
 		if err != nil {
 			return total, err
 		}
@@ -50,12 +50,12 @@ func (t *MalfeasanceProof) DecodeScale(dec *scale.Decoder) (total int, err error
 		t.Version = ProofVersion(field)
 	}
 	{
-		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 1024)
+		field, n, err := scale.DecodeStructSliceWithLimit[types.ATXID](dec, 64)
 		if err != nil {
 			return total, err
 		}
 		total += n
-		t.MarriageATXs = field
+		t.RefATXs = field
 	}
 	{
 		field, n, err := scale.DecodeCompact8(dec)

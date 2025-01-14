@@ -23,9 +23,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -37,6 +39,7 @@ type testHandler struct {
 	db           sql.StateDatabase
 	self         p2p.Peer
 	mockTrt      *malfeasance2.Mocktortoise
+	mockFetch    *mocks.MockFetcher
 }
 
 func newTestHandler(tb testing.TB) *testHandler {
@@ -69,6 +72,7 @@ func newTestHandler(tb testing.TB) *testHandler {
 		db:           db,
 		self:         "self",
 		mockTrt:      mockTrt,
+		mockFetch:    mockFetch,
 	}
 }
 
@@ -101,12 +105,6 @@ func TestRegister(t *testing.T) {
 		require.Contains(t, logs.All()[0].Message, "handler already registered")
 	})
 }
-
-// TODO(mafa): missing tests
-// - new proof for same identity is no-op
-// - new proof with bigger certificate list only updates certificate list
-// - all identities in certificates are marked as malicious
-// - invalid certificates are ignored if proof is valid
 
 func TestHandler_HandleSync(t *testing.T) {
 	t.Run("malformed data", func(t *testing.T) {
@@ -181,14 +179,27 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
 		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
+		h.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{atxID.Hash32()})
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxID}, gomock.Any()).DoAndReturn(
+			// fetch works and stores ATX for that smesher in DB
+			func(ctx context.Context, a []types.ATXID, gao ...system.GetAtxOpt) error {
+				atx := &types.ActivationTx{
+					SmesherID: nodeID,
+				}
+				atx.SetID(atxID)
+				return atxs.Add(h.db, atx, types.AtxBlob{})
+			},
+		)
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
+			RefATXs: []types.ATXID{atxID},
 			Domain:  malfeasance2.InvalidActivation,
 			Proof:   validProof,
 		}
@@ -208,10 +219,180 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		require.True(t, malicious)
 	})
 
+	t.Run("valid proof, married identity", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeIDs := make([]types.NodeID, 20)
+		for i := range nodeIDs {
+			nodeIDs[i] = types.RandomNodeID()
+		}
+		mATXID := types.RandomATXID()
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeIDs[1], nil) // valid for 2nd identity
+		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		for i := range nodeIDs {
+			h.mockTrt.EXPECT().OnMalfeasance(nodeIDs[i])
+		}
+		h.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{mATXID.Hash32()})
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{mATXID}, gomock.Any()).DoAndReturn(
+			// fetch works and stores ATXs for that smesher in DB
+			func(ctx context.Context, a []types.ATXID, gao ...system.GetAtxOpt) error {
+				atx := &types.ActivationTx{
+					SmesherID: nodeIDs[0],
+				}
+				atx.SetID(mATXID)
+				if err := atxs.Add(h.db, atx, types.AtxBlob{}); err != nil {
+					return err
+				}
+
+				mID, err := marriage.NewID(h.db)
+				if err != nil {
+					return err
+				}
+
+				for i := range nodeIDs {
+					err = marriage.Add(h.db, marriage.Info{
+						ID:            mID,
+						NodeID:        nodeIDs[i],
+						ATX:           mATXID,
+						MarriageIndex: i,
+						Target:        nodeIDs[0],
+						Signature:     types.RandomEdSignature(),
+					})
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			},
+		)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{mATXID},
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   validProof,
+		}
+
+		err := h.HandleSynced(context.Background(), types.Hash32(nodeIDs[0]), "peer", codec.MustEncode(proof))
+		require.NoError(t, err)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_proofs counter
+spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
+
+		for i := range nodeIDs {
+			malicious, err := malfeasance.IsMalicious(h.db, nodeIDs[i])
+			require.NoError(t, err)
+			require.True(t, malicious)
+		}
+	})
+
+	t.Run("valid proof, fail to fetch reference ATX", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		h.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{atxID.Hash32()})
+		errFetchFailed := errors.New("fetch failed")
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxID}, gomock.Any()).Return(errFetchFailed)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{atxID},
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   validProof,
+		}
+
+		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+		require.ErrorIs(t, err, errFetchFailed)
+
+		// not marked malicious since no proof of existence
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
+	t.Run("valid proof, no reference ATX but identity is known", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeID,
+		}
+		atx.SetID(atxID)
+		require.NoError(t, atxs.Add(h.db, atx, types.AtxBlob{}))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			// no reference ATX
+			Domain: malfeasance2.InvalidActivation,
+			Proof:  validProof,
+		}
+
+		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		require.NoError(t, err)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_proofs counter
+spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
+
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.True(t, malicious)
+	})
+
+	t.Run("valid proof, no reference ATX and identity is unknown", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeID := types.RandomNodeID()
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			// no reference ATX
+			Domain: malfeasance2.InvalidActivation,
+			Proof:  validProof,
+		}
+
+		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		// not marked malicious since no proof of existence
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
 	t.Run("valid proof, wrong hash", func(t *testing.T) {
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeID,
+		}
+		atx.SetID(atxID)
+		require.NoError(t, atxs.Add(h.db, atx, types.AtxBlob{}))
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
 		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
@@ -326,14 +507,27 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
 		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
 		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
+		h.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{atxID.Hash32()})
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxID}, gomock.Any()).DoAndReturn(
+			// fetch works and stores ATX for that smesher in DB
+			func(ctx context.Context, a []types.ATXID, gao ...system.GetAtxOpt) error {
+				atx := &types.ActivationTx{
+					SmesherID: nodeID,
+				}
+				atx.SetID(atxID)
+				return atxs.Add(h.db, atx, types.AtxBlob{})
+			},
+		)
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
+			RefATXs: []types.ATXID{atxID},
 			Domain:  malfeasance2.InvalidActivation,
 			Proof:   validProof,
 		}
@@ -348,12 +542,112 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 `
 		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
 		require.NoError(t, err)
+
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.True(t, malicious)
 	})
 
-	t.Run("valid proof for known malicious identity", func(t *testing.T) {
+	t.Run("valid proof, married identity", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeIDs := make([]types.NodeID, 20)
+		for i := range nodeIDs {
+			nodeIDs[i] = types.RandomNodeID()
+		}
+		mATXID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeIDs[0],
+		}
+		atx.SetID(mATXID)
+		require.NoError(t, atxs.Add(h.db, atx, types.AtxBlob{}))
+
+		mID, err := marriage.NewID(h.db)
+		require.NoError(t, err)
+
+		for i := range nodeIDs {
+			require.NoError(t, marriage.Add(h.db, marriage.Info{
+				ID:            mID,
+				NodeID:        nodeIDs[i],
+				ATX:           mATXID,
+				MarriageIndex: i,
+				Target:        nodeIDs[0],
+				Signature:     types.RandomEdSignature(),
+			}))
+		}
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeIDs[1], nil) // valid for 2nd identity
+		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		for i := range nodeIDs {
+			h.mockTrt.EXPECT().OnMalfeasance(nodeIDs[i])
+		}
+		h.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{mATXID.Hash32()})
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{mATXID}, gomock.Any()).Return(nil)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{mATXID},
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   validProof,
+		}
+
+		err = h.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		require.NoError(t, err)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_proofs counter
+spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
+
+		for i := range nodeIDs {
+			malicious, err := malfeasance.IsMalicious(h.db, nodeIDs[i])
+			require.NoError(t, err)
+			require.True(t, malicious)
+		}
+	})
+
+	t.Run("valid proof, fail to fetch reference ATX", func(t *testing.T) {
 		h := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		h.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{atxID.Hash32()})
+		errFetchFailed := errors.New("fetch failed")
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxID}, gomock.Any()).Return(errFetchFailed)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{atxID},
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   validProof,
+		}
+
+		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+		require.ErrorIs(t, err, errFetchFailed)
+
+		// not marked malicious since no proof of existence
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
+	t.Run("valid proof, no reference ATX but identity is known", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeID,
+		}
+		atx.SetID(atxID)
+		require.NoError(t, atxs.Add(h.db, atx, types.AtxBlob{}))
 		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
 		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
 		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
@@ -362,6 +656,71 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
+			// no reference ATX
+			Domain: malfeasance2.InvalidActivation,
+			Proof:  validProof,
+		}
+
+		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		require.NoError(t, err)
+
+		expected := `
+# HELP spacemesh_malfeasance2_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance2_num_proofs counter
+spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.NumValidProofs(), strings.NewReader(expected)))
+
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.True(t, malicious)
+	})
+
+	t.Run("valid proof, no reference ATX and identity is unknown", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeID := types.RandomNodeID()
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			// no reference ATX
+			Domain: malfeasance2.InvalidActivation,
+			Proof:  validProof,
+		}
+
+		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		// not marked malicious since no proof of existence
+		malicious, err := malfeasance.IsMalicious(h.db, nodeID)
+		require.NoError(t, err)
+		require.False(t, malicious)
+	})
+
+	t.Run("valid proof for known malicious identity", func(t *testing.T) {
+		h := newTestHandler(t)
+		validProof := []byte("valid")
+		nodeID := types.RandomNodeID()
+		atxID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeID,
+		}
+		atx.SetID(atxID)
+		require.NoError(t, atxs.Add(h.db, atx, types.AtxBlob{}))
+		mockHandler := malfeasance2.NewMockMalfeasanceHandler(gomock.NewController(t))
+		mockHandler.EXPECT().Validate(gomock.Any(), validProof).Return(nodeID, nil)
+		mockHandler.EXPECT().ReportLabels(validProof).Return([]string{"ATX", "invalidPost"})
+		h.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
+		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
+		h.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{atxID.Hash32()})
+		h.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxID}, gomock.Any()).Return(nil)
+
+		proof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{atxID},
 			Domain:  malfeasance2.InvalidActivation,
 			Proof:   validProof,
 		}
@@ -387,6 +746,29 @@ func TestHandler_Info(t *testing.T) {
 		h := newTestHandler(t)
 
 		info, err := h.Info(context.Background(), types.RandomNodeID())
+		require.ErrorContains(t, err, "get malfeasance proof")
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, info)
+	})
+
+	t.Run("married but in good standing", func(t *testing.T) {
+		h := newTestHandler(t)
+
+		nodeID := types.RandomNodeID()
+		id, err := marriage.NewID(h.db)
+		require.NoError(t, err)
+
+		err = marriage.Add(h.db, marriage.Info{
+			ID:            id,
+			NodeID:        nodeID,
+			ATX:           types.RandomATXID(),
+			MarriageIndex: 0,
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		})
+		require.NoError(t, err)
+
+		info, err := h.Info(context.Background(), nodeID)
 		require.ErrorContains(t, err, "get malfeasance proof")
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, info)

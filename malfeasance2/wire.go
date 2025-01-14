@@ -21,11 +21,14 @@ type MalfeasanceProof struct {
 	// Version is the version identifier of the proof. This can be used to extend the malfeasance proof in the future.
 	Version ProofVersion
 
-	// MarriageATXs is a list of ATXs that proof that the node is married. Upon receiving the proof, the node needs to
-	// also fetch those ATXs and verify that they are valid to update the nodes view on the status of the marriage set
-	// for the smesher the proof is about, since this malfeasance proof might show that smesher A is malicious when
-	// smesher B was requested and the marriage ATXs then show that they are married.
-	MarriageATXs []types.ATXID `scale:"max=1024"`
+	// RefATXs is a list of ATXs that proof that identity that the proof shows to be malicious exists. For non-married
+	// identities this should be just the (valid) initial ATX of that identity and for married identities it should be
+	// the marriage ATX (or multiple if an identity married multiple times).
+	//
+	// Upon receiving the proof, the node will fetch those ATXs and verify that they are valid to update the nodes view
+	// on the status of the marriage set for the smesher the proof is about, since this malfeasance proof might show
+	// that smesher A is malicious when smesher B was requested and the marriage ATXs then show that they are married.
+	RefATXs []types.ATXID `scale:"max=64"`
 
 	// Domain encodes the domain for which the proof was created
 	Domain ProofDomain
