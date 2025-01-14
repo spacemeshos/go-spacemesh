@@ -1,4 +1,4 @@
-PRAGMA user_version = 11;
+PRAGMA user_version = 12;
 CREATE TABLE atx_blobs
 (
     id         CHAR(32) PRIMARY KEY,
@@ -42,8 +42,9 @@ CREATE TABLE eligibilities
 CREATE TABLE events
 (
     id        CHAR(32) NOT NULL,
-    timestamp INTEGER NOT NULL,
-    event     TEXT NOT NULL
+    timestamp INTEGER  NOT NULL,
+    kind      INTEGER  NOT NULL,
+    event     TEXT     NOT NULL
 );
 CREATE TABLE malfeasance_sync_state
 (
@@ -110,5 +111,6 @@ CREATE TABLE proposals
 CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
 CREATE INDEX eligibilities_by_id_layer ON eligibilities (id, layer);
 CREATE INDEX events_by_id_timestamp ON events (id, timestamp);
+CREATE INDEX events_by_kind ON events (kind);
 CREATE UNIQUE INDEX idx_poet_certificates ON poet_certificates (node_id, certifier_id);
 CREATE INDEX proposals_by_id_layer ON proposals (id, layer);

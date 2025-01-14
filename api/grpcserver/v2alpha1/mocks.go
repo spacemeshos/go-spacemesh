@@ -14,6 +14,7 @@ import (
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	identity "github.com/spacemeshos/go-spacemesh/identity"
+	builder "github.com/spacemeshos/go-spacemesh/sql/builder"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -138,6 +139,44 @@ func (c *MockidentityStateAllCall) Do(f func() map[types.NodeID][]identity.State
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockidentityStateAllCall) DoAndReturn(f func() map[types.NodeID][]identity.StateInfo) *MockidentityStateAllCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// AllByOps mocks base method.
+func (m *MockidentityState) AllByOps(ops builder.Operations) map[types.NodeID][]identity.StateInfo {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllByOps", ops)
+	ret0, _ := ret[0].(map[types.NodeID][]identity.StateInfo)
+	return ret0
+}
+
+// AllByOps indicates an expected call of AllByOps.
+func (mr *MockidentityStateMockRecorder) AllByOps(ops any) *MockidentityStateAllByOpsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllByOps", reflect.TypeOf((*MockidentityState)(nil).AllByOps), ops)
+	return &MockidentityStateAllByOpsCall{Call: call}
+}
+
+// MockidentityStateAllByOpsCall wrap *gomock.Call
+type MockidentityStateAllByOpsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockidentityStateAllByOpsCall) Return(arg0 map[types.NodeID][]identity.StateInfo) *MockidentityStateAllByOpsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockidentityStateAllByOpsCall) Do(f func(builder.Operations) map[types.NodeID][]identity.StateInfo) *MockidentityStateAllByOpsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockidentityStateAllByOpsCall) DoAndReturn(f func(builder.Operations) map[types.NodeID][]identity.StateInfo) *MockidentityStateAllByOpsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
