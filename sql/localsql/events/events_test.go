@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -29,7 +30,7 @@ func TestInsertEventsAndIterate(t *testing.T) {
 			event:     types.RandomBytes(10),
 		}
 		allEvents = append(allEvents, e)
-		require.NoError(t, events.InsertEvent(db, e.id, e.timestamp, e.event))
+		require.NoError(t, events.InsertEvent(db, e.id, e.timestamp, pb.IdentityState_UNSPECIFIED, e.event))
 	}
 
 	slices.SortFunc(allEvents, func(a, b event) int { return cmp.Compare(a.timestamp.Unix(), b.timestamp.Unix()) })
