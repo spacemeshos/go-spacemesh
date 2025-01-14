@@ -115,7 +115,7 @@ $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV): $(PROJ_DIR)$(ATHENA_SETUP_ARTIFAC
 $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 	mkdir -p $(dir $@)
 ifeq ($(GOOS),windows)
-	tar xzf $(subst /,\\,$(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT)) -C $(subst /,\\,$(BIN_DIR)) $(subst $(BIN_DIR),,$@)
+	7z x -y -o"$(BIN_DIR)" "$(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT)"
 else
 	tar xzf $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -C $(BIN_DIR) $(subst $(BIN_DIR),,$@)
 endif
