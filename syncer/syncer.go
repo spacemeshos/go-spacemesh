@@ -61,10 +61,10 @@ type ReconcSyncConfig struct {
 func DefaultConfig() Config {
 	oldAtxSyncCfg := sync2.DefaultConfig()
 	oldAtxSyncCfg.MaxDepth = 16
-	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = time.Hour
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 10 * time.Hour
 	newAtxSyncCfg := sync2.DefaultConfig()
 	newAtxSyncCfg.MaxDepth = 21
-	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
+	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
 	return Config{
 		Interval:                 10 * time.Second,
 		EpochEndFraction:         0.5,
@@ -77,7 +77,7 @@ func DefaultConfig() Config {
 		AtxSync:                  atxsync.DefaultConfig(),
 		MalSync:                  malsync.DefaultConfig(),
 		ReconcSync: ReconcSyncConfig{
-			Enable:            false,
+			Enable:            true,
 			EnableActiveSync:  false,
 			OldAtxSyncCfg:     oldAtxSyncCfg,
 			NewAtxSyncCfg:     newAtxSyncCfg,
