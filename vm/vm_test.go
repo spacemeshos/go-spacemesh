@@ -97,11 +97,11 @@ func (a *singlesigAccount) spawn(
 }
 
 func (a *singlesigAccount) spendGas() int {
-	return 2052 + 3276
+	return 2480 + 3320
 }
 
 func (a *singlesigAccount) selfSpawnGas() int {
-	return 1228 + 3276
+	return 1228 + 3320
 }
 
 func (a *singlesigAccount) spendMaxGas() int {
