@@ -71,6 +71,8 @@ install:
 .PHONY: install
 
 build: go-spacemesh get-profiler get-postrs-service
+	tree build
+	echo $(CGO_CFLAGS)
 .PHONY: build
 
 get-libs: get-postrs-lib get-postrs-service get-athena-lib
