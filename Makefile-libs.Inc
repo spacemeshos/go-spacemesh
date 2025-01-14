@@ -67,7 +67,7 @@ ifeq ($(platform), windows)
 	POSTRS_PROFILER_BIN = profiler.exe
 	POSTRS_SERVICE_BIN = post-service.exe
 
-	ATHENA_LIB = libathena_vmlib.dll
+	ATHENA_LIB = athena_vmlib.dll
 	ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
 else
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
