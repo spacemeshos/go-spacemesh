@@ -62,7 +62,6 @@ type initState struct {
 	patrol           *layerpatrol.LayerPatrol
 	syncer           *syncer.Syncer
 	atxHandler       *activation.Handler
-	updater          *bootstrap.Updater
 	proposalsHandler *proposals.Handler
 	proposalBuilder  *miner.ProposalBuilder
 	postSetupMgr     *activation.PostSetupManager
