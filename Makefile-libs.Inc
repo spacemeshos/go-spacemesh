@@ -114,11 +114,7 @@ $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV): $(PROJ_DIR)$(ATHENA_SETUP_ARTIFAC
 
 $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 	mkdir -p $(dir $@)
-ifeq ($(GOOS),windows)
-	unzip -DD -o -j $(subst /,\\,$(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT)) -d $(subst /,\\,$(BIN_DIR)) $(subst $(BIN_DIR),,$@)
-else
-	tar xzf $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -C $(BIN_DIR) $(subst $(BIN_DIR),,$@)
-endif
+	unzip -DD -o $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -d $(BIN_DIR) $(subst $(BIN_DIR),,$@)
 	touch $@
 
 # rename athena VM library
