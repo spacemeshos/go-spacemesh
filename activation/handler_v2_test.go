@@ -1988,7 +1988,7 @@ func Test_Marriages(t *testing.T) {
 		require.NoError(t, err)
 		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
 	})
-	t.Run("marring existing malicious equivocation set: marks all malicious and republishes proof", func(t *testing.T) {
+	t.Run("marring existing malicious equivocation set: mark all malicious and regossip proof", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 
@@ -2019,7 +2019,7 @@ func Test_Marriages(t *testing.T) {
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
 
-		atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
+		atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID())
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 
@@ -2036,7 +2036,7 @@ func Test_Marriages(t *testing.T) {
 			require.True(t, m, "expected %s to be malicious", sig)
 		}
 	})
-	t.Run("malicious marring existing equivocation set: marks all malicious and republishes proof", func(t *testing.T) {
+	t.Run("malicious marring existing equivocation set: mark all malicious and regossip proof", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
 
@@ -2066,7 +2066,7 @@ func Test_Marriages(t *testing.T) {
 		atx2.Sign(sig)
 		atxHandler.expectAtxV2(atx2)
 
-		atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
+		atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID())
 		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
 		require.NoError(t, err)
 
@@ -2185,7 +2185,7 @@ func Test_MarryingMalicious(t *testing.T) {
 			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, malicious, nil, []byte("proof"), 0, time.Now()))
 
 			atxHandler.expectInitialAtxV2(atx)
-			atxHandler.mMalPublish.EXPECT().Republish(gomock.Any(), sig.NodeID())
+			atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID())
 
 			err := atxHandler.processATX(context.Background(), "", atx, time.Now())
 			require.NoError(t, err)

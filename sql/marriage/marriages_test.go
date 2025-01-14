@@ -271,6 +271,75 @@ func TestAddUniqueConstraints(t *testing.T) {
 	})
 }
 
+func TestMarriageATXs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("invalid ID", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		_, err := marriage.MarriageATXs(db, 101)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+	})
+
+	t.Run("valid ID", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		id1, err := marriage.NewID(db)
+		require.NoError(t, err)
+		require.NotZero(t, id1)
+
+		info := marriage.Info{
+			ID:            id1,
+			NodeID:        types.RandomNodeID(),
+			ATX:           types.RandomATXID(),
+			MarriageIndex: rand.N(256),
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		}
+		err = marriage.Add(db, info)
+		require.NoError(t, err)
+
+		atxs, err := marriage.MarriageATXs(db, id1)
+		require.NoError(t, err)
+		require.Equal(t, []types.ATXID{info.ATX}, atxs)
+	})
+
+	t.Run("multiple ATXs", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		id1, err := marriage.NewID(db)
+		require.NoError(t, err)
+		require.NotZero(t, id1)
+
+		info := marriage.Info{
+			ID:            id1,
+			NodeID:        types.RandomNodeID(),
+			ATX:           types.RandomATXID(),
+			MarriageIndex: rand.N(256),
+			Target:        types.RandomNodeID(),
+			Signature:     types.RandomEdSignature(),
+		}
+		err = marriage.Add(db, info)
+		require.NoError(t, err)
+
+		mATXs := make([]types.ATXID, 0, 2)
+		mATXs = append(mATXs, info.ATX)
+
+		info.NodeID = types.RandomNodeID()
+		info.ATX = types.RandomATXID()
+		mATXs = append(mATXs, info.ATX)
+		err = marriage.Add(db, info)
+		require.NoError(t, err)
+
+		atxs, err := marriage.MarriageATXs(db, id1)
+		require.NoError(t, err)
+		require.ElementsMatch(t, mATXs, atxs)
+	})
+}
+
 func TestNodeIDsByID(t *testing.T) {
 	t.Parallel()
 	t.Run("invalid ID", func(t *testing.T) {

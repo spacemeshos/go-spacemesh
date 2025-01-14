@@ -128,6 +128,29 @@ func FindByNodeID(db sql.Executor, nodeID types.NodeID) (Info, error) {
 	return m, nil
 }
 
+func MarriageATXs(db sql.Executor, id ID) ([]types.ATXID, error) {
+	var atxs []types.ATXID
+	rows, err := db.Exec(`
+		SELECT marriage_atx
+		FROM marriages
+		WHERE id = $1
+	`, func(s *sql.Statement) {
+		s.BindInt64(1, int64(id))
+	}, func(s *sql.Statement) bool {
+		var atx types.ATXID
+		s.ColumnBytes(0, atx[:])
+		atxs = append(atxs, atx)
+		return true
+	})
+	if err != nil {
+		return nil, fmt.Errorf("selecting marriage ATXs: %w", err)
+	}
+	if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return atxs, nil
+}
+
 func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {
 	var nodeIDs []types.NodeID
 	rows, err := db.Exec(`

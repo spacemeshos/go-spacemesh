@@ -83,9 +83,16 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID,
 	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof))
 }
 
-func (p *MalfeasanceHandlerV2) Republish(ctx context.Context, id types.NodeID) error {
-	// TODO(mafa): implement me
-	return nil
+func (p *MalfeasanceHandlerV2) Regossip(ctx context.Context, nodeID types.NodeID) error {
+	p.smeshingMutex.Lock()
+	_, exists := p.signers[nodeID]
+	p.smeshingMutex.Unlock()
+
+	if exists {
+		// do not publish proofs against one self
+		return fmt.Errorf("publish ATX malfeasance proof: identity %s is managed by node", nodeID)
+	}
+	return p.malPublisher.Regossip(ctx, nodeID)
 }
 
 func (mh *MalfeasanceHandlerV2) decodeProof(data []byte) (wire.Proof, error) {

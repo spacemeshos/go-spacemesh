@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
@@ -57,7 +58,11 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		if err := malfeasance.AddProof(p.cdb, nodeID, nil, proof, int(InvalidActivation), time.Now()); err != nil {
 			return fmt.Errorf("setting malfeasance proof: %w", err)
 		}
-		return p.publish(ctx, nodeID, nil, proof) // pass nil for certificates
+		atxID, err := atxs.GetFirstIDByNodeID(p.cdb, nodeID)
+		if err != nil {
+			return fmt.Errorf("getting atx id: %w", err)
+		}
+		return p.publish(ctx, nodeID, []types.ATXID{atxID}, proof, InvalidActivation)
 	case err != nil:
 		return fmt.Errorf("getting equivocation set: %w", err)
 	default: // smesher is married
@@ -111,10 +116,55 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		// all smeshers were already marked as malicious - no gossip to void spamming the network
 		return nil
 	}
-	return p.publish(ctx, nodeID, maps.Keys(mATXs), proof)
+	return p.publish(ctx, nodeID, maps.Keys(mATXs), proof, ProofDomain(InvalidActivation))
 }
 
-func (p *Publisher) publish(ctx context.Context, nodeID types.NodeID, marriageATXs []types.ATXID, proof []byte) error {
+func (p *Publisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
+	marriageID, err := marriage.FindIDByNodeID(p.cdb, nodeID)
+	switch {
+	case errors.Is(err, sql.ErrNotFound): // smesher is not married
+		malicious, err := malfeasance.IsMalicious(p.cdb, nodeID)
+		if err != nil {
+			return fmt.Errorf("check if smesher is malicious: %w", err)
+		}
+		if malicious {
+			p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
+			return nil
+		}
+		proof, domain, err := malfeasance.NodeIDProof(p.cdb, nodeID)
+		if err != nil {
+			return fmt.Errorf("getting malfeasance proof: %w", err)
+		}
+		atxID, err := atxs.GetFirstIDByNodeID(p.cdb, nodeID)
+		if err != nil {
+			return fmt.Errorf("getting atx id: %w", err)
+		}
+		return p.publish(ctx, nodeID, []types.ATXID{atxID}, proof, ProofDomain(domain))
+	case err != nil:
+		return fmt.Errorf("getting equivocation set: %w", err)
+	default: // smesher is married
+	}
+
+	proof, domain, err := malfeasance.MarriageProof(p.cdb, marriageID)
+	if err != nil {
+		return fmt.Errorf("getting malfeasance proof: %w", err)
+	}
+
+	atxs, err := marriage.MarriageATXs(p.cdb, marriageID)
+	if err != nil {
+		return fmt.Errorf("getting equivocation set: %w", err)
+	}
+
+	return p.publish(ctx, nodeID, atxs, proof, ProofDomain(domain))
+}
+
+func (p *Publisher) publish(
+	ctx context.Context,
+	nodeID types.NodeID,
+	marriageATXs []types.ATXID,
+	proof []byte,
+	domain ProofDomain,
+) error {
 	p.tortoise.OnMalfeasance(nodeID)
 
 	// Only gossip the proof if we are synced (to not spam the network with proofs others probably already have).
@@ -128,7 +178,7 @@ func (p *Publisher) publish(ctx context.Context, nodeID types.NodeID, marriageAT
 	malfeasanceProof := &MalfeasanceProof{
 		Version:      0,
 		MarriageATXs: marriageATXs,
-		Domain:       InvalidActivation,
+		Domain:       domain,
 		Proof:        proof,
 	}
 	if err := p.publisher.Publish(ctx, pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof)); err != nil {

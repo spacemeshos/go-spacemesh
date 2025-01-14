@@ -1217,40 +1217,40 @@ func (c *MockatxMalfeasancePublisherPublishCall) DoAndReturn(f func(context.Cont
 	return c
 }
 
-// Republish mocks base method.
-func (m *MockatxMalfeasancePublisher) Republish(ctx context.Context, nodeID types.NodeID) error {
+// Regossip mocks base method.
+func (m *MockatxMalfeasancePublisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Republish", ctx, nodeID)
+	ret := m.ctrl.Call(m, "Regossip", ctx, nodeID)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Republish indicates an expected call of Republish.
-func (mr *MockatxMalfeasancePublisherMockRecorder) Republish(ctx, nodeID any) *MockatxMalfeasancePublisherRepublishCall {
+// Regossip indicates an expected call of Regossip.
+func (mr *MockatxMalfeasancePublisherMockRecorder) Regossip(ctx, nodeID any) *MockatxMalfeasancePublisherRegossipCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Republish", reflect.TypeOf((*MockatxMalfeasancePublisher)(nil).Republish), ctx, nodeID)
-	return &MockatxMalfeasancePublisherRepublishCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Regossip", reflect.TypeOf((*MockatxMalfeasancePublisher)(nil).Regossip), ctx, nodeID)
+	return &MockatxMalfeasancePublisherRegossipCall{Call: call}
 }
 
-// MockatxMalfeasancePublisherRepublishCall wrap *gomock.Call
-type MockatxMalfeasancePublisherRepublishCall struct {
+// MockatxMalfeasancePublisherRegossipCall wrap *gomock.Call
+type MockatxMalfeasancePublisherRegossipCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockatxMalfeasancePublisherRepublishCall) Return(arg0 error) *MockatxMalfeasancePublisherRepublishCall {
+func (c *MockatxMalfeasancePublisherRegossipCall) Return(arg0 error) *MockatxMalfeasancePublisherRegossipCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockatxMalfeasancePublisherRepublishCall) Do(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRepublishCall {
+func (c *MockatxMalfeasancePublisherRegossipCall) Do(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRegossipCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockatxMalfeasancePublisherRepublishCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRepublishCall {
+func (c *MockatxMalfeasancePublisherRegossipCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRegossipCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1313,6 +1313,44 @@ func (c *MockmalfeasancePublisherPublishATXProofCall) Do(f func(context.Context,
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockmalfeasancePublisherPublishATXProofCall) DoAndReturn(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishATXProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Regossip mocks base method.
+func (m *MockmalfeasancePublisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Regossip", ctx, nodeID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Regossip indicates an expected call of Regossip.
+func (mr *MockmalfeasancePublisherMockRecorder) Regossip(ctx, nodeID any) *MockmalfeasancePublisherRegossipCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Regossip", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Regossip), ctx, nodeID)
+	return &MockmalfeasancePublisherRegossipCall{Call: call}
+}
+
+// MockmalfeasancePublisherRegossipCall wrap *gomock.Call
+type MockmalfeasancePublisherRegossipCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalfeasancePublisherRegossipCall) Return(arg0 error) *MockmalfeasancePublisherRegossipCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalfeasancePublisherRegossipCall) Do(f func(context.Context, types.NodeID) error) *MockmalfeasancePublisherRegossipCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalfeasancePublisherRegossipCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockmalfeasancePublisherRegossipCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

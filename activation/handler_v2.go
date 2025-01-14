@@ -1024,7 +1024,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		//    the gossip handler (not sync!)
 		if republishProof {
 			malicious = true
-			return h.malPublisher.Republish(ctx, atx.SmesherID)
+			return h.malPublisher.Regossip(ctx, atx.SmesherID)
 		}
 
 		var err error

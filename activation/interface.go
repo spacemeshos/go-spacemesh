@@ -107,7 +107,7 @@ type legacyMalfeasancePublisher interface {
 // the underlying malfeasancePublisher. It also allows republishing of existing proofs.
 type atxMalfeasancePublisher interface {
 	Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error
-	Republish(ctx context.Context, nodeID types.NodeID) error
+	Regossip(ctx context.Context, nodeID types.NodeID) error
 }
 
 // malfeasancePublisher is an interface for publishing malfeasance proofs.
@@ -116,6 +116,7 @@ type atxMalfeasancePublisher interface {
 // and mark the associated identity as malfeasant.
 type malfeasancePublisher interface {
 	PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error
+	Regossip(ctx context.Context, nodeID types.NodeID) error
 }
 
 type atxProvider interface {
