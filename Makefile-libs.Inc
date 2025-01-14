@@ -58,8 +58,6 @@ POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v
 
 ATHENA_SETUP_REV = v0.6.3
 ATHENA_SETUP_RELEASE = v0.6.3
-ATHENA_SETUP_ARTIFACT = athena_vmlib_$(ATHENA_SETUP_REV)_$(GOOS)_$(GOARCH).tar.gz
-ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/$(ATHENA_SETUP_RELEASE)/$(ATHENA_SETUP_ARTIFACT)
 
 ifeq ($(platform), windows)
 	POSTRS_SETUP_LIBS = post.h post.dll
@@ -67,23 +65,25 @@ ifeq ($(platform), windows)
 	POSTRS_PROFILER_BIN = profiler.exe
 	POSTRS_SERVICE_BIN = post-service.exe
 
-	ATHENA_LIB = libathena_vmlib.dll
+	ATHENA_LIB = athena_vmlib.dll
 	ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
+	ATHENA_SETUP_ARTIFACT = athena_vmlib_$(ATHENA_SETUP_REV)_win32_amd64.zip
 else
 	ifeq ($(platform), $(filter $(platform), macos macos-m1))
 		POSTRS_SETUP_LIBS = post.h libpost.dylib
 		ATHENA_LIB = libathena_vmlib.dylib
-		ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
 	else
 		POSTRS_SETUP_LIBS = post.h libpost.so
 		ATHENA_LIB = libathena_vmlib.so
-		ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
 	endif
 
 	POSTRS_PROFILER_BIN = profiler
 	POSTRS_SERVICE_BIN = post-service
+	ATHENA_SETUP_LIBS = $(ATHENA_LIB) include/athcon/helpers.h include/athcon/athcon.h
+	ATHENA_SETUP_ARTIFACT = athena_vmlib_$(ATHENA_SETUP_REV)_$(GOOS)_$(GOARCH).tar.gz
 endif
 
+ATHENA_SETUP_ARTIFACT_URL ?= https://github.com/athenavm/athena/releases/download/$(ATHENA_SETUP_RELEASE)/$(ATHENA_SETUP_ARTIFACT)
 BINDIR_POSTRS_SETUP_LIBS = $(foreach X,$(POSTRS_SETUP_LIBS),$(BIN_DIR)$(X))
 BINDIR_ATHENA_SETUP_LIBS = $(foreach X,$(ATHENA_SETUP_LIBS),$(BIN_DIR)$(X))
 
@@ -114,7 +114,11 @@ $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV): $(PROJ_DIR)$(ATHENA_SETUP_ARTIFAC
 
 $(BINDIR_ATHENA_SETUP_LIBS): $(BIN_DIR).athena.version.$(ATHENA_SETUP_REV)
 	mkdir -p $(dir $@)
+ifeq ($(GOOS),windows)
+	unzip -DD -o $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -d $(BIN_DIR) $(subst $(BIN_DIR),,$@)
+else
 	tar xzf $(PROJ_DIR)$(ATHENA_SETUP_ARTIFACT) -C $(BIN_DIR) $(subst $(BIN_DIR),,$@)
+endif
 	touch $@
 
 # rename athena VM library
