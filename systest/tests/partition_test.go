@@ -8,6 +8,7 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
@@ -88,7 +89,7 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 		node := cl.Client(i)
 
 		eg.Go(func() error {
-			return stateHashStream(ctx, node, tctx.Log.Desugar(),
+			err := stateHashStream(ctx, node, tctx.Log.Desugar(),
 				func(state *pb.GlobalStateStreamResponse) (bool, error) {
 					data := state.Datum.Datum
 					require.IsType(tb, &pb.GlobalStateData_GlobalState{}, data)
@@ -124,6 +125,10 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 					return true, nil
 				},
 			)
+			if err != nil {
+				return fmt.Errorf("state hash stream error for %s: %w", node.Name, err)
+			}
+			return nil
 		})
 	}
 
@@ -166,12 +171,12 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 			}))
 	}
 	refState := latestStates[cl.Client(0).Name]
-	pass := true
 	for i := 1; i < cl.Total(); i++ {
 		clientState := latestStates[cl.Client(i).Name]
-		agree := true
 		for layer := layersPerEpoch * 2; layer <= last; layer++ {
-			if clientState[layer] != refState[layer] {
+			if !assert.Equalf(tb, clientState[layer], refState[layer],
+				"client state differs from ref state for client %s at layer %d", cl.Client(i).Name, layer,
+			) {
 				tctx.Log.Errorw("client state differs from ref state",
 					"client", cl.Client(i).Name,
 					"ref_client", cl.Client(0).Name,
@@ -179,20 +184,17 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 					"client_hash", clientState[layer],
 					"ref_hash", refState[layer],
 				)
-				agree = false
 				break
 			}
 		}
-		if agree {
+		if !tb.Failed() {
 			tctx.Log.Debugw("client agreed with ref client on all layers",
 				"client", cl.Client(i).Name,
 				"ref_client", cl.Client(0).Name,
 			)
 		}
-		pass = pass && agree
 	}
 	require.NoError(tb, finalErr)
-	require.True(tb, pass)
 	require.NoError(tb, eg2.Wait())
 }
 

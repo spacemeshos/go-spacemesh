@@ -19,9 +19,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sync2"
+	"github.com/spacemeshos/go-spacemesh/sync2/dbset"
 	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
+	"github.com/spacemeshos/go-spacemesh/sync2/sqlstore"
 )
 
 type dumbSet struct {
@@ -138,16 +141,10 @@ func TestP2P(t *testing.T) {
 			require.NoError(t, hsync.Set().WithCopy(
 				context.Background(),
 				func(os rangesync.OrderedSet) error {
-					empty, err := os.Empty()
+					info, err := os.SetInfo()
 					require.NoError(t, err)
-					if empty {
+					if info.Count < numHashes {
 						r = false
-					} else {
-						info, err := os.GetRangeInfo(nil, nil)
-						require.NoError(t, err)
-						if info.Count < numHashes {
-							r = false
-						}
 					}
 					return nil
 				}))
@@ -163,7 +160,9 @@ func TestP2P(t *testing.T) {
 		require.NoError(t, hsync.Set().WithCopy(
 			context.Background(),
 			func(os rangesync.OrderedSet) error {
-				actualItems, err := os.Items().Collect()
+				info, err := os.SetInfo()
+				require.NoError(t, err)
+				actualItems, err := info.Items.Collect()
 				require.NoError(t, err)
 				require.ElementsMatch(t, initialSet, actualItems)
 				return nil
@@ -186,7 +185,150 @@ func TestP2P(t *testing.T) {
 			}
 		}
 		return true
-	}, 30*time.Second, 300*time.Millisecond)
+	}, 30*time.Second, 100*time.Millisecond)
+
+	for _, hsync := range hs {
+		hsync.Stop()
+	}
+}
+
+type insertHandler struct {
+	t  *testing.T
+	db sql.Database
+}
+
+func (ih insertHandler) Commit(
+	ctx context.Context,
+	peer p2p.Peer,
+	base rangesync.OrderedSet,
+	received rangesync.SeqResult,
+) error {
+	items, err := received.Collect()
+	if err != nil {
+		return err
+	}
+	sqlstore.EnsureDBItems(ih.t, ih.db, items)
+	return nil
+}
+
+func TestP2P_DBSet(t *testing.T) {
+	const (
+		numNodes  = 4
+		numHashes = 100
+		keyLen    = 32
+		maxDepth  = 24
+	)
+	logger := zaptest.NewLogger(t)
+	mesh, err := mocknet.FullMeshLinked(numNodes)
+	require.NoError(t, err)
+	st := &sqlstore.SyncedTable{
+		TableName: "foo",
+		IDColumn:  "id",
+	}
+	hs := make([]*sync2.P2PHashSync, numNodes)
+	dbs := make([]sql.Database, numNodes)
+	initialSet := make([]rangesync.KeyBytes, numHashes)
+	for n := range initialSet {
+		initialSet[n] = rangesync.RandomKeyBytes(32)
+	}
+	var eg errgroup.Group
+	defer eg.Wait()
+	for n := range hs {
+		ps := peers.New()
+		for m := 0; m < numNodes; m++ {
+			if m != n {
+				ps.Add(mesh.Hosts()[m].ID(), func() []protocol.ID {
+					return []protocol.ID{multipeer.Protocol}
+				})
+			}
+		}
+		cfg := sync2.DefaultConfig()
+		cfg.SyncInterval = 100 * time.Millisecond
+		cfg.MaxDepth = maxDepth
+		cfg.AdvanceInterval = 200 * time.Millisecond
+		host := mesh.Hosts()[n]
+		var items []rangesync.KeyBytes
+		if n == 0 {
+			items = initialSet
+		}
+		dbs[n] = sqlstore.PopulateDB(t, keyLen, items)
+		ds := dbset.NewDBSet(dbs[n], st, keyLen, maxDepth)
+		d := rangesync.NewDispatcher(logger)
+		srv := d.SetupServer(host, "sync2test", server.WithLog(logger))
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		eg.Go(func() error { return srv.Run(ctx) })
+		hs[n], err = sync2.NewP2PHashSync(
+			// Using real logger for P2PHashSync (and thus RangeSetReconciler)
+			// may cause database access when printing sequences, and in this
+			// test we need to make sure there are no such accesses after the
+			// nodes are in sync.
+			zap.NewNop(),
+			d, "test", ds, keyLen, ps, insertHandler{t: t, db: dbs[n]}, cfg, true)
+		require.NoError(t, err)
+		require.NoError(t, hs[n].Load())
+		require.False(t, hs[n].Synced())
+	}
+
+	require.NoError(t, mesh.ConnectAllButSelf())
+
+	for _, hsync := range hs {
+		hsync.Start()
+	}
+
+	initialInfo, err := hs[0].Set().SetInfo()
+	require.NoError(t, err)
+	require.Equal(t, numHashes, initialInfo.Count)
+
+	require.Eventually(t, func() bool {
+		for _, hsync := range hs {
+			// use a snapshot to avoid races
+			if !hsync.Synced() {
+				return false
+			}
+			r := true
+			require.NoError(t, hsync.Set().WithCopy(
+				context.Background(),
+				func(os rangesync.OrderedSet) error {
+					info, err := os.SetInfo()
+					require.NoError(t, err)
+					if info.Count < numHashes {
+						r = false
+					}
+					require.Equal(t, initialInfo.Fingerprint, info.Fingerprint)
+					return nil
+				}))
+			if !r {
+				return false
+			}
+		}
+		return true
+	}, 30*time.Second, 100*time.Millisecond)
+
+	// Make sure there are no queries to the database made when nodes are already in sync,
+	// except for advancing the DBSet.
+	cycleCounts := make([]int, numNodes)
+	for n, db := range dbs {
+		db.Intercept("noqueries", func(query string) error {
+			if query != `SELECT max("rowid") FROM "foo"` &&
+				query != `SELECT "id" FROM "foo" WHERE "rowid" BETWEEN ? AND ?` {
+				require.Fail(t, "unexpected query: %s", query)
+			}
+			return nil
+		})
+		cycleCounts[n] = hs[n].SyncCycleCount()
+	}
+
+	// Make sure each syncer had 3 cycle counts without any queries except for
+	// advancing the DBSet.
+	require.Eventually(t, func() bool {
+		for n, hsync := range hs {
+			if hsync.SyncCycleCount() <= cycleCounts[n]+3 {
+				return false
+			}
+		}
+		return true
+	}, 30*time.Second, 100*time.Millisecond)
 
 	for _, hsync := range hs {
 		hsync.Stop()

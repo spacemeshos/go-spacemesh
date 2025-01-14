@@ -144,13 +144,7 @@ func TestAtxHandler_Retry(t *testing.T) {
 	var eg errgroup.Group
 	eg.Go(func() error {
 		for {
-			// FIXME: BlockUntilContext is not included in FakeClock interface.
-			// This will be fixed in a post-0.4.0 clockwork release, but with a breaking change that
-			// makes FakeClock a struct instead of an interface.
-			// See: https://github.com/jonboulle/clockwork/pull/71
-			clock.(interface {
-				BlockUntilContext(ctx context.Context, n int) error
-			}).BlockUntilContext(ctx, 1)
+			clock.BlockUntilContext(ctx, 1)
 			if ctx.Err() != nil {
 				return nil
 			}
@@ -213,7 +207,7 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 		return h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs))
 	})
 	// wait for delay after 1st batch failure
-	clock.BlockUntil(1)
+	clock.BlockUntilContext(context.Background(), 1)
 	toFetch := make(map[types.ATXID]bool)
 	for _, id := range allAtxs {
 		toFetch[id] = true
@@ -272,7 +266,7 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 		return h.Commit(context.Background(), peer, baseSet, sr)
 	})
 	for range 2 {
-		clock.BlockUntil(1)
+		clock.BlockUntilContext(context.Background(), 1)
 		clock.Advance(testCfg.FailedBatchDelay)
 	}
 	require.Error(t, eg.Wait())

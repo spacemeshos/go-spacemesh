@@ -697,7 +697,6 @@ func (db *sqliteDatabase) withTx(ctx context.Context, initstmt string, exec func
 		}
 	}()
 	if err := exec(tx); err != nil {
-		tx.queryCache.ClearCache()
 		return err
 	}
 	return tx.Commit()
@@ -818,14 +817,12 @@ func (db *sqliteDatabase) WithConnection(ctx context.Context, exec func(Executor
 		return ErrClosed
 	}
 	conCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	conn := db.getConn(conCtx)
-	defer func() {
-		cancel()
-		db.pool.Put(conn)
-	}()
 	if conn == nil {
 		return ErrNoConnection
 	}
+	defer db.pool.Put(conn)
 	return exec(&sqliteConn{queryCache: db.queryCache, db: db, conn: conn})
 }
 

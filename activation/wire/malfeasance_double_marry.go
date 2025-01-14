@@ -23,8 +23,8 @@ type ProofDoubleMarry struct {
 	// NodeID is the node ID that married twice.
 	NodeID types.NodeID
 
-	// ATX1 is the ID of the ATX being proven to have the marriage certificate of interest.
-	ATX1 types.ATXID
+	// ATXID1 is the ID of the ATX being proven to have the marriage certificate of interest.
+	ATXID1 types.ATXID
 	// SmesherID1 is the ID of the smesher that published ATX1.
 	SmesherID1 types.NodeID
 	// Signature1 is the signature of the ATXID by the smesher.
@@ -32,14 +32,32 @@ type ProofDoubleMarry struct {
 	// Proof1 is the proof that the marriage certificate is contained in the ATX1.
 	Proof1 MarryProof
 
-	// ATX2 is the ID of the ATX being proven to have the marriage certificate of interest.
-	ATX2 types.ATXID
+	// ATXID2 is the ID of the ATX being proven to have the marriage certificate of interest.
+	ATXID2 types.ATXID
 	// SmesherID2 is the ID of the smesher that published ATX2.
 	SmesherID2 types.NodeID
 	// Signature2 is the signature of the ATXID by the smesher.
 	Signature2 types.EdSignature
 	// Proof2 is the proof that the marriage certificate is contained in the ATX2.
 	Proof2 MarryProof
+}
+
+func (p ProofDoubleMarry) TypeName() string {
+	return "DoubleMarryProof"
+}
+
+func (p ProofDoubleMarry) Type() ProofType {
+	return DoubleMarry
+}
+
+func (p ProofDoubleMarry) Info() map[string]string {
+	return map[string]string{
+		"node_id":     p.NodeID.String(),
+		"atx1":        p.ATXID1.String(),
+		"smesher_id1": p.SmesherID1.String(),
+		"atx2":        p.ATXID2.String(),
+		"smesher_id2": p.SmesherID2.String(),
+	}
 }
 
 var _ Proof = &ProofDoubleMarry{}
@@ -61,12 +79,12 @@ func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID typ
 	return &ProofDoubleMarry{
 		NodeID: nodeID,
 
-		ATX1:       atx1.ID(),
+		ATXID1:     atx1.ID(),
 		SmesherID1: atx1.SmesherID,
 		Signature1: atx1.Signature,
 		Proof1:     proof1,
 
-		ATX2:       atx2.ID(),
+		ATXID2:     atx2.ID(),
 		SmesherID2: atx2.SmesherID,
 		Signature2: atx2.Signature,
 		Proof2:     proof2,
@@ -74,19 +92,19 @@ func NewDoubleMarryProof(db sql.Executor, atx1, atx2 *ActivationTxV2, nodeID typ
 }
 
 func (p ProofDoubleMarry) Valid(_ context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
-	if p.ATX1 == p.ATX2 {
+	if p.ATXID1 == p.ATXID2 {
 		return types.EmptyNodeID, errors.New("proofs have the same ATX ID")
 	}
-	if !malValidator.Signature(signing.ATX, p.SmesherID1, p.ATX1.Bytes(), p.Signature1) {
+	if !malValidator.Signature(signing.ATX, p.SmesherID1, p.ATXID1.Bytes(), p.Signature1) {
 		return types.EmptyNodeID, errors.New("invalid signature for ATX1")
 	}
-	if !malValidator.Signature(signing.ATX, p.SmesherID2, p.ATX2.Bytes(), p.Signature2) {
+	if !malValidator.Signature(signing.ATX, p.SmesherID2, p.ATXID2.Bytes(), p.Signature2) {
 		return types.EmptyNodeID, errors.New("invalid signature for ATX2")
 	}
-	if err := p.Proof1.Valid(malValidator, p.ATX1, p.SmesherID1, p.NodeID); err != nil {
+	if err := p.Proof1.Valid(malValidator, p.ATXID1, p.SmesherID1, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 1 is invalid: %w", err)
 	}
-	if err := p.Proof2.Valid(malValidator, p.ATX2, p.SmesherID2, p.NodeID); err != nil {
+	if err := p.Proof2.Valid(malValidator, p.ATXID2, p.SmesherID2, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
 	}
 	return p.NodeID, nil

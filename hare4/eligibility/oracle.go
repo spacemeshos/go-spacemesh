@@ -66,7 +66,7 @@ type Config struct {
 	// For example, if epoch size is 100 and confidence is 10 hare will use previous active set for layers 0-9
 	// and then generate a new activeset.
 	//
-	// This was done like that so that we have higher `confidence` that hare will succeed atleast
+	// This was done like that so that we have higher `confidence` that hare will succeed at least
 	// once during this interval. If it doesn't we have to provide centralized fallback.
 	ConfidenceParam uint32 `mapstructure:"eligibility-confidence-param"`
 }

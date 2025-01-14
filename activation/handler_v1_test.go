@@ -756,6 +756,67 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		require.NoError(t, atxHdlr.storeAtx(context.Background(), atx3, watx3))
 	})
 
+	t.Run("another atx of v2 with the same prevatx is considered malicious", func(t *testing.T) {
+		atxHdlr := newTestHandler(t, goldenATXID)
+
+		initialATX := newInitialATXv1(t, goldenATXID)
+		initialATX.Sign(sig)
+		wInitialATX := toAtx(t, initialATX)
+
+		atxHdlr.mBeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == initialATX.ID()
+		}))
+		atxHdlr.mTortoise.EXPECT().OnAtx(initialATX.PublishEpoch+1, initialATX.ID(), gomock.Any())
+		require.NoError(t, atxHdlr.v1.storeAtx(context.Background(), wInitialATX, initialATX))
+
+		// valid first non-initial ATX
+		watx1 := newChainedActivationTxV1(t, initialATX, goldenATXID)
+		watx1.Sign(sig)
+		atx1 := toAtx(t, watx1)
+
+		atxHdlr.mBeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx1.ID()
+		}))
+		atxHdlr.mTortoise.EXPECT().OnAtx(watx1.PublishEpoch+1, watx1.ID(), gomock.Any())
+		require.NoError(t, atxHdlr.v1.storeAtx(context.Background(), atx1, watx1))
+
+		watx2 := newSoloATXv2(t, watx1.PublishEpoch+1, watx1.ID(), watx1.ID())
+		watx2.Sign(sig)
+		atxHdlr.expectAtxV2(watx2)
+
+		err := atxHdlr.v2.processATX(context.Background(), "peer", watx2, time.Now())
+		require.NoError(t, err)
+
+		// third non-initial ATX references initial ATX as prevATX
+		watx3 := newChainedActivationTxV1(t, watx1, goldenATXID)
+		watx3.PublishEpoch = watx2.PublishEpoch + 1
+		watx3.Sign(sig)
+		atx3 := toAtx(t, watx3)
+
+		atxHdlr.mBeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx3.ID()
+		}))
+		atxHdlr.mTortoise.EXPECT().OnAtx(watx3.PublishEpoch+1, watx3.ID(), gomock.Any())
+
+		verifier := wire.NewMockMalfeasanceValidator(atxHdlr.ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return atxHdlr.edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		atxHdlr.mMalPublish.EXPECT().Publish(context.Background(), sig.NodeID(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
+				malProof := proof.(*wire.ProofInvalidPrevAtxV1)
+				nId, err := malProof.Valid(context.Background(), verifier)
+				require.NoError(t, err)
+				require.Equal(t, sig.NodeID(), nId)
+				return nil
+			},
+		)
+
+		require.NoError(t, atxHdlr.v1.storeAtx(context.Background(), atx3, watx3))
+	})
+
 	t.Run("another atx with the same prevatx for registered ID doesn't create a malfeasance proof", func(t *testing.T) {
 		atxHdlr := newV1TestHandler(t, goldenATXID)
 		atxHdlr.Register(sig)

@@ -55,7 +55,7 @@ func TestSyncGetOffset(t *testing.T) {
 		// Connect the P2P mesh only after the servers are configured.
 		// This way, we avoid the race causing bad protocol identification.
 		require.NoError(t, mesh.ConnectAllButSelf())
-		offset, err := sync.GetOffset(context.TODO(), 0, peers)
+		offset, err := sync.GetOffset(context.Background(), 0, peers)
 		require.NoError(t, err)
 		require.Equal(t, 5*time.Second, offset)
 	})
@@ -75,7 +75,7 @@ func TestSyncGetOffset(t *testing.T) {
 
 		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
 		require.NoError(t, mesh.ConnectAllButSelf())
-		offset, err := sync.GetOffset(context.TODO(), 0, peers)
+		offset, err := sync.GetOffset(context.Background(), 0, peers)
 		require.ErrorIs(t, err, errTimesyncFailed)
 		require.Empty(t, offset)
 	})

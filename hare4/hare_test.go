@@ -116,7 +116,7 @@ type node struct {
 	t *tester
 
 	i          int
-	clock      clockwork.FakeClock
+	clock      *clockwork.FakeClock
 	nclock     *testNodeClock
 	signer     *signing.EdSigner
 	registered []*signing.EdSigner

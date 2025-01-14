@@ -75,3 +75,104 @@ func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *Mockt
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockMalfeasanceHandler is a mock of MalfeasanceHandler interface.
+type MockMalfeasanceHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MockMalfeasanceHandlerMockRecorder
+	isgomock struct{}
+}
+
+// MockMalfeasanceHandlerMockRecorder is the mock recorder for MockMalfeasanceHandler.
+type MockMalfeasanceHandlerMockRecorder struct {
+	mock *MockMalfeasanceHandler
+}
+
+// NewMockMalfeasanceHandler creates a new mock instance.
+func NewMockMalfeasanceHandler(ctrl *gomock.Controller) *MockMalfeasanceHandler {
+	mock := &MockMalfeasanceHandler{ctrl: ctrl}
+	mock.recorder = &MockMalfeasanceHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockMalfeasanceHandler) EXPECT() *MockMalfeasanceHandlerMockRecorder {
+	return m.recorder
+}
+
+// Info mocks base method.
+func (m *MockMalfeasanceHandler) Info(data []byte) (map[string]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Info", data)
+	ret0, _ := ret[0].(map[string]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Info indicates an expected call of Info.
+func (mr *MockMalfeasanceHandlerMockRecorder) Info(data any) *MockMalfeasanceHandlerInfoCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Info", reflect.TypeOf((*MockMalfeasanceHandler)(nil).Info), data)
+	return &MockMalfeasanceHandlerInfoCall{Call: call}
+}
+
+// MockMalfeasanceHandlerInfoCall wrap *gomock.Call
+type MockMalfeasanceHandlerInfoCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockMalfeasanceHandlerInfoCall) Return(arg0 map[string]string, arg1 error) *MockMalfeasanceHandlerInfoCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockMalfeasanceHandlerInfoCall) Do(f func([]byte) (map[string]string, error)) *MockMalfeasanceHandlerInfoCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockMalfeasanceHandlerInfoCall) DoAndReturn(f func([]byte) (map[string]string, error)) *MockMalfeasanceHandlerInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ReportLabels mocks base method.
+func (m *MockMalfeasanceHandler) ReportLabels(data []byte) []string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReportLabels", data)
+	ret0, _ := ret[0].([]string)
+	return ret0
+}
+
+// ReportLabels indicates an expected call of ReportLabels.
+func (mr *MockMalfeasanceHandlerMockRecorder) ReportLabels(data any) *MockMalfeasanceHandlerReportLabelsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportLabels", reflect.TypeOf((*MockMalfeasanceHandler)(nil).ReportLabels), data)
+	return &MockMalfeasanceHandlerReportLabelsCall{Call: call}
+}
+
+// MockMalfeasanceHandlerReportLabelsCall wrap *gomock.Call
+type MockMalfeasanceHandlerReportLabelsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockMalfeasanceHandlerReportLabelsCall) Return(arg0 []string) *MockMalfeasanceHandlerReportLabelsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockMalfeasanceHandlerReportLabelsCall) Do(f func([]byte) []string) *MockMalfeasanceHandlerReportLabelsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockMalfeasanceHandlerReportLabelsCall) DoAndReturn(f func([]byte) []string) *MockMalfeasanceHandlerReportLabelsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

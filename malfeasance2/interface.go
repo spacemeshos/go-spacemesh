@@ -9,3 +9,11 @@ import (
 type tortoise interface {
 	OnMalfeasance(types.NodeID)
 }
+
+type MalfeasanceHandler interface {
+	// Info returns a map of key-value pairs that serve as metadata for the proof
+	Info(data []byte) (map[string]string, error)
+
+	// ReportLabel returns the label for the prometheus counter of the given proof type
+	ReportLabels(data []byte) []string
+}

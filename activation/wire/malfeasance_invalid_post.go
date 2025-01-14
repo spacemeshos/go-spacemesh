@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -36,6 +37,23 @@ type ProofInvalidPost struct {
 	// InvalidPostProof is the proof for the invalid PoST of the ATX. It contains the PoST and the merkle proofs to
 	// verify the PoST.
 	InvalidPostProof InvalidPostProof
+}
+
+func (p ProofInvalidPost) TypeName() string {
+	return "InvalidPoSTProof"
+}
+
+func (p ProofInvalidPost) Type() ProofType {
+	return InvalidPost
+}
+
+func (p ProofInvalidPost) Info() map[string]string {
+	return map[string]string{
+		"atx":          p.ATXID.String(),
+		"index":        strconv.FormatUint(uint64(p.InvalidPostProof.InvalidPostIndex), 10),
+		"post_node_id": p.NodeID.String(),
+		"smesher_id":   p.SmesherID.String(),
+	}
 }
 
 var _ Proof = &ProofInvalidPost{}

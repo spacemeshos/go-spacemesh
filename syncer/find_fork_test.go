@@ -3,7 +3,6 @@ package syncer_test
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"math/rand/v2"
 	"strconv"
 	"testing"
@@ -108,7 +107,7 @@ func serveHashReq(tb testing.TB, req *fetch.MeshHashRequest) (*fetch.MeshHashes,
 	hashes = append(hashes, layerHash(int(req.To.Uint32()), true))
 
 	expCount := int(req.Count())
-	require.Len(tb, hashes, expCount, fmt.Sprintf("%#v; count exp: %v, got %v", req, expCount, len(hashes)))
+	require.Lenf(tb, hashes, expCount, "%#v; count exp: %v, got %v", req, expCount, len(hashes))
 	mh := &fetch.MeshHashes{
 		Hashes: hashes,
 	}
@@ -133,7 +132,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 			}).AnyTimes()
 
 		fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
-		require.NoError(t, err, fmt.Sprintf("lid: %v", lid))
+		require.NoErrorf(t, err, "lid: %v", lid)
 		require.Equal(t, expected, int(fork))
 	}
 }

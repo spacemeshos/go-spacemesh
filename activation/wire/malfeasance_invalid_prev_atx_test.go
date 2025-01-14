@@ -317,11 +317,11 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		proof.Proofs[0].ATXID = atx1.ID()
 
 		// invalid prev ATX
-		proof.PrevATX = types.RandomATXID()
+		proof.PrevATXID = types.RandomATXID()
 		id, err = proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.PrevATX = prevATXID
+		proof.PrevATXID = prevATXID
 
 		// invalid node ID
 		proof.NodeID = types.RandomNodeID()
@@ -935,11 +935,11 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 			}).AnyTimes()
 
 		// invalid PrevATX
-		proof.PrevATX = types.RandomATXID()
+		proof.PrevATXID = types.RandomATXID()
 		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
-		proof.PrevATX = prevATX
+		proof.PrevATXID = prevATX
 
 		// invalid SmesherID for atxv1
 		proof.ATXv1.SmesherID = types.RandomNodeID()

@@ -70,7 +70,7 @@ type PostSupervisor struct {
 	provingOpts PostProvingOpts
 
 	postSetupProvider postSetupProvider
-	atxBuilder        AtxBuilder
+	atxBuilder        atxBuilder
 
 	pid atomic.Int64 // pid of the running post service, only for tests.
 
@@ -85,7 +85,7 @@ func NewPostSupervisor(
 	postCfg PostConfig,
 	provingOpts PostProvingOpts,
 	postSetupProvider postSetupProvider,
-	atxBuilder AtxBuilder,
+	atxBuilder atxBuilder,
 ) *PostSupervisor {
 	return &PostSupervisor{
 		logger:      logger,

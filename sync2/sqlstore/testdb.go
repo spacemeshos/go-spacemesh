@@ -20,15 +20,12 @@ func CreateDB(t *testing.T, keyLen int) sql.Database {
 	return db
 }
 
-// InsertDBItems inserts items into a test database. It is only used for testing.
-func InsertDBItems(t *testing.T, db sql.Database, content []rangesync.KeyBytes) {
+func insertDBItems(t *testing.T, db sql.Database, content []rangesync.KeyBytes, cmd string) {
 	err := db.WithTx(context.Background(), func(tx sql.Transaction) error {
 		for _, id := range content {
-			_, err := tx.Exec(
-				"insert into foo(id) values(?)",
-				func(stmt *sql.Statement) {
-					stmt.BindBytes(1, id)
-				}, nil)
+			_, err := tx.Exec(cmd, func(stmt *sql.Statement) {
+				stmt.BindBytes(1, id)
+			}, nil)
 			if err != nil {
 				return err
 			}
@@ -36,6 +33,17 @@ func InsertDBItems(t *testing.T, db sql.Database, content []rangesync.KeyBytes) 
 		return nil
 	})
 	require.NoError(t, err)
+}
+
+// InsertDBItems inserts items into a test database. It is only used for testing.
+func InsertDBItems(t *testing.T, db sql.Database, content []rangesync.KeyBytes) {
+	insertDBItems(t, db, content, "insert into foo(id) values(?)")
+}
+
+// EnsureDBItems inserts items into a test database, skipping rows with keys that already exist.
+// It is only used for testing.
+func EnsureDBItems(t *testing.T, db sql.Database, content []rangesync.KeyBytes) {
+	insertDBItems(t, db, content, "insert into foo(id) values(?) on conflict do nothing")
 }
 
 // PopulateDB creates a test database and inserts items into it. It is only used for testing.

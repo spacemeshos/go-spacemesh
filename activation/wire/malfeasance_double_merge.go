@@ -59,6 +59,25 @@ type ProofDoubleMerge struct {
 	SmesherID2MarryProof MarryProof
 }
 
+func (p ProofDoubleMerge) TypeName() string {
+	return "DoubleMergeProof"
+}
+
+func (p ProofDoubleMerge) Type() ProofType {
+	return DoubleMerge
+}
+
+func (p ProofDoubleMerge) Info() map[string]string {
+	return map[string]string{
+		"publish_epoch": p.PublishEpoch.String(),
+		"marriage_atx":  p.MarriageATX.String(),
+		"atx1":          p.ATXID1.String(),
+		"smesher_id1":   p.SmesherID1.String(),
+		"atx2":          p.ATXID2.String(),
+		"smesher_id2":   p.SmesherID2.String(),
+	}
+}
+
 var _ Proof = &ProofDoubleMerge{}
 
 func NewDoubleMergeProof(db sql.Executor, atx1, atx2 *ActivationTxV2) (*ProofDoubleMerge, error) {

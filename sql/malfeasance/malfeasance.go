@@ -95,3 +95,59 @@ func IterateOps(
 	)
 	return err
 }
+
+// NodeIDProof returns the malfeasance proof and its domain for the given node ID. Returns sql.ErrNotFound if no proof
+// for the given node ID exists. To return a proof for a marriage set use MarriageProof instead.
+func NodeIDProof(db sql.Executor, nodeID types.NodeID) ([]byte, int, error) {
+	var (
+		proof  []byte
+		domain int
+	)
+	rows, err := db.Exec(`
+		SELECT proof, domain
+		FROM malfeasance
+		WHERE pubkey = ?1 AND marriage_id IS NULL
+	`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, nodeID.Bytes())
+	}, func(stmt *sql.Statement) bool {
+		proof = make([]byte, stmt.ColumnLen(0))
+		stmt.ColumnBytes(0, proof)
+		domain = int(stmt.ColumnInt64(1))
+		return false
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("proof %v: %w", nodeID, err)
+	}
+	if rows == 0 {
+		return nil, 0, sql.ErrNotFound
+	}
+	return proof, domain, nil
+}
+
+// MarriageProof returns the malfeasance proof for the marriage set. Returns sql.ErrNotFound if no proof for the given
+// marriage ID exists. To return a proof for a node ID use NodeIDProof instead.
+func MarriageProof(db sql.Executor, marriageID marriage.ID) ([]byte, int, error) {
+	var (
+		proof  []byte
+		domain int
+	)
+	rows, err := db.Exec(`
+		SELECT proof, domain
+		FROM malfeasance
+		WHERE marriage_id = ?1 AND proof IS NOT NULL
+	`, func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(marriageID))
+	}, func(stmt *sql.Statement) bool {
+		proof = make([]byte, stmt.ColumnLen(0))
+		stmt.ColumnBytes(0, proof)
+		domain = int(stmt.ColumnInt64(1))
+		return false
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("marriage proof %v: %w", marriageID, err)
+	}
+	if rows == 0 {
+		return nil, 0, sql.ErrNotFound
+	}
+	return proof, domain, nil
+}

@@ -17,7 +17,7 @@ func (t *ProofInvalidPrevAtxV2) EncodeScale(enc *scale.Encoder) (total int, err 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.PrevATX[:])
+		n, err := scale.EncodeByteArray(enc, t.PrevATXID[:])
 		if err != nil {
 			return total, err
 		}
@@ -42,7 +42,7 @@ func (t *ProofInvalidPrevAtxV2) DecodeScale(dec *scale.Decoder) (total int, err 
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.PrevATX[:])
+		n, err := scale.DecodeByteArray(dec, t.PrevATXID[:])
 		if err != nil {
 			return total, err
 		}
@@ -67,7 +67,7 @@ func (t *ProofInvalidPrevAtxV1) EncodeScale(enc *scale.Encoder) (total int, err 
 		total += n
 	}
 	{
-		n, err := scale.EncodeByteArray(enc, t.PrevATX[:])
+		n, err := scale.EncodeByteArray(enc, t.PrevATXID[:])
 		if err != nil {
 			return total, err
 		}
@@ -99,7 +99,7 @@ func (t *ProofInvalidPrevAtxV1) DecodeScale(dec *scale.Decoder) (total int, err 
 		total += n
 	}
 	{
-		n, err := scale.DecodeByteArray(dec, t.PrevATX[:])
+		n, err := scale.DecodeByteArray(dec, t.PrevATXID[:])
 		if err != nil {
 			return total, err
 		}

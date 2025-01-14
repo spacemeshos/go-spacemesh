@@ -27,7 +27,7 @@ type (
 	// Signature is an alias to types.EdSignature.
 	Signature = types.EdSignature
 
-	// Account is an alis to types.Account.
+	// Account is an alias to types.Account.
 	Account = types.Account
 	// Header is an alias to types.TxHeader.
 	Header = types.TxHeader
