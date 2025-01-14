@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -658,4 +659,33 @@ func TestConnection(t *testing.T) {
 	require.Error(t, db.WithConnection(context.Background(), func(Executor) error {
 		return errors.New("error")
 	}))
+}
+
+func TestConnection_Idle(t *testing.T) {
+	dbName := t.Name()
+	numConns := func() int {
+		return int(testutil.ToFloat64(PoolUsage.WithLabelValues(dbName)))
+	}
+	require.Zero(t, numConns())
+	db := InMemoryTest(t, WithDBName(dbName))
+	require.NoError(t, db.WithConnection(context.Background(), func(ex Executor) error {
+		for range 3 {
+			for range 3 {
+				_, err := ex.Exec("select 1", nil, func(stmt *Statement) bool {
+					require.Equal(t, 1, numConns())
+					return true
+				})
+				require.NoError(t, err)
+				// The connection should still be in use right after the query
+				require.Equal(t, 1, numConns())
+			}
+			// The connection should be released after idle interval,
+			// but reacquired on the next query
+			require.Eventually(t, func() bool { return numConns() == 0 },
+				time.Second, 10*time.Millisecond)
+		}
+		return nil
+	}))
+
+	require.Zero(t, numConns())
 }
