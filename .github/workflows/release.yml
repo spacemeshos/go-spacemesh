@@ -21,8 +21,8 @@ jobs:
           #   outname_sufix: "mac-amd64"
           - os: [self-hosted, macOS, ARM64, go-spacemesh]
             outname_sufix: "mac-arm64"
-          - os: windows-2022
-            outname_sufix: "win-amd64"
+          # - os: windows-2022
+          #   outname_sufix: "win-amd64"
     permissions:
       contents: "read"
       id-token: "write"
@@ -142,22 +142,22 @@ jobs:
       - name: Generate the env variables
         shell: bash
         run: |
-          echo "OUTNAME_WIN_AMD64=go-spacemesh-${{ github.ref_name }}-win-amd64" >> $GITHUB_ENV
+          # echo "OUTNAME_WIN_AMD64=go-spacemesh-${{ github.ref_name }}-win-amd64" >> $GITHUB_ENV
           echo "OUTNAME_LINUX_AMD64=go-spacemesh-${{ github.ref_name }}-linux-amd64" >> $GITHUB_ENV
           echo "OUTNAME_LINUX_ARM64=go-spacemesh-${{ github.ref_name }}-linux-arm64" >> $GITHUB_ENV
-          echo "OUTNAME_MAC_AMD64=go-spacemesh-${{ github.ref_name }}-mac-amd64" >> $GITHUB_ENV
+          # echo "OUTNAME_MAC_AMD64=go-spacemesh-${{ github.ref_name }}-mac-amd64" >> $GITHUB_ENV
           echo "OUTNAME_MAC_ARM64=go-spacemesh-${{ github.ref_name }}-mac-arm64" >> $GITHUB_ENV
 
-          echo "SHA256_WIN_AMD64=$(cat sha256-win-amd64/sha256-win-amd64.txt)" >> $GITHUB_ENV
+          # echo "SHA256_WIN_AMD64=$(cat sha256-win-amd64/sha256-win-amd64.txt)" >> $GITHUB_ENV
           echo "SHA256_LINUX_AMD64=$(cat sha256-linux-amd64/sha256-linux-amd64.txt)" >> $GITHUB_ENV
           echo "SHA256_LINUX_ARM64=$(cat sha256-linux-arm64/sha256-linux-arm64.txt)" >> $GITHUB_ENV
-          echo "SHA256_MAC_AMD64=$(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> $GITHUB_ENV
+          # echo "SHA256_MAC_AMD64=$(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> $GITHUB_ENV
           echo "SHA256_MAC_ARM64=$(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> $GITHUB_ENV
 
-          echo "win-amd64: $(cat sha256-win-amd64/sha256-win-amd64.txt)" >> sha256sum.yaml
+          # echo "win-amd64: $(cat sha256-win-amd64/sha256-win-amd64.txt)" >> sha256sum.yaml
           echo "linux-amd64: $(cat sha256-linux-amd64/sha256-linux-amd64.txt)" >> sha256sum.yaml
           echo "linux-arm64: $(cat sha256-linux-arm64/sha256-linux-arm64.txt)" >> sha256sum.yaml
-          echo "mac-amd64: $(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> sha256sum.yaml
+          # echo "mac-amd64: $(cat sha256-mac-amd64/sha256-mac-amd64.txt)" >> sha256sum.yaml
           echo "mac-arm64: $(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> sha256sum.yaml
 
       - name: Setup gcloud authentication
@@ -200,20 +200,21 @@ jobs:
           tag_name: ${{ github.ref_name }}
           body: |
             ## Zip Files
-            - Windows amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
-            - macOS amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
             - macOS arm64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_MAC_ARM64 }}.zip
             - Linux amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_AMD64 }}.zip
             - Linux arm64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_LINUX_ARM64 }}.zip
 
             ## checksum - Zip files
             YAML with all the checksums of this version :  https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/sha256sum.yaml
-            - Windows amd64 - sha256 : ${{ env.SHA256_WIN_AMD64 }}
             - Linux amd64 - sha256: ${{ env.SHA256_LINUX_AMD64 }}
             - Linux arm64 - sha256: ${{ env.SHA256_LINUX_ARM64 }}
-            - macOS amd64 - sha256: ${{ env.SHA256_MAC_AMD64 }}
             - macOS arm64 - sha256: ${{ env.SHA256_MAC_ARM64 }}
 
             For information about changes in this release see the [changelog](https://github.com/spacemeshos/go-spacemesh/blob/${{ github.ref_name }}/CHANGELOG.md).
           draft: false
           prerelease: true
+            # FIXME: reenable macos and windows
+            # - Windows amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_WIN_AMD64 }}.zip
+            # - macOS amd64: https://go-spacemesh-release-builds.spacemesh.network/${{ github.ref_name }}/${{ env.OUTNAME_MAC_AMD64 }}.zip
+            # - Windows amd64 - sha256 : ${{ env.SHA256_WIN_AMD64 }}
+            # - macOS amd64 - sha256: ${{ env.SHA256_MAC_AMD64 }}
