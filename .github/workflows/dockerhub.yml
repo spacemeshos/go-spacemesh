@@ -51,35 +51,31 @@ jobs:
       run: |
         echo "SUFIX=" >> $GITHUB_ENV
 
-    - name: Export tag_sufix
-      run: |
-        export TAG_SUFIX=$SUFIX
-
     - name: Build docker images
       run: |
         export VERSION="${{ github.ref_name }}"
-        make dockerbuild-go
-        make dockerbuild-bs
+        make dockerbuild-go TAG_SUFIX=$SUFIX
+        make dockerbuild-bs TAG_SUFIX=$SUFIX
 
     - name: Push docker images to dockerhub
       run: |
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
 
     - name: Push docker images to dockerhub
       if: inputs.custom_image_tag
       run: |
         export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}"
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
 
     - name: Push docker images with version tag to dockerhub
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         export DOCKER_IMAGE_VERSION="${{ github.ref_name }}"
-        make dockerpush-only 
-        make dockerpush-bs-only
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
 
         export DOCKER_IMAGE_REPO="go-spacemesh"
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-only TAG_SUFIX=$SUFIX
+        make dockerpush-bs-only TAG_SUFIX=$SUFIX
