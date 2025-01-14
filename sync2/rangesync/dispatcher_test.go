@@ -29,7 +29,8 @@ func makeFakeDispHandler(n int) rangesync.Handler {
 }
 
 func TestDispatcher(t *testing.T) {
-	mesh, err := mocknet.FullMeshConnected(2)
+	// Don't connect immediately to avoid identify race.
+	mesh, err := mocknet.FullMeshLinked(2)
 	require.NoError(t, err)
 
 	d := rangesync.NewDispatcher(zaptest.NewLogger(t))
@@ -48,6 +49,9 @@ func TestDispatcher(t *testing.T) {
 	srvPeerID := mesh.Hosts()[0].ID()
 
 	c := server.New(mesh.Hosts()[1], proto, d.Dispatch, opts...)
+	// Connect the P2P mesh only after the server is configured.
+	// This way, we avoid the race causing bad protocol identification.
+	require.NoError(t, mesh.ConnectAllButSelf())
 	for _, tt := range []struct {
 		name string
 		want int

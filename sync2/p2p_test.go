@@ -82,7 +82,9 @@ func TestP2P(t *testing.T) {
 		maxDepth  = 24
 	)
 	logger := zaptest.NewLogger(t)
-	mesh, err := mocknet.FullMeshConnected(numNodes)
+	// Do not connect immediately.
+	// See Test_GetAtxsLimiting in fetch package for details.
+	mesh, err := mocknet.FullMeshLinked(numNodes)
 	require.NoError(t, err)
 	hs := make([]*sync2.P2PHashSync, numNodes)
 	initialSet := make([]rangesync.KeyBytes, numHashes)
@@ -123,6 +125,9 @@ func TestP2P(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, hs[n].Load())
 		require.False(t, hs[n].Synced())
+	}
+	require.NoError(t, mesh.ConnectAllButSelf())
+	for n := range hs {
 		hs[n].Start()
 	}
 
