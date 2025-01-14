@@ -142,16 +142,19 @@ func FilterFrom(operations Operations) string {
 
 		switch op.Token {
 		case In:
-			values, ok := op.Value.([][]byte)
-			if !ok {
-				panic("value for 'In' token must be a slice of []byte")
+			switch values := op.Value.(type) {
+			case [][]byte:
+			case []int32:
+				params := make([]string, len(values))
+				for j := range values {
+					params[j] = fmt.Sprintf("?%d", bindIndex)
+					bindIndex++
+				}
+				fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field,
+					op.Token, strings.Join(params, ", "))
+			default:
+				panic("value for 'In' token must be a slice of []byte or []int32")
 			}
-			params := make([]string, len(values))
-			for j := range values {
-				params[j] = fmt.Sprintf("?%d", bindIndex)
-				bindIndex++
-			}
-			fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field, op.Token, strings.Join(params, ", "))
 		case IsNotNull:
 			fmt.Fprintf(&queryBuilder, " %s%s %s", op.Prefix, op.Field, op.Token)
 		default:
@@ -195,6 +198,11 @@ func bindValue(stmt *sql.Statement, bindIndex int, value any) int {
 	case [][]byte:
 		for _, v := range val {
 			stmt.BindBytes(bindIndex, v)
+			bindIndex++
+		}
+	case []int32:
+		for _, v := range val {
+			stmt.BindInt64(bindIndex, int64(v))
 			bindIndex++
 		}
 	case nil:

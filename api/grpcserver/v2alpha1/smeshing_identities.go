@@ -3,6 +3,11 @@ package v2alpha1
 import (
 	"context"
 
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"google.golang.org/grpc"
@@ -47,11 +52,19 @@ func (s *SmeshingIdentitiesService) Path() string {
 
 func (s *SmeshingIdentitiesService) States(
 	ctx context.Context,
-	_ *pb.IdentityStatesRequest,
+	request *pb.IdentityStatesRequest,
 ) (*pb.IdentityStatesResponse, error) {
-	pbIdentities := make(map[string]*pb.Identity)
+	switch {
+	case request.Limit > 100:
+		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
+	case request.Limit == 0:
+		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
+	}
 
-	for nodeId, history := range s.states.All() {
+	ops := toEventOperations(request)
+
+	pbIdentities := make(map[string]*pb.Identity, request.Limit)
+	for nodeId, history := range s.states.AllByOps(ops) {
 		pbIdentities[nodeId.String()] = &pb.Identity{
 			History: []*pb.IdentityStateInfo{},
 		}
@@ -67,6 +80,41 @@ func (s *SmeshingIdentitiesService) States(
 	}
 
 	return &pb.IdentityStatesResponse{Identities: pbIdentities}, nil
+}
+
+func toEventOperations(filter *pb.IdentityStatesRequest) builder.Operations {
+	ops := builder.Operations{}
+	if filter == nil {
+		return ops
+	}
+
+	if len(filter.States) > 0 {
+		// convert []IdentityState to []int32
+		states := make([]int32, len(filter.States))
+		for i, state := range filter.States {
+			states[i] = int32(state)
+		}
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: "kind",
+			Token: builder.In,
+			Value: states,
+		})
+	}
+
+	if filter.Limit != 0 {
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.Limit,
+			Value: int64(filter.Limit),
+		})
+	}
+	if filter.Offset != 0 {
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.Offset,
+			Value: int64(filter.Offset),
+		})
+	}
+
+	return ops
 }
 
 func (s *SmeshingIdentitiesService) PoetInfo(
