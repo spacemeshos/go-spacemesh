@@ -143,7 +143,8 @@ func runSync(
 	cfg rangesync.RangeSetReconcilerConfig,
 ) {
 	log := zaptest.NewLogger(t)
-	mesh, err := mocknet.FullMeshConnected(2)
+	// Don't connect immediately to avoid identify race.
+	mesh, err := mocknet.FullMeshLinked(2)
 	require.NoError(t, err)
 	proto := "itest"
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
@@ -210,15 +211,9 @@ func runSync(
 			return srv.Run(ctx)
 		})
 
-		// Wait for the server to activate
-		require.Eventually(t, func() bool {
-			for _, h := range mesh.Hosts() {
-				if len(h.Mux().Protocols()) == 0 {
-					return false
-				}
-			}
-			return true
-		}, time.Second, 10*time.Millisecond)
+		// Connect the P2P mesh only after the servers are configured.
+		// This way, we avoid the race causing bad protocol identification.
+		require.NoError(t, mesh.ConnectAllButSelf())
 
 		startTimer(t)
 		pssB := rangesync.NewPairwiseSetSyncerInternal(

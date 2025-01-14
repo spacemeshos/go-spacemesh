@@ -25,12 +25,14 @@ import (
 	tptu "github.com/libp2p/go-libp2p/p2p/net/upgrader"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 	"github.com/libp2p/go-libp2p/p2p/protocol/holepunch"
+	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	quic "github.com/libp2p/go-libp2p/p2p/transport/quic"
 	"github.com/libp2p/go-libp2p/p2p/transport/quicreuse"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	ma "github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -282,6 +284,7 @@ func New(
 		return nil, fmt.Errorf("can't set up connection gater: %w", err)
 	}
 
+	var idService identify.IDService
 	pt := peerinfo.NewPeerInfoTracker()
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
@@ -295,6 +298,11 @@ func New(
 			cfg.AutoNATServer.PeerMax,
 			cfg.AutoNATServer.ResetPeriod),
 		libp2p.ConnectionGater(g),
+		// Obtain the IDService via fx dependency injection.
+		// This function is always called by libp2p.New().
+		libp2p.WithFxOption(fx.Invoke(func(ids identify.IDService) {
+			idService = ids
+		})),
 	}
 	if cfg.EnableTCPTransport {
 		lopts = append(lopts,
@@ -427,6 +435,7 @@ func New(
 		WithBootnodes(bootnodesMap),
 		WithDirectNodes(g.direct),
 		WithPeerInfo(pt),
+		WithIDService(idService),
 	)
 	return Upgrade(h, opts...)
 }
