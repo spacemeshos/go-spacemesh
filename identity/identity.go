@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/sql/builder"
-
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/events"
 )
 
