@@ -534,8 +534,9 @@ func (s *initState) initProposalsStore(_ context.Context, app *App) error {
 }
 
 func (s *initState) initFetcher(ctx context.Context, app *App) error {
+	var err error
 	flog := app.addLogger(Fetcher, app.log).Zap()
-	fetcher, err := fetch.NewFetch(
+	s.fetcher, err = fetch.NewFetch(
 		app.cachedDB,
 		s.proposalsStore,
 		app.host,
@@ -548,7 +549,7 @@ func (s *initState) initFetcher(ctx context.Context, app *App) error {
 		return fmt.Errorf("create fetcher: %w", err)
 	}
 	app.eg.Go(func() error {
-		return blockssync.Sync(ctx, flog, s.mesh.MissingBlocks(), fetcher)
+		return blockssync.Sync(ctx, flog, s.mesh.MissingBlocks(), s.fetcher)
 	})
 
 	return nil
