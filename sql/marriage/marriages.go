@@ -1,7 +1,10 @@
 package marriage
 
 import (
+	"bytes"
 	"fmt"
+	"slices"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -148,7 +151,8 @@ func MarriageATXs(db sql.Executor, id ID) ([]types.ATXID, error) {
 	if rows == 0 {
 		return nil, sql.ErrNotFound
 	}
-	return atxs, nil
+	sort.Slice(atxs, func(i, j int) bool { return bytes.Compare(atxs[i].Bytes(), atxs[j].Bytes()) < 0 })
+	return slices.Compact(atxs), nil
 }
 
 func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {

@@ -328,14 +328,23 @@ func TestMarriageATXs(t *testing.T) {
 		mATXs := make([]types.ATXID, 0, 2)
 		mATXs = append(mATXs, info.ATX)
 
+		// with a different marriage ATX
 		info.NodeID = types.RandomNodeID()
 		info.ATX = types.RandomATXID()
 		mATXs = append(mATXs, info.ATX)
 		err = marriage.Add(db, info)
 		require.NoError(t, err)
 
+		// with the same marriage ATX
+		info.NodeID = types.RandomNodeID()
+		info.ATX = mATXs[0]
+		info.MarriageIndex = (info.MarriageIndex + 1) % 256
+		err = marriage.Add(db, info)
+		require.NoError(t, err)
+
 		atxs, err := marriage.MarriageATXs(db, id1)
 		require.NoError(t, err)
+		require.Len(t, atxs, 2) // only distinct ATXs
 		require.ElementsMatch(t, mATXs, atxs)
 	})
 }
