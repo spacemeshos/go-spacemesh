@@ -75,42 +75,45 @@ type initState struct {
 	nipostLogger            *zap.Logger
 }
 
-type initializerFunc func(ctx context.Context, app *App, state *initState) error
+type initializerFunc func(ctx context.Context, app *App) error
 
 func (app *App) initServices(ctx context.Context) error {
 	var state initState
 	state.peerCache = peers.New()
 	state.patrol = layerpatrol.New()
 
-	for _, initializer := range []initializerFunc{
-		initPoetDb,
-		initPostVerifier,
-		initValidator,
-		initStates,
-		initGoldenATX,
-		initVerifiers,
-		initBeacon,
-		initTortoise,
-		initMesh,
-		initPruner,
-		initProposalsStore,
-		initFetcher,
-		initHareOracle,
-		initCertifier,
-		initSyncer,
-		initATXHandler,
-		initUpdater,
-		initHare,
-		initProposalsHandler,
-		initBlocksGenerator,
-		initProposalBuilder,
-		initPostService,
-		initPoetClients,
-		initNIPostBuilder,
-		initATXBuilder,
+	for _, service := range []struct {
+		name        string
+		initializer initializerFunc
+	}{
+		{"poet DB", state.initPoetDb},
+		{"post verifier", state.initPostVerifier},
+		{"validator", state.initValidator},
+		{"states DB", state.initStates},
+		{"golden ATX", state.initGoldenATX},
+		{"verifiers", state.initVerifiers},
+		{"beacon", state.initBeacon},
+		{"tortoise", state.initTortoise},
+		{"mesh", state.initMesh},
+		{"pruner", state.initPruner},
+		{"proposals store", state.initProposalsStore},
+		{"fetcher", state.initFetcher},
+		{"hare oracle", state.initHareOracle},
+		{"certifier", state.initCertifier},
+		{"syncer", state.initSyncer},
+		{"ATX handler", state.initATXHandler},
+		{"updater", state.initUpdater},
+		{"hare", state.initHare},
+		{"proposals handler", state.initProposalsHandler},
+		{"blocks generator", state.initBlocksGenerator},
+		{"proposals builder", state.initProposalBuilder},
+		{"post service", state.initPostService},
+		{"poet clients", state.initPoetClients},
+		{"NIPost builder", state.initNIPostBuilder},
+		{"ATX builder", state.initATXBuilder},
 	} {
-		if err := initializer(ctx, app, &state); err != nil {
-			return err
+		if err := service.initializer(ctx, app); err != nil {
+			return fmt.Errorf("failed initializing %s, %w", service.name, err)
 		}
 	}
 
@@ -321,9 +324,9 @@ func (app *App) initServices(ctx context.Context) error {
 	return nil
 }
 
-func initPoetDb(_ context.Context, app *App, state *initState) error {
+func (s *initState) initPoetDb(_ context.Context, app *App) error {
 	var err error
-	state.poetDb, err = activation.NewPoetDb(
+	s.poetDb, err = activation.NewPoetDb(
 		app.db,
 		app.addLogger(PoetDbLogger, app.log).Zap(),
 		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
@@ -334,12 +337,12 @@ func initPoetDb(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initPostVerifier(_ context.Context, app *App, state *initState) error {
-	state.postStates = activation.NewPostStates(app.addLogger(PostLogger, app.log).Zap())
+func (s *initState) initPostVerifier(_ context.Context, app *App) error {
+	s.postStates = activation.NewPostStates(app.addLogger(PostLogger, app.log).Zap())
 
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
-		activation.WithAutoscaling(state.postStates),
+		activation.WithAutoscaling(s.postStates),
 	}
 	for _, sig := range app.signers {
 		opts = append(opts, activation.WithPrioritizedID(sig.NodeID()))
@@ -357,10 +360,10 @@ func initPostVerifier(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initValidator(_ context.Context, app *App, state *initState) error {
+func (s *initState) initValidator(_ context.Context, app *App) error {
 	app.validator = activation.NewValidator(
 		app.db,
-		state.poetDb,
+		s.poetDb,
 		app.Config.POST,
 		app.Config.SMESHING.Opts.Scrypt,
 		app.postVerifier,
@@ -368,14 +371,14 @@ func initValidator(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initStates(_ context.Context, app *App, state *initState) error {
+func (s *initState) initStates(_ context.Context, app *App) error {
 	cfg := vm.DefaultConfig()
 	cfg.GasLimit = app.Config.BlockGasLimit
 	cfg.GenesisID = app.Config.Genesis.GenesisID()
-	state.stateDb = vm.New(app.db,
+	s.stateDb = vm.New(app.db,
 		vm.WithConfig(cfg),
 		vm.WithLogger(app.addLogger(VMLogger, app.log).Zap()))
-	app.conState = txs.NewConservativeState(state.stateDb, app.db,
+	app.conState = txs.NewConservativeState(s.stateDb, app.db,
 		txs.WithCSConfig(txs.CSConfig{
 			BlockGasLimit:     app.Config.BlockGasLimit,
 			NumTXsPerProposal: app.Config.TxsPerProposal,
@@ -384,7 +387,7 @@ func initStates(_ context.Context, app *App, state *initState) error {
 
 	genesisAccts := app.Config.Genesis.ToAccounts()
 	if len(genesisAccts) > 0 {
-		exists, err := state.stateDb.AccountExists(genesisAccts[0].Address)
+		exists, err := s.stateDb.AccountExists(genesisAccts[0].Address)
 		if err != nil {
 			return fmt.Errorf(
 				"failed to check genesis account %v: %w",
@@ -393,7 +396,7 @@ func initStates(_ context.Context, app *App, state *initState) error {
 			)
 		}
 		if !exists {
-			if err = state.stateDb.ApplyGenesis(genesisAccts); err != nil {
+			if err = s.stateDb.ApplyGenesis(genesisAccts); err != nil {
 				return fmt.Errorf("setup genesis: %w", err)
 			}
 		}
@@ -402,43 +405,43 @@ func initStates(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initGoldenATX(_ context.Context, app *App, state *initState) error {
-	state.goldenATXID = types.ATXID(app.Config.Genesis.GoldenATX())
-	if state.goldenATXID == types.EmptyATXID {
+func (s *initState) initGoldenATX(_ context.Context, app *App) error {
+	s.goldenATXID = types.ATXID(app.Config.Genesis.GoldenATX())
+	if s.goldenATXID == types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
 
 	return nil
 }
 
-func initVerifiers(_ context.Context, app *App, state *initState) error {
+func (s *initState) initVerifiers(_ context.Context, app *App) error {
 	app.edVerifier = signing.NewEdVerifier(
 		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
 	)
 
-	state.vrfVerifier = signing.NewVRFVerifier()
+	s.vrfVerifier = signing.NewVRFVerifier()
 
 	return nil
 }
 
-func initBeacon(_ context.Context, app *App, state *initState) error {
-	state.beaconProtocol = beacon.New(
+func (s *initState) initBeacon(_ context.Context, app *App) error {
+	s.beaconProtocol = beacon.New(
 		app.host,
 		app.edVerifier,
-		state.vrfVerifier,
+		s.vrfVerifier,
 		app.cachedDB,
 		app.clock,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, app.log).Zap()),
 	)
 	for _, sig := range app.signers {
-		state.beaconProtocol.Register(sig)
+		s.beaconProtocol.Register(sig)
 	}
 
 	return nil
 }
 
-func initTortoise(ctx context.Context, app *App, state *initState) error {
+func (s *initState) initTortoise(ctx context.Context, app *App) error {
 	var err error
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = app.Config.LayerAvgSize
@@ -455,7 +458,7 @@ func initTortoise(ctx context.Context, app *App, state *initState) error {
 	}
 	app.log.Info("initializing tortoise")
 	start := time.Now()
-	state.trtl, err = tortoise.Recover(
+	s.trtl, err = tortoise.Recover(
 		ctx,
 		app.db,
 		app.atxsdata,
@@ -466,9 +469,9 @@ func initTortoise(ctx context.Context, app *App, state *initState) error {
 	}
 	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
 	app.eg.Go(func() error {
-		for rst := range state.beaconProtocol.Results() {
+		for rst := range s.beaconProtocol.Results() {
 			events.EmitBeacon(rst.Epoch, rst.Beacon)
-			state.trtl.OnBeacon(rst.Epoch, rst.Beacon)
+			s.trtl.OnBeacon(rst.Epoch, rst.Beacon)
 		}
 		app.log.Debug("beacon results watcher exited")
 		return nil
@@ -477,51 +480,51 @@ func initTortoise(ctx context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initMesh(ctx context.Context, app *App, state *initState) error {
+func (s *initState) initMesh(ctx context.Context, app *App) error {
 	var err error
-	state.executor = mesh.NewExecutor(
+	s.executor = mesh.NewExecutor(
 		app.db,
 		app.atxsdata,
-		state.stateDb,
+		s.stateDb,
 		app.conState,
 		app.addLogger(ExecutorLogger, app.log).Zap(),
 	)
-	state.mlog = app.addLogger(MeshLogger, app.log).Zap()
-	state.mesh, err = mesh.NewMesh(
-		app.db, app.atxsdata, state.trtl, state.executor,
-		app.conState, state.mlog)
+	s.mlog = app.addLogger(MeshLogger, app.log).Zap()
+	s.mesh, err = mesh.NewMesh(
+		app.db, app.atxsdata, s.trtl, s.executor,
+		app.conState, s.mlog)
 	if err != nil {
 		return fmt.Errorf("create mesh: %w", err)
 	}
 
 	app.eg.Go(func() error {
-		state.mesh.Start(ctx)
+		s.mesh.Start(ctx)
 		return nil
 	})
 
 	return nil
 }
 
-func initPruner(ctx context.Context, app *App, state *initState) error {
-	state.pruner = prune.New(
+func (s *initState) initPruner(ctx context.Context, app *App) error {
+	s.pruner = prune.New(
 		app.db,
 		app.Config.Tortoise.Hdist,
 		app.Config.PruneActivesetsFrom,
-		prune.WithLogger(state.mlog),
+		prune.WithLogger(s.mlog),
 	)
-	if err := state.pruner.Prune(app.clock.CurrentLayer()); err != nil {
+	if err := s.pruner.Prune(app.clock.CurrentLayer()); err != nil {
 		return fmt.Errorf("pruner %w", err)
 	}
 	app.eg.Go(func() error {
-		prune.Run(ctx, state.pruner, app.clock, app.Config.DatabasePruneInterval)
+		prune.Run(ctx, s.pruner, app.clock, app.Config.DatabasePruneInterval)
 		return nil
 	})
 
 	return nil
 }
 
-func initProposalsStore(_ context.Context, app *App, state *initState) error {
-	state.proposalsStore = store.New(
+func (s *initState) initProposalsStore(_ context.Context, app *App) error {
+	s.proposalsStore = store.New(
 		store.WithEvictedLayer(app.clock.CurrentLayer()),
 		store.WithLogger(app.addLogger(ProposalStoreLogger, app.log).Zap()),
 		store.WithCapacity(app.Config.Tortoise.Zdist+1),
@@ -530,13 +533,13 @@ func initProposalsStore(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initFetcher(ctx context.Context, app *App, state *initState) error {
+func (s *initState) initFetcher(ctx context.Context, app *App) error {
 	flog := app.addLogger(Fetcher, app.log).Zap()
 	fetcher, err := fetch.NewFetch(
 		app.cachedDB,
-		state.proposalsStore,
+		s.proposalsStore,
 		app.host,
-		state.peerCache,
+		s.peerCache,
 		fetch.WithContext(ctx),
 		fetch.WithConfig(app.Config.FETCH),
 		fetch.WithLogger(flog),
@@ -545,19 +548,19 @@ func initFetcher(ctx context.Context, app *App, state *initState) error {
 		return fmt.Errorf("create fetcher: %w", err)
 	}
 	app.eg.Go(func() error {
-		return blockssync.Sync(ctx, flog, state.mesh.MissingBlocks(), fetcher)
+		return blockssync.Sync(ctx, flog, s.mesh.MissingBlocks(), fetcher)
 	})
 
 	return nil
 }
 
-func initHareOracle(_ context.Context, app *App, state *initState) error {
+func (s *initState) initHareOracle(_ context.Context, app *App) error {
 	var err error
-	state.hareOracle, err = eligibility.New(
-		state.beaconProtocol,
+	s.hareOracle, err = eligibility.New(
+		s.beaconProtocol,
 		app.db,
 		app.atxsdata,
-		state.vrfVerifier,
+		s.vrfVerifier,
 		app.Config.LayersPerEpoch,
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, app.log).Zap()),
@@ -569,7 +572,7 @@ func initHareOracle(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initCertifier(_ context.Context, app *App, state *initState) error {
+func (s *initState) initCertifier(_ context.Context, app *App) error {
 	if app.Config.Certificate.CommitteeSize == 0 {
 		app.log.With().Debug("certificate committee size is not set, defaulting to hare committee size",
 			log.Uint16("size", app.Config.HARE3.Committee),
@@ -579,25 +582,25 @@ func initCertifier(_ context.Context, app *App, state *initState) error {
 	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
 	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
 	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
-	state.certifier = blocks.NewCertifier(
+	s.certifier = blocks.NewCertifier(
 		app.db,
-		state.hareOracle,
+		s.hareOracle,
 		app.edVerifier,
 		app.host,
 		app.clock,
-		state.beaconProtocol,
-		state.trtl,
+		s.beaconProtocol,
+		s.trtl,
 		blocks.WithCertConfig(app.Config.Certificate),
 		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, app.log).Zap()),
 	)
 	for _, sig := range app.signers {
-		state.certifier.Register(sig)
+		s.certifier.Register(sig)
 	}
 
 	return nil
 }
 
-func initSyncer(_ context.Context, app *App, state *initState) error {
+func (s *initState) initSyncer(_ context.Context, app *App) error {
 	var err error
 	syncerConf := app.Config.Sync
 	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
@@ -608,21 +611,21 @@ func initSyncer(_ context.Context, app *App, state *initState) error {
 		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
 	}
 	app.syncLogger = app.addLogger(SyncLogger, app.log)
-	state.syncer, err = syncer.NewSyncer(
+	s.syncer, err = syncer.NewSyncer(
 		app.cachedDB,
 		app.clock,
-		state.mesh,
-		state.trtl,
-		state.fetcher,
-		state.peerCache,
+		s.mesh,
+		s.trtl,
+		s.fetcher,
+		s.peerCache,
 		app.host,
-		state.patrol,
-		state.certifier,
-		atxsync.New(state.fetcher, app.db, app.localDB,
+		s.patrol,
+		s.certifier,
+		atxsync.New(s.fetcher, app.db, app.localDB,
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
 		),
-		malsync.New(state.fetcher, app.db, app.localDB,
+		malsync.New(s.fetcher, app.db, app.localDB,
 			malsync.WithConfig(app.Config.Sync.MalSync),
 			malsync.WithLogger(app.syncLogger.Zap()),
 			malsync.WithPeerErrMetric(syncer.MalPeerError),
@@ -634,46 +637,46 @@ func initSyncer(_ context.Context, app *App, state *initState) error {
 		return fmt.Errorf("create syncer: %w", err)
 	}
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	state.beaconProtocol.SetSyncState(state.syncer)
-	state.hareOracle.SetSync(state.syncer)
+	s.beaconProtocol.SetSyncState(s.syncer)
+	s.hareOracle.SetSync(s.syncer)
 
 	return nil
 }
 
-func initATXHandler(_ context.Context, app *App, state *initState) error {
+func (s *initState) initATXHandler(_ context.Context, app *App) error {
 	legacyMalfeasanceLogger := app.addLogger(MalfeasanceLogger, app.log).Zap()
 	legacyMalPublisher := malfeasance.NewPublisher(
 		legacyMalfeasanceLogger,
 		app.cachedDB,
-		state.syncer,
-		state.trtl,
+		s.syncer,
+		s.trtl,
 		app.host,
 	)
 
-	state.atxHandler = activation.NewHandler(
+	s.atxHandler = activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
 		app.atxsdata,
 		app.edVerifier,
 		app.clock,
-		state.fetcher,
-		state.goldenATXID,
+		s.fetcher,
+		s.goldenATXID,
 		app.validator,
 		legacyMalPublisher,
-		state.beaconProtocol,
-		state.trtl,
+		s.beaconProtocol,
+		s.trtl,
 		app.addLogger(ATXHandlerLogger, app.log).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
 	for _, sig := range app.signers {
-		state.atxHandler.Register(sig)
+		s.atxHandler.Register(sig)
 	}
 
 	return nil
 }
 
-func initUpdater(_ context.Context, app *App, _ *initState) error {
+func (s *initState) initUpdater(_ context.Context, app *App) error {
 	bscfg := app.Config.Bootstrap
 	bscfg.DataDir = app.Config.DataDir()
 	bscfg.Interval = app.Config.LayerDuration / 5
@@ -686,7 +689,7 @@ func initUpdater(_ context.Context, app *App, _ *initState) error {
 	return nil
 }
 
-func initHare(ctx context.Context, app *App, state *initState) error {
+func (s *initState) initHare(ctx context.Context, app *App) error {
 	err := app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
 		return err
@@ -701,11 +704,11 @@ func initHare(ctx context.Context, app *App, state *initState) error {
 			app.host,
 			app.db,
 			app.atxsdata,
-			state.proposalsStore,
+			s.proposalsStore,
 			app.edVerifier,
-			state.hareOracle,
-			state.syncer,
-			state.patrol,
+			s.hareOracle,
+			s.syncer,
+			s.patrol,
 			hare3.WithLogger(logger),
 			hare3.WithConfig(app.Config.HARE3),
 			hare3.WithResultsChan(app.hareResultsChan),
@@ -719,7 +722,7 @@ func initHare(ctx context.Context, app *App, state *initState) error {
 				ctx,
 				logger,
 				app.hare3.Coins(),
-				tortoiseWeakCoin{db: app.cachedDB, tortoise: state.trtl},
+				tortoiseWeakCoin{db: app.cachedDB, tortoise: s.trtl},
 			)
 			return nil
 		})
@@ -731,11 +734,11 @@ func initHare(ctx context.Context, app *App, state *initState) error {
 			app.host,
 			app.db,
 			app.atxsdata,
-			state.proposalsStore,
+			s.proposalsStore,
 			app.edVerifier,
-			state.hareOracle,
-			state.syncer,
-			state.patrol,
+			s.hareOracle,
+			s.syncer,
+			s.patrol,
 			app.host,
 			hare4.WithLogger(logger),
 			hare4.WithConfig(app.Config.HARE4),
@@ -750,7 +753,7 @@ func initHare(ctx context.Context, app *App, state *initState) error {
 				ctx,
 				logger,
 				app.hare4.Coins(),
-				tortoiseWeakCoin{db: app.cachedDB, tortoise: state.trtl},
+				tortoiseWeakCoin{db: app.cachedDB, tortoise: s.trtl},
 			)
 			return nil
 		})
@@ -759,30 +762,30 @@ func initHare(ctx context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initProposalsHandler(_ context.Context, app *App, state *initState) error {
+func (s *initState) initProposalsHandler(_ context.Context, app *App) error {
 	propHare := &proposalConsumerHare{
 		hare3:          app.hare3,
 		h3DisableLayer: app.Config.HARE3.DisableLayer,
 		hare4:          app.hare4,
 	}
 
-	state.proposalsHandler = proposals.NewHandler(
+	s.proposalsHandler = proposals.NewHandler(
 		app.db,
 		app.atxsdata,
 		propHare,
 		app.edVerifier,
 		app.host,
-		state.fetcher,
-		state.beaconProtocol,
-		state.mesh,
-		state.trtl,
-		state.vrfVerifier,
+		s.fetcher,
+		s.beaconProtocol,
+		s.mesh,
+		s.trtl,
+		s.vrfVerifier,
 		app.clock,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, app.log).Zap()),
 		proposals.WithConfig(proposals.Config{
 			LayerSize:              app.Config.LayerAvgSize,
 			LayersPerEpoch:         types.GetLayersPerEpoch(),
-			GoldenATXID:            state.goldenATXID,
+			GoldenATXID:            s.goldenATXID,
 			MaxExceptions:          app.Config.Tortoise.MaxExceptions,
 			Hdist:                  app.Config.Tortoise.Hdist,
 			MinimalActiveSetWeight: app.Config.Tortoise.MinimalActiveSetWeight,
@@ -792,16 +795,16 @@ func initProposalsHandler(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initBlocksGenerator(_ context.Context, app *App, state *initState) error {
+func (s *initState) initBlocksGenerator(_ context.Context, app *App) error {
 	app.blockGen = blocks.NewGenerator(
 		app.db,
 		app.atxsdata,
-		state.proposalsStore,
-		state.executor,
-		state.mesh,
-		state.fetcher,
-		state.certifier,
-		state.patrol,
+		s.proposalsStore,
+		s.executor,
+		s.mesh,
+		s.fetcher,
+		s.certifier,
+		s.patrol,
 		blocks.WithConfig(blocks.Config{
 			BlockGasLimit:      app.Config.BlockGasLimit,
 			OptFilterThreshold: app.Config.OptFilterThreshold,
@@ -814,20 +817,20 @@ func initBlocksGenerator(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initProposalBuilder(_ context.Context, app *App, state *initState) error {
+func (s *initState) initProposalBuilder(_ context.Context, app *App) error {
 	minerGoodAtxPct := 90
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
 
-	state.proposalBuilder = miner.New(
+	s.proposalBuilder = miner.New(
 		app.clock,
 		app.db,
 		app.localDB,
 		app.atxsdata,
 		app.host,
-		state.trtl,
-		state.syncer,
+		s.trtl,
+		s.syncer,
 		app.conState,
 		miner.WithLayerSize(app.Config.LayerAvgSize),
 		miner.WithLayerPerEpoch(types.GetLayersPerEpoch()),
@@ -839,21 +842,21 @@ func initProposalBuilder(_ context.Context, app *App, state *initState) error {
 		miner.WithActivesetPreparation(app.Config.ActiveSet),
 	)
 	for _, sig := range app.signers {
-		state.proposalBuilder.Register(sig)
+		s.proposalBuilder.Register(sig)
 	}
 
 	return nil
 }
 
-func initPostService(_ context.Context, app *App, state *initState) error {
+func (s *initState) initPostService(_ context.Context, app *App) error {
 	var err error
-	state.postSetupMgr, err = activation.NewPostSetupManager(
+	s.postSetupMgr, err = activation.NewPostSetupManager(
 		app.Config.POST,
 		app.addLogger(PostLogger, app.log).Zap(),
 		app.db,
 		app.atxsdata,
-		state.goldenATXID,
-		state.syncer,
+		s.goldenATXID,
+		s.syncer,
 		app.validator,
 		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
@@ -865,25 +868,25 @@ func initPostService(_ context.Context, app *App, state *initState) error {
 	if err != nil {
 		return fmt.Errorf("init post grpc service: %w", err)
 	}
-	state.grpcPostService = grpcPostService.(*grpcserver.PostService)
+	s.grpcPostService = grpcPostService.(*grpcserver.PostService)
 
 	return nil
 }
 
-func initPoetClients(_ context.Context, app *App, state *initState) error {
-	state.nipostLogger = app.addLogger(NipostBuilderLogger, app.log).Zap()
+func (s *initState) initPoetClients(_ context.Context, app *App) error {
+	s.nipostLogger = app.addLogger(NipostBuilderLogger, app.log).Zap()
 	client := activation.NewCertifierClient(
 		app.db,
 		app.localDB,
-		state.nipostLogger,
+		s.nipostLogger,
 		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
 	)
-	poetCertifier := activation.NewCertifier(app.localDB, state.nipostLogger, client)
+	poetCertifier := activation.NewCertifier(app.localDB, s.nipostLogger, client)
 
-	state.poetClients = make([]activation.PoetService, 0, len(app.Config.PoetServers))
+	s.poetClients = make([]activation.PoetService, 0, len(app.Config.PoetServers))
 	for _, server := range app.Config.PoetServers {
 		client, err := activation.NewPoetService(
-			state.poetDb,
+			s.poetDb,
 			server,
 			app.Config.POET,
 			app.log.Zap().Named("poet"),
@@ -893,23 +896,23 @@ func initPoetClients(_ context.Context, app *App, state *initState) error {
 		if err != nil {
 			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
 		}
-		state.poetClients = append(state.poetClients, client)
+		s.poetClients = append(s.poetClients, client)
 	}
 
 	return nil
 }
 
-func initNIPostBuilder(_ context.Context, app *App, state *initState) error {
+func (s *initState) initNIPostBuilder(_ context.Context, app *App) error {
 	var err error
-	state.nipostBuilder, err = activation.NewNIPostBuilder(
+	s.nipostBuilder, err = activation.NewNIPostBuilder(
 		app.localDB,
-		state.grpcPostService,
-		state.nipostLogger,
+		s.grpcPostService,
+		s.nipostLogger,
 		app.Config.POET,
 		app.clock,
 		app.validator,
-		activation.NipostbuilderWithPostStates(state.postStates),
-		activation.WithPoetServices(state.poetClients...),
+		activation.NipostbuilderWithPostStates(s.postStates),
+		activation.WithPoetServices(s.poetClients...),
 	)
 	if err != nil {
 		return fmt.Errorf("create nipost builder: %w", err)
@@ -918,20 +921,20 @@ func initNIPostBuilder(_ context.Context, app *App, state *initState) error {
 	return nil
 }
 
-func initATXBuilder(ctx context.Context, app *App, state *initState) error {
+func (s *initState) initATXBuilder(ctx context.Context, app *App) error {
 	builderConfig := activation.Config{
-		GoldenATXID:      state.goldenATXID,
+		GoldenATXID:      s.goldenATXID,
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
-	state.atxBuilder = activation.NewBuilder(
+	s.atxBuilder = activation.NewBuilder(
 		builderConfig,
 		app.db,
 		app.atxsdata,
 		app.localDB,
 		app.host,
-		state.nipostBuilder,
+		s.nipostBuilder,
 		app.clock,
-		state.syncer,
+		s.syncer,
 		app.addLogger(ATXBuilderLogger, app.log).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
@@ -939,8 +942,8 @@ func initATXBuilder(ctx context.Context, app *App, state *initState) error {
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
 		activation.WithValidator(app.validator),
 		activation.WithPostValidityDelay(app.Config.PostValidDelay),
-		activation.WithPostStates(state.postStates),
-		activation.WithPoets(state.poetClients...),
+		activation.WithPostStates(s.postStates),
+		activation.WithPoets(s.poetClients...),
 		activation.BuilderAtxVersions(app.Config.AtxVersions),
 	)
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
@@ -952,7 +955,7 @@ func initATXBuilder(ctx context.Context, app *App, state *initState) error {
 		// it finished initializing, to avoid warning about a missing connection when the supervised post
 		// service isn't ready yet.
 		for _, sig := range app.signers {
-			state.atxBuilder.Register(sig)
+			s.atxBuilder.Register(sig)
 		}
 	}
 
