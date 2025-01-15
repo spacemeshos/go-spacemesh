@@ -106,17 +106,17 @@ func (m *MockidentityState) EXPECT() *MockidentityStateMockRecorder {
 }
 
 // All mocks base method.
-func (m *MockidentityState) All() map[types.NodeID][]identity.StateInfo {
+func (m *MockidentityState) All(ops builder.Operations) map[types.NodeID][]identity.StateInfo {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "All")
+	ret := m.ctrl.Call(m, "All", ops)
 	ret0, _ := ret[0].(map[types.NodeID][]identity.StateInfo)
 	return ret0
 }
 
 // All indicates an expected call of All.
-func (mr *MockidentityStateMockRecorder) All() *MockidentityStateAllCall {
+func (mr *MockidentityStateMockRecorder) All(ops any) *MockidentityStateAllCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "All", reflect.TypeOf((*MockidentityState)(nil).All))
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "All", reflect.TypeOf((*MockidentityState)(nil).All), ops)
 	return &MockidentityStateAllCall{Call: call}
 }
 
@@ -132,51 +132,13 @@ func (c *MockidentityStateAllCall) Return(arg0 map[types.NodeID][]identity.State
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockidentityStateAllCall) Do(f func() map[types.NodeID][]identity.StateInfo) *MockidentityStateAllCall {
+func (c *MockidentityStateAllCall) Do(f func(builder.Operations) map[types.NodeID][]identity.StateInfo) *MockidentityStateAllCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStateAllCall) DoAndReturn(f func() map[types.NodeID][]identity.StateInfo) *MockidentityStateAllCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// AllByOps mocks base method.
-func (m *MockidentityState) AllByOps(ops builder.Operations) map[types.NodeID][]identity.StateInfo {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AllByOps", ops)
-	ret0, _ := ret[0].(map[types.NodeID][]identity.StateInfo)
-	return ret0
-}
-
-// AllByOps indicates an expected call of AllByOps.
-func (mr *MockidentityStateMockRecorder) AllByOps(ops any) *MockidentityStateAllByOpsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllByOps", reflect.TypeOf((*MockidentityState)(nil).AllByOps), ops)
-	return &MockidentityStateAllByOpsCall{Call: call}
-}
-
-// MockidentityStateAllByOpsCall wrap *gomock.Call
-type MockidentityStateAllByOpsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockidentityStateAllByOpsCall) Return(arg0 map[types.NodeID][]identity.StateInfo) *MockidentityStateAllByOpsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockidentityStateAllByOpsCall) Do(f func(builder.Operations) map[types.NodeID][]identity.StateInfo) *MockidentityStateAllByOpsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStateAllByOpsCall) DoAndReturn(f func(builder.Operations) map[types.NodeID][]identity.StateInfo) *MockidentityStateAllByOpsCall {
+func (c *MockidentityStateAllCall) DoAndReturn(f func(builder.Operations) map[types.NodeID][]identity.StateInfo) *MockidentityStateAllCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
