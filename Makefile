@@ -176,7 +176,7 @@ endif
 dockerbuild-bs:
 	DOCKER_BUILDKIT=1 docker build \
 		--secret id=mynetrc,src=$(HOME)/.netrc \
-		-t go-spacemesh-bs:$(SHA)$(TAG_SUFIX) \
+		-t go-spacemesh-bs:$(SHA) \
 		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)$(TAG_SUFIX) \
 		-f ./bootstrap.Dockerfile \
 		.
