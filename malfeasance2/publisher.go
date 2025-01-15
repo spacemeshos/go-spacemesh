@@ -62,6 +62,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		if err != nil {
 			return fmt.Errorf("getting atx id: %w", err)
 		}
+		p.tortoise.OnMalfeasance(nodeID)
 		return p.publish(ctx, []types.NodeID{nodeID}, []types.ATXID{atxID}, proof, InvalidActivation)
 	case err != nil:
 		return fmt.Errorf("getting equivocation set: %w", err)
@@ -118,6 +119,9 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		// all smeshers were already marked as malicious - no gossip to void spamming the network
 		return nil
 	}
+	for _, nodeID := range set {
+		p.tortoise.OnMalfeasance(nodeID)
+	}
 	return p.publish(ctx, set, maps.Keys(mATXs), proof, ProofDomain(InvalidActivation))
 }
 
@@ -125,14 +129,6 @@ func (p *Publisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	marriageID, err := marriage.FindIDByNodeID(p.db, nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound): // smesher is not married
-		malicious, err := malfeasance.IsMalicious(p.db, nodeID)
-		if err != nil {
-			return fmt.Errorf("check if smesher is malicious: %w", err)
-		}
-		if malicious {
-			p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
-			return nil
-		}
 		proof, domain, err := malfeasance.NodeIDProof(p.db, nodeID)
 		if err != nil {
 			return fmt.Errorf("getting malfeasance proof: %w", err)
@@ -172,10 +168,6 @@ func (p *Publisher) publish(
 	proof []byte,
 	domain ProofDomain,
 ) error {
-	for _, nodeID := range nodeID {
-		p.tortoise.OnMalfeasance(nodeID)
-	}
-
 	// Only gossip the proof if we are synced (to not spam the network with proofs others probably already have).
 	if !p.sync.ListenToATXGossip() {
 		p.logger.Debug("not in sync, not broadcasting malfeasance proof",

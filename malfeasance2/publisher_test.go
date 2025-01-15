@@ -475,5 +475,155 @@ func TestPublishATXProof(t *testing.T) {
 }
 
 func TestRegossip(t *testing.T) {
-	// TODO(mafa): implement
+	t.Parallel()
+
+	t.Run("not married and in sync", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		proof := types.RandomBytes(10)
+		nodeID := types.RandomNodeID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeID,
+		}
+		atx.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(tp.db, atx, types.AtxBlob{}))
+
+		err := malfeasance.AddProof(tp.db, nodeID, nil, proof, int(malfeasance2.InvalidActivation), time.Now())
+		require.NoError(t, err)
+
+		malfeasanceProof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{atx.ID()},
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   proof,
+		}
+
+		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
+		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
+
+		err = tp.Regossip(context.Background(), nodeID)
+		require.NoError(t, err)
+	})
+
+	t.Run("not married and not in sync", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		proof := types.RandomBytes(10)
+		nodeID := types.RandomNodeID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeID,
+		}
+		atx.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(tp.db, atx, types.AtxBlob{}))
+
+		err := malfeasance.AddProof(tp.db, nodeID, nil, proof, int(malfeasance2.InvalidActivation), time.Now())
+		require.NoError(t, err)
+
+		tp.mockSync.EXPECT().ListenToATXGossip().Return(false)
+
+		err = tp.Regossip(context.Background(), nodeID)
+		require.NoError(t, err)
+	})
+
+	t.Run("married and in sync", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		proof := types.RandomBytes(10)
+		nodeIDs := make([]types.NodeID, 20)
+		for i := range nodeIDs {
+			nodeIDs[i] = types.RandomNodeID()
+		}
+		mATXID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeIDs[0],
+		}
+		atx.SetID(mATXID)
+		require.NoError(t, atxs.Add(tp.db, atx, types.AtxBlob{}))
+
+		mID, err := marriage.NewID(tp.db)
+		require.NoError(t, err)
+
+		for i := range nodeIDs {
+			require.NoError(t, marriage.Add(tp.db, marriage.Info{
+				ID:            mID,
+				NodeID:        nodeIDs[i],
+				ATX:           mATXID,
+				MarriageIndex: i,
+				Target:        nodeIDs[0],
+				Signature:     types.RandomEdSignature(),
+			}))
+			if i == 0 {
+				require.NoError(t, malfeasance.AddProof(
+					tp.db,
+					nodeIDs[i],
+					&mID,
+					proof,
+					int(malfeasance2.InvalidActivation),
+					time.Now(),
+				))
+				continue
+			}
+			require.NoError(t, malfeasance.SetMalicious(tp.db, nodeIDs[i], mID, time.Now()))
+		}
+
+		malfeasanceProof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{atx.ID()},
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   proof,
+		}
+
+		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
+		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
+
+		err = tp.Regossip(context.Background(), nodeIDs[1])
+		require.NoError(t, err)
+	})
+
+	t.Run("married and not in sync", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		proof := types.RandomBytes(10)
+		nodeIDs := make([]types.NodeID, 20)
+		for i := range nodeIDs {
+			nodeIDs[i] = types.RandomNodeID()
+		}
+		mATXID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeIDs[0],
+		}
+		atx.SetID(mATXID)
+		require.NoError(t, atxs.Add(tp.db, atx, types.AtxBlob{}))
+
+		mID, err := marriage.NewID(tp.db)
+		require.NoError(t, err)
+
+		for i := range nodeIDs {
+			require.NoError(t, marriage.Add(tp.db, marriage.Info{
+				ID:            mID,
+				NodeID:        nodeIDs[i],
+				ATX:           mATXID,
+				MarriageIndex: i,
+				Target:        nodeIDs[0],
+				Signature:     types.RandomEdSignature(),
+			}))
+			if i == 0 {
+				require.NoError(t, malfeasance.AddProof(
+					tp.db,
+					nodeIDs[i],
+					&mID,
+					proof,
+					int(malfeasance2.InvalidActivation),
+					time.Now(),
+				))
+				continue
+			}
+			require.NoError(t, malfeasance.SetMalicious(tp.db, nodeIDs[i], mID, time.Now()))
+		}
+
+		tp.mockSync.EXPECT().ListenToATXGossip().Return(false)
+
+		err = tp.Regossip(context.Background(), nodeIDs[1])
+		require.NoError(t, err)
+	})
 }
