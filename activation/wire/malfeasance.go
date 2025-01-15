@@ -84,6 +84,11 @@ var proofTypes = map[ProofType]Proof{
 // ProofVersion is an identifier for the version of the proof that is encoded in the ATXProof.
 type ProofVersion byte
 
+const (
+	// Version1 is the first version of the ATX proof.
+	Version1 ProofVersion = 0x01
+)
+
 type ATXProof struct {
 	// Version is the version identifier of the proof. This can be used to extend the ATX proof in the future.
 	Version ProofVersion

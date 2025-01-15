@@ -75,7 +75,7 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID,
 	}
 
 	atxProof := &wire.ATXProof{
-		Version:   0x01, // for now we only have one version
+		Version:   wire.Version1, // for now we only have one version
 		ProofType: proof.Type(),
 
 		Proof: codec.MustEncode(proof),
@@ -101,7 +101,7 @@ func (mh *MalfeasanceHandlerV2) decodeProof(data []byte) (wire.Proof, error) {
 		return nil, err
 	}
 
-	if atxProof.Version != 0x01 {
+	if atxProof.Version != wire.Version1 {
 		return nil, fmt.Errorf("unsupported ATX malfeasance proof version: %d", atxProof.Version)
 	}
 
