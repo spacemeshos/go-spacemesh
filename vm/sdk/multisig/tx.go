@@ -82,7 +82,6 @@ func EncodeDeployArgs(blob []byte) []byte {
 // Spawn creates a raw SPAWN transaction, which needs to be signed by the required
 // number of signers.
 func SpawnTx(
-	template types.Address,
 	required uint8,
 	pubkeys []core.PublicKey,
 	nonce core.Nonce,
@@ -100,8 +99,8 @@ func SpawnTx(
 	}
 	return &core.Tx{
 		Version:   1,
-		Principal: core.ComputePrincipalFromBlob(template, encodedArgs),
-		Template:  &template,
+		Principal: core.ComputePrincipalFromBlob(multisig.TemplateAddress, encodedArgs),
+		Template:  &multisig.TemplateAddress,
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
@@ -111,13 +110,12 @@ func SpawnTx(
 }
 
 func Spawn(
-	template types.Address,
 	required uint8,
 	pubkeys []core.PublicKey,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) ([]byte, error) {
-	return codec.Encode(SpawnTx(template, required, pubkeys, nonce, opts...))
+	return codec.Encode(SpawnTx(required, pubkeys, nonce, opts...))
 }
 
 func SpendTx(principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) *core.Tx {

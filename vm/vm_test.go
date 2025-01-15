@@ -116,7 +116,6 @@ type multisigAccount struct {
 	required uint8
 	pks      []ed25519.PrivateKey
 	address  core.Address
-	template core.Address
 }
 
 func (a *multisigAccount) getAddress() core.Address {
@@ -149,7 +148,7 @@ func (a *multisigAccount) selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt
 	for _, pk := range a.pks {
 		pubs = append(pubs, [32]byte(signing.Public(signing.PrivateKey(pk))))
 	}
-	tx, err := sdkmultisig.Spawn(a.template, a.required, pubs, nonce, opts...)
+	tx, err := sdkmultisig.Spawn(a.required, pubs, nonce, opts...)
 	require.NoError(t, err)
 	agg := sdkmultisig.NewSignatureAggregator(tx)
 	for i := range a.required {
@@ -285,7 +284,7 @@ func (t *tester) addSingleSig(n int) *tester {
 	return t
 }
 
-func (t *tester) createMultisig(required, total uint8, template core.Address) *multisigAccount {
+func (t *tester) createMultisig(required, total uint8) *multisigAccount {
 	var pks []ed25519.PrivateKey
 	var pubs []core.PublicKey
 	for range total {
@@ -297,14 +296,13 @@ func (t *tester) createMultisig(required, total uint8, template core.Address) *m
 	return &multisigAccount{
 		required: required,
 		pks:      pks,
-		address:  sdkmultisig.Address(template, required, pubs),
-		template: template,
+		address:  sdkmultisig.Address(multisig.TemplateAddress, required, pubs),
 	}
 }
 
-func (t *tester) addMultisig(template types.Address, total int, required, numKeys uint8) *tester {
+func (t *tester) addMultisig(total int, required, numKeys uint8) *tester {
 	for range total {
-		t.addAccount(t.createMultisig(required, numKeys, template), 1_000_000_000)
+		t.addAccount(t.createMultisig(required, numKeys), 1_000_000_000)
 	}
 	return t
 }
@@ -1412,38 +1410,36 @@ func TestWallets(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultiSigWalletTemplate().
-				addMultisig(multisig.TemplateAddress, funded, 1, 3).
+				addMultisig(funded, 1, 3).
 				applyGenesisWithBalance().
-				addMultisig(multisig.TemplateAddress, total-funded, 1, 3)
+				addMultisig(total-funded, 1, 3)
 		})
 	})
 	t.Run("MultiSig23", func(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultiSigWalletTemplate().
-				addMultisig(multisig.TemplateAddress, funded, 2, 3).
+				addMultisig(funded, 2, 3).
 				applyGenesisWithBalance().
-				addMultisig(multisig.TemplateAddress, total-funded, 2, 3)
+				addMultisig(total-funded, 2, 3)
 		})
 	})
 	t.Run("MultiSig57", func(t *testing.T) {
 		testWallet(t, defaultGasPrice, multisig.TemplateAddress, func(t *testing.T) *tester {
 			return newTester(t).
 				addMultiSigWalletTemplate().
-				addMultisig(multisig.TemplateAddress, funded, 5, 7).
+				addMultisig(funded, 5, 7).
 				applyGenesisWithBalance().
-				addMultisig(multisig.TemplateAddress, total-funded, 5, 7)
+				addMultisig(total-funded, 5, 7)
 		})
 	})
 }
 
 func TestSingleSigWalletDeploy(t *testing.T) {
-	templateAddress := multisig.TemplateAddress
-	tt := newTester(
-		t,
-	).addWalletTemplate().
+	tt := newTester(t).
+		addWalletTemplate().
 		addSingleSig(1).
-		addMultisig(templateAddress, 1, 1, 3).
+		addMultisig(1, 1, 3).
 		applyGenesisWithBalance()
 
 	// 1. Spawn an account to pay for deploying
@@ -1466,13 +1462,13 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	require.Empty(t, skipped)
 	require.Empty(t, results[0].Message)
 	require.Equal(t, types.TransactionSuccess, results[0].Status)
-	require.Contains(t, results[0].Addresses, templateAddress)
+	require.Contains(t, results[0].Addresses, multisig.TemplateAddress)
 
-	deployedAccount, err := accounts.Latest(tt.db, templateAddress)
+	deployedAccount, err := accounts.Latest(tt.db, multisig.TemplateAddress)
 	require.NoError(t, err)
 
 	logger := zaptest.NewLogger(t)
-	logger.Debug("new template", zap.Stringer("address", templateAddress), zap.Inline(&deployedAccount))
+	logger.Debug("new template", zap.Stringer("address", multisig.TemplateAddress), zap.Inline(&deployedAccount))
 	require.Equal(t, code, deployedAccount.State)
 
 	pAccount1, err := accounts.Latest(tt.db, account.getAddress())
@@ -1493,11 +1489,7 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 	require.Less(t, pAccount2.Balance, pAccount1.Balance)
 
 	// 3. Spawn the new template using the 2nd prefunded account
-	_, _, err = tt.Apply(
-		types.GetEffectiveGenesis(),
-		[]types.Transaction{{RawTx: tt.selfSpawn(1, sdk.WithTemplate(templateAddress))}},
-		nil,
-	)
+	_, _, err = tt.Apply(types.GetEffectiveGenesis(), []types.Transaction{{RawTx: tt.selfSpawn(1)}}, nil)
 	require.NoError(t, err)
 
 	exists, err = tt.AccountExists(tt.accounts[1].getAddress())
@@ -1506,7 +1498,7 @@ func TestSingleSigWalletDeploy(t *testing.T) {
 
 	a, err := accounts.Latest(tt.db, tt.accounts[1].getAddress())
 	require.NoError(t, err)
-	require.Equal(t, &templateAddress, a.TemplateAddress)
+	require.Equal(t, &multisig.TemplateAddress, a.TemplateAddress)
 }
 
 func testValidation(t *testing.T, tt *tester, template core.Address) {

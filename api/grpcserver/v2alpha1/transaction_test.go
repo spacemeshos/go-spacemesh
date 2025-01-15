@@ -621,7 +621,7 @@ func TestToTxContents(t *testing.T) {
 			pubStrs = append(pubStrs, p.String())
 		}
 
-		tx, err := sdkmultisig.Spawn(multisig.TemplateAddress, 2, pubs, 0)
+		tx, err := sdkmultisig.Spawn(2, pubs, 0)
 		require.NoError(t, err)
 		agg := sdkmultisig.NewSignatureAggregator(tx)
 		for i := range 2 {

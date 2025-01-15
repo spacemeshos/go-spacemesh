@@ -37,13 +37,9 @@ func DeployTx(pubkey ed25519.PublicKey, nonce core.Nonce, blob []byte, opts ...s
 		return nil, fmt.Errorf("encoding tx payload: %w", err)
 	}
 
-	template := options.Template
-	if template == nil {
-		template = &wallet.TemplateAddress
-	}
 	return &core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: core.ComputePrincipalFromBlob(*template, pubkey),
+		Principal: core.ComputePrincipalFromBlob(wallet.TemplateAddress, pubkey),
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
@@ -82,15 +78,10 @@ func SpawnTx(pubkey ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) (*core
 	}
 	defer vmlib.Close()
 
-	template := options.Template
-	if template == nil {
-		template = &wallet.TemplateAddress
-	}
-
 	return &core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: core.ComputePrincipalFromBlob(*template, pubkey),
-		Template:  template,
+		Principal: core.ComputePrincipalFromBlob(wallet.TemplateAddress, pubkey),
+		Template:  (*types.Address)(&wallet.TemplateAddress),
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
@@ -140,14 +131,9 @@ func SpendTx(
 	}
 	defer vmlib.Close()
 
-	template := options.Template
-	if template == nil {
-		template = &wallet.TemplateAddress
-	}
-
 	return &core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: core.ComputePrincipalFromBlob(*template, pubkey),
+		Principal: core.ComputePrincipalFromBlob(wallet.TemplateAddress, pubkey),
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
@@ -174,14 +160,9 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	}
 	defer vmlib.Close()
 
-	template := options.Template
-	if template == nil {
-		template = &wallet.TemplateAddress
-	}
-
 	tx := core.Tx{
 		Version:   uint8(sdk.TxVersion),
-		Principal: core.ComputePrincipalFromBlob(*template, signing.Public(pk)),
+		Principal: core.ComputePrincipalFromBlob(wallet.TemplateAddress, signing.Public(pk)),
 		Metadata: core.Metadata{
 			Nonce:    nonce,
 			GasPrice: options.GasPrice,
