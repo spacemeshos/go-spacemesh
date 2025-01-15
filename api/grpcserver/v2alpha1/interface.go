@@ -13,8 +13,7 @@ type malfeasanceInfo interface {
 }
 
 type identityState interface {
-	All() map[types.NodeID][]identity.StateInfo
-	AllByOps(ops builder.Operations) map[types.NodeID][]identity.StateInfo
+	All(ops builder.Operations) map[types.NodeID][]identity.StateInfo
 	AllProposals() map[types.NodeID][]*types.Proposal
 	AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility
 }

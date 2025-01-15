@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 func InsertEvent(
-	db sql.Executor, id types.NodeID, timestamp time.Time, kind spacemeshv2alpha1.IdentityState, eventBytes []byte,
+	db sql.Executor, id types.NodeID, timestamp time.Time, kind int32, eventBytes []byte,
 ) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
@@ -56,33 +54,6 @@ func IterateEventsForID(
 }
 
 func IterateAllEvents(
-	db sql.Executor,
-	fn func(
-		id types.NodeID,
-		timestamp time.Time,
-		eventBytes []byte,
-	) bool,
-) error {
-	var stateBuf bytes.Buffer
-	_, err := db.Exec(
-		`SELECT id, timestamp, event FROM events ORDER BY timestamp ASC`,
-		nil,
-		func(stmt *sql.Statement) bool {
-			var id types.NodeID
-			stmt.ColumnBytes(0, id[:])
-			timestamp := time.UnixMicro(stmt.ColumnInt64(1))
-			stateBuf.Reset()
-			stateBuf.ReadFrom(stmt.ColumnReader(2))
-			return fn(id, timestamp, stateBuf.Bytes())
-		},
-	)
-	if err != nil {
-		return fmt.Errorf("iterate events: %w", err)
-	}
-	return nil
-}
-
-func IterateEventsOps(
 	db sql.Executor,
 	operations builder.Operations,
 	fn func(
