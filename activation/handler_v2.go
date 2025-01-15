@@ -943,8 +943,8 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				Target: atx.SmesherID,
 			}
 			malicious := false
-			marriageIDs := make([]marriage.ID, 1)
-			marriageIDs[0] = newMarriageID
+			marriageIDs := make(map[marriage.ID]struct{}, 1)
+			marriageIDs[newMarriageID] = struct{}{}
 			for i, m := range watx.marriages {
 				info.NodeID = m.id
 				info.MarriageIndex = i
@@ -956,7 +956,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 					if err != nil {
 						return fmt.Errorf("find marriage ID for node ID %s: %w", m.id.ShortString(), err)
 					}
-					marriageIDs = append(marriageIDs, id)
+					marriageIDs[id] = struct{}{}
 				case err != nil:
 					return fmt.Errorf("adding marriage: %w", err)
 				}
@@ -969,8 +969,9 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				}
 			}
 			if len(marriageIDs) > 1 {
-				newMarriageID = slices.Min(marriageIDs)
-				for _, id := range marriageIDs {
+				ids := maps.Keys(marriageIDs)
+				newMarriageID = slices.Min(ids)
+				for _, id := range ids {
 					if id != newMarriageID {
 						if err := marriage.UpdateMarriageID(tx, id, newMarriageID); err != nil {
 							return fmt.Errorf("updating marriage ID for %d: %w", id, err)
@@ -1023,7 +1024,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		//    the gossip handler (not sync!)
 		if republishProof {
 			malicious = true
-			return h.malPublisher.Republish(ctx, atx.SmesherID)
+			return h.malPublisher.Regossip(ctx, atx.SmesherID)
 		}
 
 		var err error

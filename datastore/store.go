@@ -113,11 +113,7 @@ func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 	}
 }
 
-func (db *CachedDB) MalfeasanceCacheSize() int {
-	return db.malfeasanceCache.Len()
-}
-
-// GetMalfeasanceProof gets the malfeasance proof associated with the NodeID.
+// TODO(mafa): this needs to be removed, since it only works with v1 malfeasance proofs.
 func (db *CachedDB) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to GetMalfeasanceProof")
@@ -141,6 +137,7 @@ func (db *CachedDB) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	return blob.Bytes, err
 }
 
+// TODO(mafa): this needs to be removed, since it only works with v1 malfeasance proofs.
 func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof []byte) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to CacheMalfeasanceProof")

@@ -849,8 +849,22 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 
 	malfeasanceLogger := app.addLogger(Malfeasance2Logger, lg).Zap()
-	atxMalHandler := activation.NewMalfeasanceHandlerV2()
-
+	malfeasancePublisher := malfeasance2.NewPublisher(
+		malfeasanceLogger,
+		app.cachedDB,
+		syncer,
+		trtl,
+		app.host,
+	)
+	atxMalHandler := activation.NewMalfeasanceHandlerV2(
+		malfeasanceLogger,
+		malfeasancePublisher,
+		app.edVerifier,
+		validator,
+	)
+	for _, sig := range app.signers {
+		atxMalHandler.Register(sig)
+	}
 	atxHandler := activation.NewHandler(
 		app.host.ID(),
 		app.cachedDB,
@@ -860,6 +874,7 @@ func (app *App) initServices(ctx context.Context) error {
 		fetcher,
 		goldenATXID,
 		validator,
+		atxMalHandler,
 		legacyMalPublisher,
 		beaconProtocol,
 		trtl,
@@ -1185,7 +1200,7 @@ func (app *App) initServices(ctx context.Context) error {
 		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
-		app.edVerifier,
+		fetcher,
 		trtl,
 	)
 	malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
@@ -1238,6 +1253,14 @@ func (app *App) initServices(ctx context.Context) error {
 				lg.Zap(),
 			),
 		),
+		// TODO(mafa): add malfeasance2 handler to fetcher
+		// fetch.ValidatorFunc(
+		// 	pubsub.DropPeerOnSyncValidationReject(
+		// 		malHandler2.HandleSyncedMalfeasanceProof,
+		// 		app.host,
+		// 		lg.Zap(),
+		// 	),
+		// ),
 	)
 
 	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
@@ -1295,6 +1318,10 @@ func (app *App) initServices(ctx context.Context) error {
 	app.host.Register(
 		pubsub.MalfeasanceProof,
 		pubsub.ChainGossipHandler(checkAtxSynced, malHandler.HandleMalfeasanceProof),
+	)
+	app.host.Register(
+		pubsub.MalfeasanceProof2,
+		pubsub.ChainGossipHandler(checkAtxSynced, malHandler2.HandleGossip),
 	)
 
 	app.proposalBuilder = proposalBuilder

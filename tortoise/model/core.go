@@ -100,7 +100,7 @@ func (c *core) OnMessage(m Messenger, event Message) {
 			})
 			c.eligibilities = max(uint32(c.weight*layerSize/total), 1)
 		}
-		votes, err := c.tortoise.EncodeVotes(context.TODO())
+		votes, err := c.tortoise.EncodeVotes(context.Background())
 		if err != nil {
 			panic(err)
 		}

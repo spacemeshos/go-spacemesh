@@ -276,6 +276,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	require.NoError(t, err)
 
 	mFetch := smocks.NewMockFetcher(ctrl)
+	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
 	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
 	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
@@ -290,6 +291,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		mFetch,
 		goldenATX,
 		validator,
+		mMalPublish,
 		mLegacyPublish,
 		mBeacon,
 		mTortoise,

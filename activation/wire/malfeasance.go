@@ -71,18 +71,23 @@ const (
 	InvalidPreviousV2 ProofType = 0x15
 )
 
-var proofTypes = map[ProofType]Proof{
+var proofTypes = map[ProofType]func() Proof{
 	// TODO(mafa): legacy proofs
 
-	DoubleMarry:       &ProofDoubleMarry{},
-	DoubleMerge:       &ProofDoubleMerge{},
-	InvalidPost:       &ProofInvalidPost{},
-	InvalidPreviousV1: &ProofInvalidPrevAtxV1{},
-	InvalidPreviousV2: &ProofInvalidPrevAtxV2{},
+	DoubleMarry:       func() Proof { return &ProofDoubleMarry{} },
+	DoubleMerge:       func() Proof { return &ProofDoubleMerge{} },
+	InvalidPost:       func() Proof { return &ProofInvalidPost{} },
+	InvalidPreviousV1: func() Proof { return &ProofInvalidPrevAtxV1{} },
+	InvalidPreviousV2: func() Proof { return &ProofInvalidPrevAtxV2{} },
 }
 
 // ProofVersion is an identifier for the version of the proof that is encoded in the ATXProof.
 type ProofVersion byte
+
+const (
+	// Version1 is the first version of the ATX proof.
+	Version1 ProofVersion = 0x01
+)
 
 type ATXProof struct {
 	// Version is the version identifier of the proof. This can be used to extend the ATX proof in the future.
@@ -94,10 +99,11 @@ type ATXProof struct {
 }
 
 func (p *ATXProof) Decode() (Proof, error) {
-	rst, ok := proofTypes[p.ProofType]
+	newProof, ok := proofTypes[p.ProofType]
 	if !ok {
 		return nil, fmt.Errorf("unknown ATX malfeasance proof type: 0x%x", p.ProofType)
 	}
+	rst := newProof()
 	if err := codec.Decode(p.Proof, rst); err != nil {
 		return nil, fmt.Errorf("decoding ATX malfeasance proof of type 0x%x: %w", p.ProofType, err)
 	}

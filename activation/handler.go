@@ -101,6 +101,7 @@ func NewHandler(
 	fetcher system.Fetcher,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
+	malPublisher atxMalfeasancePublisher,
 	legacyMalPublisher legacyMalfeasancePublisher,
 	beacon atxReceiver,
 	tortoise system.Tortoise,
@@ -126,7 +127,7 @@ func NewHandler(
 			beacon:          beacon,
 			tortoise:        tortoise,
 			malPublisher:    legacyMalPublisher,
-			malPublisher2:   &MalfeasanceHandlerV2{}, // TODO(mafa): pass real publisher when available
+			malPublisher2:   malPublisher,
 			signers:         make(map[types.NodeID]*signing.EdSigner),
 		},
 
@@ -143,7 +144,7 @@ func NewHandler(
 			fetcher:         fetcher,
 			beacon:          beacon,
 			tortoise:        tortoise,
-			malPublisher:    &MalfeasanceHandlerV2{}, // TODO(mafa): pass real publisher when available
+			malPublisher:    malPublisher,
 		},
 	}
 
