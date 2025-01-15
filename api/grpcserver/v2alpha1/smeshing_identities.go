@@ -62,7 +62,7 @@ func (s *SmeshingIdentitiesService) States(
 	ops := toEventOperations(request)
 
 	pbIdentities := make(map[string]*pb.Identity, request.Limit)
-	for nodeId, history := range s.states.AllByOps(ops) {
+	for nodeId, history := range s.states.All(ops) {
 		pbIdentities[nodeId.String()] = &pb.Identity{
 			History: []*pb.IdentityStateInfo{},
 		}

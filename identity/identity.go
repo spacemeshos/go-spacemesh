@@ -43,7 +43,7 @@ func (s *StateStorage) Set(id types.NodeID, newState State) {
 	if err != nil {
 		s.logger.Panic("marshaling state", zap.Error(err))
 	}
-	if err := events.InsertEvent(s.db, id, info.Time, info.State.APIStateInfo().State, stateBytes); err != nil {
+	if err := events.InsertEvent(s.db, id, info.Time, int32(info.State.APIStateInfo().State), stateBytes); err != nil {
 		s.logger.Panic("inserting state into local DB", zap.Error(err))
 	}
 }
@@ -72,30 +72,9 @@ func (s *StateStorage) Get(id types.NodeID) ([]StateInfo, error) {
 	return allEvents, nil
 }
 
-func (s *StateStorage) All() map[types.NodeID][]StateInfo {
+func (s *StateStorage) All(ops builder.Operations) map[types.NodeID][]StateInfo {
 	allEvents := make(map[types.NodeID][]StateInfo)
-	events.IterateAllEvents(s.db, func(id types.NodeID, timestamp time.Time, eventBytes []byte) bool {
-		event, err := unmarshalState(eventBytes)
-		if err != nil {
-			s.logger.Panic(
-				"unmarshaling event from DB",
-				log.ZShortStringer("smesherID", id),
-				zap.Time("timestamp", timestamp),
-				zap.Error(err),
-			)
-		}
-		if _, ok := allEvents[id]; !ok {
-			allEvents[id] = make([]StateInfo, 0)
-		}
-		allEvents[id] = append(allEvents[id], *event)
-		return true
-	})
-	return allEvents
-}
-
-func (s *StateStorage) AllByOps(ops builder.Operations) map[types.NodeID][]StateInfo {
-	allEvents := make(map[types.NodeID][]StateInfo)
-	events.IterateEventsOps(s.db, ops, func(id types.NodeID, timestamp time.Time, eventBytes []byte) bool {
+	events.IterateAllEvents(s.db, ops, func(id types.NodeID, timestamp time.Time, eventBytes []byte) bool {
 		event, err := unmarshalState(eventBytes)
 		if err != nil {
 			s.logger.Panic(
