@@ -1334,7 +1334,7 @@ func Test_ValidateMarriages(t *testing.T) {
 		atx.Sign(sig)
 
 		_, err = atxHandler.equivocationSet(atx)
-		require.ErrorContains(t, err, "smeshers marriage ATX ID mismatch")
+		require.ErrorContains(t, err, "smesher's marriage ATX ID mismatch")
 	})
 	t.Run("smesher is married", func(t *testing.T) {
 		t.Parallel()

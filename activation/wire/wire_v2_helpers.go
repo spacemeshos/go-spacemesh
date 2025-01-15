@@ -2,6 +2,7 @@ package wire
 
 import (
 	"math/rand/v2"
+	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -77,8 +78,8 @@ func WithNIPostSubPost(subPost SubPostV2) testNIPostV2Opt {
 }
 
 // NewTestActivationTxV2 creates a new ActivationTxV2 with random values.
-// ONLY FOR TESTING.
-func NewTestActivationTxV2(opts ...testAtxV2Opt) *ActivationTxV2 {
+func NewTestActivationTxV2(tb testing.TB, opts ...testAtxV2Opt) *ActivationTxV2 {
+	tb.Helper()
 	atx := &ActivationTxV2{
 		PublishEpoch:   rand.N(types.EpochID(255)),
 		PositioningATX: types.RandomATXID(),

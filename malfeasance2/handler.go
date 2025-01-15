@@ -203,7 +203,7 @@ func (h *Handler) HandleSynced(ctx context.Context, expHash types.Hash32, peer p
 	h.logger.Debug("synced malfeasance proof",
 		log.ZContext(ctx),
 		log.ZShortStringer("requested", expHash),
-		zap.Array("valid_for", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
+		zap.Array("malicious IDs", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
 			for _, id := range nodeIDs {
 				arr.AppendString(id.String())
 			}
@@ -240,7 +240,7 @@ func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, msg []byte) e
 	h.countProof(proof)
 	h.logger.Debug("received gossiped malfeasance proof",
 		log.ZContext(ctx),
-		zap.Array("valid_for", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
+		zap.Array("malicious IDs", zapcore.ArrayMarshalerFunc(func(arr zapcore.ArrayEncoder) error {
 			for _, id := range nodeIDs {
 				arr.AppendString(id.String())
 			}

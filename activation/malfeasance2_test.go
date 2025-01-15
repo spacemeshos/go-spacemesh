@@ -398,6 +398,7 @@ func TestValidate(t *testing.T) {
 			Pow:     rand.Uint64(),
 		}
 		atx := wire.NewTestActivationTxV2(
+			t,
 			wire.WithNIPost(
 				wire.WithNIPostChallenge(nipostChallenge),
 				wire.WithNIPostSubPost(wire.SubPostV2{

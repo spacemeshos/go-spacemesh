@@ -43,6 +43,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		numUnits uint32,
 	) *ActivationTxV2 {
 		atx := NewTestActivationTxV2(
+			t,
 			WithNIPost(
 				WithNIPostChallenge(nipostChallenge),
 				WithNIPostSubPost(SubPostV2{
@@ -62,6 +63,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		numUnits uint32,
 	) *ActivationTxV2 {
 		wInitialAtx := NewTestActivationTxV2(
+			t,
 			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx.Sign(sig)
@@ -73,6 +75,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, initialAtx, wInitialAtx.Blob()))
 
 		wPubInitialAtx := NewTestActivationTxV2(
+			t,
 			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wPubInitialAtx.Sign(pubSig)
@@ -84,6 +87,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		marryInitialAtx := types.RandomATXID()
 
 		wMarriageAtx := NewTestActivationTxV2(
+			t,
 			WithMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
 			WithMarriageCertificate(sig, wInitialAtx.ID(), marrySig.NodeID()),
 			WithMarriageCertificate(pubSig, wPubInitialAtx.ID(), marrySig.NodeID()),
@@ -96,6 +100,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, marriageAtx, wMarriageAtx.Blob()))
 
 		atx := NewTestActivationTxV2(
+			t,
 			WithPreviousATXs(marryInitialAtx, wInitialAtx.ID(), wPubInitialAtx.ID()),
 			WithMarriageATX(wMarriageAtx.ID()),
 			WithNIPost(

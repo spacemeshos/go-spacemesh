@@ -21,8 +21,8 @@ type MalfeasanceHandlerV2 struct {
 	edVerifier   *signing.EdVerifier
 	validator    nipostValidatorV2
 
-	smeshingMutex sync.Mutex
-	signers       map[types.NodeID]*signing.EdSigner
+	signersMtx sync.Mutex
+	signers    map[types.NodeID]*signing.EdSigner
 }
 
 func NewMalfeasanceHandlerV2(
@@ -42,8 +42,8 @@ func NewMalfeasanceHandlerV2(
 }
 
 func (p *MalfeasanceHandlerV2) Register(sig *signing.EdSigner) {
-	p.smeshingMutex.Lock()
-	defer p.smeshingMutex.Unlock()
+	p.signersMtx.Lock()
+	defer p.signersMtx.Unlock()
 	if _, exists := p.signers[sig.NodeID()]; exists {
 		p.logger.Error("signing key already registered", log.ZShortStringer("id", sig.NodeID()))
 		return
@@ -55,9 +55,9 @@ func (p *MalfeasanceHandlerV2) Register(sig *signing.EdSigner) {
 
 // Publish publishes an ATX proof by encoding it and sending it to the malfeasance publisher.
 func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error {
-	p.smeshingMutex.Lock()
+	p.signersMtx.Lock()
 	_, exists := p.signers[nodeID]
-	p.smeshingMutex.Unlock()
+	p.signersMtx.Unlock()
 
 	if exists {
 		// do not publish proofs against one self
@@ -84,9 +84,9 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID,
 }
 
 func (p *MalfeasanceHandlerV2) Regossip(ctx context.Context, nodeID types.NodeID) error {
-	p.smeshingMutex.Lock()
+	p.signersMtx.Lock()
 	_, exists := p.signers[nodeID]
-	p.smeshingMutex.Unlock()
+	p.signersMtx.Unlock()
 
 	if exists {
 		// do not publish proofs against one self

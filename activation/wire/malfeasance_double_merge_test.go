@@ -30,6 +30,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 
 	setupMarriage := func(db sql.Executor) *ActivationTxV2 {
 		wInitialAtx1 := NewTestActivationTxV2(
+			t,
 			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx1.Sign(sig)
@@ -41,6 +42,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, initialAtx1, wInitialAtx1.Blob()))
 
 		wInitialAtx2 := NewTestActivationTxV2(
+			t,
 			WithInitial(types.RandomATXID(), PostV1{}),
 		)
 		wInitialAtx2.Sign(otherSig)
@@ -50,6 +52,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		require.NoError(t, atxs.Add(db, initialAtx2, wInitialAtx2.Blob()))
 
 		wMarriageAtx := NewTestActivationTxV2(
+			t,
 			WithMarriageCertificate(marrySig, types.EmptyATXID, marrySig.NodeID()),
 			WithMarriageCertificate(sig, wInitialAtx1.ID(), marrySig.NodeID()),
 			WithMarriageCertificate(otherSig, wInitialAtx2.ID(), marrySig.NodeID()),
@@ -77,12 +80,14 @@ func Test_DoubleMergeProof(t *testing.T) {
 		marriageAtx := setupMarriage(db)
 
 		atx1 := NewTestActivationTxV2(
+			t,
 			WithMarriageATX(marriageAtx.ID()),
 			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
 		atx1.Sign(sig)
 
 		atx2 := NewTestActivationTxV2(
+			t,
 			WithMarriageATX(marriageAtx.ID()),
 			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
@@ -109,6 +114,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		marriageAtx := setupMarriage(db)
 
 		atx1 := NewTestActivationTxV2(
+			t,
 			WithMarriageATX(marriageAtx.ID()),
 			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
@@ -130,10 +136,10 @@ func Test_DoubleMergeProof(t *testing.T) {
 	t.Run("ATXs must have different signers", func(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
-		atx1 := NewTestActivationTxV2()
+		atx1 := NewTestActivationTxV2(t)
 		atx1.Sign(sig)
 
-		atx2 := NewTestActivationTxV2()
+		atx2 := NewTestActivationTxV2(t)
 		atx2.Sign(sig)
 
 		proof, err := NewDoubleMergeProof(db, atx1, atx2)
@@ -145,11 +151,13 @@ func Test_DoubleMergeProof(t *testing.T) {
 		t.Parallel()
 		db := statesql.InMemoryTest(t)
 		atx := NewTestActivationTxV2(
+			t,
 			WithPublishEpoch(1),
 		)
 		atx.Sign(sig)
 
 		atx2 := NewTestActivationTxV2(
+			t,
 			WithPublishEpoch(2),
 		)
 		atx2.Sign(otherSig)
@@ -163,11 +171,13 @@ func Test_DoubleMergeProof(t *testing.T) {
 		db := statesql.InMemoryTest(t)
 
 		atx := NewTestActivationTxV2(
+			t,
 			WithPublishEpoch(1),
 		)
 		atx.Sign(sig)
 
 		atx2 := NewTestActivationTxV2(
+			t,
 			WithPublishEpoch(1),
 		)
 		atx2.Sign(otherSig)
@@ -212,12 +222,14 @@ func Test_DoubleMergeProof(t *testing.T) {
 		marriageAtx := setupMarriage(db)
 
 		atx1 := NewTestActivationTxV2(
+			t,
 			WithMarriageATX(marriageAtx.ID()),
 			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
 		atx1.Sign(sig)
 
 		atx2 := NewTestActivationTxV2(
+			t,
 			WithMarriageATX(marriageAtx.ID()),
 			WithPublishEpoch(marriageAtx.PublishEpoch+1),
 		)
