@@ -79,7 +79,7 @@ func testnet() config.Config {
 			DataDirParent:                defaultdir,
 			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
 			MetricsPort:                  1010,
-			DatabaseConnections:          16,
+			DatabaseConnections:          32,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
 			DatabasePruneInterval:        30 * time.Minute,
 			DatabaseConnIdleTimeout:      10 * time.Millisecond,

@@ -233,7 +233,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockGasLimit:                math.MaxUint64,
 		OptFilterThreshold:           90,
 		TickSize:                     100,
-		DatabaseConnections:          16,
+		DatabaseConnections:          32,
 		DatabaseSizeMeteringInterval: 10 * time.Minute,
 		DatabasePruneInterval:        30 * time.Minute,
 		DatabaseQueryCacheSizes: DatabaseQueryCacheSizes{
