@@ -762,7 +762,7 @@ func TestProcessLayer(t *testing.T) {
 
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
 				ensuresDatabaseConsistent(t, tm.cdb, c.updates)
-				err := tm.ProcessLayer(context.TODO(), lid)
+				err := tm.ProcessLayer(context.Background(), lid)
 				if len(c.err) > 0 {
 					require.ErrorContains(t, err, c.err)
 				} else {
@@ -790,7 +790,7 @@ func ensuresDatabaseConsistent(tb testing.TB, db sql.Executor, results []result.
 			if !rst.Data {
 				continue
 			}
-			_ = blocks.Add(db, types.NewExistingBlock(rst.Header.ID, types.InnerBlock{
+			blocks.Add(db, types.NewExistingBlock(rst.Header.ID, types.InnerBlock{
 				LayerIndex: layer.Layer,
 			}))
 		}
@@ -962,7 +962,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 				if c.onHare {
 					tm.mockTortoise.EXPECT().OnHareOutput(c.lid, c.bid)
 				}
-				err := tm.ProcessLayerPerHareOutput(context.TODO(), c.lid, c.bid, false)
+				err := tm.ProcessLayerPerHareOutput(context.Background(), c.lid, c.bid, false)
 				if len(c.err) > 0 {
 					require.ErrorContains(t, err, c.err)
 				}

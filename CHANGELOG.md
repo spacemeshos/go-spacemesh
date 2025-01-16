@@ -2,7 +2,61 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
-## Unreleased
+## v1.7.10
+
+### Upgrade information
+
+The previous release (v1.7.9) contained a bug where, if used on other networks than mainnet, hare consensus would not
+be compatible to other versions. Mainnet was not affected by this bug and this release fixes the issue.
+
+### Improvements
+
+* [#6552](https://github.com/spacemeshos/go-spacemesh/pull/6552) The ATX with the greatest height can now be fetched
+  via the v2alpha1 API.
+
+* [#6558](https://github.com/spacemeshos/go-spacemesh/pull/6558) Reduce the number of needed DB queries in syncv2.
+
+* [#6559](https://github.com/spacemeshos/go-spacemesh/pull/6559) Further reduce the number of needed DB queries in
+  syncv2.
+
+* [#6579](https://github.com/spacemeshos/go-spacemesh/pull/6579) Fix a bug where Hare Committee size was not correctly
+  set for non-mainnet networks.
+
+* [#6575](https://github.com/spacemeshos/go-spacemesh/pull/6575) Removal of a possible deadlock in query cache.
+
+* [#6576](https://github.com/spacemeshos/go-spacemesh/pull/6576) More reductions in the number of DB queries in syncv2.
+
+## v1.7.9
+
+### Upgrade information
+
+This release contains improvements to sync. The changes are disabled by default and are still being tested. Syncv2
+will officially be enabled for all nodes in a future release. No action from users is necessary at the moment.
+
+### Improvements
+
+* [#6457](https://github.com/spacemeshos/go-spacemesh/pull/6457) Fix trying to certify POST when certifier URL is empty.
+
+## v1.7.8
+
+### Upgrade information
+
+The deprecated `--poet-server` flag was removed from the node. Using the flag before this version would have resulted
+in an error asking to change to `--poet-servers`. Now the node will only print that the flag is unknown.
+Use `--poet-servers` instead.
+
+### Improvements
+
+* [#6477](https://github.com/spacemeshos/go-spacemesh/pull/6477) Improve peer selection during sync. A node will not
+  request data from nodes that have not yet completed their initialization.
+
+* [#6498](https://github.com/spacemeshos/go-spacemesh/pull/6498) Removed deprecated `--poet-server` flag. Use
+  `--poet-servers` instead.
+
+* [#6500](https://github.com/spacemeshos/go-spacemesh/pull/6500) Updated post-rs dependency. This fixes an issue where
+  the profiler would exit with an error when profiling PoS proving options.
+
+## v1.7.7
 
 ### Improvements
 
@@ -14,6 +68,15 @@ See [RELEASE](./RELEASE.md) for workflow instructions.
 
 * [#6422](https://github.com/spacemeshos/go-spacemesh/pull/6422) Further improved performance of the proposal building
   process to avoid late proposals.
+
+* [#6443](https://github.com/spacemeshos/go-spacemesh/pull/6443) Improve eviction of ineffectual transactions in the database
+  which will now show up as ineffectual when querying them from the API.
+
+* [#6431](https://github.com/spacemeshos/go-spacemesh/pull/6431) Fix db-allow-schema-drift handling
+
+* [#6451](https://github.com/spacemeshos/go-spacemesh/pull/6451) Fix a possible deadloop in the beacon protocol.
+
+* [#6470](https://github.com/spacemeshos/go-spacemesh/pull/6470) Fix I/O buffering issue which could be affecting QUIC connections.
 
 ## v1.7.6
 

@@ -11,14 +11,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 )
 
 func makeFakeDispHandler(n int) rangesync.Handler {
-	return func(ctx context.Context, stream io.ReadWriter) error {
+	return func(ctx context.Context, _ p2p.Peer, stream io.ReadWriter) error {
 		x := rangesync.KeyBytes(bytes.Repeat([]byte{byte(n)}, 32))
-		c := rangesync.StartWireConduit(ctx, stream)
+		c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 		defer c.End()
 		s := rangesync.Sender{c}
 		s.SendRangeContents(x, x, n)
@@ -28,7 +29,8 @@ func makeFakeDispHandler(n int) rangesync.Handler {
 }
 
 func TestDispatcher(t *testing.T) {
-	mesh, err := mocknet.FullMeshConnected(2)
+	// Don't connect immediately to avoid identify race.
+	mesh, err := mocknet.FullMeshLinked(2)
 	require.NoError(t, err)
 
 	d := rangesync.NewDispatcher(zaptest.NewLogger(t))
@@ -47,6 +49,9 @@ func TestDispatcher(t *testing.T) {
 	srvPeerID := mesh.Hosts()[0].ID()
 
 	c := server.New(mesh.Hosts()[1], proto, d.Dispatch, opts...)
+	// Connect the P2P mesh only after the server is configured.
+	// This way, we avoid the race causing bad protocol identification.
+	require.NoError(t, mesh.ConnectAllButSelf())
 	for _, tt := range []struct {
 		name string
 		want int
@@ -59,7 +64,7 @@ func TestDispatcher(t *testing.T) {
 			require.NoError(t, c.StreamRequest(
 				context.Background(), srvPeerID, []byte(tt.name),
 				func(ctx context.Context, stream io.ReadWriter) error {
-					c := rangesync.StartWireConduit(ctx, stream)
+					c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 					defer c.End()
 					m, err := c.NextMessage()
 					require.NoError(t, err)

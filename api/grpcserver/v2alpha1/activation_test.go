@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -33,7 +34,8 @@ func TestActivationService_List(t *testing.T) {
 			activations[i] = *atx
 		}
 
-		svc := NewActivationService(db)
+		goldenAtx := types.ATXID{2, 3, 4}
+		svc := NewActivationService(db, goldenAtx)
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
@@ -244,7 +246,8 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 		epoch5ATXs[i] = *atx
 	}
 
-	svc := NewActivationService(db)
+	goldenAtx := types.ATXID{2, 3, 4}
+	svc := NewActivationService(db, goldenAtx)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -273,5 +276,62 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 		require.Len(t, epoch5ATXs, int(epoch5Count.Count))
 
 		require.NotEqual(t, int(epoch3Count.Count), int(epoch5Count.Count))
+	})
+}
+
+func TestActivationService_Highest(t *testing.T) {
+	t.Run("max tick height", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+		ctx := context.Background()
+
+		goldenAtx := types.ATXID{2, 3, 4}
+		svc := NewActivationService(db, goldenAtx)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		client := spacemeshv2alpha1.NewActivationServiceClient(conn)
+
+		atx := &types.ActivationTx{
+			Sequence:     rand.Uint64(),
+			PublishEpoch: 0,
+			Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
+			NumUnits:     rand.Uint32(),
+		}
+		id := types.RandomATXID()
+		atx.SetID(id)
+		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+
+		res, err := client.Highest(ctx, &spacemeshv2alpha1.HighestRequest{})
+		require.NoError(t, err)
+		require.Equal(t, atx.ID().Bytes(), res.Activation.Id)
+		require.Equal(t, atx.PublishEpoch.Uint32(), res.Activation.PublishEpoch)
+		require.Equal(t, atx.SmesherID.Bytes(), res.Activation.SmesherId)
+		require.Equal(t, atx.Coinbase.String(), res.Activation.Coinbase)
+		require.Equal(t, atx.NumUnits, res.Activation.NumUnits)
+		require.Equal(t, atx.Weight, res.Activation.Weight)
+		require.Equal(t, atx.TickHeight(), res.Activation.Height)
+	})
+	t.Run("returns golden atx on error", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+		ctx := context.Background()
+
+		goldenAtx := types.ATXID{2, 3, 4}
+		svc := NewActivationService(db, goldenAtx)
+		cfg, cleanup := launchServer(t, svc)
+		t.Cleanup(cleanup)
+
+		conn := dialGrpc(t, cfg)
+		client := spacemeshv2alpha1.NewActivationServiceClient(conn)
+
+		res, err := client.Highest(ctx, &spacemeshv2alpha1.HighestRequest{})
+		require.NoError(t, err)
+		require.Equal(t, goldenAtx.Bytes(), res.Activation.Id)
+		require.Empty(t, res.Activation.PublishEpoch)
+		require.Empty(t, res.Activation.SmesherId)
+		require.Empty(t, res.Activation.Coinbase)
+		require.Empty(t, res.Activation.NumUnits)
+		require.Empty(t, res.Activation.Weight)
+		require.Empty(t, res.Activation.Height)
 	})
 }

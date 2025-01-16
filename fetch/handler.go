@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -20,10 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-)
-
-const (
-	fetchSubKey sql.QueryCacheSubKey = "epoch-info-req"
 )
 
 type handler struct {
@@ -45,7 +42,7 @@ func newHandler(
 }
 
 // handleMaliciousIDsReq returns the IDs of all known malicious nodes.
-func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, error) {
+func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
 	nodes, err := identities.AllMalicious(h.cdb)
 	if err != nil {
 		return nil, fmt.Errorf("getting malicious IDs: %w", err)
@@ -57,7 +54,7 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ []byte) ([]byte, 
 	return codec.MustEncode(malicious), nil
 }
 
-func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
 		nodeIDs, err := identities.AllMalicious(h.cdb)
 		if err != nil {
@@ -75,35 +72,32 @@ func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, msg []byte, s
 }
 
 // handleEpochInfoReq returns the ATXs published in the specified epoch.
-func (h *handler) handleEpochInfoReq(ctx context.Context, msg []byte) ([]byte, error) {
+func (h *handler) handleEpochInfoReq(ctx context.Context, _ p2p.Peer, msg []byte) ([]byte, error) {
 	var epoch types.EpochID
 	if err := codec.Decode(msg, &epoch); err != nil {
 		return nil, err
 	}
 
-	cacheKey := sql.QueryCacheKey(atxs.CacheKindEpochATXs, epoch.String())
-	return sql.WithCachedSubKey(ctx, h.cdb, cacheKey, fetchSubKey, func(ctx context.Context) ([]byte, error) {
-		atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
-		if err != nil {
-			return nil, fmt.Errorf("getting ATX IDs: %w", err)
-		}
-		ed := EpochData{
-			AtxIDs: atxids,
-		}
-		bts, err := codec.Encode(&ed)
-		if err != nil {
-			h.logger.Fatal("failed to serialize EpochData",
-				zap.Uint32("epoch", epoch.Uint32()),
-				log.ZContext(ctx),
-				zap.Error(err),
-			)
-		}
-		return bts, nil
-	})
+	atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
+	if err != nil {
+		return nil, fmt.Errorf("getting ATX IDs: %w", err)
+	}
+	ed := EpochData{
+		AtxIDs: atxids,
+	}
+	bts, err := codec.Encode(&ed)
+	if err != nil {
+		h.logger.Fatal("failed to serialize EpochData",
+			zap.Uint32("epoch", epoch.Uint32()),
+			log.ZContext(ctx),
+			zap.Error(err),
+		)
+	}
+	return bts, nil
 }
 
 // handleEpochInfoReq streams the ATXs published in the specified epoch.
-func (h *handler) handleEpochInfoReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+func (h *handler) handleEpochInfoReqStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 	var epoch types.EpochID
 	if err := codec.Decode(msg, &epoch); err != nil {
 		return err
@@ -181,7 +175,7 @@ func (h *handler) streamIDs(ctx context.Context, s io.ReadWriter, retrieve retri
 }
 
 // handleLayerDataReq returns all data in a layer, described in LayerData.
-func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, error) {
+func (h *handler) handleLayerDataReq(ctx context.Context, _ p2p.Peer, req []byte) ([]byte, error) {
 	var (
 		lid types.LayerID
 		ld  LayerData
@@ -202,7 +196,7 @@ func (h *handler) handleLayerDataReq(ctx context.Context, req []byte) ([]byte, e
 	return out, nil
 }
 
-func (h *handler) handleLayerOpinionsReq2(ctx context.Context, data []byte) ([]byte, error) {
+func (h *handler) handleLayerOpinionsReq2(ctx context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 	var req OpinionRequest
 	if err := codec.Decode(data, &req); err != nil {
 		return nil, err
@@ -257,7 +251,7 @@ func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid type
 	return nil, err
 }
 
-func (h *handler) handleHashReq(ctx context.Context, data []byte) ([]byte, error) {
+func (h *handler) handleHashReq(ctx context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 	return h.doHandleHashReq(ctx, data, datastore.NoHint)
 }
 
@@ -290,7 +284,8 @@ func (h *handler) doHandleHashReq(ctx context.Context, data []byte, hint datasto
 			h.logger.Debug("remote peer requested nonexistent hash",
 				log.ZContext(ctx),
 				zap.Stringer("hash", r.Hash),
-				zap.String("hint", string(r.Hint)))
+				zap.String("hint", string(r.Hint)),
+			)
 			hashMissing.WithLabelValues(string(r.Hint)).Add(1)
 			continue
 		} else if len(blob.Bytes) == 0 {
@@ -301,7 +296,8 @@ func (h *handler) doHandleHashReq(ctx context.Context, data []byte, hint datasto
 			h.logger.Debug("responded to hash request",
 				log.ZContext(ctx),
 				zap.Stringer("hash", r.Hash),
-				zap.Int("dataSize", len(blob.Bytes)))
+				zap.Int("dataSize", len(blob.Bytes)),
+			)
 		}
 		// add response to batch
 		m := ResponseMessage{
@@ -327,7 +323,7 @@ func (h *handler) doHandleHashReq(ctx context.Context, data []byte, hint datasto
 	return bts, nil
 }
 
-func (h *handler) handleHashReqStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+func (h *handler) handleHashReqStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 	return h.doHandleHashReqStream(ctx, msg, s, datastore.NoHint)
 }
 
@@ -416,7 +412,7 @@ func (h *handler) doHandleHashReqStream(
 	return nil
 }
 
-func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte, error) {
+func (h *handler) handleMeshHashReq(ctx context.Context, _ p2p.Peer, reqData []byte) ([]byte, error) {
 	var (
 		req    MeshHashRequest
 		hashes []types.Hash32
@@ -447,7 +443,7 @@ func (h *handler) handleMeshHashReq(ctx context.Context, reqData []byte) ([]byte
 	return data, nil
 }
 
-func (h *handler) handleMeshHashReqStream(ctx context.Context, reqData []byte, s io.ReadWriter) error {
+func (h *handler) handleMeshHashReqStream(ctx context.Context, _ p2p.Peer, reqData []byte, s io.ReadWriter) error {
 	var req MeshHashRequest
 	if err := codec.Decode(reqData, &req); err != nil {
 		return fmt.Errorf("%w: decoding request: %w", errBadRequest, err)

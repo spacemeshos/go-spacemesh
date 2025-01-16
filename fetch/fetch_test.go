@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -86,6 +88,7 @@ func createFetch(tb testing.TB) *testFetch {
 		cdb,
 		store.New(),
 		nil,
+		peers.New(),
 		WithContext(context.Background()),
 		WithConfig(cfg),
 		WithLogger(lg),
@@ -132,6 +135,7 @@ func TestFetch_Start(t *testing.T) {
 		cdb,
 		store.New(),
 		nil,
+		peers.New(),
 		WithContext(context.Background()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
@@ -152,14 +156,14 @@ func TestFetch_GetHash(t *testing.T) {
 	hint2 := datastore.BallotDB
 
 	// test hash aggregation
-	p0, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	p0, err := f.getHash(context.Background(), h1, hint, goodReceiver)
 	require.NoError(t, err)
-	p1, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	p1, err := f.getHash(context.Background(), h1, hint, goodReceiver)
 	require.NoError(t, err)
 	require.Equal(t, p0.completed, p1.completed)
 
 	h2 := types.RandomHash()
-	p2, err := f.getHash(context.TODO(), h2, hint2, goodReceiver)
+	p2, err := f.getHash(context.Background(), h2, hint2, goodReceiver)
 	require.NoError(t, err)
 	require.NotEqual(t, p1.completed, p2.completed)
 }
@@ -187,7 +191,9 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 			f := createFetch(t)
 			f.cfg.MaxRetriesForRequest = 0
 			peer := p2p.Peer("buddy")
-			f.peers.Add(peer)
+			f.peers.Add(peer, func() []protocol.ID {
+				return []protocol.ID{hashProtocol, activeSetProtocol}
+			})
 
 			hsh0 := types.RandomHash()
 			res0 := ResponseMessage{
@@ -224,10 +230,10 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 				receiver = badReceiver
 			}
 			for i := 0; i < 2; i++ {
-				p, err := f.getHash(context.TODO(), hsh0, datastore.ProposalDB, receiver)
+				p, err := f.getHash(context.Background(), hsh0, datastore.ProposalDB, receiver)
 				require.NoError(t, err)
 				p0 = append(p0, p)
-				p, err = f.getHash(context.TODO(), hsh1, datastore.BlockDB, receiver)
+				p, err = f.getHash(context.Background(), hsh1, datastore.BlockDB, receiver)
 				require.NoError(t, err)
 				p1 = append(p1, p)
 			}
@@ -259,8 +265,9 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	f.cfg.BatchTimeout = 1
 	f.cfg.BatchSize = 2
 	peer := p2p.Peer("buddy")
-	f.peers.Add(peer)
-
+	f.peers.Add(peer, func() []protocol.ID {
+		return []protocol.ID{hashProtocol, activeSetProtocol}
+	})
 	h1 := types.RandomHash()
 	h2 := types.RandomHash()
 	h3 := types.RandomHash()
@@ -292,11 +299,11 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 
 	defer f.Stop()
 	require.NoError(t, f.Start())
-	p1, err := f.getHash(context.TODO(), h1, hint, goodReceiver)
+	p1, err := f.getHash(context.Background(), h1, hint, goodReceiver)
 	require.NoError(t, err)
-	p2, err := f.getHash(context.TODO(), h2, hint, goodReceiver)
+	p2, err := f.getHash(context.Background(), h2, hint, goodReceiver)
 	require.NoError(t, err)
-	p3, err := f.getHash(context.TODO(), h3, hint, goodReceiver)
+	p3, err := f.getHash(context.Background(), h3, hint, goodReceiver)
 	require.NoError(t, err)
 	for _, p := range []*promise{p1, p2, p3} {
 		<-p.completed
@@ -374,7 +381,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	require.Len(t, h.GetPeers(), 1)
 
 	// This handler returns a ResponseBatch with an empty response that will fail validation on the remote peer
-	badPeerHandler := func(_ context.Context, data []byte) ([]byte, error) {
+	badPeerHandler := func(_ context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 		var b RequestBatch
 		codec.Decode(data, &b)
 
@@ -403,6 +410,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 		cdb,
 		store.New(),
 		h,
+		peers.New(),
 		WithContext(ctx),
 		WithConfig(cfg),
 		WithLogger(lg),

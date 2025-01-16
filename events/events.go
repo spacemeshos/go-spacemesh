@@ -7,10 +7,8 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 )
 
 type UserEvent struct {
@@ -332,21 +330,25 @@ func EmitProposal(nodeID types.NodeID, layer types.LayerID, proposal types.Propo
 		&pb.Event_Proposal{
 			Proposal: &pb.EventProposal{
 				Layer:    layer.Uint32(),
-				Proposal: proposal[:],
+				Proposal: proposal.Bytes(),
 				Smesher:  nodeID.Bytes(),
 			},
 		},
 	)
 }
 
-func EmitOwnMalfeasanceProof(nodeID types.NodeID, proof []byte) {
+func EmitOwnMalfeasanceProof(nodeID types.NodeID) {
 	const help = "Node committed malicious behavior. Identity will be canceled."
 	emitUserEvent(
 		help,
 		false,
 		&pb.Event_Malfeasance{
 			Malfeasance: &pb.EventMalfeasance{
-				Proof: ToMalfeasancePB(nodeID, proof, false),
+				Proof: &pb.MalfeasanceProof{
+					SmesherId: &pb.SmesherId{Id: nodeID.Bytes()},
+					Layer:     &pb.LayerNumber{Number: uint32(0)},
+					Kind:      pb.MalfeasanceProof_MALFEASANCE_UNSPECIFIED,
+				},
 			},
 		},
 	)
@@ -365,34 +367,4 @@ func emitUserEvent(help string, failure bool, details pb.IsEventDetails) {
 			log.With().Error("failed to emit event", log.Err(err))
 		}
 	}
-}
-
-func ToMalfeasancePB(nodeID types.NodeID, proof []byte, includeProof bool) *pb.MalfeasanceProof {
-	mp := &wire.MalfeasanceProof{}
-	if err := codec.Decode(proof, mp); err != nil {
-		return &pb.MalfeasanceProof{}
-	}
-	kind := pb.MalfeasanceProof_MALFEASANCE_UNSPECIFIED
-	switch mp.Proof.Type {
-	case wire.MultipleATXs:
-		kind = pb.MalfeasanceProof_MALFEASANCE_ATX
-	case wire.MultipleBallots:
-		kind = pb.MalfeasanceProof_MALFEASANCE_BALLOT
-	case wire.HareEquivocation:
-		kind = pb.MalfeasanceProof_MALFEASANCE_HARE
-	case wire.InvalidPostIndex:
-		kind = pb.MalfeasanceProof_MALFEASANCE_POST_INDEX
-	case wire.InvalidPrevATX:
-		kind = pb.MalfeasanceProof_MALFEASANCE_INCORRECT_PREV_ATX
-	}
-	result := &pb.MalfeasanceProof{
-		SmesherId: &pb.SmesherId{Id: nodeID.Bytes()},
-		Layer:     &pb.LayerNumber{Number: mp.Layer.Uint32()},
-		Kind:      kind,
-		DebugInfo: wire.MalfeasanceInfo(nodeID, mp),
-	}
-	if includeProof {
-		result.Proof = proof
-	}
-	return result
 }

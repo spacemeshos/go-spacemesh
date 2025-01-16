@@ -35,19 +35,11 @@ import (
 
 // Errors.
 var (
-	ErrSyntax        = errors.New("invalid hex string")
-	ErrMissingPrefix = errors.New("hex string without 0x prefix")
-	ErrOddLength     = errors.New("hex string of odd length")
-	ErrUint64Range   = errors.New("hex number > 64 bits")
+	errSyntax        = errors.New("invalid hex string")
+	errMissingPrefix = errors.New("hex string without 0x prefix")
+	errOddLength     = errors.New("hex string of odd length")
+	errUint64Range   = errors.New("hex number > 64 bits")
 )
-
-// Encode encodes b as a hex string with 0x prefix.
-func Encode(b []byte) string {
-	enc := make([]byte, len(b)*2+2)
-	copy(enc, "0x")
-	hex.Encode(enc[2:], b)
-	return string(enc)
-}
 
 // FromHex returns the bytes represented by the hexadecimal string s.
 // Parameter s may be prefixed with "0x".

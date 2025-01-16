@@ -13,7 +13,6 @@ import (
 	context "context"
 	reflect "reflect"
 
-	prometheus "github.com/prometheus/client_golang/prometheus"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	wire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	gomock "go.uber.org/mock/gomock"
@@ -75,6 +74,68 @@ func (c *MocktortoiseOnMalfeasanceCall) Do(f func(types.NodeID)) *MocktortoiseOn
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MocktortoiseOnMalfeasanceCall) DoAndReturn(f func(types.NodeID)) *MocktortoiseOnMalfeasanceCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Mocksyncer is a mock of syncer interface.
+type Mocksyncer struct {
+	ctrl     *gomock.Controller
+	recorder *MocksyncerMockRecorder
+	isgomock struct{}
+}
+
+// MocksyncerMockRecorder is the mock recorder for Mocksyncer.
+type MocksyncerMockRecorder struct {
+	mock *Mocksyncer
+}
+
+// NewMocksyncer creates a new mock instance.
+func NewMocksyncer(ctrl *gomock.Controller) *Mocksyncer {
+	mock := &Mocksyncer{ctrl: ctrl}
+	mock.recorder = &MocksyncerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocksyncer) EXPECT() *MocksyncerMockRecorder {
+	return m.recorder
+}
+
+// ListenToATXGossip mocks base method.
+func (m *Mocksyncer) ListenToATXGossip() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListenToATXGossip")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// ListenToATXGossip indicates an expected call of ListenToATXGossip.
+func (mr *MocksyncerMockRecorder) ListenToATXGossip() *MocksyncerListenToATXGossipCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListenToATXGossip", reflect.TypeOf((*Mocksyncer)(nil).ListenToATXGossip))
+	return &MocksyncerListenToATXGossipCall{Call: call}
+}
+
+// MocksyncerListenToATXGossipCall wrap *gomock.Call
+type MocksyncerListenToATXGossipCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocksyncerListenToATXGossipCall) Return(arg0 bool) *MocksyncerListenToATXGossipCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocksyncerListenToATXGossipCall) Do(f func() bool) *MocksyncerListenToATXGossipCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocksyncerListenToATXGossipCall) DoAndReturn(f func() bool) *MocksyncerListenToATXGossipCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -142,74 +203,40 @@ func (c *MockMalfeasanceHandlerInfoCall) DoAndReturn(f func(wire.ProofData) (map
 	return c
 }
 
-// ReportInvalidProof mocks base method.
-func (m *MockMalfeasanceHandler) ReportInvalidProof(vec *prometheus.CounterVec) {
+// ReportLabel mocks base method.
+func (m *MockMalfeasanceHandler) ReportLabel() string {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ReportInvalidProof", vec)
+	ret := m.ctrl.Call(m, "ReportLabel")
+	ret0, _ := ret[0].(string)
+	return ret0
 }
 
-// ReportInvalidProof indicates an expected call of ReportInvalidProof.
-func (mr *MockMalfeasanceHandlerMockRecorder) ReportInvalidProof(vec any) *MockMalfeasanceHandlerReportInvalidProofCall {
+// ReportLabel indicates an expected call of ReportLabel.
+func (mr *MockMalfeasanceHandlerMockRecorder) ReportLabel() *MockMalfeasanceHandlerReportLabelCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportInvalidProof", reflect.TypeOf((*MockMalfeasanceHandler)(nil).ReportInvalidProof), vec)
-	return &MockMalfeasanceHandlerReportInvalidProofCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportLabel", reflect.TypeOf((*MockMalfeasanceHandler)(nil).ReportLabel))
+	return &MockMalfeasanceHandlerReportLabelCall{Call: call}
 }
 
-// MockMalfeasanceHandlerReportInvalidProofCall wrap *gomock.Call
-type MockMalfeasanceHandlerReportInvalidProofCall struct {
+// MockMalfeasanceHandlerReportLabelCall wrap *gomock.Call
+type MockMalfeasanceHandlerReportLabelCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockMalfeasanceHandlerReportInvalidProofCall) Return() *MockMalfeasanceHandlerReportInvalidProofCall {
-	c.Call = c.Call.Return()
+func (c *MockMalfeasanceHandlerReportLabelCall) Return(arg0 string) *MockMalfeasanceHandlerReportLabelCall {
+	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockMalfeasanceHandlerReportInvalidProofCall) Do(f func(*prometheus.CounterVec)) *MockMalfeasanceHandlerReportInvalidProofCall {
+func (c *MockMalfeasanceHandlerReportLabelCall) Do(f func() string) *MockMalfeasanceHandlerReportLabelCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockMalfeasanceHandlerReportInvalidProofCall) DoAndReturn(f func(*prometheus.CounterVec)) *MockMalfeasanceHandlerReportInvalidProofCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// ReportProof mocks base method.
-func (m *MockMalfeasanceHandler) ReportProof(vec *prometheus.CounterVec) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ReportProof", vec)
-}
-
-// ReportProof indicates an expected call of ReportProof.
-func (mr *MockMalfeasanceHandlerMockRecorder) ReportProof(vec any) *MockMalfeasanceHandlerReportProofCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportProof", reflect.TypeOf((*MockMalfeasanceHandler)(nil).ReportProof), vec)
-	return &MockMalfeasanceHandlerReportProofCall{Call: call}
-}
-
-// MockMalfeasanceHandlerReportProofCall wrap *gomock.Call
-type MockMalfeasanceHandlerReportProofCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockMalfeasanceHandlerReportProofCall) Return() *MockMalfeasanceHandlerReportProofCall {
-	c.Call = c.Call.Return()
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockMalfeasanceHandlerReportProofCall) Do(f func(*prometheus.CounterVec)) *MockMalfeasanceHandlerReportProofCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockMalfeasanceHandlerReportProofCall) DoAndReturn(f func(*prometheus.CounterVec)) *MockMalfeasanceHandlerReportProofCall {
+func (c *MockMalfeasanceHandlerReportLabelCall) DoAndReturn(f func() string) *MockMalfeasanceHandlerReportLabelCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -152,7 +152,7 @@ func (mi *mempoolIterator) pop() *NanoTX {
 			zap.Uint64("gas_left", mi.gasRemaining),
 			zap.Time("received", top.Received),
 		)
-		_ = heap.Pop(&mi.pq)
+		heap.Pop(&mi.pq)
 		// remove all txs for this principal since we cannot fulfill the lowest nonce for this principal
 		delete(mi.txs, top.Principal)
 		top = nil
@@ -174,7 +174,7 @@ func (mi *mempoolIterator) pop() *NanoTX {
 	next := mi.getNext(ntx.Principal)
 	if next == nil {
 		mi.logger.Debug("addr txs exhausted", zap.Stringer("address", ntx.Principal))
-		_ = heap.Pop(&mi.pq)
+		heap.Pop(&mi.pq)
 	} else {
 		mi.logger.Debug("added tx for addr",
 			zap.Stringer("tx_id", next.ID),

@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/identity"
+	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -22,7 +23,7 @@ import (
 
 var ErrNotFound = errors.New("not found")
 
-type AtxReceiver interface {
+type atxReceiver interface {
 	OnAtx(*types.ActivationTx)
 }
 
@@ -95,16 +96,31 @@ type Syncer interface {
 	RegisterForATXSynced() <-chan struct{}
 }
 
-// malfeasancePublisher is an interface for publishing malfeasance proofs.
-// This interface is used to publish proofs in V2.
+// legacyMalfeasancePublisher is an interface for publishing legacy malfeasance proofs.
 //
-// The provider of that interface ensures that only valid proofs are published (invalid ones return an error).
-// Proofs against an identity that is managed by the node will also return an error and will not be gossiped.
+// It is used int he ATXv1 handler and will be replaced in the future by the atxMalfeasancePublisher, which will
+// wrap legacy proofs into the new encoding structure.
+type legacyMalfeasancePublisher interface {
+	PublishProof(ctx context.Context, smesherID types.NodeID, proof *mwire.MalfeasanceProof) error
+}
+
+// atxMalfeasancePublisher is an interface for publishing atx malfeasance proofs.
+//
+// It encapsulates a specific malfeasance proof into a generic ATX malfeasance proof and publishes it by calling
+// the underlying malfeasancePublisher. It also allows republishing of existing proofs.
+type atxMalfeasancePublisher interface {
+	Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error
+	Regossip(ctx context.Context, nodeID types.NodeID) error
+}
+
+// malfeasancePublisher is an interface for publishing malfeasance proofs.
 //
 // Additionally the publisher will only gossip proofs when the node is in sync, otherwise it will only store them
-// and mark the associated identity as malfeasant.
+// and mark the associated identity as malfeasant. We do this to prevent spamming the network with proofs for identities
+// where most likely the network already knows they are malicious.
 type malfeasancePublisher interface {
-	Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error
+	PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error
+	Regossip(ctx context.Context, nodeID types.NodeID) error
 }
 
 type atxProvider interface {
@@ -219,7 +235,7 @@ var (
 	ErrPostClientNotConnected = errors.New("post service not registered")
 )
 
-type AtxBuilder interface {
+type atxBuilder interface {
 	Register(sig *signing.EdSigner)
 }
 

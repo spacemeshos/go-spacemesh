@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -16,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -49,23 +51,55 @@ type Handler struct {
 	tortoise tortoise
 
 	handlers map[MalfeasanceType]MalfeasanceHandler
+
+	// metrics
+	numProofs        *prometheus.CounterVec
+	numInvalidProofs *prometheus.CounterVec
+	numMalformed     prometheus.Counter
 }
 
 func NewHandler(
 	cdb *datastore.CachedDB,
 	lg *zap.Logger,
 	self p2p.Peer,
-	nodeID []types.NodeID,
+	nodeIDs []types.NodeID,
 	tortoise tortoise,
 ) *Handler {
+	proofCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.Namespace,
+			Subsystem: namespace,
+			Name:      validProofName,
+			Help:      "number of malfeasance proofs",
+		},
+		[]string{
+			typeLabel,
+		},
+	)
+	invalidProofCounter := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: metrics.Namespace,
+			Subsystem: namespace,
+			Name:      invalidProofName,
+			Help:      "number of invalid malfeasance proofs",
+		},
+		[]string{
+			typeLabel,
+		},
+	)
+
 	return &Handler{
 		logger:   lg,
 		cdb:      cdb,
 		self:     self,
-		nodeIDs:  nodeID,
+		nodeIDs:  nodeIDs,
 		tortoise: tortoise,
 
 		handlers: make(map[MalfeasanceType]MalfeasanceHandler),
+
+		numProofs:        proofCounter,
+		numInvalidProofs: invalidProofCounter,
+		numMalformed:     invalidProofCounter.WithLabelValues("mal"),
 	}
 }
 
@@ -77,25 +111,32 @@ func (h *Handler) RegisterHandler(malfeasanceType MalfeasanceType, handler Malfe
 	h.handlers[malfeasanceType] = handler
 }
 
-func (h *Handler) reportMalfeasance(smesher types.NodeID, proof []byte) {
+func (h *Handler) reportMalfeasance(smesher types.NodeID) {
 	h.tortoise.OnMalfeasance(smesher)
-	events.ReportMalfeasance(smesher, proof)
+	events.ReportMalfeasance(smesher)
 	if slices.Contains(h.nodeIDs, smesher) {
-		events.EmitOwnMalfeasanceProof(smesher, proof)
+		events.EmitOwnMalfeasanceProof(smesher)
 	}
 }
 
 func (h *Handler) countProof(mp *wire.MalfeasanceProof) {
-	h.handlers[MalfeasanceType(mp.Proof.Type)].ReportProof(numProofs)
+	label := h.handlers[MalfeasanceType(mp.Proof.Type)].ReportLabel()
+	h.numProofs.WithLabelValues(label).Inc()
 }
 
 func (h *Handler) countInvalidProof(p *wire.MalfeasanceProof) {
-	h.handlers[MalfeasanceType(p.Proof.Type)].ReportInvalidProof(numInvalidProofs)
+	label := h.handlers[MalfeasanceType(p.Proof.Type)].ReportLabel()
+	h.numInvalidProofs.WithLabelValues(label).Inc()
 }
 
-func (h *Handler) Info(data []byte) (map[string]string, error) {
+func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error) {
+	var blob sql.Blob
+	if err := identities.LoadMalfeasanceBlob(ctx, h.cdb, nodeID.Bytes(), &blob); err != nil {
+		return nil, fmt.Errorf("load malfeasance proof: %w", err)
+	}
+
 	var p wire.MalfeasanceProof
-	if err := codec.Decode(data, &p); err != nil {
+	if err := codec.Decode(blob.Bytes, &p); err != nil {
 		return nil, fmt.Errorf("decode malfeasance proof: %w", err)
 	}
 	mh, ok := h.handlers[MalfeasanceType(p.Proof.Type)]
@@ -120,7 +161,7 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 ) error {
 	var p wire.MalfeasanceProof
 	if err := codec.Decode(data, &p); err != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		h.logger.Error("malformed message (sync)", log.ZContext(ctx), zap.Error(err))
 		return errMalformedData
 	}
@@ -130,9 +171,9 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 		// but only log "validation ignored" instead of the error we return
 		h.logger.Warn("malfeasance proof for wrong identity",
 			log.ZContext(ctx),
+			zap.Stringer("peer", peer),
 			log.ZShortStringer("expected", expHash),
 			log.ZShortStringer("got", nodeID),
-			zap.Stringer("peer", peer),
 		)
 		return fmt.Errorf(
 			"%w: malfeasance proof want %s, got %s",
@@ -151,12 +192,12 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, data []byte) error {
 	var p wire.MalfeasanceGossip
 	if err := codec.Decode(data, &p); err != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		h.logger.Error("malformed message", log.ZContext(ctx), zap.Error(err))
 		return errMalformedData
 	}
 	if p.Eligibility != nil {
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		return fmt.Errorf("%w: eligibility field was deprecated with hare3", pubsub.ErrValidationReject)
 	}
 	if peer == h.self {
@@ -170,7 +211,7 @@ func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, dat
 			h.countInvalidProof(&p.MalfeasanceProof)
 			return fmt.Errorf("%w: %s", pubsub.ErrValidationReject, err)
 		}
-		h.reportMalfeasance(id, codec.MustEncode(&p.MalfeasanceProof))
+		h.reportMalfeasance(id)
 		// node saves malfeasance proof eagerly/atomically with the malicious data.
 		// it has validated the proof before saving to db.
 		h.countProof(&p.MalfeasanceProof)
@@ -188,7 +229,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 	nodeID, err := h.Validate(ctx, p)
 	switch {
 	case errors.Is(err, errUnknownProof):
-		numMalformed.Inc()
+		h.numMalformed.Inc()
 		return types.EmptyNodeID, err
 	case err != nil:
 		h.countInvalidProof(p)
@@ -219,7 +260,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		}
 		return nodeID, err
 	}
-	h.reportMalfeasance(nodeID, proofBytes)
+	h.reportMalfeasance(nodeID)
 	h.cdb.CacheMalfeasanceProof(nodeID, proofBytes)
 	h.countProof(p)
 	h.logger.Debug("new malfeasance proof",

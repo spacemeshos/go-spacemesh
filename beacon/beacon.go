@@ -729,16 +729,16 @@ func (pd *ProtocolDriver) listenEpochs(ctx context.Context) {
 				pd.logger.Debug("time sync detected, realigning Beacon")
 				continue
 			}
+			epoch := current.GetEpoch()
+			layer = epoch.Add(1).FirstLayer()
 			if !current.FirstInEpoch() {
 				continue
 			}
-			epoch := current.GetEpoch()
-			layer = epoch.Add(1).FirstLayer()
 
 			pd.setProposalTimeForNextEpoch()
 			pd.logger.Info("processing epoch", zap.Uint32("epoch", epoch.Uint32()))
 			pd.eg.Go(func() error {
-				_ = pd.onNewEpoch(ctx, epoch)
+				pd.onNewEpoch(ctx, epoch)
 				return nil
 			})
 		}

@@ -213,7 +213,6 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
 	t.Parallel()
 	tctx := testcontext.New(t)
-	tctx.PoetSize = 2
 
 	cl := cluster.New(tctx, cluster.WithKeys(10))
 	require.NoError(t, cl.AddBootnodes(tctx, 2))

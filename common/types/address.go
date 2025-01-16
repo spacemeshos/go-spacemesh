@@ -115,7 +115,7 @@ func (a Address) String() string {
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (a Address) Format(s fmt.State, c rune) {
-	_, _ = fmt.Fprintf(s, "%"+string(c), a[:])
+	fmt.Fprintf(s, "%"+string(c), a[:])
 }
 
 // EncodeScale implements scale codec interface.

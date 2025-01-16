@@ -95,7 +95,12 @@ func newTestDriver(tb testing.TB, cfg Config, p pubsub.Publisher, miners int, id
 
 	tpd.cdb = datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
 	tb.Cleanup(func() { assert.NoError(tb, tpd.cdb.Close()) })
-	tpd.ProtocolDriver = New(p, signing.NewEdVerifier(), tpd.mVerifier, tpd.cdb, tpd.mClock,
+	tpd.ProtocolDriver = New(
+		p,
+		signing.NewEdVerifier(),
+		tpd.mVerifier,
+		tpd.cdb,
+		tpd.mClock,
 		WithConfig(cfg),
 		WithLogger(lg),
 		withWeakCoin(coinValueMock(tb, true)),

@@ -2,13 +2,14 @@ package rangesync
 
 import (
 	"iter"
+	"slices"
 
 	"go.uber.org/zap/zapcore"
 )
 
 // Seq represents an ordered sequence of elements.
-// Unless the sequence is empty or an error occurs while iterating, it yields elements
-// endlessly, wrapping around to the first element after the last one.
+// Most sequences are finite. Infinite sequences are explicitly mentioned in the
+// documentation of functions/methods that return them.
 type Seq iter.Seq[KeyBytes]
 
 var _ zapcore.ArrayMarshaler = Seq(nil)
@@ -38,19 +39,7 @@ func (s Seq) FirstN(n int) []KeyBytes {
 // It may not be very efficient due to reallocations, and thus it should only be used for
 // small sequences or for testing.
 func (s Seq) Collect() []KeyBytes {
-	var (
-		first KeyBytes
-		r     []KeyBytes
-	)
-	for v := range s {
-		if first == nil {
-			first = v
-		} else if v.Compare(first) == 0 {
-			break
-		}
-		r = append(r, v)
-	}
-	return r
+	return slices.Collect(iter.Seq[KeyBytes](s))
 }
 
 // MarshalLogArray implements zapcore.ArrayMarshaler.
@@ -68,6 +57,19 @@ func (s Seq) MarshalLogArray(enc zapcore.ArrayEncoder) error {
 		n++
 	}
 	return nil
+}
+
+// Limit limits sequence to n elements.
+func (s Seq) Limit(n int) Seq {
+	return Seq(func(yield func(KeyBytes) bool) {
+		n := n // ensure reusability
+		for k := range s {
+			if n == 0 || !yield(k) {
+				return
+			}
+			n--
+		}
+	})
 }
 
 // EmptySeq returns an empty sequence.
@@ -125,11 +127,28 @@ func (s SeqResult) Collect() ([]KeyBytes, error) {
 	return s.Seq.Collect(), s.Error()
 }
 
+// IsEmpty returns true if the sequence in SeqResult is empty.
+// It also checks for errors.
+func (s SeqResult) IsEmpty() (bool, error) {
+	for range s.Seq {
+		return false, s.Error()
+	}
+	return true, s.Error()
+}
+
+// Limit limits SeqResult to n elements.
+func (s SeqResult) Limit(n int) SeqResult {
+	return SeqResult{
+		Seq:   s.Seq.Limit(n),
+		Error: s.Error,
+	}
+}
+
 // EmptySeqResult returns an empty sequence result.
 func EmptySeqResult() SeqResult {
 	return SeqResult{
 		Seq:   EmptySeq(),
-		Error: func() error { return nil },
+		Error: NoSeqError,
 	}
 }
 
@@ -138,5 +157,19 @@ func ErrorSeqResult(err error) SeqResult {
 	return SeqResult{
 		Seq:   EmptySeq(),
 		Error: SeqError(err),
+	}
+}
+
+// MakeSeqResult makes a SeqResult out of a slice.
+func MakeSeqResult(items []KeyBytes) SeqResult {
+	return SeqResult{
+		Seq: func(yield func(k KeyBytes) bool) {
+			for _, item := range items {
+				if !yield(item) {
+					return
+				}
+			}
+		},
+		Error: NoSeqError,
 	}
 }

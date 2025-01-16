@@ -252,6 +252,12 @@ type InvalidPostIndexProof struct {
 	InvalidIdx uint32
 }
 
+func (p *InvalidPostIndexProof) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	encoder.AddObject("atx", &p.Atx)
+	encoder.AddUint32("invalid_index", p.InvalidIdx)
+	return nil
+}
+
 type BallotProofMsg struct {
 	InnerMsg types.BallotMetadata
 

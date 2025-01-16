@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare4"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/syncer/atxsync"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
@@ -77,16 +78,25 @@ func MainnetConfig() Config {
 
 	hare4conf := hare4.DefaultConfig()
 	hare4conf.Enable = false
+
+	oldAtxSyncCfg := sync2.DefaultConfig()
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = time.Hour
+	oldAtxSyncCfg.MaxDepth = 16
+	newAtxSyncCfg := sync2.DefaultConfig()
+	newAtxSyncCfg.MaxDepth = 21
+	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
+
 	return Config{
 		BaseConfig: BaseConfig{
-			DataDirParent:         defaultDataDir,
-			FileLock:              filepath.Join(os.TempDir(), "spacemesh.lock"),
-			MetricsPort:           1010,
-			DatabaseConnections:   16,
-			DatabasePruneInterval: 30 * time.Minute,
-			DatabaseVacuumState:   21,
-			PruneActivesetsFrom:   12, // starting from epoch 13 activesets below 12 will be pruned
-			NetworkHRP:            "sm",
+			DataDirParent:           defaultDataDir,
+			FileLock:                filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:             1010,
+			DatabaseConnections:     16,
+			DatabasePruneInterval:   30 * time.Minute,
+			DatabaseVacuumState:     21,
+			DatabaseConnIdleTimeout: 10 * time.Millisecond,
+			PruneActivesetsFrom:     12, // starting from epoch 13 activesets below 12 will be pruned
+			NetworkHRP:              "sm",
 
 			LayerDuration:  5 * time.Minute,
 			LayerAvgSize:   50,
@@ -212,6 +222,17 @@ func MainnetConfig() Config {
 			DisableMeshAgreement:     true,
 			AtxSync:                  atxsync.DefaultConfig(),
 			MalSync:                  malsync.DefaultConfig(),
+			ReconcSync: syncer.ReconcSyncConfig{
+				OldAtxSyncCfg:     oldAtxSyncCfg,
+				NewAtxSyncCfg:     newAtxSyncCfg,
+				ParallelLoadLimit: 10,
+				HardTimeout:       10 * time.Minute,
+				ServerConfig: fetch.ServerConfig{
+					Queue:    200,
+					Requests: 100,
+					Interval: time.Second,
+				},
+			},
 		},
 		Recovery: checkpoint.DefaultConfig(),
 		Cache:    datastore.DefaultConfig(),

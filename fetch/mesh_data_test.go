@@ -5,9 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	p2phost "github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/peerinfo"
@@ -86,7 +90,7 @@ func startTestLoop(tb testing.TB, f *Fetch, eg *errgroup.Group, stop chan struct
 			default:
 				f.mu.Lock()
 				for h, req := range f.unprocessed {
-					require.NoError(tb, req.validator(req.ctx, types.Hash32{}, p2p.NoPeer, []byte{}))
+					require.NoError(tb, req.validator(req.ctx, h, p2p.NoPeer, []byte{}))
 					close(req.promise.completed)
 					delete(f.unprocessed, h)
 				}
@@ -137,7 +141,9 @@ func TestFetch_getHashes(t *testing.T) {
 		f.Start()
 		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
-			f.peers.Add(peer)
+			f.peers.Add(peer, func() []protocol.ID {
+				return []protocol.ID{hashProtocol, activeSetProtocol}
+			})
 		}
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.RegisterPeerHashes(peers[0], hashes[:2])
@@ -249,7 +255,9 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.Start()
 		tb.Cleanup(f.Stop)
 		for _, peer := range peers {
-			f.peers.Add(peer)
+			f.peers.Add(peer, func() []protocol.ID {
+				return []protocol.ID{hashProtocol, activeSetProtocol}
+			})
 		}
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.RegisterPeerHashes(peers[0], hashes[:2])
@@ -591,7 +599,7 @@ func genATXs(tb testing.TB, num uint32) []*types.ActivationTx {
 }
 
 func TestGetATXs(t *testing.T) {
-	atxs := genATXs(t, 2)
+	atxs := genATXs(t, 4)
 	f := createFetch(t)
 	f.mAtxH.EXPECT().
 		HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
@@ -602,10 +610,22 @@ func TestGetATXs(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	atxIDs := types.ToATXIDs(atxs)
-	require.NoError(t, f.GetAtxs(context.Background(), atxIDs))
+	atxIDs1 := types.ToATXIDs(atxs[:2])
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs1))
+
+	atxIDs2 := types.ToATXIDs(atxs[2:])
+	var recvIDs []types.ATXID
+	var mtx sync.Mutex
+	require.NoError(t, f.GetAtxs(context.Background(), atxIDs2,
+		system.WithATXCallback(func(id types.ATXID, err error) {
+			mtx.Lock()
+			defer mtx.Unlock()
+			require.NoError(t, err)
+			recvIDs = append(recvIDs, id)
+		})))
 	close(stop)
 	require.NoError(t, eg.Wait())
+	require.ElementsMatch(t, atxIDs2, recvIDs)
 }
 
 func TestGetActiveSet(t *testing.T) {
@@ -947,9 +967,6 @@ func TestFetch_GetCert(t *testing.T) {
 
 // Test if GetAtxs() limits the number of concurrent requests to `cfg.GetAtxsConcurrency`.
 func Test_GetAtxsLimiting(t *testing.T) {
-	mesh, err := mocknet.FullMeshConnected(2)
-	require.NoError(t, err)
-
 	const (
 		totalRequests     = 100
 		getAtxConcurrency = 10
@@ -957,10 +974,13 @@ func Test_GetAtxsLimiting(t *testing.T) {
 
 	for _, withLimiting := range []bool{false, true} {
 		t.Run(fmt.Sprintf("with limiting: %v", withLimiting), func(t *testing.T) {
+			// Do not connect immediately in order to avoid identify race.
+			mesh, err := mocknet.FullMeshLinked(2)
+			require.NoError(t, err)
 			srv := server.New(
 				wrapHost(mesh.Hosts()[1]),
 				hashProtocol,
-				server.WrapHandler(func(_ context.Context, data []byte) ([]byte, error) {
+				server.WrapHandler(func(_ context.Context, _ p2p.Peer, data []byte) ([]byte, error) {
 					var requestBatch RequestBatch
 					require.NoError(t, codec.Decode(data, &requestBatch))
 					resBatch := ResponseBatch{
@@ -1004,7 +1024,9 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
+			ps := peers.New()
 			f, err := NewFetch(cdb, store.New(), host,
+				ps,
 				WithContext(context.Background()),
 				withServers(map[string]requester{hashProtocol: client}),
 				WithConfig(cfg),
@@ -1017,6 +1039,38 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			}
 			require.NoError(t, f.Start())
 			t.Cleanup(f.Stop)
+
+			// Connect the P2P mesh only after the server is configured.
+			// This way, we avoid the race causing bad protocol identification.
+			require.NoError(t, mesh.ConnectAllButSelf())
+			// There are possibilities for race in go-libp2p when we connect early
+			// after server creation. IDService has its own snapshot which is updated
+			// upon EvtLocalProtocolsUpdated event. The events propagate over a channel
+			// and there's no way to see if IDService has already updated its snapshot.
+			// In case if the snapshot is outdated, a wrong list of supported protocols
+			// can be sent to the peers. The only way around it is apparently to re-connect
+			// if the necessary protocol is not supported.
+			require.Eventually(t, func() bool {
+				if ps.Total() == 0 {
+					return false
+				}
+				if len(ps.SelectBestWithProtocols(1, []protocol.ID{
+					hashProtocol,
+				})) != 0 {
+					return true
+				}
+				nets := mesh.Nets()
+				for _, n1 := range nets {
+					for _, n2 := range nets {
+						if n1 == n2 {
+							continue
+						}
+						require.NoError(t, mesh.DisconnectNets(n1, n2))
+					}
+				}
+				require.NoError(t, mesh.ConnectAllButSelf())
+				return false
+			}, 1*time.Second, 5*time.Millisecond)
 
 			var atxIds []types.ATXID
 			for i := 0; i < totalRequests; i++ {
@@ -1120,14 +1174,14 @@ func TestBatchErrorIgnore(t *testing.T) {
 func FuzzCertRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleLayerOpinionsReq2(context.Background(), data)
+		h.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), data)
 	})
 }
 
 func FuzzMeshHashRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleMeshHashReq(context.Background(), data)
+		h.handleMeshHashReq(context.Background(), p2p.Peer(""), data)
 	})
 }
 
@@ -1135,14 +1189,14 @@ func FuzzMeshHashRequestStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleMeshHashReqStream(context.Background(), data, &b)
+		h.handleMeshHashReqStream(context.Background(), p2p.Peer(""), data, &b)
 	})
 }
 
 func FuzzLayerInfo(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleEpochInfoReq(context.Background(), data)
+		h.handleEpochInfoReq(context.Background(), p2p.Peer(""), data)
 	})
 }
 
@@ -1150,14 +1204,14 @@ func FuzzLayerInfoStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleEpochInfoReqStream(context.Background(), data, &b)
+		h.handleEpochInfoReqStream(context.Background(), p2p.Peer(""), data, &b)
 	})
 }
 
 func FuzzHashReq(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleHashReq(context.Background(), data)
+		h.handleHashReq(context.Background(), p2p.Peer(""), data)
 	})
 }
 
@@ -1165,6 +1219,6 @@ func FuzzHashReqStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleHashReqStream(context.Background(), data, &b)
+		h.handleHashReqStream(context.Background(), p2p.Peer(""), data, &b)
 	})
 }

@@ -8,7 +8,8 @@ var (
 )
 
 type (
-	Sender = sender
+	Sender     = sender
+	NullTracer = nullTracer
 )
 
 func (rsr *RangeSetReconciler) DoRound(s Sender) (done bool, err error) { return rsr.doRound(s) }

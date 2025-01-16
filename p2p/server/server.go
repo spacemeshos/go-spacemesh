@@ -32,12 +32,8 @@ type DecayingTagSpec struct {
 	Cap      int           `mapstructure:"cap"`
 }
 
-var (
-	// ErrNotConnected is returned when peer is not connected.
-	ErrNotConnected = errors.New("peer is not connected")
-	// ErrPeerResponseFailed raised if peer responded with an error.
-	ErrPeerResponseFailed = errors.New("peer response failed")
-)
+// ErrNotConnected is returned when peer is not connected.
+var ErrNotConnected = errors.New("peer is not connected")
 
 // Opt is a type to configure a server.
 type Opt func(s *Server)
@@ -104,6 +100,8 @@ func WithRequestsPerInterval(n int, interval time.Duration) Opt {
 	}
 }
 
+// WithDecayingTag specifies P2P decaying tag that is applied to the peer when a request
+// is being served.
 func WithDecayingTag(tag DecayingTagSpec) Opt {
 	return func(s *Server) {
 		s.decayingTagSpec = &tag
@@ -111,11 +109,11 @@ func WithDecayingTag(tag DecayingTagSpec) Opt {
 }
 
 // Handler is a handler to be defined by the application.
-type Handler func(context.Context, []byte) ([]byte, error)
+type Handler func(context.Context, peer.ID, []byte) ([]byte, error)
 
 // StreamHandler is a handler that writes the response to the stream directly instead of
 // buffering the serialized representation.
-type StreamHandler func(context.Context, []byte, io.ReadWriter) error
+type StreamHandler func(context.Context, peer.ID, []byte, io.ReadWriter) error
 
 // StreamRequestCallback is a function that executes a streamed request.
 type StreamRequestCallback func(context.Context, io.ReadWriter) error
@@ -140,7 +138,7 @@ func (err *ServerError) Error() string {
 type Response struct {
 	// keep in line with limit of ResponseMessage.Data in `fetch/wire_types.go`
 	Data  []byte `scale:"max=272629760"` // 260 MiB > 8.0 mio ATX * 32 bytes per ID
-	Error string `scale:"max=1024"`      // TODO(mafa): make error code instead of string
+	Error string `scale:"max=1024"`
 }
 
 // Server for the Handler.
@@ -264,6 +262,7 @@ func (s *Server) Run(ctx context.Context) error {
 				eg.Wait()
 				return nil
 			}
+			peer := req.stream.Conn().RemotePeer()
 			ctx, cancel := context.WithCancel(ctx)
 			eg.Go(func() error {
 				<-ctx.Done()
@@ -275,9 +274,9 @@ func (s *Server) Run(ctx context.Context) error {
 				defer cancel()
 				conn := req.stream.Conn()
 				if s.decayingTag != nil {
-					s.decayingTag.Bump(conn.RemotePeer(), s.decayingTagSpec.Inc)
+					s.decayingTag.Bump(peer, s.decayingTagSpec.Inc)
 				}
-				ok := s.queueHandler(ctx, req.stream)
+				ok := s.queueHandler(ctx, peer, req.stream)
 				duration := time.Since(req.received)
 				if s.peerInfo() != nil {
 					info := s.peerInfo().EnsurePeerInfo(conn.RemotePeer())
@@ -297,11 +296,10 @@ func (s *Server) Run(ctx context.Context) error {
 	}
 }
 
-func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
+func (s *Server) queueHandler(ctx context.Context, peer peer.ID, stream network.Stream) bool {
 	dadj := newDeadlineAdjuster(stream, s.timeout, s.hardTimeout)
 	defer dadj.Close()
-	rd := bufio.NewReader(dadj)
-	size, err := varint.ReadUvarint(rd)
+	size, err := varint.ReadUvarint(dadj)
 	if err != nil {
 		s.logger.Debug("initial read failed",
 			zap.String("protocol", s.protocol),
@@ -323,7 +321,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 		return false
 	}
 	buf := make([]byte, size)
-	_, err = io.ReadFull(rd, buf)
+	_, err = io.ReadFull(dadj, buf)
 	if err != nil {
 		s.logger.Debug("error reading request",
 			zap.String("protocol", s.protocol),
@@ -334,7 +332,7 @@ func (s *Server) queueHandler(ctx context.Context, stream network.Stream) bool {
 		return false
 	}
 	start := time.Now()
-	if err = s.handler(log.WithNewRequestID(ctx), buf, dadj); err != nil {
+	if err = s.handler(log.WithNewRequestID(ctx), peer, buf, dadj); err != nil {
 		s.logger.Debug("handler reported error",
 			zap.String("protocol", s.protocol),
 			zap.Stringer("remotePeer", stream.Conn().RemotePeer()),
@@ -388,7 +386,7 @@ func (s *Server) StreamRequest(
 		return fmt.Errorf("request length (%d) is longer than limit %d", len(req), s.requestLimit)
 	}
 	if s.h.Network().Connectedness(pid) != network.Connected {
-		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
+		return ErrNotConnected
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, s.hardTimeout)
@@ -543,8 +541,8 @@ func ReadResponse(r io.Reader, toCall func(resLen uint32) (int, error)) (int, er
 }
 
 func WrapHandler(handler Handler) StreamHandler {
-	return func(ctx context.Context, req []byte, stream io.ReadWriter) error {
-		buf, hErr := handler(ctx, req)
+	return func(ctx context.Context, peer peer.ID, req []byte, stream io.ReadWriter) error {
+		buf, hErr := handler(ctx, peer, req)
 		var resp Response
 		if hErr != nil {
 			resp.Error = hErr.Error()

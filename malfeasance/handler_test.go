@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -20,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -29,13 +32,14 @@ import (
 type testMalfeasanceHandler struct {
 	*Handler
 
-	db      sql.StateDatabase
-	mockTrt *Mocktortoise
+	observedLogs *observer.ObservedLogs
+	db           sql.StateDatabase
+	mockTrt      *Mocktortoise
 }
 
 func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	db := statesql.InMemoryTest(tb)
-	observer, _ := observer.New(zapcore.WarnLevel)
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
 	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
 		func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewTee(core, observer)
@@ -47,6 +51,7 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	store := atxsdata.New()
 	cdb := datastore.NewCachedDB(db, logger, datastore.WithConsensusCache(store))
 	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
+
 	h := NewHandler(
 		cdb,
 		logger,
@@ -58,8 +63,9 @@ func newHandler(tb testing.TB) *testMalfeasanceHandler {
 	return &testMalfeasanceHandler{
 		Handler: h,
 
-		db:      db,
-		mockTrt: trt,
+		observedLogs: observedLogs,
+		db:           db,
+		mockTrt:      trt,
 	}
 }
 
@@ -70,6 +76,13 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", []byte{0x01})
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("unknown malfeasance type", func(t *testing.T) {
@@ -88,6 +101,13 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
 		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -101,7 +121,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 				return types.EmptyNodeID, errors.New("invalid proof")
 			},
 		)
-		handler.EXPECT().ReportInvalidProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
@@ -117,6 +137,14 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
 		require.ErrorContains(t, err, "invalid proof")
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 0
+spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numInvalidProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -131,7 +159,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		handler.EXPECT().ReportProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		gossip := &wire.MalfeasanceGossip{
@@ -151,6 +179,13 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 		var blob sql.Blob
 		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
 		require.Equal(t, codec.MustEncode(&gossip.MalfeasanceProof), blob.Bytes)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance_num_proofs counter
+spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
@@ -207,6 +242,13 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		)
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("unknown malfeasance type", func(t *testing.T) {
@@ -228,6 +270,13 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		)
 		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numMalformed, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof for wrong nodeID", func(t *testing.T) {
@@ -242,7 +291,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		handler.EXPECT().ReportProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -253,15 +302,30 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 			},
 		}
 
+		expectedHash := types.RandomHash()
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		err := h.HandleSyncedMalfeasanceProof(
 			context.Background(),
-			types.RandomHash(),
+			expectedHash,
 			"peer",
 			codec.MustEncode(proof),
 		)
 		require.ErrorIs(t, err, errWrongHash)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		require.Equal(t, 1, h.observedLogs.Len())
+		log := h.observedLogs.All()[0]
+		require.Equal(t, zap.WarnLevel, log.Level)
+		require.Contains(t, log.Message, "malfeasance proof for wrong identity")
+		require.Equal(t, expectedHash.ShortString(), log.ContextMap()["expected"])
+		require.Equal(t, p2p.Peer("peer").String(), log.ContextMap()["peer"])
+
+		expected := `
+# HELP spacemesh_malfeasance_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance_num_proofs counter
+spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected))) // proof is still valid
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -276,7 +340,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				return types.EmptyNodeID, errors.New("invalid proof")
 			},
 		)
-		handler.EXPECT().ReportInvalidProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -295,6 +359,14 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		)
 		require.ErrorContains(t, err, "invalid proof")
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_invalid_proofs number of invalid malfeasance proofs
+# TYPE spacemesh_malfeasance_num_invalid_proofs counter
+spacemesh_malfeasance_num_invalid_proofs{type="mal"} 0
+spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numInvalidProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
@@ -309,7 +381,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 				return nodeID, nil
 			},
 		)
-		handler.EXPECT().ReportProof(gomock.Any())
+		handler.EXPECT().ReportLabel().Return("multiATXs")
 		h.RegisterHandler(MultipleATXs, handler)
 
 		proof := &wire.MalfeasanceProof{
@@ -328,6 +400,13 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		var blob sql.Blob
 		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
 		require.Equal(t, proofBytes, blob.Bytes)
+
+		expected := `
+# HELP spacemesh_malfeasance_num_proofs number of malfeasance proofs
+# TYPE spacemesh_malfeasance_num_proofs counter
+spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
+`
+		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected)))
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
@@ -374,11 +453,12 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 }
 
 func TestHandler_Info(t *testing.T) {
-	t.Run("malformed data", func(t *testing.T) {
+	t.Run("unknown identity", func(t *testing.T) {
 		h := newHandler(t)
 
-		info, err := h.Info(types.RandomBytes(32))
-		require.ErrorContains(t, err, "decode malfeasance proof:")
+		info, err := h.Info(context.Background(), types.RandomNodeID())
+		require.ErrorContains(t, err, "load malfeasance proof:")
+		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, info)
 	})
 
@@ -392,9 +472,11 @@ func TestHandler_Info(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
+		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
 
-		info, err := h.Info(proofBytes)
+		info, err := h.Info(context.Background(), nodeID)
 		require.ErrorContains(t, err, fmt.Sprintf("unknown malfeasance type %d", wire.MultipleATXs))
 		require.Nil(t, info)
 	})
@@ -414,9 +496,11 @@ func TestHandler_Info(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
+		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
 
-		info, err := h.Info(proofBytes)
+		info, err := h.Info(context.Background(), nodeID)
 		require.ErrorContains(t, err, "invalid proof")
 		require.Nil(t, info)
 	})
@@ -440,7 +524,10 @@ func TestHandler_Info(t *testing.T) {
 				Data: &wire.AtxProof{},
 			},
 		}
+		nodeID := types.RandomNodeID()
 		proofBytes := codec.MustEncode(proof)
+		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
+
 		expectedProperties := map[string]string{
 			"domain": "0",
 			"type":   strconv.FormatUint(uint64(wire.MultipleATXs), 10),
@@ -449,7 +536,7 @@ func TestHandler_Info(t *testing.T) {
 			expectedProperties[k] = v
 		}
 
-		info, err := h.Info(proofBytes)
+		info, err := h.Info(context.Background(), nodeID)
 		require.NoError(t, err)
 		require.Equal(t, expectedProperties, info)
 	})
