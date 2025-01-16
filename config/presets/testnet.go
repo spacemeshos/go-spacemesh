@@ -69,6 +69,7 @@ func testnet() config.Config {
 
 	oldAtxSyncCfg := sync2.DefaultConfig()
 	oldAtxSyncCfg.MaxDepth = 16
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 10 * time.Minute
 	newAtxSyncCfg := sync2.DefaultConfig()
 	newAtxSyncCfg.MaxDepth = 21
 	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
