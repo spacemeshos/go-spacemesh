@@ -43,6 +43,7 @@ func standalone() config.Config {
 
 	conf.Tortoise.Hdist = 2
 	conf.Tortoise.Zdist = 2
+	conf.Tortoise.MinimalActiveSetWeight = []types.EpochMinimalActiveWeight{{Weight: 1_000}}
 
 	conf.HareEligibility.ConfidenceParam = 2
 
