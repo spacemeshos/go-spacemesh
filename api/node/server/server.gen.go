@@ -45,7 +45,7 @@ type ServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(w http.ResponseWriter, r *http.Request, publishEpoch externalRef0.EpochID)
-	// Get epoch eligibility slots for a given node id
+	// Get eligibility slots for a given node id in given epoch
 	// (GET /eligibility/slots/{node}/{epoch})
 	GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.NodeID, epoch externalRef0.EpochID)
 	// Get the beacon value for an epoch
@@ -56,10 +56,10 @@ type ServerInterface interface {
 	GetHareRoundTemplateLayerIterRound(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound)
 	// Get the total weight for layer
 	// (GET /hare/total_weight/{layer})
-	GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer uint32)
+	GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID)
 	// Get the miner weight in layer
 	// (GET /hare/weight/{node_id}/{layer})
-	GetHareWeightNodeIdLayer(w http.ResponseWriter, r *http.Request, nodeId externalRef0.NodeID, layer uint32)
+	GetHareWeightNodeIdLayer(w http.ResponseWriter, r *http.Request, nodeId externalRef0.NodeID, layer externalRef0.LayerID)
 	// Store PoET proof
 	// (POST /poet)
 	PostPoet(w http.ResponseWriter, r *http.Request)
@@ -263,7 +263,7 @@ func (siw *ServerInterfaceWrapper) GetHareTotalWeightLayer(w http.ResponseWriter
 	var err error
 
 	// ------------- Path parameter "layer" -------------
-	var layer uint32
+	var layer externalRef0.LayerID
 
 	err = runtime.BindStyledParameterWithOptions("simple", "layer", r.PathValue("layer"), &layer, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
@@ -297,7 +297,7 @@ func (siw *ServerInterfaceWrapper) GetHareWeightNodeIdLayer(w http.ResponseWrite
 	}
 
 	// ------------- Path parameter "layer" -------------
-	var layer uint32
+	var layer externalRef0.LayerID
 
 	err = runtime.BindStyledParameterWithOptions("simple", "layer", r.PathValue("layer"), &layer, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
@@ -622,8 +622,8 @@ type GetEligibilitySlotsNodeEpochResponseObject interface {
 }
 
 type GetEligibilitySlotsNodeEpoch200JSONResponse struct {
-	Nonce uint64 `json:"Nonce"`
-	Slots uint32 `json:"Slots"`
+	Nonce uint64 `json:"nonce"`
+	Slots uint32 `json:"slots"`
 }
 
 func (response GetEligibilitySlotsNodeEpoch200JSONResponse) VisitGetEligibilitySlotsNodeEpochResponse(w http.ResponseWriter) error {
@@ -649,23 +649,15 @@ type GetHareBeaconEpochResponseObject interface {
 	VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error
 }
 
-type GetHareBeaconEpoch200ApplicationoctetStreamResponse struct {
-	Body          io.Reader
-	ContentLength int64
+type GetHareBeaconEpoch200JSONResponse struct {
+	Beacon []uint8 `json:"beacon"`
 }
 
-func (response GetHareBeaconEpoch200ApplicationoctetStreamResponse) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response GetHareBeaconEpoch200JSONResponse) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type GetHareBeaconEpoch204Response struct {
@@ -714,30 +706,22 @@ func (response GetHareRoundTemplateLayerIterRound204Response) VisitGetHareRoundT
 }
 
 type GetHareTotalWeightLayerRequestObject struct {
-	Layer uint32 `json:"layer"`
+	Layer externalRef0.LayerID `json:"layer"`
 }
 
 type GetHareTotalWeightLayerResponseObject interface {
 	VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error
 }
 
-type GetHareTotalWeightLayer200ApplicationoctetStreamResponse struct {
-	Body          io.Reader
-	ContentLength int64
+type GetHareTotalWeightLayer200JSONResponse struct {
+	Weight uint64 `json:"weight"`
 }
 
-func (response GetHareTotalWeightLayer200ApplicationoctetStreamResponse) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response GetHareTotalWeightLayer200JSONResponse) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type GetHareTotalWeightLayer204Response struct {
@@ -749,31 +733,23 @@ func (response GetHareTotalWeightLayer204Response) VisitGetHareTotalWeightLayerR
 }
 
 type GetHareWeightNodeIdLayerRequestObject struct {
-	NodeId externalRef0.NodeID `json:"node_id"`
-	Layer  uint32              `json:"layer"`
+	NodeId externalRef0.NodeID  `json:"node_id"`
+	Layer  externalRef0.LayerID `json:"layer"`
 }
 
 type GetHareWeightNodeIdLayerResponseObject interface {
 	VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error
 }
 
-type GetHareWeightNodeIdLayer200ApplicationoctetStreamResponse struct {
-	Body          io.Reader
-	ContentLength int64
+type GetHareWeightNodeIdLayer200JSONResponse struct {
+	Weight uint64 `json:"weight"`
 }
 
-func (response GetHareWeightNodeIdLayer200ApplicationoctetStreamResponse) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response GetHareWeightNodeIdLayer200JSONResponse) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type GetHareWeightNodeIdLayer204Response struct {
@@ -891,7 +867,7 @@ type StrictServerInterface interface {
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, request GetActivationPositioningAtxPublishEpochRequestObject) (GetActivationPositioningAtxPublishEpochResponseObject, error)
-	// Get epoch eligibility slots for a given node id
+	// Get eligibility slots for a given node id in given epoch
 	// (GET /eligibility/slots/{node}/{epoch})
 	GetEligibilitySlotsNodeEpoch(ctx context.Context, request GetEligibilitySlotsNodeEpochRequestObject) (GetEligibilitySlotsNodeEpochResponseObject, error)
 	// Get the beacon value for an epoch
@@ -1106,7 +1082,7 @@ func (sh *strictHandler) GetHareRoundTemplateLayerIterRound(w http.ResponseWrite
 }
 
 // GetHareTotalWeightLayer operation middleware
-func (sh *strictHandler) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer uint32) {
+func (sh *strictHandler) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID) {
 	var request GetHareTotalWeightLayerRequestObject
 
 	request.Layer = layer
@@ -1132,7 +1108,7 @@ func (sh *strictHandler) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.
 }
 
 // GetHareWeightNodeIdLayer operation middleware
-func (sh *strictHandler) GetHareWeightNodeIdLayer(w http.ResponseWriter, r *http.Request, nodeId externalRef0.NodeID, layer uint32) {
+func (sh *strictHandler) GetHareWeightNodeIdLayer(w http.ResponseWriter, r *http.Request, nodeId externalRef0.NodeID, layer externalRef0.LayerID) {
 	var request GetHareWeightNodeIdLayerRequestObject
 
 	request.NodeId = nodeId

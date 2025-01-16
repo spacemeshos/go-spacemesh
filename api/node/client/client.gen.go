@@ -125,10 +125,10 @@ type ClientInterface interface {
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHareTotalWeightLayer request
-	GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetHareTotalWeightLayer(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHareWeightNodeIdLayer request
-	GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostPoetWithBody request with any body
 	PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -212,7 +212,7 @@ func (c *Client) GetHareRoundTemplateLayerIterRound(ctx context.Context, layer e
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHareTotalWeightLayerRequest(c.Server, layer)
 	if err != nil {
 		return nil, err
@@ -224,7 +224,7 @@ func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHareWeightNodeIdLayerRequest(c.Server, nodeId, layer)
 	if err != nil {
 		return nil, err
@@ -498,7 +498,7 @@ func NewGetHareRoundTemplateLayerIterRoundRequest(server string, layer externalR
 }
 
 // NewGetHareTotalWeightLayerRequest generates requests for GetHareTotalWeightLayer
-func NewGetHareTotalWeightLayerRequest(server string, layer uint32) (*http.Request, error) {
+func NewGetHareTotalWeightLayerRequest(server string, layer externalRef0.LayerID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -532,7 +532,7 @@ func NewGetHareTotalWeightLayerRequest(server string, layer uint32) (*http.Reque
 }
 
 // NewGetHareWeightNodeIdLayerRequest generates requests for GetHareWeightNodeIdLayer
-func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.NodeID, layer uint32) (*http.Request, error) {
+func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.NodeID, layer externalRef0.LayerID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -740,10 +740,10 @@ type ClientWithResponsesInterface interface {
 	GetHareRoundTemplateLayerIterRoundWithResponse(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*GetHareRoundTemplateLayerIterRoundResponse, error)
 
 	// GetHareTotalWeightLayerWithResponse request
-	GetHareTotalWeightLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error)
+	GetHareTotalWeightLayerWithResponse(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error)
 
 	// GetHareWeightNodeIdLayerWithResponse request
-	GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error)
+	GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error)
 
 	// PostPoetWithBodyWithResponse request with any body
 	PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error)
@@ -827,8 +827,8 @@ type GetEligibilitySlotsNodeEpochResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
-		Nonce uint64 `json:"Nonce"`
-		Slots uint32 `json:"Slots"`
+		Nonce uint64 `json:"nonce"`
+		Slots uint32 `json:"slots"`
 	}
 }
 
@@ -851,6 +851,9 @@ func (r GetEligibilitySlotsNodeEpochResponse) StatusCode() int {
 type GetHareBeaconEpochResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *struct {
+		Beacon []uint8 `json:"beacon"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -893,6 +896,9 @@ func (r GetHareRoundTemplateLayerIterRoundResponse) StatusCode() int {
 type GetHareTotalWeightLayerResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *struct {
+		Weight uint64 `json:"weight"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -914,6 +920,9 @@ func (r GetHareTotalWeightLayerResponse) StatusCode() int {
 type GetHareWeightNodeIdLayerResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *struct {
+		Weight uint64 `json:"weight"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -1050,7 +1059,7 @@ func (c *ClientWithResponses) GetHareRoundTemplateLayerIterRoundWithResponse(ctx
 }
 
 // GetHareTotalWeightLayerWithResponse request returning *GetHareTotalWeightLayerResponse
-func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error) {
+func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error) {
 	rsp, err := c.GetHareTotalWeightLayer(ctx, layer, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1059,7 +1068,7 @@ func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Co
 }
 
 // GetHareWeightNodeIdLayerWithResponse request returning *GetHareWeightNodeIdLayerResponse
-func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error) {
+func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error) {
 	rsp, err := c.GetHareWeightNodeIdLayer(ctx, nodeId, layer, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1190,8 +1199,8 @@ func ParseGetEligibilitySlotsNodeEpochResponse(rsp *http.Response) (*GetEligibil
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Nonce uint64 `json:"Nonce"`
-			Slots uint32 `json:"Slots"`
+			Nonce uint64 `json:"nonce"`
+			Slots uint32 `json:"slots"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -1214,6 +1223,18 @@ func ParseGetHareBeaconEpochResponse(rsp *http.Response) (*GetHareBeaconEpochRes
 	response := &GetHareBeaconEpochResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Beacon []uint8 `json:"beacon"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	}
 
 	return response, nil
@@ -1248,6 +1269,18 @@ func ParseGetHareTotalWeightLayerResponse(rsp *http.Response) (*GetHareTotalWeig
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Weight uint64 `json:"weight"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -1262,6 +1295,18 @@ func ParseGetHareWeightNodeIdLayerResponse(rsp *http.Response) (*GetHareWeightNo
 	response := &GetHareWeightNodeIdLayerResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Weight uint64 `json:"weight"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	}
 
 	return response, nil
