@@ -80,11 +80,9 @@ func MainnetConfig() Config {
 	hare4conf.Enable = false
 
 	oldAtxSyncCfg := sync2.DefaultConfig()
-	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = time.Hour
 	oldAtxSyncCfg.MaxDepth = 16
 	newAtxSyncCfg := sync2.DefaultConfig()
 	newAtxSyncCfg.MaxDepth = 21
-	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
 
 	return Config{
 		BaseConfig: BaseConfig{
