@@ -963,7 +963,7 @@ func (app *App) initServices(ctx context.Context) error {
 			app.Config.HARE3,
 			app.clock,
 			nodeServiceClient,
-			app.hOracle,
+			hOracle,
 			logger,
 		)
 		for _, sig := range app.signers {
@@ -979,7 +979,7 @@ func (app *App) initServices(ctx context.Context) error {
 				app.atxsdata,
 				proposalsStore,
 				app.edVerifier,
-				app.hOracle,
+				hOracle,
 				newSyncer,
 				patrol,
 				hare3.WithLogger(logger),
@@ -1009,7 +1009,7 @@ func (app *App) initServices(ctx context.Context) error {
 				app.atxsdata,
 				proposalsStore,
 				app.edVerifier,
-				app.hOracle,
+				hOracle,
 				newSyncer,
 				patrol,
 				app.host,
