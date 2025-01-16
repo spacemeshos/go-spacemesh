@@ -163,16 +163,20 @@ paths:
           name: layer
           required: true
           schema:
-            type: integer
-            format: uint32
+            $ref: "models/components.yaml#/components/schemas/LayerID"
       responses:
         "200":
-          description: successfully found the total weight to return to client
+          description: successfully found the total weight
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  weight:
+                    type: integer
+                    format: uint64
+                required:
+                  - weight
         "204":
           description: did not find a message to retrieve
   /hare/weight/{node_id}/{layer}:
@@ -190,16 +194,20 @@ paths:
           name: layer
           required: true
           schema:
-            type: integer
-            format: uint32
+            $ref: "models/components.yaml#/components/schemas/LayerID"
       responses:
         "200":
-          description: successfully found the total weight to return to client
+          description: successfully found the miner's weight
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  weight:
+                    type: integer
+                    format: uint64
+                required:
+                  - weight
         "204":
           description: did not find a message to retrieve
   /hare/beacon/{epoch}:
@@ -217,10 +225,19 @@ paths:
         "200":
           description: successfully found the epoch id
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  beacon:
+                    type: array
+                    items:
+                      type: integer
+                      format: uint8
+                    minItems: 4
+                    maxItems: 4
+                required:
+                  - beacon
         "204":
           description: did not find a message to retrieve
   /proposal/{layer}/{node}:
@@ -253,7 +270,7 @@ paths:
           description: could not generate proposal
   /eligibility/slots/{node}/{epoch}:
     get:
-      summary: Get epoch eligibility slots for a given node id
+      summary: Get eligibility slots for a given node id in given epoch
       tags:
         - "proposals"
       parameters:
@@ -275,15 +292,15 @@ paths:
               schema:
                 type: object
                 properties:
-                  Slots:
+                  slots:
                     type: integer
                     format: uint32
-                  Nonce:
+                  nonce:
                     type: integer
                     format: uint64
                 required:
-                  - Slots
-                  - Nonce
+                  - slots
+                  - nonce
         "500":
             description: could not calculate eligibility slots
 

@@ -44,7 +44,7 @@ components:
       format: uint32
     LayerID:
       type: integer
-      format: uint64
+      format: uint32
     HareIter:
       type: integer
       format: uint8

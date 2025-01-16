@@ -158,50 +158,42 @@ func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, r
 }
 
 func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	resp, err := s.client.GetHareTotalWeightLayer(ctx, uint32(layer))
+	resp, err := s.client.GetHareTotalWeightLayerWithResponse(ctx, uint32(layer))
 	if err != nil {
 		return 0, fmt.Errorf("get total weight: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return resp.JSON200.Weight, nil
+	default:
+		return 0, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("read all: %w", err)
-	}
-	return strconv.ParseUint(string(bytes), 10, 64)
 }
 
 func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
-	resp, err := s.client.GetHareWeightNodeIdLayer(ctx, node.String(), uint32(layer))
+	resp, err := s.client.GetHareWeightNodeIdLayerWithResponse(ctx, node.String(), uint32(layer))
 	if err != nil {
 		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return resp.JSON200.Weight, nil
+	default:
+		return 0, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("read all: %w", err)
-	}
-	return strconv.ParseUint(string(bytes), 10, 64)
 }
 
 func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
-	v := types.Beacon{}
-	resp, err := s.client.GetHareBeaconEpoch(ctx, externalRef0.EpochID(epoch))
+	resp, err := s.client.GetHareBeaconEpochWithResponse(ctx, externalRef0.EpochID(epoch))
 	if err != nil {
-		return v, fmt.Errorf("get hare beacon: %w", err)
+		return types.Beacon{}, fmt.Errorf("get hare beacon: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return v, fmt.Errorf("unexpected status: %s", resp.Status)
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return types.Beacon(resp.JSON200.Beacon), nil
+	default:
+		return types.Beacon{}, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return v, fmt.Errorf("read all: %w", err)
-	}
-	copy(v[:], bytes)
-	return v, nil
 }
 
 func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
@@ -258,8 +250,8 @@ func (s *NodeService) CalculateEligibilitySlotsFor(
 	}
 	switch resp.StatusCode() {
 	case http.StatusOK:
+		return resp.JSON200.Slots, types.VRFPostIndex(resp.JSON200.Nonce), nil
 	default:
-		return 0, 0, fmt.Errorf("unexpected status: %s", resp.Status())
+		return 0, 0, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
-	return resp.JSON200.Slots, types.VRFPostIndex(resp.JSON200.Nonce), nil
 }

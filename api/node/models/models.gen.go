@@ -27,7 +27,7 @@ type HareIter = uint8
 type HareRound = uint8
 
 // LayerID defines model for LayerID.
-type LayerID = uint64
+type LayerID = uint32
 
 // NodeID defines model for NodeID.
 type NodeID = string

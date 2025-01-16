@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
@@ -257,17 +256,6 @@ func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
 	}, nil
 }
 
-type totalWeightResp struct {
-	w uint64
-}
-
-func (t *totalWeightResp) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write([]byte(strconv.FormatUint(t.w, 10)))
-	return err
-}
-
 func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
 	req GetHareTotalWeightLayerRequestObject,
 ) (GetHareTotalWeightLayerResponseObject, error) {
@@ -275,18 +263,7 @@ func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &totalWeightResp{weight}, nil
-}
-
-type nodeWeightResp struct {
-	val uint64
-}
-
-func (n *nodeWeightResp) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write([]byte(strconv.FormatUint(n.val, 10)))
-	return err
+	return &GetHareTotalWeightLayer200JSONResponse{Weight: weight}, nil
 }
 
 func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
@@ -301,16 +278,7 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("miner weight: %w", err)
 	}
-	return &nodeWeightResp{val: weight}, nil
-}
-
-type beaconResp struct{ b types.Beacon }
-
-func (b *beaconResp) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write(b.b[:])
-	return err
+	return &GetHareWeightNodeIdLayer200JSONResponse{Weight: weight}, nil
 }
 
 func (s *Server) GetHareBeaconEpoch(ctx context.Context,
@@ -320,7 +288,7 @@ func (s *Server) GetHareBeaconEpoch(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &beaconResp{b: beacon}, nil
+	return &GetHareBeaconEpoch200JSONResponse{Beacon: beacon[:]}, nil
 }
 
 type proposalResp struct {
