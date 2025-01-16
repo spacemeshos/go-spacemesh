@@ -62,11 +62,11 @@ func DefaultConfig() Config {
 	oldAtxSyncCfg := sync2.DefaultConfig()
 	oldAtxSyncCfg.MaxDepth = 16
 	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 10 * time.Hour
-	oldAtxSyncCfg.AdvanceInterval = time.Hour
+	oldAtxSyncCfg.AdvanceInterval = 10 * time.Hour
 	newAtxSyncCfg := sync2.DefaultConfig()
 	newAtxSyncCfg.MaxDepth = 21
 	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
-	newAtxSyncCfg.AdvanceInterval = 5 * time.Minute
+	newAtxSyncCfg.AdvanceInterval = 30 * time.Minute
 	return Config{
 		Interval:                 10 * time.Second,
 		EpochEndFraction:         0.5,
