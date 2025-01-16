@@ -42,13 +42,12 @@ type malSyncer interface {
 
 // fetcher is the interface to the low-level fetching.
 type fetcher interface {
-	GetMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
 	GetLayerData(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetLayerOpinions(context.Context, p2p.Peer, types.LayerID) ([]byte, error)
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
-	system.AtxFetcher
-	system.MalfeasanceProofFetcher
+	GetAtxs(context.Context, []types.ATXID, ...system.GetAtxOpt) error
+	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
@@ -72,4 +71,9 @@ type forkFinder interface {
 	UpdateAgreement(p2p.Peer, types.LayerID, types.Hash32, time.Time)
 	FindFork(context.Context, p2p.Peer, types.LayerID, types.Hash32) (types.LayerID, error)
 	Purge(bool, ...p2p.Peer)
+}
+
+type multiEpochAtxSyncerV2 interface {
+	EnsureSync(ctx context.Context, lastWaitEpoch, newEpoch types.EpochID) (lastSynced types.EpochID, err error)
+	Stop()
 }

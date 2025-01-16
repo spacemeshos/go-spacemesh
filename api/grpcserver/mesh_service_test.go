@@ -177,7 +177,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	require.Equal(t, nodeID, types.BytesToNodeID(resp.Proof.SmesherId.Id))
 	require.EqualValues(t, layer, resp.Proof.Layer.Number)
 	require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_BALLOT, resp.Proof.Kind)
-	require.Equal(t, events.ToMalfeasancePB(nodeID, codec.MustEncode(proof), true), resp.Proof)
+	require.Equal(t, toMalfeasancePB(nodeID, codec.MustEncode(proof), true), resp.Proof)
 	require.NotEmpty(t, resp.Proof.Proof)
 	var got wire.MalfeasanceProof
 	require.NoError(t, codec.Decode(resp.Proof.Proof, &got))
@@ -251,16 +251,16 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 
 	id, proof := AtxMalfeasance(t, db)
 	proofBytes := codec.MustEncode(proof)
-	events.ReportMalfeasance(id, proofBytes)
+	events.ReportMalfeasance(id)
 	resp, err := stream.Recv()
 	require.NoError(t, err)
-	require.Equal(t, events.ToMalfeasancePB(id, proofBytes, false), resp.Proof)
+	require.Equal(t, toMalfeasancePB(id, proofBytes, false), resp.Proof)
 	id, proof = BallotMalfeasance(t, db)
 	proofBytes = codec.MustEncode(proof)
-	events.ReportMalfeasance(id, proofBytes)
+	events.ReportMalfeasance(id)
 	resp, err = stream.Recv()
 	require.NoError(t, err)
-	require.Equal(t, events.ToMalfeasancePB(id, proofBytes, false), resp.Proof)
+	require.Equal(t, toMalfeasancePB(id, proofBytes, false), resp.Proof)
 }
 
 type MeshAPIMockInstrumented struct {

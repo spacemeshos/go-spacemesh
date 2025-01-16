@@ -691,6 +691,45 @@ func (c *MockconservativeStateGetTransactionsByAddressCall) DoAndReturn(f func(t
 	return c
 }
 
+// HasEvicted mocks base method.
+func (m *MockconservativeState) HasEvicted(tid types.TransactionID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEvicted", tid)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEvicted indicates an expected call of HasEvicted.
+func (mr *MockconservativeStateMockRecorder) HasEvicted(tid any) *MockconservativeStateHasEvictedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEvicted", reflect.TypeOf((*MockconservativeState)(nil).HasEvicted), tid)
+	return &MockconservativeStateHasEvictedCall{Call: call}
+}
+
+// MockconservativeStateHasEvictedCall wrap *gomock.Call
+type MockconservativeStateHasEvictedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockconservativeStateHasEvictedCall) Return(arg0 bool, arg1 error) *MockconservativeStateHasEvictedCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockconservativeStateHasEvictedCall) Do(f func(types.TransactionID) (bool, error)) *MockconservativeStateHasEvictedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockconservativeStateHasEvictedCall) DoAndReturn(f func(types.TransactionID) (bool, error)) *MockconservativeStateHasEvictedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Validation mocks base method.
 func (m *MockconservativeState) Validation(raw types.RawTx) system.ValidationRequest {
 	m.ctrl.T.Helper()

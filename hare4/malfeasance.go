@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -102,10 +101,6 @@ func (mh *MalfeasanceHandler) Validate(ctx context.Context, data wire.ProofData)
 	return types.EmptyNodeID, errors.New("invalid hare malfeasance proof")
 }
 
-func (mh *MalfeasanceHandler) ReportProof(numProofs *prometheus.CounterVec) {
-	numProofs.WithLabelValues(hareEquivocate).Inc()
-}
-
-func (mh *MalfeasanceHandler) ReportInvalidProof(numInvalidProofs *prometheus.CounterVec) {
-	numInvalidProofs.WithLabelValues(hareEquivocate).Inc()
+func (mh *MalfeasanceHandler) ReportLabel() string {
+	return hareEquivocate
 }

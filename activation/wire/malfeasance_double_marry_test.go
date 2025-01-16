@@ -1,11 +1,12 @@
 package wire
 
 import (
+	"context"
 	"fmt"
-	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -14,28 +15,36 @@ import (
 )
 
 func Test_DoubleMarryProof(t *testing.T) {
+	t.Parallel()
+
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
 	otherSig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 
+	edVerifier := signing.NewEdVerifier()
+
 	t.Run("valid", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
+
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
 		otherAtx.SmesherID = otherSig.NodeID()
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+		atx1 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
+		atx2 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
@@ -43,248 +52,160 @@ func Test_DoubleMarryProof(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, proof)
 
-		verifier := signing.NewEdVerifier()
-		id, err := proof.Valid(verifier)
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+
+		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, otherSig.NodeID(), id)
 	})
 
-	t.Run("does not contain same certificate owner", func(t *testing.T) {
+	t.Run("identity is not included in both ATXs", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
 
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+		otherAtx := &types.ActivationTx{}
+		otherAtx.SetID(types.RandomATXID())
+		otherAtx.SmesherID = otherSig.NodeID()
+		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
+
+		atx1 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+		atx2 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
+		marriages := make([]MarriageCertificate, len(atx1.Marriages))
+		copy(marriages, atx1.Marriages)
+		atx1.Marriages = marriages[:1]
 		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
-		require.ErrorContains(t, err, fmt.Sprintf(
+		require.EqualError(t, err, fmt.Sprintf(
 			"proof for atx1: does not contain a marriage certificate signed by %s", otherSig.NodeID().ShortString(),
 		))
 		require.Nil(t, proof)
+		atx1.Marriages = marriages
 
+		marriages = make([]MarriageCertificate, len(atx2.Marriages))
+		copy(marriages, atx2.Marriages)
+		atx2.Marriages = marriages[:1]
 		proof, err = NewDoubleMarryProof(db, atx1, atx2, sig.NodeID())
-		require.ErrorContains(t, err, fmt.Sprintf(
+		require.EqualError(t, err, fmt.Sprintf(
 			"proof for atx2: does not contain a marriage certificate signed by %s", sig.NodeID().ShortString(),
 		))
 		require.Nil(t, proof)
+		atx2.Marriages = marriages
 	})
 
 	t.Run("same ATX ID", func(t *testing.T) {
-		atx1 := newActivationTxV2()
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		atx1 := NewTestActivationTxV2(t)
 		atx1.Sign(sig)
 
-		db := statesql.InMemoryTest(t)
 		proof, err := NewDoubleMarryProof(db, atx1, atx1, sig.NodeID())
 		require.ErrorContains(t, err, "ATXs have the same ID")
 		require.Nil(t, proof)
 
 		// manually construct an invalid proof
 		proof = &ProofDoubleMarry{
-			Proofs: [2]MarryProof{
-				{
-					ATXID: atx1.ID(),
-				},
-				{
-					ATXID: atx1.ID(),
-				},
-			},
+			ATXID1: atx1.ID(),
+			ATXID2: atx1.ID(),
 		}
 
-		verifier := signing.NewEdVerifier()
-		id, err := proof.Valid(verifier)
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+
+		id, err := proof.Valid(context.Background(), verifier)
 		require.ErrorContains(t, err, "same ATX ID")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
 
-	t.Run("invalid marriage proof", func(t *testing.T) {
+	t.Run("invalid proof", func(t *testing.T) {
+		t.Parallel()
 		db := statesql.InMemoryTest(t)
+
 		otherAtx := &types.ActivationTx{}
 		otherAtx.SetID(types.RandomATXID())
 		otherAtx.SmesherID = otherSig.NodeID()
 		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
 
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+		atx1 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
 		)
 		atx1.Sign(sig)
 
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
-		)
-		atx2.Sign(otherSig)
-
-		// manually construct an invalid proof
-		proof1, err := createMarryProof(db, atx1, otherSig.NodeID())
-		require.NoError(t, err)
-		proof2, err := createMarryProof(db, atx2, otherSig.NodeID())
-		require.NoError(t, err)
-
-		proof := &ProofDoubleMarry{
-			NodeID: otherSig.NodeID(),
-			Proofs: [2]MarryProof{
-				proof1, proof2,
-			},
-		}
-
-		verifier := signing.NewEdVerifier()
-		proof.Proofs[0].MarriageProof = slices.Clone(proof1.MarriageProof)
-		proof.Proofs[0].MarriageProof[0] = types.RandomHash()
-		id, err := proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 1 is invalid: invalid marriage proof")
-		require.Equal(t, types.EmptyNodeID, id)
-
-		proof.Proofs[0].MarriageProof[0] = proof1.MarriageProof[0]
-		proof.Proofs[1].MarriageProof = slices.Clone(proof2.MarriageProof)
-		proof.Proofs[1].MarriageProof[0] = types.RandomHash()
-		id, err = proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 2 is invalid: invalid marriage proof")
-		require.Equal(t, types.EmptyNodeID, id)
-	})
-
-	t.Run("invalid certificate proof", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-		otherAtx := &types.ActivationTx{}
-		otherAtx.SetID(types.RandomATXID())
-		otherAtx.SmesherID = otherSig.NodeID()
-		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
-
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
-		)
-		atx1.Sign(sig)
-
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
-		)
-		atx2.Sign(otherSig)
-
-		// manually construct an invalid proof
-		proof1, err := createMarryProof(db, atx1, otherSig.NodeID())
-		require.NoError(t, err)
-		proof2, err := createMarryProof(db, atx2, otherSig.NodeID())
-		require.NoError(t, err)
-
-		proof := &ProofDoubleMarry{
-			NodeID: otherSig.NodeID(),
-			Proofs: [2]MarryProof{
-				proof1, proof2,
-			},
-		}
-
-		verifier := signing.NewEdVerifier()
-		proof.Proofs[0].CertificateProof = slices.Clone(proof1.CertificateProof)
-		proof.Proofs[0].CertificateProof[0] = types.RandomHash()
-		id, err := proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate proof")
-		require.Equal(t, types.EmptyNodeID, id)
-
-		proof.Proofs[0].CertificateProof[0] = proof1.CertificateProof[0]
-		proof.Proofs[1].CertificateProof = slices.Clone(proof2.CertificateProof)
-		proof.Proofs[1].CertificateProof[0] = types.RandomHash()
-		id, err = proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate proof")
-		require.Equal(t, types.EmptyNodeID, id)
-	})
-
-	t.Run("invalid atx signature", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-		otherAtx := &types.ActivationTx{}
-		otherAtx.SetID(types.RandomATXID())
-		otherAtx.SmesherID = otherSig.NodeID()
-		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
-
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
-		)
-		atx1.Sign(sig)
-
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
+		atx2 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
 		)
 		atx2.Sign(otherSig)
 
 		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
 		require.NoError(t, err)
 
-		verifier := signing.NewEdVerifier()
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
 
-		proof.Proofs[0].Signature = types.RandomEdSignature()
-		id, err := proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
+		// invalid signature for ATX1
+		proof.Signature1 = types.RandomEdSignature()
+		id, err := proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX1")
 		require.Equal(t, types.EmptyNodeID, id)
+		proof.Signature1 = atx1.Signature
 
-		proof.Proofs[0].Signature = atx1.Signature
-		proof.Proofs[1].Signature = types.RandomEdSignature()
-		id, err = proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
+		// invalid signature for ATX2
+		proof.Signature2 = types.RandomEdSignature()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX2")
 		require.Equal(t, types.EmptyNodeID, id)
-	})
+		proof.Signature2 = atx2.Signature
 
-	t.Run("invalid certificate signature", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
-		otherAtx := &types.ActivationTx{}
-		otherAtx.SetID(types.RandomATXID())
-		otherAtx.SmesherID = otherSig.NodeID()
-		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
-
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
-		)
-		atx1.Sign(sig)
-
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
-		)
-		atx2.Sign(otherSig)
-
-		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
-		require.NoError(t, err)
-
-		verifier := signing.NewEdVerifier()
-
-		proof.Proofs[0].CertificateSignature = types.RandomEdSignature()
-		id, err := proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 1 is invalid: invalid certificate signature")
+		// invalid smesher ID for ATX1
+		proof.SmesherID1 = types.RandomNodeID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX1")
 		require.Equal(t, types.EmptyNodeID, id)
+		proof.SmesherID1 = atx1.SmesherID
 
-		proof.Proofs[0].CertificateSignature = atx1.Marriages[1].Signature
-		proof.Proofs[1].CertificateSignature = types.RandomEdSignature()
-		id, err = proof.Valid(verifier)
-		require.ErrorContains(t, err, "proof 2 is invalid: invalid certificate signature")
+		// invalid smesher ID for ATX2
+		proof.SmesherID2 = types.RandomNodeID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX2")
 		require.Equal(t, types.EmptyNodeID, id)
-	})
+		proof.SmesherID2 = atx2.SmesherID
 
-	t.Run("unknown reference ATX", func(t *testing.T) {
-		db := statesql.InMemoryTest(t)
+		// invalid ATX ID for ATX1
+		proof.ATXID1 = types.RandomATXID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX1")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.ATXID1 = atx1.ID()
 
-		atx1 := newActivationTxV2(
-			withMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(otherSig, types.RandomATXID(), sig.NodeID()), // unknown reference ATX
-		)
-		atx1.Sign(sig)
-
-		atx2 := newActivationTxV2(
-			withMarriageCertificate(otherSig, types.EmptyATXID, sig.NodeID()),
-			withMarriageCertificate(sig, atx1.ID(), sig.NodeID()),
-		)
-		atx2.Sign(otherSig)
-
-		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
-		require.Error(t, err)
-		require.Nil(t, proof)
+		// invalid ATX ID for ATX2
+		proof.ATXID2 = types.RandomATXID()
+		id, err = proof.Valid(context.Background(), verifier)
+		require.ErrorContains(t, err, "invalid signature for ATX2")
+		require.Equal(t, types.EmptyNodeID, id)
+		proof.ATXID2 = atx2.ID()
 	})
 }

@@ -97,7 +97,7 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
+	builder := activation.NewMockatxBuilder(gomock.NewController(tb))
 	builder.EXPECT().Register(gomock.Any())
 	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, ps.Start(cmdCfg, postOpts, sig))

@@ -495,7 +495,7 @@ func (h *Hare) run(session *session) error {
 			if err := h.onOutput(session, current, out); err != nil {
 				return err
 			}
-			// we are logginng stats 1 network delay after new iteration start
+			// we are logging stats 1 network delay after new iteration start
 			// so that we can receive notify messages from previous iteration
 			if session.proto.Round == softlock && h.config.LogStats {
 				h.log.Debug("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))

@@ -31,14 +31,17 @@ func LoadDBSchemaScript(db Executor) (string, error) {
 		return "", err
 	}
 	fmt.Fprintf(&sb, "PRAGMA user_version = %d;\n", version)
+	// The following SQL query ensures that tables are listed first,
+	// ordered by name, and then all other objects, ordered by their table name
+	// and then by their own name.
 	if _, err = db.Exec(`
 		SELECT tbl_name, sql || ';'
 		FROM sqlite_master
 		WHERE sql IS NOT NULL AND tbl_name NOT LIKE 'sqlite_%'
 		ORDER BY
-			CASE WHEN type = 'table' THEN 1 ELSE 2 END, -- ensures tables are first
-			tbl_name,									-- tables are sorted by name, then all other objects
-			name										-- (indexes, triggers, etc.) also by name
+			CASE WHEN type = 'table' THEN 1 ELSE 2 END,
+			tbl_name,
+			name
 	`, nil, func(st *Statement) bool {
 		fmt.Fprintln(&sb, st.ColumnText(1))
 		return true

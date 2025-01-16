@@ -1,6 +1,8 @@
 package v2alpha1
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
@@ -9,7 +11,7 @@ import (
 //go:generate mockgen -typed -package=v2alpha1 -destination=./mocks.go -source=./interface.go
 
 type malfeasanceInfo interface {
-	Info(data []byte) (map[string]string, error)
+	Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error)
 }
 
 type identityState interface {

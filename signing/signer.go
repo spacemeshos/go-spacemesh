@@ -43,6 +43,8 @@ func (d Domain) String() string {
 		return "HARE"
 	case POET:
 		return "POET"
+	case MARRIAGE:
+		return "MARRIAGE"
 	case BEACON_FIRST_MSG:
 		return "BEACON_FIRST_MSG"
 	case BEACON_FOLLOWUP_MSG:

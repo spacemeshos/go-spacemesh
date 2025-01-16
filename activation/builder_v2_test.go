@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -55,7 +56,7 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 
 			atxHandler := newTestHandler(t, tab.goldenATXID, WithAtxVersions(AtxVersions{1: types.AtxV2}))
 			atxHandler.expectInitialAtxV2(&atx)
-			require.NoError(t, atxHandler.HandleGossipAtx(context.Background(), "", got))
+			require.NoError(t, atxHandler.HandleGossipAtx(context.Background(), p2p.NoPeer, got))
 			return nil
 		})
 	require.Empty(t, atx.PreviousATXs)

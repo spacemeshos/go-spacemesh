@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
 
@@ -64,9 +65,13 @@ func makeSet(items string) *rangesync.DumbSet {
 }
 
 func setStr(os rangesync.OrderedSet) string {
-	ids, err := os.Items().Collect()
+	info, err := os.SetInfo()
 	if err != nil {
-		panic("set error: " + err.Error())
+		panic("set info error: " + err.Error())
+	}
+	ids, err := info.Items.Collect()
+	if err != nil {
+		panic("collect items error: " + err.Error())
 	}
 	var r strings.Builder
 	for _, id := range ids {
@@ -178,7 +183,7 @@ func TestRangeSync(t *testing.T) {
 		finalA, finalB string
 		x, y           string
 		countA, countB int
-		fpA, fpB       rangesync.Fingerprint
+		inSync         bool
 		maxRounds      [4]int
 		sim            float64
 	}{
@@ -190,8 +195,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "",
 			countA:    0,
 			countB:    0,
-			fpA:       rangesync.EmptyFingerprint(),
-			fpB:       rangesync.EmptyFingerprint(),
+			inSync:    true,
 			maxRounds: [4]int{1, 1, 1, 1},
 			sim:       1,
 		},
@@ -203,8 +207,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    0,
 			countB:    4,
-			fpA:       rangesync.EmptyFingerprint(),
-			fpB:       rangesync.StringToFP("abcd"),
+			inSync:    false,
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
 		},
@@ -216,8 +219,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    4,
 			countB:    0,
-			fpA:       rangesync.StringToFP("abcd"),
-			fpB:       rangesync.EmptyFingerprint(),
+			inSync:    false,
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
 		},
@@ -229,8 +231,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    2,
 			countB:    2,
-			fpA:       rangesync.StringToFP("ab"),
-			fpB:       rangesync.StringToFP("cd"),
+			inSync:    false,
 			maxRounds: [4]int{3, 2, 2, 2},
 			sim:       0,
 		},
@@ -242,8 +243,7 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcdefghijklmnopqr",
 			countA:    13,
 			countB:    7,
-			fpA:       rangesync.StringToFP("acdefghijklmn"),
-			fpB:       rangesync.StringToFP("bcdopqr"),
+			inSync:    false,
 			maxRounds: [4]int{4, 4, 3, 3},
 			sim:       0.153,
 		},
@@ -257,8 +257,7 @@ func TestRangeSync(t *testing.T) {
 			y:         "h",
 			countA:    6,
 			countB:    3,
-			fpA:       rangesync.StringToFP("acdefg"),
-			fpB:       rangesync.StringToFP("bcd"),
+			inSync:    false,
 			maxRounds: [4]int{3, 3, 2, 2},
 			sim:       0.333,
 		},
@@ -272,8 +271,7 @@ func TestRangeSync(t *testing.T) {
 			y:         "a",
 			countA:    7,
 			countB:    4,
-			fpA:       rangesync.StringToFP("hijklmn"),
-			fpB:       rangesync.StringToFP("opqr"),
+			inSync:    false,
 			maxRounds: [4]int{4, 3, 3, 2},
 			sim:       0,
 		},
@@ -285,26 +283,22 @@ func TestRangeSync(t *testing.T) {
 			finalB:    "abcd",
 			countA:    3,
 			countB:    1,
-			fpA:       rangesync.StringToFP("bcd"),
-			fpB:       rangesync.StringToFP("a"),
+			inSync:    false,
 			maxRounds: [4]int{2, 2, 2, 2},
 			sim:       0,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			logger := zaptest.NewLogger(t)
-			for n, maxSendRange := range []int{1, 2, 3, 4} {
+			for n, maxSendRange := range []uint{1, 2, 3, 4} {
 				t.Logf("maxSendRange: %d", maxSendRange)
+				cfg := rangesync.DefaultConfig()
+				cfg.MaxSendRange = maxSendRange
+				cfg.ItemChunkSize = 3
 				setA := makeSet(tc.a)
-				syncA := rangesync.NewRangeSetReconciler(setA,
-					rangesync.WithLogger(logger.Named("A")),
-					rangesync.WithMaxSendRange(maxSendRange),
-					rangesync.WithItemChunkSize(3))
+				syncA := rangesync.NewRangeSetReconciler(logger.Named("A"), cfg, setA)
 				setB := makeSet(tc.b)
-				syncB := rangesync.NewRangeSetReconciler(setB,
-					rangesync.WithLogger(logger.Named("B")),
-					rangesync.WithMaxSendRange(maxSendRange),
-					rangesync.WithItemChunkSize(3))
+				syncB := rangesync.NewRangeSetReconciler(logger.Named("B"), cfg, setB)
 
 				var (
 					nRounds    int
@@ -325,12 +319,24 @@ func TestRangeSync(t *testing.T) {
 
 				require.Equal(t, tc.countA, prBA.Count, "countA")
 				require.Equal(t, tc.countB, prAB.Count, "countB")
-				require.Equal(t, tc.fpA, prBA.FP, "fpA")
-				require.Equal(t, tc.fpB, prAB.FP, "fpB")
+				require.Equal(t, tc.inSync, prAB.InSync, "inSyncAB")
+				require.Equal(t, tc.inSync, prBA.InSync, "inSyncBA")
 				require.Equal(t, tc.finalA, setStr(setA), "finalA")
 				require.Equal(t, tc.finalB, setStr(setB), "finalB")
 				require.InDelta(t, tc.sim, prAB.Sim, 0.01, "prAB.Sim")
 				require.InDelta(t, tc.sim, prBA.Sim, 0.01, "prBA.Sim")
+
+				prBA = runProbe(t, syncB, syncA, x, y)
+				prAB = runProbe(t, syncA, syncB, x, y)
+				require.True(t, prAB.InSync, "inSyncAB after sync")
+				require.True(t, prBA.InSync, "inSyncBA after sync")
+				require.Equal(t, prAB.Count, prBA.Count, "count after sync")
+				// We expect exactly 1 similarity after sync, so we don't
+				// want to use require.InEpsilon as the linter suggests.
+				//nolint:testifylint
+				require.Equal(t, float64(1), prAB.Sim, "sim after sync")
+				//nolint:testifylint
+				require.Equal(t, float64(1), prBA.Sim, "sim after sync")
 			}
 		})
 	}
@@ -371,13 +377,13 @@ func TestRandomSync(t *testing.T) {
 		expectedSet := maps.Keys(keySet)
 		slices.Sort(expectedSet)
 
-		maxSendRange := rand.Intn(16) + 1
-		syncA := rangesync.NewRangeSetReconciler(setA,
-			rangesync.WithMaxSendRange(maxSendRange),
-			rangesync.WithItemChunkSize(3))
-		syncB := rangesync.NewRangeSetReconciler(setB,
-			rangesync.WithMaxSendRange(maxSendRange),
-			rangesync.WithItemChunkSize(3))
+		maxSendRange := uint(rand.Intn(16) + 1)
+		cfg := rangesync.DefaultConfig()
+		cfg.MaxSendRange = maxSendRange
+		cfg.ItemChunkSize = 3
+		logger := zap.NewNop()
+		syncA := rangesync.NewRangeSetReconciler(logger, cfg, setA)
+		syncB := rangesync.NewRangeSetReconciler(logger, cfg, setB)
 
 		runSync(t, syncA, syncB, nil, nil, max(len(expectedSet), 2))
 		setA.AddReceived()
@@ -389,7 +395,7 @@ func TestRandomSync(t *testing.T) {
 }
 
 type hashSyncTestConfig struct {
-	maxSendRange    int
+	maxSendRange    uint
 	numTestHashes   int
 	minNumSpecificA int
 	maxNumSpecificA int
@@ -401,20 +407,20 @@ type hashSyncTester struct {
 	tb           testing.TB
 	src          []rangesync.KeyBytes
 	setA, setB   *rangesync.DumbSet
-	opts         []rangesync.RangeSetReconcilerOption
+	cfg          rangesync.RangeSetReconcilerConfig
 	numSpecificA int
 	numSpecificB int
 }
 
 func newHashSyncTester(tb testing.TB, cfg hashSyncTestConfig) *hashSyncTester {
 	tb.Helper()
+	rCfg := rangesync.DefaultConfig()
+	rCfg.MaxSendRange = cfg.maxSendRange
+	rCfg.MaxReconcDiff = 0.1
 	st := &hashSyncTester{
-		tb:  tb,
-		src: make([]rangesync.KeyBytes, cfg.numTestHashes),
-		opts: []rangesync.RangeSetReconcilerOption{
-			rangesync.WithMaxSendRange(cfg.maxSendRange),
-			rangesync.WithMaxDiff(0.1),
-		},
+		tb:           tb,
+		src:          make([]rangesync.KeyBytes, cfg.numTestHashes),
+		cfg:          rCfg,
 		numSpecificA: rand.Intn(cfg.maxNumSpecificA+1-cfg.minNumSpecificA) + cfg.minNumSpecificA,
 		numSpecificB: rand.Intn(cfg.maxNumSpecificB+1-cfg.minNumSpecificB) + cfg.minNumSpecificB,
 	}
@@ -444,9 +450,13 @@ func newHashSyncTester(tb testing.TB, cfg hashSyncTestConfig) *hashSyncTester {
 }
 
 func (st *hashSyncTester) verify(setA, setB rangesync.OrderedSet) {
-	itemsA, err := setA.Items().Collect()
+	infoA, err := setA.SetInfo()
 	require.NoError(st.tb, err)
-	itemsB, err := setB.Items().Collect()
+	itemsA, err := infoA.Items.Collect()
+	require.NoError(st.tb, err)
+	infoB, err := setB.SetInfo()
+	require.NoError(st.tb, err)
+	itemsB, err := infoB.Items.Collect()
 	require.NoError(st.tb, err)
 	require.Equal(st.tb, itemsA, itemsB)
 	require.Equal(st.tb, st.src, itemsA)
@@ -461,8 +471,9 @@ func TestSyncHash(t *testing.T) {
 		minNumSpecificB: 4,
 		maxNumSpecificB: 90,
 	})
-	syncA := rangesync.NewRangeSetReconciler(st.setA, st.opts...)
-	syncB := rangesync.NewRangeSetReconciler(st.setB, st.opts...)
+	logger := zap.NewNop()
+	syncA := rangesync.NewRangeSetReconciler(logger, st.cfg, st.setA)
+	syncB := rangesync.NewRangeSetReconciler(logger, st.cfg, st.setB)
 	nRounds, nMsg, nItems := runSync(t, syncA, syncB, nil, nil, 100)
 	numSpecific := st.numSpecificA + st.numSpecificB
 	itemCoef := float64(nItems) / float64(numSpecific)

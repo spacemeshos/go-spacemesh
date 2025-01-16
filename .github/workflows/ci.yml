@@ -1,7 +1,6 @@
 name: CI
 
 env:
-  go-version: "1.23"
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -79,7 +78,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
       - name: fmt, tidy, generate
         run: |
           make install
@@ -110,7 +109,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
       - name: setup env
         run: make install
       - name: lint
@@ -157,7 +156,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
           cache: ${{ runner.arch != 'arm64' }}
       - name: setup env
         run: make install
@@ -184,7 +183,6 @@ jobs:
         with:
           lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
-
       - uses: extractions/netrc@v2
         with:
           machine: github.com
@@ -203,7 +201,12 @@ jobs:
       - name: test coverage
         run: make cover
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/test-results-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
@@ -263,7 +266,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           check-latest: true
-          go-version: ${{ env.go-version }}
+          go-version-file: "go.mod"
           cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
         if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
@@ -282,7 +285,7 @@ jobs:
           GOTESTSUM_JUNITFILE: unit-tests.xml
         run: make test
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v5
         # always run even if the previous step fails
         if: always()
         with:

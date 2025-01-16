@@ -8,7 +8,6 @@ import (
 // EventMalfeasance includes the malfeasance proof.
 type EventMalfeasance struct {
 	Smesher types.NodeID
-	Proof   []byte
 }
 
 // SubscribeMalfeasance subscribes malfeasance events.
@@ -26,11 +25,11 @@ func SubscribeMalfeasance() Subscription {
 }
 
 // ReportMalfeasance reports a malfeasance proof.
-func ReportMalfeasance(nodeID types.NodeID, proof []byte) {
+func ReportMalfeasance(nodeID types.NodeID) {
 	mu.RLock()
 	defer mu.RUnlock()
 	if reporter != nil {
-		if err := reporter.malfeasanceEmitter.Emit(EventMalfeasance{Smesher: nodeID, Proof: proof}); err != nil {
+		if err := reporter.malfeasanceEmitter.Emit(EventMalfeasance{Smesher: nodeID}); err != nil {
 			log.With().Error("failed to emit malfeasance proof", log.Err(err))
 		}
 	}

@@ -22,6 +22,7 @@ import (
 type MocktransactionConState struct {
 	ctrl     *gomock.Controller
 	recorder *MocktransactionConStateMockRecorder
+	isgomock struct{}
 }
 
 // MocktransactionConStateMockRecorder is the mock recorder for MocktransactionConState.
@@ -39,6 +40,45 @@ func NewMocktransactionConState(ctrl *gomock.Controller) *MocktransactionConStat
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MocktransactionConState) EXPECT() *MocktransactionConStateMockRecorder {
 	return m.recorder
+}
+
+// HasEvicted mocks base method.
+func (m *MocktransactionConState) HasEvicted(tid types.TransactionID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasEvicted", tid)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// HasEvicted indicates an expected call of HasEvicted.
+func (mr *MocktransactionConStateMockRecorder) HasEvicted(tid any) *MocktransactionConStateHasEvictedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasEvicted", reflect.TypeOf((*MocktransactionConState)(nil).HasEvicted), tid)
+	return &MocktransactionConStateHasEvictedCall{Call: call}
+}
+
+// MocktransactionConStateHasEvictedCall wrap *gomock.Call
+type MocktransactionConStateHasEvictedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocktransactionConStateHasEvictedCall) Return(arg0 bool, arg1 error) *MocktransactionConStateHasEvictedCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocktransactionConStateHasEvictedCall) Do(f func(types.TransactionID) (bool, error)) *MocktransactionConStateHasEvictedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocktransactionConStateHasEvictedCall) DoAndReturn(f func(types.TransactionID) (bool, error)) *MocktransactionConStateHasEvictedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // Validation mocks base method.
@@ -83,6 +123,7 @@ func (c *MocktransactionConStateValidationCall) DoAndReturn(f func(types.RawTx) 
 type MocktransactionSyncer struct {
 	ctrl     *gomock.Controller
 	recorder *MocktransactionSyncerMockRecorder
+	isgomock struct{}
 }
 
 // MocktransactionSyncerMockRecorder is the mock recorder for MocktransactionSyncer.
@@ -144,6 +185,7 @@ func (c *MocktransactionSyncerIsSyncedCall) DoAndReturn(f func(context.Context) 
 type MocktransactionValidator struct {
 	ctrl     *gomock.Controller
 	recorder *MocktransactionValidatorMockRecorder
+	isgomock struct{}
 }
 
 // MocktransactionValidatorMockRecorder is the mock recorder for MocktransactionValidator.

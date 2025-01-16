@@ -1,9 +1,12 @@
 package rangesync
 
 import (
+	"context"
 	"crypto/md5"
 	"errors"
+	"fmt"
 	"slices"
+	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/hash"
@@ -105,23 +108,26 @@ func realFPFunc(items []KeyBytes) Fingerprint {
 // DumbSet is a simple OrderedSet implementation that doesn't include any optimizations.
 // It is intended to be only used in tests.
 type DumbSet struct {
-	keys             []KeyBytes
-	received         map[string]int
-	added            map[string]bool
-	allowMutiReceive bool
-	FPFunc           func(items []KeyBytes) Fingerprint
+	copyMtx           sync.Mutex
+	keys              []KeyBytes
+	received          map[string]int
+	added             map[string]bool
+	allowMultiReceive bool
+	FPFunc            func(items []KeyBytes) Fingerprint
 }
 
 var _ OrderedSet = &DumbSet{}
 
 // SetAllowMultiReceive sets whether the set allows receiving the same item multiple times.
 func (ds *DumbSet) SetAllowMultiReceive(allow bool) {
-	ds.allowMutiReceive = allow
+	ds.allowMultiReceive = allow
 }
 
 // AddUnchecked adds an item to the set without registerting the item for checks
 // as in case of Add and Receive.
 func (ds *DumbSet) AddUnchecked(id KeyBytes) {
+	ds.copyMtx.Lock()
+	defer ds.copyMtx.Unlock()
 	if len(ds.keys) == 0 {
 		ds.keys = []KeyBytes{id}
 	}
@@ -179,7 +185,7 @@ func (ds *DumbSet) Receive(id KeyBytes) error {
 	}
 	sid := string(id)
 	ds.received[sid]++
-	if !ds.allowMutiReceive && ds.received[sid] > 1 {
+	if !ds.allowMultiReceive && ds.received[sid] > 1 {
 		panic("item already received: " + id.String())
 	}
 	return nil
@@ -234,16 +240,15 @@ func (ds *DumbSet) getRangeInfo(
 	x, y KeyBytes,
 	count int,
 ) (r RangeInfo, end KeyBytes, err error) {
-	if x == nil && y == nil {
+	if x == nil || y == nil {
 		if len(ds.keys) == 0 {
 			return RangeInfo{
 				Fingerprint: EmptyFingerprint(),
+				Items:       EmptySeqResult(),
 			}, nil, nil
 		}
 		x = ds.keys[0]
 		y = x
-	} else if x == nil || y == nil {
-		panic("BUG: bad X or Y")
 	}
 	rangeItems, start, end := naiveRange(ds.keys, x, y, count)
 	fpFunc := ds.FPFunc
@@ -258,15 +263,18 @@ func (ds *DumbSet) getRangeInfo(
 		if start == nil || end == nil {
 			panic("empty start/end from naiveRange")
 		}
-		r.Items = ds.seqFor(start)
+		r.Items = ds.seqFor(start).Limit(r.Count)
 	} else {
 		r.Items = EmptySeqResult()
 	}
 	return r, end, nil
 }
 
-// GetRangeInfo implements OrderedSet.
-func (ds *DumbSet) GetRangeInfo(x, y KeyBytes) (RangeInfo, error) {
+// RangeInfo implements OrderedSet.
+func (ds *DumbSet) RangeInfo(x, y KeyBytes) (RangeInfo, error) {
+	if x == nil || y == nil {
+		return RangeInfo{}, errors.New("bad range")
+	}
 	ri, _, err := ds.getRangeInfo(x, y, -1)
 	return ri, err
 }
@@ -293,27 +301,57 @@ func (ds *DumbSet) SplitRange(x, y KeyBytes, count int) (SplitInfo, error) {
 	}, nil
 }
 
-// Empty implements OrderedSet.
-func (ds *DumbSet) Empty() (bool, error) {
-	return len(ds.keys) == 0, nil
+// SetInfo implements OrderedSet.
+func (ds *DumbSet) SetInfo() (RangeInfo, error) {
+	ri, _, err := ds.getRangeInfo(nil, nil, -1)
+	return ri, err
 }
 
-// Items implements OrderedSet.
-func (ds *DumbSet) Items() SeqResult {
-	if len(ds.keys) == 0 {
-		return EmptySeqResult()
+// WithCopy implements OrderedSet.
+func (ds *DumbSet) WithCopy(_ context.Context, toCall func(OrderedSet) error) error {
+	ds.copyMtx.Lock()
+	copy := &DumbSet{
+		keys:              slices.Clone(ds.keys),
+		allowMultiReceive: ds.allowMultiReceive,
+		FPFunc:            ds.FPFunc,
 	}
-	return ds.seq(0)
-}
-
-// Copy implements OrderedSet.
-func (ds *DumbSet) Copy(syncScope bool) OrderedSet {
-	return &DumbSet{
-		keys: slices.Clone(ds.keys),
-	}
+	ds.copyMtx.Unlock()
+	return toCall(copy)
 }
 
 // Recent implements OrderedSet.
 func (ds *DumbSet) Recent(since time.Time) (SeqResult, int) {
 	return EmptySeqResult(), 0
 }
+
+// Loaded implements OrderedSet.
+func (ds *DumbSet) Loaded() bool {
+	return true
+}
+
+// EnsureLoaded implements OrderedSet.
+func (ds *DumbSet) EnsureLoaded() error {
+	return nil
+}
+
+// Advance implements OrderedSet.
+func (ds *DumbSet) Advance() error {
+	return nil
+}
+
+// Has implements OrderedSet.
+func (ds *DumbSet) Has(k KeyBytes) (bool, error) {
+	info, err := ds.SetInfo()
+	if err != nil {
+		return false, fmt.Errorf("set info: %w", err)
+	}
+	for cur := range info.Items.Seq {
+		if k.Compare(cur) == 0 {
+			return true, info.Items.Error()
+		}
+	}
+	return false, info.Items.Error()
+}
+
+// Release implements OrderedSet.
+func (ds *DumbSet) Release() {}

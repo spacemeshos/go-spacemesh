@@ -35,7 +35,7 @@ func FuzzMessageDecode(f *testing.F) {
 	f.Fuzz(func(t *testing.T, buf []byte) {
 		var msg Message
 		if err := codec.Decode(buf, &msg); err == nil {
-			_ = msg.Validate()
+			msg.Validate()
 		}
 	})
 }
