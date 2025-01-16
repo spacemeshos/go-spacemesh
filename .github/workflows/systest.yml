@@ -39,26 +39,26 @@ concurrency:
   cancel-in-progress: ${{ github.base_ref == 'staging' && false || true }}
 
 jobs:
-  filter-changes:
-    runs-on: ubuntu-22.04
-    outputs:
-      nondocchanges: ${{ steps.filter.outputs.nondoc || github.event_name == 'pull_request' }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          predicate-quantifier: 'every'
-          filters: |
-            nondoc:
-              - '!**/*.md'
-              - '!.github/CODEOWNERS'
+  # filter-changes:
+  #   runs-on: ubuntu-22.04
+  #   outputs:
+  #     nondocchanges: ${{ steps.filter.outputs.nondoc || github.event_name == 'pull_request' }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: dorny/paths-filter@v3
+  #       id: filter
+  #       with:
+  #         predicate-quantifier: 'every'
+  #         filters: |
+  #           nondoc:
+  #             - '!**/*.md'
+  #             - '!.github/CODEOWNERS'
 
   build-docker-images:
     runs-on: ubuntu-22.04
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    needs:
-      - filter-changes
+    #if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    # needs:
+    #   - filter-changes
     timeout-minutes: 20
     permissions:
       contents: 'read'
@@ -120,9 +120,9 @@ jobs:
 
   provision-cluster:
     runs-on: ubuntu-22.04
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    needs:
-      - filter-changes
+    # if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    # needs:
+    #   - filter-changes
     timeout-minutes: 20
     permissions:
       contents: 'read'
@@ -171,10 +171,10 @@ jobs:
 
   systest-gke:
     runs-on: ubuntu-22.04
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    # if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     continue-on-error: true
     needs:
-      - filter-changes
+      # - filter-changes
       - provision-cluster
       - build-docker-images
     timeout-minutes: 70
@@ -261,9 +261,9 @@ jobs:
 
   delete-pool:
     runs-on: ubuntu-22.04
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    # if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
-      - filter-changes
+      # - filter-changes
       - systest-gke
     timeout-minutes: 20
     permissions:
@@ -300,12 +300,12 @@ jobs:
   systest-status:
     if: always()
     needs:
-      - filter-changes
+      # - filter-changes
       - systest-gke
     runs-on: ubuntu-22.04
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest-gke.result == 'success') && 'success' || 'failure' }}
+      status: ${{ (needs.systest-gke.result == 'success') && 'success' || 'failure' }}
     steps:
       - name: Mark the job as succeeded
         if: env.status == 'success'
