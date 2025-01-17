@@ -10,6 +10,8 @@ OAPI_CODEGEN_VERSION := v2.4.0
 
 TAG_SUFIX ?= ""
 
+TAG_SUFIX ?= ""
+
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
     BRANCH = $(SHA)
