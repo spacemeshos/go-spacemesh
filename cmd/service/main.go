@@ -28,8 +28,8 @@ func main() { // run the app
 	cmd.Commit = commit
 	cmd.Branch = branch
 	cmd.NoMainNet = noMainNet == "true"
-	rootCmd.AddCommand(node.GetCommand())
-	rootCmd.AddCommand(node.GetActivationServiceCommand())
+	rootCmd.AddCommand(node.GetNodeServiceCommand())
+	rootCmd.AddCommand(node.GetSmeshingServiceCommand())
 	if err := rootCmd.Execute(); err != nil {
 		// Do not print error as cmd.SilenceErrors is false
 		// and the error was already printed

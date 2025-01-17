@@ -147,7 +147,7 @@ const (
 	NodeServiceClientLogger = "nodeServiceClient"
 )
 
-func GetCommand() *cobra.Command {
+func GetNodeServiceCommand() *cobra.Command {
 	conf := config.MainnetConfig()
 	var configPath *string
 	c := &cobra.Command{
@@ -2268,7 +2268,7 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 // services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
 	if app.Config.IsNodeServiceClientMode() {
-		return errors.New("attempt to start node service using activation service configuration")
+		return errors.New("attempt to start node service using smeshing service configuration")
 	}
 	if err := app.verifyVersionUpgrades(); err != nil {
 		return fmt.Errorf("version upgrade verification failed: %w", err)

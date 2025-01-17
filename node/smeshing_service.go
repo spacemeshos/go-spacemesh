@@ -42,12 +42,12 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 )
 
-func GetActivationServiceCommand() *cobra.Command {
+func GetSmeshingServiceCommand() *cobra.Command {
 	conf := config.MainnetConfig()
 	var configPath *string
 	c := &cobra.Command{
-		Use:   "activation",
-		Short: "Start activation service",
+		Use:   "smeshing",
+		Short: "Start smeshing service",
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := configure(c, *configPath, &conf); err != nil {
 				return err
@@ -97,7 +97,7 @@ func GetActivationServiceCommand() *cobra.Command {
 			c.SilenceUsage = true
 
 			// This blocks until the context is finished or until an error is produced
-			err = app.StartActivationService(ctx)
+			err = app.StartSmeshingService(ctx)
 			cleanupCtx, cleanupCancel := context.WithTimeout(
 				context.Background(),
 				30*time.Second,
@@ -135,7 +135,7 @@ func GetActivationServiceCommand() *cobra.Command {
 }
 
 // Initialize parses and validates the node configuration and sets up logging.
-func (app *App) InitializeActivationService() error {
+func (app *App) InitializeSmeshingService() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
 	var existing config.GenesisConfig
 	if err := existing.LoadFromFile(gpath); err != nil {
@@ -170,7 +170,7 @@ func (app *App) InitializeActivationService() error {
 	return nil
 }
 
-func (app *App) initActivationServiceServices(ctx context.Context) error {
+func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 	layerSize := app.Config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
@@ -428,7 +428,7 @@ func (app *App) initActivationServiceServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) startActivationServiceServices(ctx context.Context) error {
+func (app *App) startSmeshingServiceServices(ctx context.Context) error {
 	if app.remoteProposalBuilder != nil {
 		app.eg.Go(func() error {
 			return app.remoteProposalBuilder.Run(ctx)
@@ -452,18 +452,18 @@ func (app *App) startActivationServiceServices(ctx context.Context) error {
 	return nil
 }
 
-// StartActivationService starts the Spacemesh activation service and
+// StartSmeshingService starts the Spacemesh activation service and
 // initializes all relevant services according to command line
 // arguments provided.
-func (app *App) StartActivationService(ctx context.Context) error {
+func (app *App) StartSmeshingService(ctx context.Context) error {
 	if !app.Config.IsNodeServiceClientMode() {
-		return errors.New("attempt to start activation service using node service configuration")
+		return errors.New("attempt to start smeshing service using node service configuration")
 	}
 	if err := app.verifyVersionUpgrades(); err != nil {
 		return fmt.Errorf("version upgrade verification failed: %w", err)
 	}
 
-	err := app.startActivationServiceSynchronous(ctx)
+	err := app.startSmeshingServiceSynchronous(ctx)
 	if err != nil {
 		app.log.With().Error("failed to start App", log.Err(err))
 		return err
@@ -483,7 +483,7 @@ func (app *App) StartActivationService(ctx context.Context) error {
 	}
 }
 
-func (app *App) startActivationServiceSynchronous(ctx context.Context) (err error) {
+func (app *App) startSmeshingServiceSynchronous(ctx context.Context) (err error) {
 	// notify anyone who might be listening that the app has finished starting.
 	// this can be used by, e.g., app tests.
 	defer close(app.started)
@@ -560,7 +560,7 @@ func (app *App) startActivationServiceSynchronous(ctx context.Context) (err erro
 		return err
 	}
 
-	if err := app.initActivationServiceServices(ctx); err != nil {
+	if err := app.initSmeshingServiceServices(ctx); err != nil {
 		return fmt.Errorf("init services: %w", err)
 	}
 
@@ -579,7 +579,7 @@ func (app *App) startActivationServiceSynchronous(ctx context.Context) (err erro
 			types.Hash32(id).ShortString(), app.Config.Genesis.GenesisID().ShortString())
 	}
 
-	if err := app.startActivationServiceServices(ctx); err != nil {
+	if err := app.startSmeshingServiceServices(ctx); err != nil {
 		return fmt.Errorf("start services: %w", err)
 	}
 
