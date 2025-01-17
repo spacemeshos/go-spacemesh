@@ -23,13 +23,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	nodeclient "github.com/spacemeshos/go-spacemesh/api/node/client"
-	"github.com/spacemeshos/go-spacemesh/beacon"
-	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare4"
@@ -41,10 +38,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
-	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 func GetActivationServiceCommand() *cobra.Command {
@@ -135,19 +130,6 @@ func GetActivationServiceCommand() *cobra.Command {
 		},
 	}
 	c.AddCommand(versionCmd)
-
-	relayCmd := cobra.Command{
-		Use:          "relay",
-		Short:        "Run relay server",
-		SilenceUsage: true,
-		RunE: func(c *cobra.Command, args []string) error {
-			if err := configure(c, *configPath, &conf); err != nil {
-				return err
-			}
-			return runRelay(c.Context(), &conf)
-		},
-	}
-	c.AddCommand(&relayCmd)
 
 	return c
 }
@@ -257,43 +239,6 @@ func (app *App) initActivationServiceServices(ctx context.Context) error {
 	)
 
 	vrfVerifier := signing.NewVRFVerifier()
-	var beaconProtocol *beacon.ProtocolDriver
-
-	trtlCfg := app.Config.Tortoise
-	trtlCfg.LayerSize = layerSize
-	if trtlCfg.BadBeaconVoteDelayLayers == 0 {
-		trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	}
-	trtlopts := []tortoise.Opt{
-		tortoise.WithLogger(app.addLogger(TrtlLogger, lg).Zap()),
-		tortoise.WithConfig(trtlCfg),
-	}
-	if trtlCfg.EnableTracer {
-		app.log.With().Info("tortoise will trace execution")
-		trtlopts = append(trtlopts, tortoise.WithTracer())
-	}
-	app.log.Info("initializing tortoise")
-	start := time.Now()
-	trtl, err := tortoise.Recover(
-		ctx,
-		app.db,
-		app.atxsdata,
-		app.clock.CurrentLayer(), trtlopts...,
-	)
-	if err != nil {
-		return fmt.Errorf("can't recover tortoise state: %w", err)
-	}
-	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
-	if nodeServiceClient == nil {
-		app.eg.Go(func() error {
-			for rst := range beaconProtocol.Results() {
-				events.EmitBeacon(rst.Epoch, rst.Beacon)
-				trtl.OnBeacon(rst.Epoch, rst.Beacon)
-			}
-			app.log.Debug("beacon results watcher exited")
-			return nil
-		})
-	}
 
 	var msh *mesh.Mesh
 	var atxHandler *activation.Handler
@@ -323,9 +268,6 @@ func (app *App) initActivationServiceServices(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("create hare oracle: %w", err)
 	}
-
-	var fetcher *fetch.Fetch
-	var newSyncer *syncer.Syncer
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
@@ -368,7 +310,7 @@ func (app *App) initActivationServiceServices(ctx context.Context) error {
 		app.db,
 		app.atxsdata,
 		goldenATXID,
-		newSyncer,
+		nil,
 		app.validator,
 		activation.PostValidityDelay(app.Config.PostValidDelay),
 	)
@@ -479,41 +421,14 @@ func (app *App) initActivationServiceServices(ctx context.Context) error {
 	}
 
 	app.mesh = msh
-	app.syncer = newSyncer
 	app.atxBuilder = atxBuilder
 	app.atxHandler = atxHandler
 	app.poetDb = poetDb
-	app.fetcher = fetcher
-	app.beaconProtocol = beaconProtocol
 
 	return nil
 }
 
 func (app *App) startActivationServiceServices(ctx context.Context) error {
-	if app.fetcher != nil {
-		if err := app.fetcher.Start(); err != nil {
-			return fmt.Errorf("start fetcher: %w", err)
-		}
-	}
-	if app.syncer != nil {
-		app.syncer.Start()
-	}
-
-	if app.beaconProtocol != nil {
-		app.beaconProtocol.Start(ctx)
-	}
-
-	if app.blockGen != nil {
-		app.blockGen.Start(ctx)
-	}
-	if app.certifier != nil {
-		app.certifier.Start(ctx)
-	}
-	if app.proposalBuilder != nil {
-		app.eg.Go(func() error {
-			return app.proposalBuilder.Run(ctx)
-		})
-	}
 	if app.remoteProposalBuilder != nil {
 		app.eg.Go(func() error {
 			return app.remoteProposalBuilder.Run(ctx)
@@ -534,13 +449,6 @@ func (app *App) startActivationServiceServices(ctx context.Context) error {
 		}
 	}
 
-	if app.ptimesync != nil {
-		app.ptimesync.Start()
-	}
-
-	if app.updater != nil {
-		app.listenToUpdates(ctx)
-	}
 	return nil
 }
 
@@ -564,13 +472,6 @@ func (app *App) StartActivationService(ctx context.Context) error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
-	// TODO: pass app.eg to components and wait for them collectively
-	if app.ptimesync != nil {
-		app.eg.Go(func() error {
-			app.errCh <- app.ptimesync.Wait()
-			return nil
-		})
-	}
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
@@ -644,14 +545,6 @@ func (app *App) startActivationServiceSynchronous(ctx context.Context) (err erro
 		}
 	}
 
-	var preserved *checkpoint.PreservedData
-	if app.Config.Recovery.Uri != "" {
-		preserved, err = app.loadCheckpoint(ctx)
-		if err != nil {
-			return fmt.Errorf("loading checkpoint: %w", err)
-		}
-	}
-
 	/* Initialize all protocol services */
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(app.Config.LayerDuration),
@@ -690,18 +583,7 @@ func (app *App) startActivationServiceSynchronous(ctx context.Context) (err erro
 		return fmt.Errorf("start services: %w", err)
 	}
 
-	// need post verifying service to start first
-	if preserved != nil {
-		app.preserveAfterRecovery(ctx, *preserved)
-	} else {
-		app.log.Info("no need to preserve data after recovery")
-	}
-
 	if err := app.startAPIServices(ctx); err != nil {
-		return err
-	}
-
-	if err := app.launchStandalone(ctx); err != nil {
 		return err
 	}
 
