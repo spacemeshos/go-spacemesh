@@ -54,7 +54,7 @@ const (
 	MalfeasanceV2Alpha1       Service = "malfeasance_v2alpha1"
 	MalfeasanceStreamV2Alpha1 Service = "malfeasance_stream_v2alpha1"
 
-	// v2beta1
+	// v2beta1.
 	ActivationV2Beta1        Service = "activation_v2beta1"
 	ActivationStreamV2Beta1  Service = "activation_stream_v2beta1"
 	RewardV2Beta1            Service = "reward_v2beta1"

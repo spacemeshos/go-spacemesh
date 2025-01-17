@@ -3,9 +3,8 @@ package v2beta1
 import (
 	"context"
 
-	spacemeshv2beta1 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
-
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	spacemeshv2beta1 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
