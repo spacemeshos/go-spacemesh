@@ -164,7 +164,7 @@ func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string,
 }
 
 func cmdWithRun(run func(*cobra.Command, []string) error) *cobra.Command {
-	c := GetCommand()
+	c := GetNodeServiceCommand()
 	c.RunE = run
 	return c
 }
