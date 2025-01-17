@@ -118,7 +118,7 @@ func GetSmeshingServiceCommand() *cobra.Command {
 		},
 	}
 
-	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
+	configPath = cmd.AddNodeServiceFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
 	versionCmd := &cobra.Command{
@@ -456,9 +456,6 @@ func (app *App) startSmeshingServiceServices(ctx context.Context) error {
 // initializes all relevant services according to command line
 // arguments provided.
 func (app *App) StartSmeshingService(ctx context.Context) error {
-	if !app.Config.IsNodeServiceClientMode() {
-		return errors.New("attempt to start smeshing service using node service configuration")
-	}
 	if err := app.verifyVersionUpgrades(); err != nil {
 		return fmt.Errorf("version upgrade verification failed: %w", err)
 	}

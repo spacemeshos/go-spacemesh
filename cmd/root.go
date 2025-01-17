@@ -11,13 +11,26 @@ import (
 	"github.com/spacemeshos/go-spacemesh/node/flags"
 )
 
-func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
+func AddNodeServiceFlags(flagSet *pflag.FlagSet, cfg *config.Config) *string {
+	configPath := AddCommonFlags(flagSet, cfg)
+	return configPath
+}
+
+func AddSmeshingServiceFlags(flagSet *pflag.FlagSet, cfg *config.Config) *string {
+	configPath := AddCommonFlags(flagSet, cfg)
+
+	flagSet.StringVar(&cfg.NodeServiceAddress, "node-service-address", "", "address of the Node Service to connect to")
+
+	return configPath
+}
+
+func AddCommonFlags(flagSet *pflag.FlagSet, cfg *config.Config) *string {
 	// A workaround to keep the original config intact to avoid
 	// overwriting it with the default values.
 	original := *cfg
 	defer func() { *cfg = original }()
 
-	configPath = flagSet.StringP("config", "c", "", "load configuration from file")
+	configPath := flagSet.StringP("config", "c", "", "load configuration from file")
 	flagSet.StringVarP(&cfg.Preset, "preset", "p",
 		"", fmt.Sprintf("preset overwrites default values of the config. options %s", presets.Options()),
 	)
@@ -93,8 +106,6 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	flagSet.BoolVar(&cfg.NoMainOverride, "no-main-override",
 		cfg.NoMainOverride, "force 'nomain' builds to run on the mainnet",
 	)
-
-	flagSet.StringVar(&cfg.NodeServiceAddress, "node-service-address", "", "address of the Node Service to connect to")
 
 	/** ======================== P2P Flags ========================== **/
 
@@ -299,6 +310,9 @@ func AddFlags(flagSet *pflag.FlagSet, cfg *config.Config) (configPath *string) {
 	})
 
 	/**======================== Smeshing Flags ========================== **/
+	// TODO: move there parameters to AddSmeshingServiceFlags but that will
+	// break "legacy" mode so that can be done only during/after
+	// https://github.com/spacemeshos/go-spacemesh/issues/6638
 
 	flagSet.BoolVar(&cfg.SMESHING.Start, "smeshing-start", cfg.SMESHING.Start, "")
 	flagSet.StringVar(&cfg.SMESHING.CoinbaseAccount, "smeshing-coinbase",
