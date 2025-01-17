@@ -165,6 +165,7 @@ jobs:
             --metadata disable-legacy-endpoints=true \
             --service-account ${{ secrets.CI_GKE_NODEPOOL_SA }} \
             --project ${{ secrets.CI_GCP_PROJECT_ID }} \
+            --node-version ${{ secrets.CI_GKE_NODEPOOL_VERSION }} \
             --quiet
 
           echo "Node pool created: $NODE_POOL_NAME"
