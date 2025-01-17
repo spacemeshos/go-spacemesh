@@ -2,6 +2,20 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Upgrade information
+
+This release is introducing a new way of starting Spacemesh services through `go-spacemesh`
+binary which is used to start `node` service and/or `smeshing` service.
+
+`smeshing` service requires set `--node-service-address` parameter passed in command line
+pointing to the running `node` service.
+
+### Improvements
+
+* [#6625](https://github.com/spacemeshos/go-spacemesh/pull/6625) Add command for starting services
+
 ## v1.7.10
 
 ### Upgrade information

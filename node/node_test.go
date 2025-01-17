@@ -164,7 +164,7 @@ func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string,
 }
 
 func cmdWithRun(run func(*cobra.Command, []string) error) *cobra.Command {
-	c := GetCommand()
+	c := GetNodeServiceCommand()
 	c.RunE = run
 	return c
 }
@@ -674,7 +674,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		conf := config.Config{}
 		var flags pflag.FlagSet
-		cmd.AddFlags(&flags, &conf)
+		cmd.AddNodeServiceFlags(&flags, &conf)
 
 		const lowPeers = 1234
 		require.NoError(t, LoadConfig(&conf, name, nil))
@@ -775,7 +775,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			conf := config.MainnetConfig()
 			var flags pflag.FlagSet
-			cmd.AddFlags(&flags, &conf)
+			cmd.AddNodeServiceFlags(&flags, &conf)
 
 			require.NoError(t, LoadConfig(&conf, "", nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
@@ -800,7 +800,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			conf := config.Config{}
 			var flags pflag.FlagSet
-			cmd.AddFlags(&flags, &conf)
+			cmd.AddNodeServiceFlags(&flags, &conf)
 
 			require.NoError(t, LoadConfig(&conf, name, nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
@@ -848,7 +848,7 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
 			conf := config.Config{}
 			var flags pflag.FlagSet
-			cmd.AddFlags(&flags, &conf)
+			cmd.AddNodeServiceFlags(&flags, &conf)
 
 			err := flags.Parse([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
 			require.ErrorContains(t, err, "failed to parse PoST Provider ID")
@@ -874,7 +874,7 @@ func TestConfig_Load(t *testing.T) {
 	t.Run("missing default doesn't fail", func(t *testing.T) {
 		conf := config.Config{}
 		var flags pflag.FlagSet
-		cmd.AddFlags(&flags, &conf)
+		cmd.AddNodeServiceFlags(&flags, &conf)
 
 		require.NoError(t, LoadConfig(&conf, "", nil))
 		require.NoError(t, flags.Parse([]string{}))
@@ -888,7 +888,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		},
 	}
 	var flags pflag.FlagSet
-	cmd.AddFlags(&flags, &conf)
+	cmd.AddNodeServiceFlags(&flags, &conf)
 
 	const value = 100
 	keys := []string{"0x03", "0x04"}

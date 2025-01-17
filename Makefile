@@ -89,7 +89,7 @@ gen-p2p-identity:
 
 go-spacemesh: get-libs
 	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
-.PHONY: go-spacemesh gen-p2p-identity
+.PHONY: go-spacemesh
 
 bootstrapper:
 	cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .

@@ -39,8 +39,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
-	"github.com/spacemeshos/go-spacemesh/api/node/client"
-	nodeclient "github.com/spacemeshos/go-spacemesh/api/node/client"
 	nodeserver "github.com/spacemeshos/go-spacemesh/api/node/server"
 	"github.com/spacemeshos/go-spacemesh/api/proxy"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -149,12 +147,12 @@ const (
 	NodeServiceClientLogger = "nodeServiceClient"
 )
 
-func GetCommand() *cobra.Command {
+func GetNodeServiceCommand() *cobra.Command {
 	conf := config.MainnetConfig()
 	var configPath *string
 	c := &cobra.Command{
 		Use:   "node",
-		Short: "start node",
+		Short: "Start node service",
 		RunE: func(c *cobra.Command, args []string) error {
 			if err := configure(c, *configPath, &conf); err != nil {
 				return err
@@ -225,7 +223,7 @@ func GetCommand() *cobra.Command {
 		},
 	}
 
-	configPath = cmd.AddFlags(c.PersistentFlags(), &conf)
+	configPath = cmd.AddNodeServiceFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
 	versionCmd := &cobra.Command{
@@ -611,31 +609,10 @@ func (app *App) initServices(ctx context.Context) error {
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
-	var nodeServiceClient *client.NodeService
-	if server := app.Config.BaseConfig.NodeServiceAddress; server != "" {
-		logger := app.addLogger(NodeServiceClientLogger, lg).Zap()
-		cfg := &nodeclient.Config{
-			RetryWaitMin: time.Millisecond * 500,
-			RetryWaitMax: time.Second,
-			RetryMax:     10,
-		}
-		var err error
-		nodeServiceClient, err = nodeclient.NewNodeServiceClient(server, logger, cfg)
-		if err != nil {
-			return fmt.Errorf("creating node service client: %w", err)
-		}
-	}
-
-	poetDbOpts := []activation.PoetDbOption{
-		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
-	}
-	if nodeServiceClient != nil {
-		poetDbOpts = append(poetDbOpts, activation.WithRemotePoetStorer(nodeServiceClient))
-	}
 	poetDb, err := activation.NewPoetDb(
 		app.db,
 		app.addLogger(PoetDbLogger, lg).Zap(),
-		poetDbOpts...,
+		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
 	)
 	if err != nil {
 		return fmt.Errorf("creating poet db: %w", err)
@@ -673,34 +650,32 @@ func (app *App) initServices(ctx context.Context) error {
 
 	var state *vm.VM
 
-	if nodeServiceClient == nil {
-		cfg := vm.DefaultConfig()
-		cfg.GasLimit = app.Config.BlockGasLimit
-		cfg.GenesisID = app.Config.Genesis.GenesisID()
-		state = vm.New(app.db,
-			vm.WithConfig(cfg),
-			vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
-		app.conState = txs.NewConservativeState(state, app.db,
-			txs.WithCSConfig(txs.CSConfig{
-				BlockGasLimit:     app.Config.BlockGasLimit,
-				NumTXsPerProposal: app.Config.TxsPerProposal,
-			}),
-			txs.WithLogger(app.addLogger(ConStateLogger, lg).Zap()))
+	cfg := vm.DefaultConfig()
+	cfg.GasLimit = app.Config.BlockGasLimit
+	cfg.GenesisID = app.Config.Genesis.GenesisID()
+	state = vm.New(app.db,
+		vm.WithConfig(cfg),
+		vm.WithLogger(app.addLogger(VMLogger, lg).Zap()))
+	app.conState = txs.NewConservativeState(state, app.db,
+		txs.WithCSConfig(txs.CSConfig{
+			BlockGasLimit:     app.Config.BlockGasLimit,
+			NumTXsPerProposal: app.Config.TxsPerProposal,
+		}),
+		txs.WithLogger(app.addLogger(ConStateLogger, lg).Zap()))
 
-		genesisAccts := app.Config.Genesis.ToAccounts()
-		if len(genesisAccts) > 0 {
-			exists, err := state.AccountExists(genesisAccts[0].Address)
-			if err != nil {
-				return fmt.Errorf(
-					"failed to check genesis account %v: %w",
-					genesisAccts[0].Address,
-					err,
-				)
-			}
-			if !exists {
-				if err = state.ApplyGenesis(genesisAccts); err != nil {
-					return fmt.Errorf("setup genesis: %w", err)
-				}
+	genesisAccts := app.Config.Genesis.ToAccounts()
+	if len(genesisAccts) > 0 {
+		exists, err := state.AccountExists(genesisAccts[0].Address)
+		if err != nil {
+			return fmt.Errorf(
+				"failed to check genesis account %v: %w",
+				genesisAccts[0].Address,
+				err,
+			)
+		}
+		if !exists {
+			if err = state.ApplyGenesis(genesisAccts); err != nil {
+				return fmt.Errorf("setup genesis: %w", err)
 			}
 		}
 	}
@@ -715,20 +690,17 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 
 	vrfVerifier := signing.NewVRFVerifier()
-	var beaconProtocol *beacon.ProtocolDriver
-	if nodeServiceClient == nil {
-		beaconProtocol = beacon.New(
-			app.host,
-			app.edVerifier,
-			vrfVerifier,
-			app.cachedDB,
-			app.clock,
-			beacon.WithConfig(app.Config.Beacon),
-			beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
-		)
-		for _, sig := range app.signers {
-			beaconProtocol.Register(sig)
-		}
+	beaconProtocol := beacon.New(
+		app.host,
+		app.edVerifier,
+		vrfVerifier,
+		app.cachedDB,
+		app.clock,
+		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		beaconProtocol.Register(sig)
 	}
 
 	trtlCfg := app.Config.Tortoise
@@ -756,50 +728,43 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("can't recover tortoise state: %w", err)
 	}
 	app.log.With().Info("tortoise initialized", log.Duration("duration", time.Since(start)))
-	if nodeServiceClient == nil {
-		app.eg.Go(func() error {
-			for rst := range beaconProtocol.Results() {
-				events.EmitBeacon(rst.Epoch, rst.Beacon)
-				trtl.OnBeacon(rst.Epoch, rst.Beacon)
-			}
-			app.log.Debug("beacon results watcher exited")
-			return nil
-		})
-	}
+	app.eg.Go(func() error {
+		for rst := range beaconProtocol.Results() {
+			events.EmitBeacon(rst.Epoch, rst.Beacon)
+			trtl.OnBeacon(rst.Epoch, rst.Beacon)
+		}
+		app.log.Debug("beacon results watcher exited")
+		return nil
+	})
 
 	var msh *mesh.Mesh
-	var executor *mesh.Executor
-	var atxHandler *activation.Handler
 
-	if nodeServiceClient == nil {
-		executor = mesh.NewExecutor(
-			app.db,
-			app.atxsdata,
-			state,
-			app.conState,
-			app.addLogger(ExecutorLogger, lg).Zap(),
-		)
-		mlog := app.addLogger(MeshLogger, lg).Zap()
-		msh, err = mesh.NewMesh(app.db, app.atxsdata, trtl, executor, app.conState, mlog)
-		if err != nil {
-			return fmt.Errorf("create mesh: %w", err)
-		}
-
-		app.eg.Go(func() error {
-			msh.Start(ctx)
-			return nil
-		})
-
-		pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
-		if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
-			return fmt.Errorf("pruner %w", err)
-		}
-		app.eg.Go(func() error {
-			prune.Run(ctx, pruner, app.clock, app.Config.DatabasePruneInterval)
-			return nil
-		})
-
+	executor := mesh.NewExecutor(
+		app.db,
+		app.atxsdata,
+		state,
+		app.conState,
+		app.addLogger(ExecutorLogger, lg).Zap(),
+	)
+	mlog := app.addLogger(MeshLogger, lg).Zap()
+	msh, err = mesh.NewMesh(app.db, app.atxsdata, trtl, executor, app.conState, mlog)
+	if err != nil {
+		return fmt.Errorf("create mesh: %w", err)
 	}
+
+	app.eg.Go(func() error {
+		msh.Start(ctx)
+		return nil
+	})
+
+	pruner := prune.New(app.db, app.Config.Tortoise.Hdist, app.Config.PruneActivesetsFrom, prune.WithLogger(mlog))
+	if err := pruner.Prune(app.clock.CurrentLayer()); err != nil {
+		return fmt.Errorf("pruner %w", err)
+	}
+	app.eg.Go(func() error {
+		prune.Run(ctx, pruner, app.clock, app.Config.DatabasePruneInterval)
+		return nil
+	})
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
@@ -812,33 +777,20 @@ func (app *App) initServices(ctx context.Context) error {
 		)
 	}
 
-	if nodeServiceClient == nil {
-		app.txHandler = txs.NewTxHandler(
-			app.conState,
-			app.host.ID(),
-			app.addLogger(TxHandlerLogger, lg).Zap(),
-		)
-	}
+	app.txHandler = txs.NewTxHandler(
+		app.conState,
+		app.host.ID(),
+		app.addLogger(TxHandlerLogger, lg).Zap(),
+	)
 
-	extraOpts := []eligibility.Opt{
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
-	}
-	var bcnGetter eligibility.BeaconProvider
-	if nodeServiceClient != nil {
-		bcnGetter = nodeServiceClient
-		extraOpts = append(extraOpts, eligibility.WithTotalWeightFunc(nodeServiceClient.TotalWeight))
-		extraOpts = append(extraOpts, eligibility.WithMinerWeightFunc(nodeServiceClient.MinerWeight))
-	} else {
-		bcnGetter = &beaconGetter{beaconProtocol}
-	}
 	hOracle, err := eligibility.New(
-		bcnGetter,
+		&beaconGetter{beaconProtocol},
 		app.db,
 		app.atxsdata,
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
-		extraOpts...,
+		eligibility.WithConfig(app.Config.HareEligibility),
+		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
 	)
 	if err != nil {
 		return fmt.Errorf("create hare oracle: %w", err)
@@ -851,104 +803,101 @@ func (app *App) initServices(ctx context.Context) error {
 	var proposalsStore *store.Store
 	patrol := layerpatrol.New()
 
-	if nodeServiceClient == nil {
-		bscfg := app.Config.Bootstrap
-		bscfg.DataDir = app.Config.DataDir()
-		bscfg.Interval = app.Config.LayerDuration / 5
-		app.updater = bootstrap.New(
-			app.clock,
-			bootstrap.WithConfig(bscfg),
-			bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
-		)
+	bscfg := app.Config.Bootstrap
+	bscfg.DataDir = app.Config.DataDir()
+	bscfg.Interval = app.Config.LayerDuration / 5
+	app.updater = bootstrap.New(
+		app.clock,
+		bootstrap.WithConfig(bscfg),
+		bootstrap.WithLogger(app.addLogger(BootstrapLogger, lg).Zap()),
+	)
 
-		if app.Config.Certificate.CommitteeSize == 0 {
-			app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
-				log.Uint16("size", app.Config.HARE3.Committee))
-			app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
-		}
-		app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
-		app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
-		app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
-		certifier = blocks.NewCertifier(
-			app.db,
-			hOracle,
-			app.edVerifier,
-			app.host,
-			app.clock,
-			beaconProtocol,
-			trtl,
-			blocks.WithCertConfig(app.Config.Certificate),
-			blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
-		)
-		for _, sig := range app.signers {
-			certifier.Register(sig)
-		}
-
-		proposalsStore = store.New(
-			store.WithEvictedLayer(app.clock.CurrentLayer()),
-			store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
-			store.WithCapacity(app.Config.Tortoise.Zdist+1),
-		)
-		peerCache := peers.New()
-		flog := app.addLogger(Fetcher, lg)
-		fetcher, err = fetch.NewFetch(
-			app.cachedDB,
-			proposalsStore,
-			app.host,
-			peerCache,
-			fetch.WithContext(ctx),
-			fetch.WithConfig(app.Config.FETCH),
-			fetch.WithLogger(flog.Zap()),
-		)
-		if err != nil {
-			return fmt.Errorf("create fetcher: %w", err)
-		}
-		app.eg.Go(func() error {
-			return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
-		})
-
-		blockHandler = blocks.NewHandler(fetcher, app.db, trtl, msh,
-			blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()))
-
-		syncerConf := app.Config.Sync
-		syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
-		syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
-		syncerConf.Standalone = app.Config.Standalone
-
-		if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
-			app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
-		}
-		app.syncLogger = app.addLogger(SyncLogger, lg)
-		newSyncer, err = syncer.NewSyncer(
-			app.cachedDB,
-			app.clock,
-			msh,
-			trtl,
-			fetcher,
-			peerCache,
-			app.host,
-			patrol,
-			certifier,
-			atxsync.New(fetcher, app.db, app.localDB,
-				atxsync.WithConfig(app.Config.Sync.AtxSync),
-				atxsync.WithLogger(app.syncLogger.Zap()),
-			),
-			malsync.New(fetcher, app.db, app.localDB,
-				malsync.WithConfig(app.Config.Sync.MalSync),
-				malsync.WithLogger(app.syncLogger.Zap()),
-				malsync.WithPeerErrMetric(syncer.MalPeerError),
-			),
-			syncer.WithConfig(syncerConf),
-			syncer.WithLogger(app.syncLogger.Zap()),
-		)
-		if err != nil {
-			return fmt.Errorf("create syncer: %w", err)
-		}
-		// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-		beaconProtocol.SetSyncState(newSyncer)
-		hOracle.SetSync(newSyncer)
-
+	if app.Config.Certificate.CommitteeSize == 0 {
+		app.log.With().Warning("certificate committee size is not set, defaulting to hare committee size",
+			log.Uint16("size", app.Config.HARE3.Committee))
+		app.Config.Certificate.CommitteeSize = int(app.Config.HARE3.Committee)
 	}
+	app.Config.Certificate.CertifyThreshold = app.Config.Certificate.CommitteeSize/2 + 1
+	app.Config.Certificate.LayerBuffer = app.Config.Tortoise.Zdist
+	app.Config.Certificate.NumLayersToKeep = app.Config.Tortoise.Zdist * 2
+	certifier = blocks.NewCertifier(
+		app.db,
+		hOracle,
+		app.edVerifier,
+		app.host,
+		app.clock,
+		beaconProtocol,
+		trtl,
+		blocks.WithCertConfig(app.Config.Certificate),
+		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
+	)
+	for _, sig := range app.signers {
+		certifier.Register(sig)
+	}
+
+	proposalsStore = store.New(
+		store.WithEvictedLayer(app.clock.CurrentLayer()),
+		store.WithLogger(app.addLogger(ProposalStoreLogger, lg).Zap()),
+		store.WithCapacity(app.Config.Tortoise.Zdist+1),
+	)
+	peerCache := peers.New()
+	flog := app.addLogger(Fetcher, lg)
+	fetcher, err = fetch.NewFetch(
+		app.cachedDB,
+		proposalsStore,
+		app.host,
+		peerCache,
+		fetch.WithContext(ctx),
+		fetch.WithConfig(app.Config.FETCH),
+		fetch.WithLogger(flog.Zap()),
+	)
+	if err != nil {
+		return fmt.Errorf("create fetcher: %w", err)
+	}
+	app.eg.Go(func() error {
+		return blockssync.Sync(ctx, flog.Zap(), msh.MissingBlocks(), fetcher)
+	})
+
+	blockHandler = blocks.NewHandler(fetcher, app.db, trtl, msh,
+		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg).Zap()))
+
+	syncerConf := app.Config.Sync
+	syncerConf.HareDelayLayers = app.Config.Tortoise.Zdist
+	syncerConf.SyncCertDistance = app.Config.Tortoise.Hdist
+	syncerConf.Standalone = app.Config.Standalone
+
+	if app.Config.P2P.MinPeers < app.Config.Sync.MalSync.MinSyncPeers {
+		app.Config.Sync.MalSync.MinSyncPeers = max(1, app.Config.P2P.MinPeers)
+	}
+	app.syncLogger = app.addLogger(SyncLogger, lg)
+	newSyncer, err = syncer.NewSyncer(
+		app.cachedDB,
+		app.clock,
+		msh,
+		trtl,
+		fetcher,
+		peerCache,
+		app.host,
+		patrol,
+		certifier,
+		atxsync.New(fetcher, app.db, app.localDB,
+			atxsync.WithConfig(app.Config.Sync.AtxSync),
+			atxsync.WithLogger(app.syncLogger.Zap()),
+		),
+		malsync.New(fetcher, app.db, app.localDB,
+			malsync.WithConfig(app.Config.Sync.MalSync),
+			malsync.WithLogger(app.syncLogger.Zap()),
+			malsync.WithPeerErrMetric(syncer.MalPeerError),
+		),
+		syncer.WithConfig(syncerConf),
+		syncer.WithLogger(app.syncLogger.Zap()),
+	)
+	if err != nil {
+		return fmt.Errorf("create syncer: %w", err)
+	}
+	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	beaconProtocol.SetSyncState(newSyncer)
+	hOracle.SetSync(newSyncer)
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
@@ -958,176 +907,140 @@ func (app *App) initServices(ctx context.Context) error {
 
 	// should be removed after hare4 transition is complete
 	app.hareResultsChan = make(chan hare4.ConsensusOutput, 32)
-	if nodeServiceClient != nil {
-		app.remoteHare = hare3.NewRemoteHare(
-			app.Config.HARE3,
+	if app.Config.HARE3.Enable {
+		app.hare3 = hare3.New(
 			app.clock,
-			nodeServiceClient,
+			app.host,
+			app.db,
+			app.atxsdata,
+			proposalsStore,
+			app.edVerifier,
 			hOracle,
-			logger,
+			newSyncer,
+			patrol,
+			hare3.WithLogger(logger),
+			hare3.WithConfig(app.Config.HARE3),
+			hare3.WithResultsChan(app.hareResultsChan),
 		)
 		for _, sig := range app.signers {
-			app.remoteHare.Register(sig)
+			app.hare3.Register(sig)
 		}
-		app.remoteHare.Start(ctx)
-	} else {
-		if app.Config.HARE3.Enable {
-			app.hare3 = hare3.New(
-				app.clock,
-				app.host,
-				app.db,
-				app.atxsdata,
-				proposalsStore,
-				app.edVerifier,
-				hOracle,
-				newSyncer,
-				patrol,
-				hare3.WithLogger(logger),
-				hare3.WithConfig(app.Config.HARE3),
-				hare3.WithResultsChan(app.hareResultsChan),
+		app.hare3.Start()
+		app.eg.Go(func() error {
+			compat.ReportWeakcoin(
+				ctx,
+				logger,
+				app.hare3.Coins(),
+				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
 			)
-			for _, sig := range app.signers {
-				app.hare3.Register(sig)
-			}
-			app.hare3.Start()
-			app.eg.Go(func() error {
-				compat.ReportWeakcoin(
-					ctx,
-					logger,
-					app.hare3.Coins(),
-					tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-				)
-				return nil
-			})
-		}
-
-		if app.Config.HARE4.Enable {
-			app.hare4 = hare4.New(
-				app.clock,
-				app.host,
-				app.db,
-				app.atxsdata,
-				proposalsStore,
-				app.edVerifier,
-				hOracle,
-				newSyncer,
-				patrol,
-				app.host,
-				hare4.WithLogger(logger),
-				hare4.WithConfig(app.Config.HARE4),
-				hare4.WithResultsChan(app.hareResultsChan),
-			)
-			for _, sig := range app.signers {
-				app.hare4.Register(sig)
-			}
-			app.hare4.Start()
-			app.eg.Go(func() error {
-				compat.ReportWeakcoin(
-					ctx,
-					logger,
-					app.hare4.Coins(),
-					tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
-				)
-				return nil
-			})
-		}
+			return nil
+		})
 	}
+
+	if app.Config.HARE4.Enable {
+		app.hare4 = hare4.New(
+			app.clock,
+			app.host,
+			app.db,
+			app.atxsdata,
+			proposalsStore,
+			app.edVerifier,
+			hOracle,
+			newSyncer,
+			patrol,
+			app.host,
+			hare4.WithLogger(logger),
+			hare4.WithConfig(app.Config.HARE4),
+			hare4.WithResultsChan(app.hareResultsChan),
+		)
+		for _, sig := range app.signers {
+			app.hare4.Register(sig)
+		}
+		app.hare4.Start()
+		app.eg.Go(func() error {
+			compat.ReportWeakcoin(
+				ctx,
+				logger,
+				app.hare4.Coins(),
+				tortoiseWeakCoin{db: app.cachedDB, tortoise: trtl},
+			)
+			return nil
+		})
+	}
+
 	propHare := &proposalConsumerHare{
 		hare3:          app.hare3,
 		h3DisableLayer: app.Config.HARE3.DisableLayer,
 		hare4:          app.hare4,
 	}
 
-	var proposalListener *proposals.Handler
+	proposalListener := proposals.NewHandler(
+		app.db,
+		app.atxsdata,
+		propHare,
+		app.edVerifier,
+		app.host,
+		fetcher,
+		beaconProtocol,
+		msh,
+		trtl,
+		vrfVerifier,
+		app.clock,
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg).Zap()),
+		proposals.WithConfig(proposals.Config{
+			LayerSize:              layerSize,
+			LayersPerEpoch:         layersPerEpoch,
+			GoldenATXID:            goldenATXID,
+			MaxExceptions:          trtlCfg.MaxExceptions,
+			Hdist:                  trtlCfg.Hdist,
+			MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
+		}),
+	)
 
-	if nodeServiceClient == nil {
-		proposalListener = proposals.NewHandler(
-			app.db,
-			app.atxsdata,
-			propHare,
-			app.edVerifier,
-			app.host,
-			fetcher,
-			beaconProtocol,
-			msh,
-			trtl,
-			vrfVerifier,
-			app.clock,
-			proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg).Zap()),
-			proposals.WithConfig(proposals.Config{
-				LayerSize:              layerSize,
-				LayersPerEpoch:         layersPerEpoch,
-				GoldenATXID:            goldenATXID,
-				MaxExceptions:          trtlCfg.MaxExceptions,
-				Hdist:                  trtlCfg.Hdist,
-				MinimalActiveSetWeight: trtlCfg.MinimalActiveSetWeight,
-			}),
-		)
-
-		app.blockGen = blocks.NewGenerator(
-			app.db,
-			app.atxsdata,
-			proposalsStore,
-			executor,
-			msh,
-			fetcher,
-			certifier,
-			patrol,
-			blocks.WithConfig(blocks.Config{
-				BlockGasLimit:      app.Config.BlockGasLimit,
-				OptFilterThreshold: app.Config.OptFilterThreshold,
-				GenBlockInterval:   500 * time.Millisecond,
-			}),
-			blocks.WithHareOutputChan(app.hareResultsChan),
-			blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg).Zap()),
-		)
-	}
+	app.blockGen = blocks.NewGenerator(
+		app.db,
+		app.atxsdata,
+		proposalsStore,
+		executor,
+		msh,
+		fetcher,
+		certifier,
+		patrol,
+		blocks.WithConfig(blocks.Config{
+			BlockGasLimit:      app.Config.BlockGasLimit,
+			OptFilterThreshold: app.Config.OptFilterThreshold,
+			GenBlockInterval:   500 * time.Millisecond,
+		}),
+		blocks.WithHareOutputChan(app.hareResultsChan),
+		blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg).Zap()),
+	)
 
 	minerGoodAtxPct := 90
 	if app.Config.MinerGoodAtxsPercent > 0 {
 		minerGoodAtxPct = app.Config.MinerGoodAtxsPercent
 	}
-	var proposalBuilder *miner.ProposalBuilder
-	var remoteProposalBuilder *miner.RemoteProposalBuilder
-	if nodeServiceClient != nil {
-		remoteProposalBuilder = miner.NewRemoteBuilder(
-			app.clock,
-			nodeServiceClient,
-			nodeServiceClient,
-			nodeServiceClient,
-			layerSize,
-			layersPerEpoch,
-			app.addLogger(ProposalBuilderLogger, lg).Zap(),
-			app.idStates,
-		)
-		for _, sig := range app.signers {
-			remoteProposalBuilder.Register(sig)
-		}
-		app.remoteProposalBuilder = remoteProposalBuilder
-	} else {
-		proposalBuilder = miner.New(
-			app.clock,
-			app.db,
-			app.localDB,
-			app.atxsdata,
-			app.host,
-			trtl,
-			newSyncer,
-			app.conState,
-			miner.WithLayerSize(layerSize),
-			miner.WithLayerPerEpoch(layersPerEpoch),
-			miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
-			miner.WithHdist(app.Config.Tortoise.Hdist),
-			miner.WithNetworkDelay(app.Config.ATXGradeDelay),
-			miner.WithMinGoodAtxPercent(minerGoodAtxPct),
-			miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg).Zap()),
-			miner.WithActivesetPreparation(app.Config.ActiveSet),
-		)
-		for _, sig := range app.signers {
-			proposalBuilder.Register(sig)
-		}
-		app.proposalBuilder = proposalBuilder
+	proposalBuilder := miner.New(
+		app.clock,
+		app.db,
+		app.localDB,
+		app.atxsdata,
+		app.host,
+		trtl,
+		newSyncer,
+		app.conState,
+		miner.WithLayerSize(layerSize),
+		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithMinimalActiveSetWeight(app.Config.Tortoise.MinimalActiveSetWeight),
+		miner.WithHdist(app.Config.Tortoise.Hdist),
+		miner.WithNetworkDelay(app.Config.ATXGradeDelay),
+		miner.WithMinGoodAtxPercent(minerGoodAtxPct),
+		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg).Zap()),
+		miner.WithActivesetPreparation(app.Config.ActiveSet),
+	)
+	for _, sig := range app.signers {
+		proposalBuilder.Register(sig)
 	}
+	app.proposalBuilder = proposalBuilder
 
 	postSetupMgr, err := activation.NewPostSetupManager(
 		app.Config.POST,
@@ -1194,43 +1107,31 @@ func (app *App) initServices(ctx context.Context) error {
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 
-	var (
-		atxBuilderLog = app.addLogger(ATXBuilderLogger, lg).Zap()
-		atxService    activation.AtxService
-		atxPublisher  pubsub.Publisher
-		syncer        activation.Syncer
-	)
-	if nodeServiceClient != nil {
-		atxService = nodeServiceClient
-		atxPublisher = nodeServiceClient
-		syncer = alwaysSyncedSyncer{}
-	} else {
-		trustedIDs := make([]types.NodeID, 0, len(app.signers))
-		for _, sig := range app.signers {
-			trustedIDs = append(trustedIDs, sig.NodeID())
-		}
-		atxService = activation.NewDBAtxService(
-			app.db,
-			goldenATXID,
-			app.atxsdata,
-			app.validator,
-			atxBuilderLog,
-			activation.WithPostValidityDelay(app.Config.PostValidDelay),
-			activation.WithTrustedIDs(trustedIDs...),
-		)
-		atxPublisher = app.host
-		syncer = newSyncer
+	atxBuilderLog := app.addLogger(ATXBuilderLogger, lg).Zap()
+
+	trustedIDs := make([]types.NodeID, 0, len(app.signers))
+	for _, sig := range app.signers {
+		trustedIDs = append(trustedIDs, sig.NodeID())
 	}
+	atxService := activation.NewDBAtxService(
+		app.db,
+		goldenATXID,
+		app.atxsdata,
+		app.validator,
+		atxBuilderLog,
+		activation.WithPostValidityDelay(app.Config.PostValidDelay),
+		activation.WithTrustedIDs(trustedIDs...),
+	)
 
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
 		app.localDB,
 		atxService,
-		atxPublisher,
+		app.host,
 		app.validator,
 		nipostBuilder,
 		app.clock,
-		syncer,
+		newSyncer,
 		atxBuilderLog,
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
@@ -1265,222 +1166,220 @@ func (app *App) initServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
-	if nodeServiceClient == nil {
-		legacyMalfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
-		malfeasanceLogger := app.addLogger(Malfeasance2Logger, lg).Zap()
-		activationMH := activation.NewMalfeasanceHandler(
-			app.cachedDB,
-			legacyMalfeasanceLogger,
-			app.edVerifier,
-		)
-		meshMH := mesh.NewMalfeasanceHandler(
-			app.cachedDB,
-			app.edVerifier,
-			mesh.WithMalfeasanceLogger(legacyMalfeasanceLogger),
-		)
-		hareMH := hare3.NewMalfeasanceHandler(
-			app.cachedDB,
-			app.edVerifier,
-			hare3.WithMalfeasanceLogger(legacyMalfeasanceLogger),
-		)
-		invalidPostMH := activation.NewInvalidPostIndexHandler(
-			app.cachedDB,
-			app.edVerifier,
-			app.postVerifier,
-		)
-		invalidPrevMH := activation.NewInvalidPrevATXHandler(app.cachedDB, app.edVerifier)
+	legacyMalfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
+	malfeasanceLogger := app.addLogger(Malfeasance2Logger, lg).Zap()
+	activationMH := activation.NewMalfeasanceHandler(
+		app.cachedDB,
+		legacyMalfeasanceLogger,
+		app.edVerifier,
+	)
+	meshMH := mesh.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		mesh.WithMalfeasanceLogger(legacyMalfeasanceLogger),
+	)
+	hareMH := hare3.NewMalfeasanceHandler(
+		app.cachedDB,
+		app.edVerifier,
+		hare3.WithMalfeasanceLogger(legacyMalfeasanceLogger),
+	)
+	invalidPostMH := activation.NewInvalidPostIndexHandler(
+		app.cachedDB,
+		app.edVerifier,
+		app.postVerifier,
+	)
+	invalidPrevMH := activation.NewInvalidPrevATXHandler(app.cachedDB, app.edVerifier)
 
-		nodeIDs := make([]types.NodeID, 0, len(app.signers))
-		for _, s := range app.signers {
-			nodeIDs = append(nodeIDs, s.NodeID())
-		}
-		malHandler := malfeasance.NewHandler(
-			app.cachedDB,
-			legacyMalfeasanceLogger,
-			app.host.ID(),
-			nodeIDs,
-			trtl,
-		)
-		malHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
-		malHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
-		malHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
-		malHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
-		malHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
-
-		malHandler2 := malfeasance2.NewHandler(
-			app.cachedDB,
-			malfeasanceLogger,
-			app.host.ID(),
-			nodeIDs,
-			fetcher,
-			trtl,
-		)
-		legacyMalPublisher := malfeasance.NewPublisher(
-			legacyMalfeasanceLogger,
-			app.cachedDB,
-			newSyncer,
-			trtl,
-			app.host,
-		)
-
-		malfeasancePublisher := malfeasance2.NewPublisher(
-			malfeasanceLogger,
-			app.cachedDB,
-			newSyncer,
-			trtl,
-			app.host,
-		)
-		atxMalHandler := activation.NewMalfeasanceHandlerV2(
-			malfeasanceLogger,
-			malfeasancePublisher,
-			app.edVerifier,
-			validator,
-		)
-
-		atxHandler = activation.NewHandler(
-			app.host.ID(),
-			app.cachedDB,
-			app.atxsdata,
-			app.edVerifier,
-			app.clock,
-			fetcher,
-			goldenATXID,
-			validator,
-			atxMalHandler,
-			legacyMalPublisher,
-			beaconProtocol,
-			trtl,
-			app.addLogger(ATXHandlerLogger, lg).Zap(),
-			activation.WithTickSize(app.Config.TickSize),
-			activation.WithAtxVersions(app.Config.AtxVersions),
-		)
-		for _, sig := range app.signers {
-			atxHandler.Register(sig)
-		}
-		malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
-
-		fetcher.SetValidators(
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg.Zap()),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg.Zap()),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(
-					proposalListener.HandleSyncedBallot,
-					app.host,
-					lg.Zap(),
-				),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg.Zap()),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg.Zap()),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(
-					proposalListener.HandleSyncedProposal,
-					app.host,
-					lg.Zap(),
-				),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(
-					app.txHandler.HandleBlockTransaction,
-					app.host,
-					lg.Zap(),
-				),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(
-					app.txHandler.HandleProposalTransaction,
-					app.host,
-					lg.Zap(),
-				),
-			),
-			fetch.ValidatorFunc(
-				pubsub.DropPeerOnSyncValidationReject(
-					malHandler.HandleSyncedMalfeasanceProof,
-					app.host,
-					lg.Zap(),
-				),
-			),
-			// TODO(mafa): add malfeasance2 handler to fetcher
-			// fetch.ValidatorFunc(
-			// 	pubsub.DropPeerOnSyncValidationReject(
-			// 		malHandler2.HandleSyncedMalfeasanceProof,
-			// 		app.host,
-			// 		lg.Zap(),
-			// 	),
-			// ),
-		)
-
-		checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
-			if newSyncer.ListenToGossip() {
-				return nil
-			}
-			return errors.New("not synced for gossip")
-		}
-		checkAtxSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
-			if newSyncer.ListenToATXGossip() {
-				return nil
-			}
-			return errors.New("not synced for gossip")
-		}
-
-		if app.Config.Beacon.RoundsNumber > 0 {
-			app.host.Register(
-				pubsub.BeaconWeakCoinProtocol,
-				pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleWeakCoinProposal),
-				pubsub.WithValidatorInline(true),
-			)
-			app.host.Register(
-				pubsub.BeaconProposalProtocol,
-				pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleProposal),
-				pubsub.WithValidatorInline(true),
-			)
-			app.host.Register(
-				pubsub.BeaconFirstVotesProtocol,
-				pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFirstVotes),
-				pubsub.WithValidatorInline(true),
-			)
-			app.host.Register(
-				pubsub.BeaconFollowingVotesProtocol,
-				pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFollowingVotes),
-				pubsub.WithValidatorInline(true),
-			)
-		}
-
-		app.host.Register(
-			pubsub.ProposalProtocol,
-			pubsub.ChainGossipHandler(checkSynced, proposalListener.HandleProposal),
-		)
-		app.host.Register(
-			pubsub.AtxProtocol,
-			pubsub.ChainGossipHandler(checkAtxSynced, atxHandler.HandleGossipAtx),
-			pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
-		)
-		app.host.Register(
-			pubsub.TxProtocol,
-			pubsub.ChainGossipHandler(checkSynced, app.txHandler.HandleGossipTransaction),
-		)
-		app.host.Register(
-			pubsub.BlockCertify,
-			pubsub.ChainGossipHandler(checkSynced, certifier.HandleCertifyMessage),
-		)
-		app.host.Register(
-			pubsub.MalfeasanceProof,
-			pubsub.ChainGossipHandler(checkAtxSynced, malHandler.HandleMalfeasanceProof),
-		)
-		app.host.Register(
-			pubsub.MalfeasanceProof2,
-			pubsub.ChainGossipHandler(checkAtxSynced, malHandler2.HandleGossip),
-		)
-		app.malfeasanceHandler = malHandler
-		app.malfeasance2Handler = malHandler2
+	nodeIDs := make([]types.NodeID, 0, len(app.signers))
+	for _, s := range app.signers {
+		nodeIDs = append(nodeIDs, s.NodeID())
 	}
+	malHandler := malfeasance.NewHandler(
+		app.cachedDB,
+		legacyMalfeasanceLogger,
+		app.host.ID(),
+		nodeIDs,
+		trtl,
+	)
+	malHandler.RegisterHandler(malfeasance.MultipleATXs, activationMH)
+	malHandler.RegisterHandler(malfeasance.MultipleBallots, meshMH)
+	malHandler.RegisterHandler(malfeasance.HareEquivocation, hareMH)
+	malHandler.RegisterHandler(malfeasance.InvalidPostIndex, invalidPostMH)
+	malHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
+
+	malHandler2 := malfeasance2.NewHandler(
+		app.cachedDB,
+		malfeasanceLogger,
+		app.host.ID(),
+		nodeIDs,
+		fetcher,
+		trtl,
+	)
+	legacyMalPublisher := malfeasance.NewPublisher(
+		legacyMalfeasanceLogger,
+		app.cachedDB,
+		newSyncer,
+		trtl,
+		app.host,
+	)
+
+	malfeasancePublisher := malfeasance2.NewPublisher(
+		malfeasanceLogger,
+		app.cachedDB,
+		newSyncer,
+		trtl,
+		app.host,
+	)
+	atxMalHandler := activation.NewMalfeasanceHandlerV2(
+		malfeasanceLogger,
+		malfeasancePublisher,
+		app.edVerifier,
+		validator,
+	)
+
+	atxHandler := activation.NewHandler(
+		app.host.ID(),
+		app.cachedDB,
+		app.atxsdata,
+		app.edVerifier,
+		app.clock,
+		fetcher,
+		goldenATXID,
+		validator,
+		atxMalHandler,
+		legacyMalPublisher,
+		beaconProtocol,
+		trtl,
+		app.addLogger(ATXHandlerLogger, lg).Zap(),
+		activation.WithTickSize(app.Config.TickSize),
+		activation.WithAtxVersions(app.Config.AtxVersions),
+	)
+	for _, sig := range app.signers {
+		atxHandler.Register(sig)
+	}
+	malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
+
+	fetcher.SetValidators(
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg.Zap()),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg.Zap()),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				proposalListener.HandleSyncedBallot,
+				app.host,
+				lg.Zap(),
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg.Zap()),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg.Zap()),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				proposalListener.HandleSyncedProposal,
+				app.host,
+				lg.Zap(),
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				app.txHandler.HandleBlockTransaction,
+				app.host,
+				lg.Zap(),
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				app.txHandler.HandleProposalTransaction,
+				app.host,
+				lg.Zap(),
+			),
+		),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(
+				malHandler.HandleSyncedMalfeasanceProof,
+				app.host,
+				lg.Zap(),
+			),
+		),
+		// TODO(mafa): add malfeasance2 handler to fetcher
+		// fetch.ValidatorFunc(
+		// 	pubsub.DropPeerOnSyncValidationReject(
+		// 		malHandler2.HandleSyncedMalfeasanceProof,
+		// 		app.host,
+		// 		lg.Zap(),
+		// 	),
+		// ),
+	)
+
+	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+		if newSyncer.ListenToGossip() {
+			return nil
+		}
+		return errors.New("not synced for gossip")
+	}
+	checkAtxSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
+		if newSyncer.ListenToATXGossip() {
+			return nil
+		}
+		return errors.New("not synced for gossip")
+	}
+
+	if app.Config.Beacon.RoundsNumber > 0 {
+		app.host.Register(
+			pubsub.BeaconWeakCoinProtocol,
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleWeakCoinProposal),
+			pubsub.WithValidatorInline(true),
+		)
+		app.host.Register(
+			pubsub.BeaconProposalProtocol,
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleProposal),
+			pubsub.WithValidatorInline(true),
+		)
+		app.host.Register(
+			pubsub.BeaconFirstVotesProtocol,
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFirstVotes),
+			pubsub.WithValidatorInline(true),
+		)
+		app.host.Register(
+			pubsub.BeaconFollowingVotesProtocol,
+			pubsub.ChainGossipHandler(checkSynced, beaconProtocol.HandleFollowingVotes),
+			pubsub.WithValidatorInline(true),
+		)
+	}
+
+	app.host.Register(
+		pubsub.ProposalProtocol,
+		pubsub.ChainGossipHandler(checkSynced, proposalListener.HandleProposal),
+	)
+	app.host.Register(
+		pubsub.AtxProtocol,
+		pubsub.ChainGossipHandler(checkAtxSynced, atxHandler.HandleGossipAtx),
+		pubsub.WithValidatorConcurrency(app.Config.P2P.GossipAtxValidationThrottle),
+	)
+	app.host.Register(
+		pubsub.TxProtocol,
+		pubsub.ChainGossipHandler(checkSynced, app.txHandler.HandleGossipTransaction),
+	)
+	app.host.Register(
+		pubsub.BlockCertify,
+		pubsub.ChainGossipHandler(checkSynced, certifier.HandleCertifyMessage),
+	)
+	app.host.Register(
+		pubsub.MalfeasanceProof,
+		pubsub.ChainGossipHandler(checkAtxSynced, malHandler.HandleMalfeasanceProof),
+	)
+	app.host.Register(
+		pubsub.MalfeasanceProof2,
+		pubsub.ChainGossipHandler(checkAtxSynced, malHandler2.HandleGossip),
+	)
+	app.malfeasanceHandler = malHandler
+	app.malfeasance2Handler = malHandler2
 
 	app.proposalBuilder = proposalBuilder
 	app.mesh = msh
@@ -1490,20 +1389,18 @@ func (app *App) initServices(ctx context.Context) error {
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
-	if !app.Config.IsNodeServiceClientMode() {
-		app.hOracle = hOracle
-		app.certifier = certifier
-		if !app.Config.TIME.Peersync.Disable {
-			app.ptimesync = peersync.New(
-				app.host,
-				app.host,
-				peersync.WithLog(app.addLogger(TimeSyncLogger, lg).Zap()),
-				peersync.WithConfig(app.Config.TIME.Peersync),
-			)
-		}
-		if err := app.host.Start(); err != nil {
-			return err
-		}
+	app.hOracle = hOracle
+	app.certifier = certifier
+	if !app.Config.TIME.Peersync.Disable {
+		app.ptimesync = peersync.New(
+			app.host,
+			app.host,
+			peersync.WithLog(app.addLogger(TimeSyncLogger, lg).Zap()),
+			peersync.WithConfig(app.Config.TIME.Peersync),
+		)
+	}
+	if err := app.host.Start(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -2367,7 +2264,8 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	return nil
 }
 
-// Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
+// Start starts the Spacemesh node service and initializes all relevant
+// services according to command line arguments provided.
 func (app *App) Start(ctx context.Context) error {
 	if err := app.verifyVersionUpgrades(); err != nil {
 		return fmt.Errorf("version upgrade verification failed: %w", err)
@@ -2502,13 +2400,11 @@ func (app *App) startSynchronous(ctx context.Context) (err error) {
 	if !onMainNet(app.Config) {
 		nc = handshake.NetworkCookie(prologue)
 	}
-	if !app.Config.IsNodeServiceClientMode() {
-		app.host, err = p2p.New(p2plog.Zap(), cfg, []byte(prologue), nc,
-			p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
-		)
-		if err != nil {
-			return fmt.Errorf("initialize p2p host: %w", err)
-		}
+	app.host, err = p2p.New(p2plog.Zap(), cfg, []byte(prologue), nc,
+		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
+	)
+	if err != nil {
+		return fmt.Errorf("initialize p2p host: %w", err)
 	}
 
 	if err := app.setupDBs(ctx, logger); err != nil {

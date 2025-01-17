@@ -284,7 +284,3 @@ func LoadConfig(src io.Reader, vip *viper.Viper) error {
 	}
 	return nil
 }
-
-func (c *BaseConfig) IsNodeServiceClientMode() bool {
-	return c.NodeServiceAddress != ""
-}
