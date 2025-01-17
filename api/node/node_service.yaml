@@ -147,10 +147,9 @@ paths:
         "200":
           description: successfully found the message to return to client
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                $ref: "models/components.yaml#/components/schemas/HareRoundTemplate"
         "204":
           description: did not find a message to retrieve
   /hare/total_weight/{layer}:

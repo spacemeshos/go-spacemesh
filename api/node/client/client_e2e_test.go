@@ -185,11 +185,34 @@ func Test_Hare(t *testing.T) {
 		require.NoError(t, err)
 	})
 	t.Run("hare message", func(t *testing.T) {
-		exp := make([]byte, 182)
-		mock.hare.EXPECT().RoundMessage(gomock.Any(), gomock.Any()).Return(&hare3.Message{})
-		v, err := svc.GetHareMessage(context.Background(), types.LayerID(113), hare3.IterRound{})
-		require.Equal(t, exp, v)
+		body := hare3.Body{
+			Layer:     113,
+			IterRound: hare3.IterRound{Iter: 7, Round: 2},
+			Value: hare3.Value{
+				Proposals: []types.ProposalID{
+					types.RandomProposalID(),
+					types.RandomProposalID(),
+				},
+			},
+		}
+		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(&body)
+		gotBody, err := svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
 		require.NoError(t, err)
+		require.Equal(t, body, *gotBody)
+
+		// non-nil reference
+		ref := types.RandomHash()
+		body.Value.Reference = &ref
+		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(&body)
+		gotBody, err = svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
+		require.NoError(t, err)
+		require.Equal(t, body, *gotBody)
+
+		// no template
+		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(nil)
+		gotBody, err = svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
+		require.NoError(t, err)
+		require.Nil(t, gotBody)
 	})
 }
 

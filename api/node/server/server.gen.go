@@ -678,23 +678,13 @@ type GetHareRoundTemplateLayerIterRoundResponseObject interface {
 	VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error
 }
 
-type GetHareRoundTemplateLayerIterRound200ApplicationoctetStreamResponse struct {
-	Body          io.Reader
-	ContentLength int64
-}
+type GetHareRoundTemplateLayerIterRound200JSONResponse externalRef0.HareRoundTemplate
 
-func (response GetHareRoundTemplateLayerIterRound200ApplicationoctetStreamResponse) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/octet-stream")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
+func (response GetHareRoundTemplateLayerIterRound200JSONResponse) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
+	return json.NewEncoder(w).Encode(response)
 }
 
 type GetHareRoundTemplateLayerIterRound204Response struct {

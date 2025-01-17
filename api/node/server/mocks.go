@@ -182,40 +182,40 @@ func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.Node
 	return c
 }
 
-// RoundMessage mocks base method.
-func (m *Mockhare) RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message {
+// RoundTemplate mocks base method.
+func (m *Mockhare) RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RoundMessage", layer, round)
-	ret0, _ := ret[0].(*hare3.Message)
+	ret := m.ctrl.Call(m, "RoundTemplate", layer, round)
+	ret0, _ := ret[0].(*hare3.Body)
 	return ret0
 }
 
-// RoundMessage indicates an expected call of RoundMessage.
-func (mr *MockhareMockRecorder) RoundMessage(layer, round any) *MockhareRoundMessageCall {
+// RoundTemplate indicates an expected call of RoundTemplate.
+func (mr *MockhareMockRecorder) RoundTemplate(layer, round any) *MockhareRoundTemplateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoundMessage", reflect.TypeOf((*Mockhare)(nil).RoundMessage), layer, round)
-	return &MockhareRoundMessageCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoundTemplate", reflect.TypeOf((*Mockhare)(nil).RoundTemplate), layer, round)
+	return &MockhareRoundTemplateCall{Call: call}
 }
 
-// MockhareRoundMessageCall wrap *gomock.Call
-type MockhareRoundMessageCall struct {
+// MockhareRoundTemplateCall wrap *gomock.Call
+type MockhareRoundTemplateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareRoundMessageCall) Return(arg0 *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundTemplateCall) Return(arg0 *hare3.Body) *MockhareRoundTemplateCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareRoundMessageCall) Do(f func(types.LayerID, hare3.IterRound) *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundTemplateCall) Do(f func(types.LayerID, hare3.IterRound) *hare3.Body) *MockhareRoundTemplateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareRoundMessageCall) DoAndReturn(f func(types.LayerID, hare3.IterRound) *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundTemplateCall) DoAndReturn(f func(types.LayerID, hare3.IterRound) *hare3.Body) *MockhareRoundTemplateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
