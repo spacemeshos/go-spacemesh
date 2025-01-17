@@ -42,7 +42,7 @@ jobs:
   filter-changes:
     runs-on: ubuntu-22.04
     outputs:
-      nondocchanges: ${{ steps.filter.outputs.nondoc }}
+      nondocchanges: ${{ steps.filter.outputs.nondoc || github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
