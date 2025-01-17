@@ -39,6 +39,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2alpha1"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2beta1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -1654,6 +1655,62 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	case v2alpha1.Account:
 		service := v2alpha1.NewAccountService(app.apiDB, app.conState)
+		app.grpcServices[svc] = service
+		return service, nil
+	// v2beta1
+	case v2beta1.Activation:
+		service := v2beta1.NewActivationService(app.apiDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.ActivationStream:
+		service := v2beta1.NewActivationStreamService(app.apiDB)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Reward:
+		service := v2beta1.NewRewardService(app.apiDB)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.RewardStream:
+		service := v2beta1.NewRewardStreamService(app.apiDB)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Malfeasance:
+		service := v2beta1.NewMalfeasanceService(app.apiDB, app.malfeasance2Handler, app.malfeasanceHandler)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.MalfeasanceStream:
+		service := v2beta1.NewMalfeasanceStreamService(app.apiDB, app.malfeasance2Handler, app.malfeasanceHandler)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Network:
+		service := v2beta1.NewNetworkService(
+			app.clock.GenesisTime(),
+			app.Config,
+		)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Node:
+		service := v2beta1.NewNodeService(app.host, app.mesh, app.clock, app.syncer)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Layer:
+		service := v2beta1.NewLayerService(app.apiDB)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.LayerStream:
+		service := v2beta1.NewLayerStreamService(app.apiDB)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Transaction:
+		service := v2beta1.NewTransactionService(app.apiDB, app.conState, app.syncer, app.txHandler, app.host)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.TransactionStream:
+		service := v2beta1.NewTransactionStreamService()
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Account:
+		service := v2beta1.NewAccountService(app.apiDB, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
 	}

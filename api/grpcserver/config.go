@@ -53,6 +53,21 @@ const (
 	AccountV2Alpha1           Service = "account_v2alpha1"
 	MalfeasanceV2Alpha1       Service = "malfeasance_v2alpha1"
 	MalfeasanceStreamV2Alpha1 Service = "malfeasance_stream_v2alpha1"
+
+	// v2beta1
+	ActivationV2Beta1        Service = "activation_v2beta1"
+	ActivationStreamV2Beta1  Service = "activation_stream_v2beta1"
+	RewardV2Beta1            Service = "reward_v2beta1"
+	RewardStreamV2Beta1      Service = "reward_stream_v2beta1"
+	NetworkV2Beta1           Service = "network_v2beta1"
+	NodeV2Beta1              Service = "node_v2beta1"
+	LayerV2Beta1             Service = "layer_v2beta1"
+	LayerStreamV2Beta1       Service = "layer_stream_v2beta1"
+	TransactionV2Beta1       Service = "transaction_v2beta1"
+	TransactionStreamV2Beta1 Service = "transaction_stream_v2beta1"
+	AccountV2Beta1           Service = "account_v2beta1"
+	MalfeasanceV2Beta1       Service = "malfeasance_v2beta1"
+	MalfeasanceStreamV2Beta1 Service = "malfeasance_stream_v2beta1"
 )
 
 // DefaultConfig defines the default configuration options for api.
@@ -62,12 +77,20 @@ func DefaultConfig() Config {
 			GlobalState, Mesh, Transaction, Node, Activation, ActivationV2Alpha1,
 			RewardV2Alpha1, NetworkV2Alpha1, NodeV2Alpha1, LayerV2Alpha1, TransactionV2Alpha1,
 			AccountV2Alpha1, MalfeasanceV2Alpha1,
+
+			// v2beta1
+			ActivationV2Beta1, RewardV2Beta1, NetworkV2Beta1, NodeV2Beta1,
+			LayerV2Beta1, TransactionV2Beta1, AccountV2Beta1, MalfeasanceV2Beta1,
 		},
 		PublicListener: "0.0.0.0:9092",
 		PrivateServices: []Service{
 			Admin, Smesher, Debug, ActivationStreamV2Alpha1,
 			RewardStreamV2Alpha1, LayerStreamV2Alpha1, TransactionStreamV2Alpha1,
 			MalfeasanceStreamV2Alpha1,
+
+			// v2beta1
+			ActivationStreamV2Beta1, RewardStreamV2Beta1, LayerStreamV2Beta1,
+			TransactionStreamV2Beta1, MalfeasanceStreamV2Beta1,
 		},
 		PrivateListener:        "127.0.0.1:9093",
 		PostServices:           []Service{Post, PostInfo},
