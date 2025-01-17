@@ -72,7 +72,7 @@ install:
 	go install github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@$(OAPI_CODEGEN_VERSION)
 .PHONY: install
 
-build: go-spacemesh get-profiler get-postrs-service service
+build: go-spacemesh get-profiler get-postrs-service
 .PHONY: build
 
 get-libs: get-postrs-lib get-postrs-service
@@ -90,10 +90,6 @@ gen-p2p-identity:
 go-spacemesh: get-libs
 	cd cmd/node ; go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
 .PHONY: go-spacemesh
-
-service: get-libs
-	cd cmd/service ; go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) .
-.PHONY: service
 
 bootstrapper:
 	cd cmd/bootstrapper ;  go build -o $(BIN_DIR)go-$@$(EXE) .
