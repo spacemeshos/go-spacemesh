@@ -429,11 +429,12 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 }
 
 func (app *App) startSmeshingServiceServices(ctx context.Context) error {
-	if app.remoteProposalBuilder != nil {
-		app.eg.Go(func() error {
-			return app.remoteProposalBuilder.Run(ctx)
-		})
+	if app.remoteProposalBuilder == nil {
+		panic("remote proposal builder can not be nil at this point")
 	}
+	app.eg.Go(func() error {
+		return app.remoteProposalBuilder.Run(ctx)
+	})
 
 	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
