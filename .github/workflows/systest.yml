@@ -172,7 +172,15 @@ jobs:
     permissions:
       contents: 'read'
       id-token: 'write'
+    strategy:
+      matrix:
+        iter: [ "1", "2", "3", "4" ]
+      max-parallel: 1
     steps:
+      - name: iter
+        run: |
+          echo "iteration $iter"
+
       - uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
