@@ -11,14 +11,13 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type NodeService interface {
-	GetHareMessage(ctx context.Context, layer types.LayerID, round IterRound) ([]byte, error)
+	HareRoundTemplate(ctx context.Context, layer types.LayerID, round IterRound) (*Body, error)
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 	Publish(ctx context.Context, proto string, blob []byte) error
 }
@@ -177,18 +176,16 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		}
-	}
-	msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
-	if err != nil && active {
-		h.log.Error("get hare message on preround", zap.Error(err))
-	} else if msgBytes == nil && err == nil {
-		// do nothing, there's no message to process
-	} else {
-		msg := &Message{}
-		if err := codec.Decode(msgBytes, msg); err != nil {
-			h.log.Error("preround decode remote hare message", zap.Error(err))
+		body, err := h.svc.HareRoundTemplate(ctx, session.lid, session.proto.IterRound)
+		if err != nil {
+			h.log.Error("failed to get hare round template on preround", zap.Error(err))
+		} else if body == nil {
+			// do nothing, there's no message to process
 		} else {
-			h.signPub(ctx, session, msg)
+			msg := Message{
+				Body: *body,
+			}
+			h.signPub(ctx, session, &msg)
 		}
 	}
 
@@ -222,22 +219,19 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 					zap.Bool("active", active),
 				)
 
-				msgBytes, err := h.svc.GetHareMessage(ctx, session.lid, session.proto.IterRound)
-				if msgBytes == nil && err == nil {
+				body, err := h.svc.HareRoundTemplate(ctx, session.lid, session.proto.IterRound)
+				if body == nil && err == nil {
 					// special case - no message to process, we're either too early or hare terminated.
 					// do the onRound and then continue
 					onRound(session.proto) // advance the protocol state before continuing
 					continue
 				}
 				if err != nil {
-					h.log.Error("get hare message", zap.Error(err))
+					h.log.Error("getting hare round template", zap.Error(err))
 					onRound(session.proto) // advance the protocol state before continuing
 					continue
 				}
-				msg := &Message{}
-				if err := codec.Decode(msgBytes, msg); err != nil {
-					h.log.Error("decode remote hare message", zap.Error(err))
-				}
+				msg := &Message{Body: *body}
 				h.signPub(ctx, session, msg)
 			}
 

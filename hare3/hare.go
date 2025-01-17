@@ -675,7 +675,7 @@ func (h *Hare) cleanupLayer(l types.LayerID) {
 	}
 }
 
-func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
+func (h *Hare) RoundTemplate(layer types.LayerID, round IterRound) *Body {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -687,7 +687,7 @@ func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
 	if !ok {
 		return nil
 	}
-	return r.message
+	return &r.message.Body
 }
 
 func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {

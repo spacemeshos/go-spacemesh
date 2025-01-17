@@ -131,34 +131,58 @@ func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProof
 	return nil
 }
 
-func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
-	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx,
+func (s *NodeService) HareRoundTemplate(
+	ctx context.Context,
+	layer types.LayerID,
+	round hare3.IterRound,
+) (*hare3.Body, error) {
+	resp, err := s.client.GetHareRoundTemplateLayerIterRoundWithResponse(ctx,
 		externalRef0.LayerID(layer),
 		externalRef0.HareIter(round.Iter),
 		externalRef0.HareRound(round.Round))
 	if err != nil {
 		return nil, fmt.Errorf("get hare message: %w", err)
 	}
-	switch resp.StatusCode {
+	switch resp.StatusCode() {
 	case http.StatusOK:
-		bytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("read all: %w", err)
+		body := hare3.Body{
+			Layer:     layer,
+			IterRound: round,
 		}
-		return bytes, nil
-
+		for _, proposalHex := range resp.JSON200.Proposals {
+			if len(proposalHex) != 40 {
+				return nil, errors.New("invalid proposal ID length")
+			}
+			proposal, err := hex.DecodeString(proposalHex)
+			if err != nil {
+				return nil, fmt.Errorf("decoding proposal ID: %w", err)
+			}
+			body.Value.Proposals = append(body.Value.Proposals, types.ProposalID(proposal))
+		}
+		if refHex := resp.JSON200.Reference; refHex != nil {
+			if len(*refHex) != 64 {
+				return nil, errors.New("invalid reference length")
+			}
+			reference, err := hex.DecodeString(*refHex)
+			if err != nil {
+				return nil, fmt.Errorf("decoding proposal ID: %w", err)
+			}
+			refHash := types.Hash32(reference)
+			body.Value.Reference = &refHash
+		}
+		return &body, nil
 	case http.StatusNoContent:
 		// no message to return, special case, return nil,nil
 		// and the caller should assume there's no message to process,
 		// therefore hare probably terminated.
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("unexpected status during get hare message: %s", resp.Status)
+		return nil, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
 }
 
 func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	resp, err := s.client.GetHareTotalWeightLayerWithResponse(ctx, uint32(layer))
+	resp, err := s.client.GetHareTotalWeightLayerWithResponse(ctx, layer.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get total weight: %w", err)
 	}
@@ -171,7 +195,7 @@ func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uin
 }
 
 func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
-	resp, err := s.client.GetHareWeightNodeIdLayerWithResponse(ctx, node.String(), uint32(layer))
+	resp, err := s.client.GetHareWeightNodeIdLayerWithResponse(ctx, node.String(), layer.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
@@ -184,7 +208,7 @@ func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node
 }
 
 func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
-	resp, err := s.client.GetHareBeaconEpochWithResponse(ctx, externalRef0.EpochID(epoch))
+	resp, err := s.client.GetHareBeaconEpochWithResponse(ctx, epoch.Uint32())
 	if err != nil {
 		return types.Beacon{}, fmt.Errorf("get hare beacon: %w", err)
 	}
@@ -199,7 +223,7 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
 	*types.Proposal, uint64, error,
 ) {
-	resp, err := s.client.GetProposalLayerNode(ctx, externalRef0.LayerID(layer), node.String())
+	resp, err := s.client.GetProposalLayerNode(ctx, layer.Uint32(), node.String())
 	if err != nil {
 		return nil, 0, fmt.Errorf("get proposal layer: %w", err)
 	}

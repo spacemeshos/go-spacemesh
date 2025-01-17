@@ -28,7 +28,7 @@ type poetDB interface {
 }
 
 type hare interface {
-	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
+	RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body
 	TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error)
 	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error)
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
@@ -224,36 +224,27 @@ func (s *Server) PostPoet(ctx context.Context, request PostPoetRequestObject) (P
 	return PostPoet200Response{}, nil
 }
 
-type hareResponse struct {
-	message []byte
-}
-
-func (h *hareResponse) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error {
-	if h.message == nil {
-		w.WriteHeader(204) // no content
-		return nil
-	}
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write(h.message)
-	return err
-}
-
 func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
 	request GetHareRoundTemplateLayerIterRoundRequestObject,
 ) (GetHareRoundTemplateLayerIterRoundResponseObject, error) {
-	msg := s.hare.RoundMessage(types.LayerID(request.Layer),
+	body := s.hare.RoundTemplate(types.LayerID(request.Layer),
 		hare3.IterRound{
 			Round: hare3.Round(request.Round),
 			Iter:  (request.Iter),
 		})
-	if msg == nil {
-		return &hareResponse{}, nil
+	if body == nil {
+		return GetHareRoundTemplateLayerIterRound204Response{}, nil
 	}
 
-	return &hareResponse{
-		message: codec.MustEncode(msg),
-	}, nil
+	var resp GetHareRoundTemplateLayerIterRound200JSONResponse
+	for _, p := range body.Value.Proposals {
+		resp.Proposals = append(resp.Proposals, hex.EncodeToString(p[:]))
+	}
+	if ref := body.Value.Reference; ref != nil {
+		refHex := hex.EncodeToString(ref[:])
+		resp.Reference = &refHex
+	}
+	return resp, nil
 }
 
 func (s *Server) GetHareTotalWeightLayer(ctx context.Context,

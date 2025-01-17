@@ -875,6 +875,7 @@ func (r GetHareBeaconEpochResponse) StatusCode() int {
 type GetHareRoundTemplateLayerIterRoundResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *externalRef0.HareRoundTemplate
 }
 
 // Status returns HTTPResponse.Status
@@ -1251,6 +1252,16 @@ func ParseGetHareRoundTemplateLayerIterRoundResponse(rsp *http.Response) (*GetHa
 	response := &GetHareRoundTemplateLayerIterRoundResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest externalRef0.HareRoundTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	}
 
 	return response, nil
