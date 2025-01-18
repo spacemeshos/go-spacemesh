@@ -2162,7 +2162,7 @@ func (app *App) stopServices(ctx context.Context) {
 	grpczap.SetGrpcLoggerV2(grpcLog, log.NewNop().Zap())
 }
 
-func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
+func (app *App) setupStateAPIAndCacheDBs(ctx context.Context, lg log.Log) error {
 	dbPath := app.Config.DataDir()
 	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbPath, err)
@@ -2245,6 +2245,12 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		datastore.WithConsensusCache(app.atxsdata),
 	)
 
+	return nil
+}
+
+func (app *App) setupLocalDB(ctx context.Context, lg log.Log) error {
+	dbPath := app.Config.DataDir()
+	dbLog := app.addLogger(StateDbLogger, lg).Zap()
 	lSchema, err := localmigrations.SchemaWithInCodeMigrations()
 	if err != nil {
 		return fmt.Errorf("error loading db schema: %w", err)
@@ -2262,6 +2268,14 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 	}
 	app.localDB = localDB
 	return nil
+}
+
+func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
+	if err := app.setupStateAPIAndCacheDBs(ctx, lg); err != nil {
+		return err
+	}
+
+	return app.setupLocalDB(ctx, lg)
 }
 
 // Start starts the Spacemesh node service and initializes all relevant
