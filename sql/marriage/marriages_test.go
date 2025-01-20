@@ -48,6 +48,51 @@ func TestFind(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
+func TestUpdateMarriageID(t *testing.T) {
+	t.Parallel()
+	db := statesql.InMemoryTest(t)
+
+	id1, err := marriage.NewID(db)
+	require.NoError(t, err)
+	require.NotZero(t, id1)
+
+	nodeID1 := types.RandomNodeID()
+	nodeID2 := types.RandomNodeID()
+	info := marriage.Info{
+		ID:            id1,
+		NodeID:        nodeID1,
+		ATX:           types.RandomATXID(),
+		MarriageIndex: rand.N(256),
+		Target:        types.RandomNodeID(),
+		Signature:     types.RandomEdSignature(),
+	}
+	err = marriage.Add(db, info)
+	require.NoError(t, err)
+
+	info.NodeID = nodeID2
+	info.MarriageIndex = (info.MarriageIndex + 1) % 256
+	err = marriage.Add(db, info)
+	require.NoError(t, err)
+
+	id2, err := marriage.NewID(db)
+	require.NoError(t, err)
+	require.NotZero(t, id2)
+	require.NotEqual(t, id1, id2)
+
+	err = marriage.UpdateMarriageID(db, id1, id2)
+	require.NoError(t, err)
+
+	for _, nodeID := range []types.NodeID{nodeID1, nodeID2} {
+		id, err := marriage.FindIDByNodeID(db, nodeID)
+		require.NoError(t, err)
+		require.Equal(t, id2, id)
+
+		info, err = marriage.FindByNodeID(db, nodeID)
+		require.NoError(t, err)
+		require.Equal(t, id2, info.ID)
+	}
+}
+
 func TestAdd(t *testing.T) {
 	t.Parallel()
 	db := statesql.InMemoryTest(t)
