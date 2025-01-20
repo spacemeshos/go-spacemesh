@@ -554,7 +554,7 @@ func (app *App) startSmeshingServiceSynchronous(ctx context.Context) (err error)
 		return fmt.Errorf("cannot create clock: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, logger); err != nil {
+	if err := app.setupLocalDB(ctx, logger); err != nil {
 		return err
 	}
 
