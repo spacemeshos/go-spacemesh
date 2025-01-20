@@ -17,6 +17,25 @@ type ActivationTx struct {
 	Weight       uint64  `json:"Weight"`
 }
 
+// Ballot defines model for Ballot.
+type Ballot struct {
+	AtxID       ATXID      `json:"AtxID"`
+	EpochData   *EpochData `json:"EpochData,omitempty"`
+	OpinionHash Hash32     `json:"OpinionHash"`
+	RefBallotID *Hash20    `json:"RefBallotID,omitempty"`
+	Votes       Votes      `json:"Votes"`
+}
+
+// Beacon defines model for Beacon.
+type Beacon = string
+
+// EpochData defines model for EpochData.
+type EpochData struct {
+	ActiveSetHash    Hash32 `json:"ActiveSetHash"`
+	Beacon           Beacon `json:"Beacon"`
+	EligibilityCount uint32 `json:"EligibilityCount"`
+}
+
 // EpochID defines model for EpochID.
 type EpochID = uint32
 
@@ -29,14 +48,41 @@ type HareRound = uint8
 // HareRoundTemplate defines model for HareRoundTemplate.
 type HareRoundTemplate struct {
 	// Proposals Array of 32-byte proposal IDs encoded as hex strings
-	Proposals []string `json:"Proposals"`
-
-	// Reference Optional 32-byte reference hash
-	Reference *string `json:"Reference,omitempty"`
+	Proposals []Hash20 `json:"Proposals"`
+	Reference *Hash32  `json:"Reference,omitempty"`
 }
+
+// Hash20 defines model for Hash20.
+type Hash20 = string
+
+// Hash32 defines model for Hash32.
+type Hash32 = string
 
 // LayerID defines model for LayerID.
 type LayerID = uint32
 
 // NodeID defines model for NodeID.
 type NodeID = string
+
+// PartialProposal defines model for PartialProposal.
+type PartialProposal struct {
+	Ballot   Ballot   `json:"Ballot"`
+	MeshHash Hash32   `json:"MeshHash"`
+	TxIDs    []Hash32 `json:"TxIDs"`
+	VrfNonce uint64   `json:"VrfNonce"`
+}
+
+// Vote defines model for Vote.
+type Vote struct {
+	Height  uint64  `json:"Height"`
+	ID      Hash20  `json:"ID"`
+	LayerID LayerID `json:"LayerID"`
+}
+
+// Votes defines model for Votes.
+type Votes struct {
+	Abstain []LayerID `json:"Abstain"`
+	Against []Vote    `json:"Against"`
+	Base    Hash20    `json:"Base"`
+	Support []Vote    `json:"Support"`
+}

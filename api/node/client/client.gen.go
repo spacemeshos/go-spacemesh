@@ -852,7 +852,7 @@ type GetHareBeaconEpochResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
-		Beacon []uint8 `json:"beacon"`
+		Beacon externalRef0.Beacon `json:"beacon"`
 	}
 }
 
@@ -966,6 +966,7 @@ func (r PostPoetResponse) StatusCode() int {
 type GetProposalLayerNodeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *externalRef0.PartialProposal
 }
 
 // Status returns HTTPResponse.Status
@@ -1229,7 +1230,7 @@ func ParseGetHareBeaconEpochResponse(rsp *http.Response) (*GetHareBeaconEpochRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Beacon []uint8 `json:"beacon"`
+			Beacon externalRef0.Beacon `json:"beacon"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -1350,6 +1351,16 @@ func ParseGetProposalLayerNodeResponse(rsp *http.Response) (*GetProposalLayerNod
 	response := &GetProposalLayerNodeResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest externalRef0.PartialProposal
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	}
 
 	return response, nil

@@ -279,23 +279,7 @@ func (s *Server) GetHareBeaconEpoch(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &GetHareBeaconEpoch200JSONResponse{Beacon: beacon[:]}, nil
-}
-
-type proposalResp struct {
-	buf   []byte
-	nonce types.VRFPostIndex
-}
-
-func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/octet-stream")
-	w.Header().Add("x-spacemesh-atx-nonce", fmt.Sprintf("%d", p.nonce))
-	w.WriteHeader(200)
-	if p.buf != nil {
-		_, err := w.Write(p.buf)
-		return err
-	}
-	return nil
+	return &GetHareBeaconEpoch200JSONResponse{Beacon: hex.EncodeToString(beacon[:])}, nil
 }
 
 func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (
@@ -303,25 +287,80 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 ) {
 	hexBuf, err := hex.DecodeString(request.Node)
 	if err != nil {
-		return &proposalResp{}, err
+		return GetProposalLayerNode500Response{}, err
 	}
 	id := types.BytesToNodeID(hexBuf)
 
 	proposal, nonce, err := s.proposals.BuildFor(ctx, types.LayerID(request.Layer), id)
 	if err != nil {
-		return &proposalResp{}, err
+		return GetProposalLayerNode500Response{}, err
 	}
 	if proposal == nil {
-		return &proposalResp{}, nil
-	}
-	// we have to explicitly check this case otherwise the next line may panic
-	if proposal.Ballot.RefBallot != types.EmptyBallotID {
-		return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, nil
+		return GetProposalLayerNode204Response{}, nil
 	}
 	if proposal.Ballot.EpochData.EligibilityCount == 0 {
-		return &proposalResp{}, nil
+		return GetProposalLayerNode204Response{}, nil
 	}
-	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, nil
+
+	resp := GetProposalLayerNode200JSONResponse{
+		Ballot: models.Ballot{
+			AtxID:       hex.EncodeToString(proposal.AtxID.Bytes()),
+			OpinionHash: hex.EncodeToString(proposal.OpinionHash.Bytes()),
+			Votes: models.Votes{
+				Abstain: encodeLayerIDs(proposal.Votes.Abstain),
+				Against: encodeVotes(proposal.Votes.Against),
+				Base:    hex.EncodeToString(proposal.Votes.Base[:]),
+				Support: encodeVotes(proposal.Votes.Support),
+			},
+		},
+		TxIDs:    encodeSlicesOfBytes(proposal.TxIDs),
+		VrfNonce: uint64(nonce),
+		MeshHash: hex.EncodeToString(proposal.MeshHash.Bytes()),
+	}
+
+	if proposal.Ballot.RefBallot != types.EmptyBallotID {
+		refBallotIDHex := hex.EncodeToString(proposal.RefBallot[:])
+		resp.Ballot.RefBallotID = &refBallotIDHex
+	} else {
+		resp.Ballot.EpochData = &models.EpochData{
+			ActiveSetHash:    hex.EncodeToString(proposal.EpochData.ActiveSetHash[:]),
+			Beacon:           hex.EncodeToString(proposal.EpochData.Beacon[:]),
+			EligibilityCount: proposal.EpochData.EligibilityCount,
+		}
+	}
+	return resp, nil
+}
+
+type asBytes interface {
+	Bytes() []byte
+}
+
+func encodeSlicesOfBytes[T asBytes](ids []T) []models.Hash32 {
+	encoded := make([]models.Hash32, 0, len(ids))
+	for _, h := range ids {
+		encoded = append(encoded, hex.EncodeToString(h.Bytes()))
+	}
+	return encoded
+}
+
+func encodeLayerIDs(lids []types.LayerID) []models.LayerID {
+	encoded := make([]models.LayerID, 0, len(lids))
+	for _, l := range lids {
+		encoded = append(encoded, l.Uint32())
+	}
+	return encoded
+}
+
+func encodeVotes(votes []types.Vote) []models.Vote {
+	encoded := make([]models.Vote, 0, len(votes))
+	for _, vote := range votes {
+		encoded = append(encoded, models.Vote{
+			Height:  vote.Height,
+			ID:      hex.EncodeToString(vote.ID[:]),
+			LayerID: vote.LayerID.Uint32(),
+		})
+	}
+	return encoded
 }
 
 func (s *Server) GetEligibilitySlotsNodeEpoch(
