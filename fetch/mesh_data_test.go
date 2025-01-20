@@ -387,7 +387,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	nodeIDs := []types.NodeID{{1}, {2}, {3}}
 	f := createFetch(t)
-	f.mMalH.EXPECT().
+	f.mLegacyMalH.EXPECT().
 		HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
 		Times(len(nodeIDs))

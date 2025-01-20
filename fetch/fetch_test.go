@@ -36,7 +36,6 @@ type testFetch struct {
 	mMHashS *mocks.Mockrequester
 	mOpn2S  *mocks.Mockrequester
 
-	mMalH        *mocks.MockSyncValidator
 	mAtxH        *mocks.MockSyncValidator
 	mBallotH     *mocks.MockSyncValidator
 	mActiveSetH  *mocks.MockSyncValidator
@@ -46,19 +45,21 @@ type testFetch struct {
 	mTxBlocksH   *mocks.MockSyncValidator
 	mTxProposalH *mocks.MockSyncValidator
 	mPoetH       *mocks.MockSyncValidator
+	mLegacyMalH  *mocks.MockSyncValidator
+	mMalH        *mocks.MockSyncValidator
 }
 
 func createFetch(tb testing.TB) *testFetch {
 	ctrl := gomock.NewController(tb)
 	tf := &testFetch{
-		mh:           mocks.NewMockhost(ctrl),
-		mMalS:        mocks.NewMockrequester(ctrl),
-		mAtxS:        mocks.NewMockrequester(ctrl),
-		mLyrS:        mocks.NewMockrequester(ctrl),
-		mHashS:       mocks.NewMockrequester(ctrl),
-		mMHashS:      mocks.NewMockrequester(ctrl),
-		mOpn2S:       mocks.NewMockrequester(ctrl),
-		mMalH:        mocks.NewMockSyncValidator(ctrl),
+		mh:      mocks.NewMockhost(ctrl),
+		mMalS:   mocks.NewMockrequester(ctrl),
+		mAtxS:   mocks.NewMockrequester(ctrl),
+		mLyrS:   mocks.NewMockrequester(ctrl),
+		mHashS:  mocks.NewMockrequester(ctrl),
+		mMHashS: mocks.NewMockrequester(ctrl),
+		mOpn2S:  mocks.NewMockrequester(ctrl),
+
 		mAtxH:        mocks.NewMockSyncValidator(ctrl),
 		mBallotH:     mocks.NewMockSyncValidator(ctrl),
 		mActiveSetH:  mocks.NewMockSyncValidator(ctrl),
@@ -67,6 +68,8 @@ func createFetch(tb testing.TB) *testFetch {
 		mTxBlocksH:   mocks.NewMockSyncValidator(ctrl),
 		mTxProposalH: mocks.NewMockSyncValidator(ctrl),
 		mPoetH:       mocks.NewMockSyncValidator(ctrl),
+		mLegacyMalH:  mocks.NewMockSyncValidator(ctrl),
+		mMalH:        mocks.NewMockSyncValidator(ctrl),
 	}
 	for _, srv := range []*mocks.Mockrequester{tf.mMalS, tf.mAtxS, tf.mLyrS, tf.mHashS, tf.mMHashS, tf.mOpn2S} {
 		srv.EXPECT().Run(gomock.Any()).AnyTimes()
@@ -114,6 +117,7 @@ func createFetch(tb testing.TB) *testFetch {
 		tf.mProposalH,
 		tf.mTxBlocksH,
 		tf.mTxProposalH,
+		tf.mLegacyMalH,
 		tf.mMalH,
 	)
 	return tf
@@ -422,7 +426,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject },
 	)
-	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(
@@ -444,6 +448,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
 	fetcher.SetValidators(
 		ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)),
+		nil,
 		nil,
 		nil,
 		nil,

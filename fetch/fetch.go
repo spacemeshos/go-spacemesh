@@ -394,15 +394,16 @@ func (f *Fetch) registerServer(
 }
 
 type dataValidators struct {
-	atx         SyncValidator
-	poet        SyncValidator
-	ballot      SyncValidator
-	activeset   SyncValidator
-	block       SyncValidator
-	proposal    SyncValidator
-	txBlock     SyncValidator
-	txProposal  SyncValidator
-	malfeasance SyncValidator
+	atx               SyncValidator
+	poet              SyncValidator
+	ballot            SyncValidator
+	activeset         SyncValidator
+	block             SyncValidator
+	proposal          SyncValidator
+	txBlock           SyncValidator
+	txProposal        SyncValidator
+	legacyMalfeasance SyncValidator
+	malfeasance       SyncValidator
 }
 
 // SetValidators sets the handlers to validate various mesh data fetched from peers.
@@ -416,17 +417,19 @@ func (f *Fetch) SetValidators(
 	txBlock SyncValidator,
 	txProposal SyncValidator,
 	mal SyncValidator,
+	mal2 SyncValidator,
 ) {
 	f.validators = &dataValidators{
-		atx:         atx,
-		poet:        poet,
-		ballot:      ballot,
-		activeset:   activeset,
-		block:       block,
-		proposal:    prop,
-		txBlock:     txBlock,
-		txProposal:  txProposal,
-		malfeasance: mal,
+		atx:               atx,
+		poet:              poet,
+		ballot:            ballot,
+		activeset:         activeset,
+		block:             block,
+		proposal:          prop,
+		txBlock:           txBlock,
+		txProposal:        txProposal,
+		legacyMalfeasance: mal,
+		malfeasance:       mal2,
 	}
 }
 

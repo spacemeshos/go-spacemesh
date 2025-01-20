@@ -143,7 +143,7 @@ func createP2PFetch(
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return nil },
 	)
-	tpf.serverFetch.SetValidators(vf, vf, vf, vf, vf, vf, vf, vf, vf)
+	tpf.serverFetch.SetValidators(vf, vf, vf, vf, vf, vf, vf, vf, vf, vf)
 	require.NoError(tb, tpf.serverFetch.Start())
 	tb.Cleanup(tpf.serverFetch.Stop)
 
@@ -172,6 +172,7 @@ func createP2PFetch(
 		mkFakeValidator(tpf, "txBlock"),
 		mkFakeValidator(tpf, "txProposal"),
 		mkFakeValidator(tpf, "mal"),
+		mkFakeValidator(tpf, "mal2"),
 	)
 	require.NoError(tb, tpf.clientFetch.Start())
 	tb.Cleanup(tpf.clientFetch.Stop)

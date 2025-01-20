@@ -167,7 +167,7 @@ func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) er
 	}
 	f.logger.Debug("requesting malfeasance proofs from peer", log.ZContext(ctx), zap.Int("num_proofs", len(ids)))
 	hashes := types.NodeIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage)
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.legacyMalfeasance.HandleMessage)
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.

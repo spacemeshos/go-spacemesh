@@ -42,6 +42,7 @@ import (
 )
 
 // TestPostMalfeasanceProof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
+// TODO(mafa): update test to publish the ATX after v2 ATXs are live and then check for malfeasance.
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
@@ -129,6 +130,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 
 	fetcher.SetValidators(
+		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
