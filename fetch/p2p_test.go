@@ -356,7 +356,7 @@ func TestP2PMaliciousIDs(t *testing.T) {
 				tpf.serverDB.Close()
 			}
 
-			malIDs, err := tpf.clientFetch.GetMaliciousIDs(context.Background(), tpf.serverID)
+			malIDs, err := tpf.clientFetch.LegacyMaliciousIDs(context.Background(), tpf.serverID)
 			if errStr == "" {
 				require.NoError(t, err)
 				require.ElementsMatch(t, bad, malIDs)
@@ -531,7 +531,9 @@ func TestP2PGetMalfeasanceProofs(t *testing.T) {
 			proof := types.RandomBytes(11)
 			require.NoError(t, identities.SetMalicious(tpf.serverCDB, nid, proof, time.Now()))
 			tpf.verifyGetHash(
-				func() error { return tpf.clientFetch.GetMalfeasanceProofs(context.Background(), []types.NodeID{nid}) },
+				func() error {
+					return tpf.clientFetch.LegacyMalfeasanceProofs(context.Background(), []types.NodeID{nid})
+				},
 				errStr, "mal", "hs/1", types.Hash32(nid), nid.Bytes(),
 				proof,
 			)

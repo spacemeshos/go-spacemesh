@@ -100,15 +100,6 @@ func startTestLoop(tb testing.TB, f *Fetch, eg *errgroup.Group, stop chan struct
 	})
 }
 
-func generateMaliciousIDs(tb testing.TB) []types.NodeID {
-	tb.Helper()
-	malIDs := make([]types.NodeID, numMalicious)
-	for i := range malIDs {
-		malIDs[i] = types.RandomNodeID()
-	}
-	return malIDs
-}
-
 func generateLayerContent(tb testing.TB) []byte {
 	tb.Helper()
 	ballotIDs := make([]types.BallotID, 0, numBallots)
@@ -396,7 +387,7 @@ func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetMalfeasanceProofs(context.Background(), nodeIDs))
+	require.NoError(t, f.LegacyMalfeasanceProofs(context.Background(), nodeIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -659,27 +650,34 @@ func TestGetPoetProof(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
-func TestFetch_GetMaliciousIDs(t *testing.T) {
+func TestFetch_LegacyMaliciousIDs(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		t.Parallel()
 		f := createFetch(t)
-		expectedIds := generateMaliciousIDs(t)
-		resp := codec.MustEncode(&MaliciousIDs{NodeIDs: expectedIds})
+		expectedIDs := make([]types.NodeID, numMalicious)
+		for i := range expectedIDs {
+			expectedIDs[i] = types.RandomNodeID()
+		}
+		resp := codec.MustEncode(&MaliciousIDs{NodeIDs: expectedIDs})
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
-		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(resp, nil)
-		ids, err := f.GetMaliciousIDs(context.Background(), "p0")
+		f.mLegacyMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(resp, nil)
+		ids, err := f.LegacyMaliciousIDs(context.Background(), "p0")
 		require.NoError(t, err)
-		require.Equal(t, expectedIds, ids)
+		require.Equal(t, expectedIDs, ids)
 	})
 	t.Run("failure", func(t *testing.T) {
 		t.Parallel()
 		errUnknown := errors.New("unknown")
 		f := createFetch(t)
-		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(nil, errUnknown)
-		ids, err := f.GetMaliciousIDs(context.Background(), "p0")
+		f.mLegacyMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(nil, errUnknown)
+		ids, err := f.LegacyMaliciousIDs(context.Background(), "p0")
 		require.ErrorIs(t, err, errUnknown)
 		require.Nil(t, ids)
 	})
+}
+
+func TestFetch_MaliciousIDs(t *testing.T) {
+	// TODO(mafa): implement for malfeasance2
 }
 
 func TestFetch_GetLayerOpinions(t *testing.T) {

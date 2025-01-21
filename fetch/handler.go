@@ -41,8 +41,8 @@ func newHandler(
 	}
 }
 
-// handleMaliciousIDsReq returns the IDs of all known malicious nodes.
-func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
+// handleLegacyMaliciousIDsReq returns the IDs of all known malicious nodes.
+func (h *handler) handleLegacyMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
 	nodes, err := identities.AllMalicious(h.cdb)
 	if err != nil {
 		return nil, fmt.Errorf("getting malicious IDs: %w", err)
@@ -54,7 +54,7 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byt
 	return codec.MustEncode(malicious), nil
 }
 
-func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
+func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
 		nodeIDs, err := identities.AllMalicious(h.cdb)
 		if err != nil {

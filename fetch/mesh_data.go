@@ -160,15 +160,31 @@ func (f *Fetch) GetActiveSet(ctx context.Context, set types.Hash32) error {
 	return f.getHashes(ctx, []types.Hash32{set}, datastore.ActiveSet, f.validators.activeset.HandleMessage)
 }
 
-// GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
-func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+// LegacyMalfeasanceProofs gets legacy malfeasance proofs (v1) for the specified NodeIDs and validates them.
+func (f *Fetch) LegacyMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.Debug("requesting malfeasance proofs from peer", log.ZContext(ctx), zap.Int("num_proofs", len(ids)))
+	f.logger.Debug("requesting legacy malfeasance proofs from peers",
+		log.ZContext(ctx),
+		zap.Int("num_proofs", len(ids)),
+	)
 	hashes := types.NodeIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.legacyMalfeasance.HandleMessage)
+	return f.getHashes(ctx, hashes, datastore.LegacyMalfeasance, f.validators.legacyMalfeasance.HandleMessage)
 }
+
+// MalfeasanceProofs gets malfeasance proofs (v2) for the specified NodeIDs and validates them.
+// func (f *Fetch) MalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+// 	if len(ids) == 0 {
+// 		return nil
+// 	}
+// 	f.logger.Debug("requesting malfeasance proofs from peers",
+// 		log.ZContext(ctx),
+// 		zap.Int("num_proofs", len(ids)),
+// 	)
+// 	hashes := types.NodeIDsToHashes(ids)
+// 	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage)
+// }
 
 // GetBallots gets data for the specified BallotIDs and validates them.
 func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {
@@ -269,38 +285,75 @@ func (f *Fetch) GetPoetProof(ctx context.Context, id types.Hash32) error {
 			log.ZContext(ctx),
 			zap.String("hint", string(datastore.POETDB)),
 			zap.Stringer("hash", id),
-			zap.Error(pm.err))
+			zap.Error(pm.err),
+		)
 		return pm.err
 	}
 }
 
-func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.NodeID, error) {
+// LegacyMaliciousIDs gets the malicious IDs from the specified peer. Proofs for those IDs can be fetched via the
+// legacy malfeasance proofs protocol (see also LegacyMalfeasanceProofs).
+func (f *Fetch) LegacyMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.NodeID, error) {
 	var malIDs MaliciousIDs
-	if f.cfg.Streaming {
-		if err := f.meteredStreamRequest(
-			ctx, malProtocol, peer, []byte{},
-			func(ctx context.Context, s io.ReadWriter) (int, error) {
-				total, err := readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
-				if ctx.Err() != nil {
-					return total, ctx.Err()
-				}
-				return total, err
-			},
-		); err != nil {
-			return nil, err
-		}
-	} else {
-		data, err := f.meteredRequest(ctx, malProtocol, peer, []byte{})
+	if !f.cfg.Streaming {
+		data, err := f.meteredRequest(ctx, legacyMalProtocol, peer, []byte{})
 		if err != nil {
 			return nil, err
 		}
 		if err := codec.Decode(data, &malIDs); err != nil {
 			return nil, err
 		}
+		f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
+		return malIDs.NodeIDs, nil
+	}
+
+	err := f.meteredStreamRequest(ctx, legacyMalProtocol, peer, []byte{},
+		func(ctx context.Context, s io.ReadWriter) (int, error) {
+			total, err := readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
+			if ctx.Err() != nil {
+				return total, ctx.Err()
+			}
+			return total, err
+		},
+	)
+	if err != nil {
+		return nil, err
 	}
 	f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
 	return malIDs.NodeIDs, nil
 }
+
+// MaliciousIDs gets the malicious IDs from the specified peer. Proofs for those IDs can be fetched via the malfeasance
+// proof protocol (see also MalfeasanceProofs).
+// func (f *Fetch) MaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.NodeID, error) {
+// 	var malIDs MaliciousIDs
+// 	if !f.cfg.Streaming {
+// 		data, err := f.meteredRequest(ctx, malProtocol, peer, []byte{})
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		if err := codec.Decode(data, &malIDs); err != nil {
+// 			return nil, err
+// 		}
+// 		f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
+// 		return malIDs.NodeIDs, nil
+// 	}
+
+// 	err := f.meteredStreamRequest(ctx, malProtocol, peer, []byte{},
+// 		func(ctx context.Context, s io.ReadWriter) (int, error) {
+// 			total, err := readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
+// 			if ctx.Err() != nil {
+// 				return total, ctx.Err()
+// 			}
+// 			return total, err
+// 		},
+// 	)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
+// 	return malIDs.NodeIDs, nil
+// }
 
 // GetLayerData get layer data from peers.
 func (f *Fetch) GetLayerData(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {

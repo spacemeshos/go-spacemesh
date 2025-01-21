@@ -33,7 +33,8 @@ const (
 	hashProtocol      = "hs/1"
 	activeSetProtocol = "as/1"
 	meshHashProtocol  = "mh/1"
-	malProtocol       = "ml/1"
+	legacyMalProtocol = "ml/1"
+	malProtocol       = "ml/2"
 	OpnProtocol       = "lp/2"
 
 	cacheSize = 1000
@@ -178,9 +179,11 @@ func DefaultConfig() Config {
 			hashProtocol: {Queue: 2000, Requests: 200, Interval: time.Second},
 			// active sets (can get quite large)
 			activeSetProtocol: {Queue: 10, Requests: 1, Interval: time.Second},
-			// serves at most 100 hashes - 3KB
+			// serves at most 100 hashes - 3 KB
 			meshHashProtocol: {Queue: 1000, Requests: 100, Interval: time.Second},
-			// serves all malicious ids (id - 32 byte) - 10KB
+			// serves all legacy malicious ids (á 32 byte, ~2255 as of Jan 2025) - <100 KB
+			legacyMalProtocol: {Queue: 100, Requests: 10, Interval: time.Second},
+			// serves all malicious ids (á 32 byte, 0 as of Jan 2025) - <100 KB
 			malProtocol: {Queue: 100, Requests: 10, Interval: time.Second},
 			// 64 bytes
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
@@ -357,7 +360,8 @@ func NewFetch(
 					return h.doHandleHashReqStream(ctx, msg, s, datastore.ActiveSet)
 				})
 			f.registerServer(host, meshHashProtocol, h.handleMeshHashReqStream)
-			f.registerServer(host, malProtocol, h.handleMaliciousIDsReqStream)
+			f.registerServer(host, legacyMalProtocol, h.handleLegacyMaliciousIDsReqStream)
+			// f.registerServer(host, malProtocol, h.handleMaliciousIDsReqStream)
 		} else {
 			f.registerServer(host, atxProtocol, server.WrapHandler(h.handleEpochInfoReq))
 			f.registerServer(host, hashProtocol, server.WrapHandler(h.handleHashReq))
@@ -367,7 +371,8 @@ func NewFetch(
 					return h.doHandleHashReq(ctx, data, datastore.ActiveSet)
 				}))
 			f.registerServer(host, meshHashProtocol, server.WrapHandler(h.handleMeshHashReq))
-			f.registerServer(host, malProtocol, server.WrapHandler(h.handleMaliciousIDsReq))
+			f.registerServer(host, legacyMalProtocol, server.WrapHandler(h.handleLegacyMaliciousIDsReq))
+			// f.registerServer(host, malProtocol, server.WrapHandler(h.handleMaliciousIDsReq))
 		}
 		f.registerServer(host, lyrDataProtocol, server.WrapHandler(h.handleLayerDataReq))
 		f.registerServer(host, OpnProtocol, server.WrapHandler(h.handleLayerOpinionsReq2))

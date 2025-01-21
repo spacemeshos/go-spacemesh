@@ -42,79 +42,79 @@ func (m *Mockfetcher) EXPECT() *MockfetcherMockRecorder {
 	return m.recorder
 }
 
-// GetMalfeasanceProofs mocks base method.
-func (m *Mockfetcher) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
+// LegacyMalfeasanceProofs mocks base method.
+func (m *Mockfetcher) LegacyMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMalfeasanceProofs", arg0, arg1)
+	ret := m.ctrl.Call(m, "LegacyMalfeasanceProofs", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// GetMalfeasanceProofs indicates an expected call of GetMalfeasanceProofs.
-func (mr *MockfetcherMockRecorder) GetMalfeasanceProofs(arg0, arg1 any) *MockfetcherGetMalfeasanceProofsCall {
+// LegacyMalfeasanceProofs indicates an expected call of LegacyMalfeasanceProofs.
+func (mr *MockfetcherMockRecorder) LegacyMalfeasanceProofs(arg0, arg1 any) *MockfetcherLegacyMalfeasanceProofsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProofs", reflect.TypeOf((*Mockfetcher)(nil).GetMalfeasanceProofs), arg0, arg1)
-	return &MockfetcherGetMalfeasanceProofsCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LegacyMalfeasanceProofs", reflect.TypeOf((*Mockfetcher)(nil).LegacyMalfeasanceProofs), arg0, arg1)
+	return &MockfetcherLegacyMalfeasanceProofsCall{Call: call}
 }
 
-// MockfetcherGetMalfeasanceProofsCall wrap *gomock.Call
-type MockfetcherGetMalfeasanceProofsCall struct {
+// MockfetcherLegacyMalfeasanceProofsCall wrap *gomock.Call
+type MockfetcherLegacyMalfeasanceProofsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockfetcherGetMalfeasanceProofsCall) Return(arg0 error) *MockfetcherGetMalfeasanceProofsCall {
+func (c *MockfetcherLegacyMalfeasanceProofsCall) Return(arg0 error) *MockfetcherLegacyMalfeasanceProofsCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockfetcherGetMalfeasanceProofsCall) Do(f func(context.Context, []types.NodeID) error) *MockfetcherGetMalfeasanceProofsCall {
+func (c *MockfetcherLegacyMalfeasanceProofsCall) Do(f func(context.Context, []types.NodeID) error) *MockfetcherLegacyMalfeasanceProofsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []types.NodeID) error) *MockfetcherGetMalfeasanceProofsCall {
+func (c *MockfetcherLegacyMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []types.NodeID) error) *MockfetcherLegacyMalfeasanceProofsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
-// GetMaliciousIDs mocks base method.
-func (m *Mockfetcher) GetMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
+// LegacyMaliciousIDs mocks base method.
+func (m *Mockfetcher) LegacyMaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMaliciousIDs", arg0, arg1)
+	ret := m.ctrl.Call(m, "LegacyMaliciousIDs", arg0, arg1)
 	ret0, _ := ret[0].([]types.NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetMaliciousIDs indicates an expected call of GetMaliciousIDs.
-func (mr *MockfetcherMockRecorder) GetMaliciousIDs(arg0, arg1 any) *MockfetcherGetMaliciousIDsCall {
+// LegacyMaliciousIDs indicates an expected call of LegacyMaliciousIDs.
+func (mr *MockfetcherMockRecorder) LegacyMaliciousIDs(arg0, arg1 any) *MockfetcherLegacyMaliciousIDsCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMaliciousIDs", reflect.TypeOf((*Mockfetcher)(nil).GetMaliciousIDs), arg0, arg1)
-	return &MockfetcherGetMaliciousIDsCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LegacyMaliciousIDs", reflect.TypeOf((*Mockfetcher)(nil).LegacyMaliciousIDs), arg0, arg1)
+	return &MockfetcherLegacyMaliciousIDsCall{Call: call}
 }
 
-// MockfetcherGetMaliciousIDsCall wrap *gomock.Call
-type MockfetcherGetMaliciousIDsCall struct {
+// MockfetcherLegacyMaliciousIDsCall wrap *gomock.Call
+type MockfetcherLegacyMaliciousIDsCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockfetcherGetMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherLegacyMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetcherLegacyMaliciousIDsCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockfetcherGetMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherLegacyMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherLegacyMaliciousIDsCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetcherGetMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherGetMaliciousIDsCall {
+func (c *MockfetcherLegacyMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherLegacyMaliciousIDsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -178,18 +178,18 @@ func newTester(tb testing.TB, cfg Config) *tester {
 func (tester *tester) expectGetMaliciousIDs() {
 	// "2" comes just from a single peer
 	tester.fetcher.EXPECT().
-		GetMaliciousIDs(gomock.Any(), tester.peers[0]).
+		LegacyMaliciousIDs(gomock.Any(), tester.peers[0]).
 		Return(malData("4", "1", "3", "2"), nil)
 	for _, p := range tester.peers[1:] {
 		tester.fetcher.EXPECT().
-			GetMaliciousIDs(gomock.Any(), p).
+			LegacyMaliciousIDs(gomock.Any(), p).
 			Return(malData("4", "1", "3"), nil)
 	}
 }
 
 func (tester *tester) expectGetProofs(errMap map[types.NodeID]error) {
 	tester.fetcher.EXPECT().
-		GetMalfeasanceProofs(gomock.Any(), gomock.Any()).
+		LegacyMalfeasanceProofs(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, ids []types.NodeID) error {
 			batchErr := &fetch.BatchError{
 				Errors: make(map[types.Hash32]error),
@@ -245,7 +245,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectPeers(tester.peers)
 		for _, p := range tester.peers {
 			tester.fetcher.EXPECT().
-				GetMaliciousIDs(gomock.Any(), p).
+				LegacyMaliciousIDs(gomock.Any(), p).
 				Return(nil, nil)
 		}
 		epochStart := tester.clock.Now().Truncate(time.Second)
@@ -260,10 +260,10 @@ func TestSyncer(t *testing.T) {
 		cancel()
 		tester.expectPeers([]p2p.Peer{"a"})
 		tester.fetcher.EXPECT().
-			GetMaliciousIDs(gomock.Any(), gomock.Any()).
+			LegacyMaliciousIDs(gomock.Any(), gomock.Any()).
 			Return(malData("1"), nil).AnyTimes()
 		tester.fetcher.EXPECT().
-			GetMalfeasanceProofs(gomock.Any(), gomock.Any()).
+			LegacyMalfeasanceProofs(gomock.Any(), gomock.Any()).
 			Return(errors.New("no atxs")).AnyTimes()
 		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
 	})
@@ -299,11 +299,11 @@ func TestSyncer(t *testing.T) {
 		tester := newTester(t, cfg)
 		tester.expectPeers(tester.peers)
 		tester.fetcher.EXPECT().
-			GetMaliciousIDs(gomock.Any(), tester.peers[0]).
+			LegacyMaliciousIDs(gomock.Any(), tester.peers[0]).
 			Return(nil, errors.New("fail"))
 		for _, p := range tester.peers[1:] {
 			tester.fetcher.EXPECT().
-				GetMaliciousIDs(gomock.Any(), p).
+				LegacyMaliciousIDs(gomock.Any(), p).
 				Return(malData("4", "1", "3", "2"), nil)
 		}
 		tester.expectGetProofs(nil)

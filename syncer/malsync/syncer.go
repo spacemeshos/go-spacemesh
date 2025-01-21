@@ -25,8 +25,8 @@ import (
 
 type fetcher interface {
 	SelectBestShuffled(int) []p2p.Peer
-	GetMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
-	GetMalfeasanceProofs(context.Context, []types.NodeID) error
+	LegacyMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
+	LegacyMalfeasanceProofs(context.Context, []types.NodeID) error
 }
 
 type Opt func(*Syncer)
@@ -302,7 +302,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 		var eg errgroup.Group
 		for _, peer := range peers {
 			eg.Go(func() error {
-				malIDs, err := s.fetcher.GetMaliciousIDs(ctx, peer)
+				malIDs, err := s.fetcher.LegacyMaliciousIDs(ctx, peer)
 				if err != nil {
 					if errors.Is(err, context.Canceled) {
 						return nil
@@ -422,7 +422,7 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 				log.ZContext(ctx),
 				zap.Int("count", len(batch)),
 			)
-			err := s.fetcher.GetMalfeasanceProofs(ctx, batch)
+			err := s.fetcher.LegacyMalfeasanceProofs(ctx, batch)
 			if err != nil {
 				if errors.Is(err, context.Canceled) {
 					return ctx.Err()
