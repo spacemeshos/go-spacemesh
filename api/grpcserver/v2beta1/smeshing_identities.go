@@ -1,10 +1,10 @@
-package v2alpha1
+package v2beta1
 
 import (
 	"context"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
-const SmeshingIdentities = "smeshing_identities_v2alpha1"
+const SmeshingIdentities = "smeshing_identities_v2beta1"
 
 type SmeshingIdentitiesService struct {
 	states      identityState
@@ -45,7 +45,7 @@ func (s *SmeshingIdentitiesService) RegisterHandlerService(mux *runtime.ServeMux
 }
 
 func (s *SmeshingIdentitiesService) Path() string {
-	return "/spacemesh.v2alpha1.SmeshingIdentitiesService/"
+	return "/spacemesh.v2beta1.SmeshingIdentitiesService/"
 }
 
 func (s *SmeshingIdentitiesService) States(
