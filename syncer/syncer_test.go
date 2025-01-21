@@ -82,6 +82,7 @@ type testSyncer struct {
 	mCertHdr     *mocks.MockcertHandler
 	mForkFinder  *mocks.MockforkFinder
 	mASV2        *mocks.MockmultiEpochAtxSyncerV2
+	mMSV2        *mocks.MockmalfeasanceSyncerV2
 }
 
 func (ts *testSyncer) expectMalEnsureInSync(current types.LayerID) {
@@ -127,6 +128,7 @@ func newTestSyncerWithConfig(tb testing.TB, cfg Config) *testSyncer {
 		mCertHdr:     mocks.NewMockcertHandler(ctrl),
 		mForkFinder:  mocks.NewMockforkFinder(ctrl),
 		mASV2:        mocks.NewMockmultiEpochAtxSyncerV2(ctrl),
+		mMSV2:        mocks.NewMockmalfeasanceSyncerV2(ctrl),
 	}
 	db := statesql.InMemoryTest(tb)
 	ts.cdb = datastore.NewCachedDB(db, lg)
@@ -154,6 +156,7 @@ func newTestSyncerWithConfig(tb testing.TB, cfg Config) *testSyncer {
 		withDataFetcher(ts.mDataFetcher),
 		withForkFinder(ts.mForkFinder),
 		withAtxSyncerV2(ts.mASV2),
+		withMalfeasanceSyncerV2(ts.mMSV2),
 	)
 	require.NoError(tb, err)
 	return ts
@@ -212,6 +215,7 @@ func TestStartAndShutdown(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 
 	ts.mASV2.EXPECT().Stop()
+	ts.mMSV2.EXPECT().Stop()
 	cancel()
 	require.False(t, ts.syncer.synchronize(ctx))
 	ts.syncer.Close()
@@ -262,6 +266,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	<-dlCh
 
 	ts.mASV2.EXPECT().Stop()
+	ts.mMSV2.EXPECT().Stop()
 	cancel()
 	ts.syncer.Close()
 }
@@ -514,6 +519,7 @@ func TestSyncAtxs_Genesis_SyncV2(t *testing.T) {
 	t.Run("no atx expected", func(t *testing.T) {
 		ts := newSyncerWithoutPeriodicRunsWithConfig(t, cfg)
 		ts.mTicker.advanceToLayer(1)
+		ts.mMSV2.EXPECT().StartAndSync(gomock.Any())
 		require.True(t, ts.syncer.synchronize(context.Background()))
 		require.True(t, ts.syncer.ListenToATXGossip())
 		require.Equal(t, types.EpochID(0), ts.syncer.lastAtxEpoch())
@@ -528,6 +534,20 @@ func TestSyncAtxs_Genesis_SyncV2(t *testing.T) {
 		require.False(t, ts.syncer.ListenToATXGossip())
 		ts.mASV2.EXPECT().EnsureSync(gomock.Any(), types.EpochID(0), epoch)
 		ts.expectMalEnsureInSync(current)
+		ts.mMSV2.EXPECT().StartAndSync(gomock.Any())
+		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.ListenToATXGossip())
+	})
+
+	t.Run("with malfeasance syncv2", func(t *testing.T) {
+		cfg.ReconcSync.EnableMalSync = true
+		ts := newSyncerWithoutPeriodicRunsWithConfig(t, cfg)
+		epoch := types.EpochID(1)
+		current := epoch.FirstLayer() + 2
+		ts.mTicker.advanceToLayer(current) // to pass epoch end fraction threshold
+		require.False(t, ts.syncer.ListenToATXGossip())
+		ts.mASV2.EXPECT().EnsureSync(gomock.Any(), types.EpochID(0), epoch)
+		ts.mMSV2.EXPECT().StartAndSync(gomock.Any())
 		require.True(t, ts.syncer.synchronize(context.Background()))
 		require.True(t, ts.syncer.ListenToATXGossip())
 	})

@@ -87,6 +87,9 @@ func MainnetConfig() Config {
 	newAtxSyncCfg.MaxDepth = 21
 	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
 	newAtxSyncCfg.AdvanceInterval = 5 * time.Minute
+	malSyncCfg := sync2.DefaultConfig()
+	malSyncCfg.MaxDepth = 16
+	malSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
 
 	return Config{
 		BaseConfig: BaseConfig{
@@ -228,6 +231,7 @@ func MainnetConfig() Config {
 				Enable:            true,
 				OldAtxSyncCfg:     oldAtxSyncCfg,
 				NewAtxSyncCfg:     newAtxSyncCfg,
+				MalSyncCfg:        malSyncCfg,
 				ParallelLoadLimit: 10,
 				HardTimeout:       10 * time.Minute,
 				ServerConfig: fetch.ServerConfig{

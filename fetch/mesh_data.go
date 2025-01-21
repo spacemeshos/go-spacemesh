@@ -160,14 +160,30 @@ func (f *Fetch) GetActiveSet(ctx context.Context, set types.Hash32) error {
 	return f.getHashes(ctx, []types.Hash32{set}, datastore.ActiveSet, f.validators.activeset.HandleMessage)
 }
 
-// GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
-func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+// GetMalfeasanceProofsWithCallback gets malfeasance proofs for the specified NodeIDs and validates them.
+// If callback is not nil, GetMalfeasanceProofsWithCallback invokes the callback for each proof fetched.
+func (f *Fetch) GetMalfeasanceProofsWithCallback(
+	ctx context.Context,
+	ids []types.NodeID,
+	callback func(types.NodeID, error),
+) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	f.logger.Debug("requesting malfeasance proofs from peer", log.ZContext(ctx), zap.Int("num_proofs", len(ids)))
 	hashes := types.NodeIDsToHashes(ids)
-	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage)
+	var ghOpts []getHashesOpt
+	if callback != nil {
+		ghOpts = append(ghOpts, withHashCallback(func(hash types.Hash32, err error) {
+			callback(types.NodeID(hash), err)
+		}))
+	}
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage, ghOpts...)
+}
+
+// GetMalfeasanceProofs gets malfeasance proofs for the specified NodeIDs and validates them.
+func (f *Fetch) GetMalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+	return f.GetMalfeasanceProofsWithCallback(ctx, ids, nil)
 }
 
 // GetBallots gets data for the specified BallotIDs and validates them.

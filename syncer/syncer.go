@@ -50,8 +50,10 @@ type Config struct {
 type ReconcSyncConfig struct {
 	Enable            bool               `mapstructure:"enable"`
 	EnableActiveSync  bool               `mapstructure:"enable-active-sync"`
+	EnableMalSync     bool               `mapstructure:"enable-mal-sync"`
 	OldAtxSyncCfg     sync2.Config       `mapstructure:"old-atx-sync"`
 	NewAtxSyncCfg     sync2.Config       `mapstructure:"new-atx-sync"`
+	MalSyncCfg        sync2.Config       `mapstructure:"mal-sync"`
 	ParallelLoadLimit int                `mapstructure:"parallel-load-limit"`
 	HardTimeout       time.Duration      `mapstructure:"hard-timeout"`
 	ServerConfig      fetch.ServerConfig `mapstructure:"server-config"`
@@ -67,6 +69,9 @@ func DefaultConfig() Config {
 	newAtxSyncCfg.MaxDepth = 21
 	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
 	newAtxSyncCfg.AdvanceInterval = 5 * time.Minute
+	malSyncCfg := sync2.DefaultConfig()
+	malSyncCfg.MaxDepth = 16
+	malSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
 	return Config{
 		Interval:                 10 * time.Second,
 		EpochEndFraction:         0.5,
@@ -83,6 +88,7 @@ func DefaultConfig() Config {
 			EnableActiveSync:  false,
 			OldAtxSyncCfg:     oldAtxSyncCfg,
 			NewAtxSyncCfg:     newAtxSyncCfg,
+			MalSyncCfg:        malSyncCfg,
 			ParallelLoadLimit: 10,
 			HardTimeout:       10 * time.Minute,
 			ServerConfig: fetch.ServerConfig{
@@ -162,6 +168,12 @@ func withAtxSyncerV2(asv2 multiEpochAtxSyncerV2) Option {
 	}
 }
 
+func withMalfeasanceSyncerV2(msv2 malfeasanceSyncerV2) Option {
+	return func(s *Syncer) {
+		s.msv2 = msv2
+	}
+}
+
 // Syncer is responsible to keep the node in sync with the network.
 type Syncer struct {
 	logger       *zap.Logger
@@ -206,6 +218,7 @@ type Syncer struct {
 	stop context.CancelFunc
 
 	asv2       multiEpochAtxSyncerV2
+	msv2       malfeasanceSyncerV2
 	dispatcher *rangesync.Dispatcher
 }
 
@@ -252,10 +265,11 @@ func NewSyncer(
 	s.isBusy.Store(false)
 	s.lastLayerSynced.Store(s.mesh.LatestLayer().Uint32())
 	s.lastEpochSynced.Store(types.GetEffectiveGenesis().GetEpoch().Uint32() - 1)
-	if s.cfg.ReconcSync.Enable && s.asv2 == nil {
-		serverOpts := s.cfg.ReconcSync.ServerConfig.ToOpts()
-		serverOpts = append(serverOpts, server.WithHardTimeout(s.cfg.ReconcSync.HardTimeout))
-		s.dispatcher = sync2.NewDispatcher(s.logger, host, serverOpts)
+	if !s.cfg.ReconcSync.Enable || (s.asv2 != nil && s.msv2 != nil) {
+		return s, nil
+	}
+	if s.asv2 == nil {
+		s.ensureDispatcher(host)
 		hss := sync2.NewATXSyncSource(
 			s.logger,
 			s.dispatcher,
@@ -276,7 +290,26 @@ func NewSyncer(
 			return nil, fmt.Errorf("creating multi-epoch ATX syncer: %w", err)
 		}
 	}
+	if s.msv2 == nil {
+		s.ensureDispatcher(host)
+		var err error
+		s.msv2, err = sync2.NewMalfeasanceSyncer(
+			s.logger, s.dispatcher, "malsync", s.cfg.ReconcSync.MalSyncCfg, cdb.Database,
+			fetcher, peerCache, s.cfg.ReconcSync.EnableActiveSync)
+		if err != nil {
+			return nil, fmt.Errorf("creating malfeasance syncer: %w", err)
+		}
+	}
 	return s, nil
+}
+
+func (s *Syncer) ensureDispatcher(host host.Host) {
+	if s.dispatcher != nil {
+		return
+	}
+	serverOpts := s.cfg.ReconcSync.ServerConfig.ToOpts()
+	serverOpts = append(serverOpts, server.WithHardTimeout(s.cfg.ReconcSync.HardTimeout))
+	s.dispatcher = sync2.NewDispatcher(s.logger, host, serverOpts)
 }
 
 // Close stops the syncing process and the goroutines syncer spawns.
@@ -289,6 +322,9 @@ func (s *Syncer) Close() {
 	err := s.eg.Wait()
 	if s.asv2 != nil {
 		s.asv2.Stop()
+	}
+	if s.msv2 != nil {
+		s.msv2.Stop()
 	}
 	s.logger.Debug("all syncer goroutines finished", zap.Error(err))
 }
@@ -686,9 +722,34 @@ func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
 	return nil
 }
 
+func (s *Syncer) ensureMalfeasanceInSyncV2(ctx context.Context) error {
+	if !s.cfg.ReconcSync.EnableActiveSync || !s.cfg.ReconcSync.EnableMalSync {
+		// no actual active sync is initiated in this case, thus no logs
+		if err := s.msv2.StartAndSync(ctx); err != nil {
+			return fmt.Errorf("starting malfeasance syncv2: %w", err)
+		}
+		return nil
+	}
+	if !s.ListenToATXGossip() {
+		s.logger.Info("syncing malicious proofs", log.ZContext(ctx))
+		if err := s.msv2.StartAndSync(ctx); err != nil {
+			return fmt.Errorf("starting malfeasance syncv2: %w", err)
+		}
+		s.logger.Info("malicious IDs synced", log.ZContext(ctx))
+		// Malfeasance proofs are synced after the actual ATXs.
+		// We set ATX synced status after both ATXs and malfeascance proofs
+		// are in sync.
+		s.setATXSynced()
+	}
+	return nil
+}
+
 func (s *Syncer) syncAtxAndMalfeasance(ctx context.Context) error {
 	if s.cfg.ReconcSync.Enable {
 		if err := s.ensureATXsInSyncV2(ctx); err != nil {
+			return err
+		}
+		if err := s.ensureMalfeasanceInSyncV2(ctx); err != nil {
 			return err
 		}
 	}
@@ -699,7 +760,12 @@ func (s *Syncer) syncAtxAndMalfeasance(ctx context.Context) error {
 			return err
 		}
 	}
-	return s.ensureMalfeasanceInSync(ctx)
+	if !s.cfg.ReconcSync.Enable || !s.cfg.ReconcSync.EnableActiveSync || !s.cfg.ReconcSync.EnableMalSync {
+		if err := s.ensureMalfeasanceInSync(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func isTooFarBehind(
