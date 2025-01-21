@@ -39,11 +39,6 @@ func (s *NodeService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterNodeServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *NodeService) String() string {
-	return "NodeService"
-}
-
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
 	peers peerCounter,

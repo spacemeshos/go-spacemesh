@@ -17,6 +17,7 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pbV2 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
@@ -46,10 +47,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk"
 	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -161,7 +164,7 @@ func testArgs(ctx context.Context, root *cobra.Command, args ...string) (string,
 }
 
 func cmdWithRun(run func(*cobra.Command, []string) error) *cobra.Command {
-	c := GetCommand()
+	c := GetNodeServiceCommand()
 	c.RunE = run
 	return c
 }
@@ -330,6 +333,65 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
+}
+
+func TestProxyingJsonService(t *testing.T) {
+	cfg := config.Config{
+		API: grpcserver.Config{
+			JSONListener:    "127.0.0.1:0",
+			PublicListener:  "127.0.0.1:0",
+			PublicServices:  []grpcserver.Service{grpcserver.Node},
+			PrivateServices: nil,
+			PostServices:    nil,
+			TLSServices:     nil,
+		},
+	}
+
+	// Start server
+	logger := logtest.New(t)
+	db := localsql.InMemoryTest(t)
+	serverApp := New(WithConfig(&cfg), WithLog(logger.Named("server")))
+	err := serverApp.startAPIServices(context.Background())
+	require.NoError(t, err)
+	defer serverApp.stopServices(context.Background())
+
+	// Start client proxying to the server
+	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
+	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Alpha1}
+	clientApp := New(WithConfig(&cfg), WithLog(logger.Named("client")))
+	clientApp.idStates = identity.NewIdentityStateStorage(db, logger.Named("idStates").Zap())
+
+	require.NoError(t, clientApp.startAPIServices(context.Background()))
+	defer clientApp.stopServices(context.Background())
+
+	var (
+		respBody   []byte
+		respStatus int
+	)
+	const message = "hello world"
+	endpoint := fmt.Sprintf("http://%s/v1/node/echo", clientApp.apiProxy.BoundAddress)
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	require.Eventually(t, func() bool {
+		respBody, respStatus = callEndpoint(t, endpoint, payload)
+		return respStatus == http.StatusOK
+	}, 2*time.Second, 100*time.Millisecond)
+	var msg pb.EchoResponse
+	require.NoError(t, protojson.Unmarshal(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
+
+	// Make a request to a local SmeshingIdentities service
+	endpoint = fmt.Sprintf(
+		"http://%s/spacemesh.v2alpha1.SmeshingIdentitiesService/States",
+		clientApp.apiProxy.BoundAddress,
+	)
+
+	nodeID := types.RandomNodeID()
+	clientApp.idStates.Set(nodeID, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
+	respBody, status := callEndpoint(t, endpoint, []byte(`{"limit": 1}`))
+	require.Equal(t, http.StatusOK, status)
+	var resp pbV2.IdentityStatesResponse
+	require.NoError(t, protojson.Unmarshal(respBody, &resp))
+	require.Contains(t, resp.Identities, nodeID.String())
 }
 
 type noopHook struct{}
@@ -612,7 +674,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		conf := config.Config{}
 		var flags pflag.FlagSet
-		cmd.AddFlags(&flags, &conf)
+		cmd.AddNodeServiceFlags(&flags, &conf)
 
 		const lowPeers = 1234
 		require.NoError(t, LoadConfig(&conf, name, nil))
@@ -713,7 +775,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			conf := config.MainnetConfig()
 			var flags pflag.FlagSet
-			cmd.AddFlags(&flags, &conf)
+			cmd.AddNodeServiceFlags(&flags, &conf)
 
 			require.NoError(t, LoadConfig(&conf, "", nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
@@ -738,7 +800,7 @@ func TestConfig_CustomTypes(t *testing.T) {
 
 			conf := config.Config{}
 			var flags pflag.FlagSet
-			cmd.AddFlags(&flags, &conf)
+			cmd.AddNodeServiceFlags(&flags, &conf)
 
 			require.NoError(t, LoadConfig(&conf, name, nil))
 			require.NoError(t, flags.Parse(strings.Fields(tc.cli)))
@@ -786,7 +848,7 @@ func TestConfig_PostProviderID_InvalidValues(t *testing.T) {
 		t.Run(fmt.Sprintf("%s_Flags", tc.name), func(t *testing.T) {
 			conf := config.Config{}
 			var flags pflag.FlagSet
-			cmd.AddFlags(&flags, &conf)
+			cmd.AddNodeServiceFlags(&flags, &conf)
 
 			err := flags.Parse([]string{fmt.Sprintf("--smeshing-opts-provider=%s", tc.cliValue)})
 			require.ErrorContains(t, err, "failed to parse PoST Provider ID")
@@ -812,7 +874,7 @@ func TestConfig_Load(t *testing.T) {
 	t.Run("missing default doesn't fail", func(t *testing.T) {
 		conf := config.Config{}
 		var flags pflag.FlagSet
-		cmd.AddFlags(&flags, &conf)
+		cmd.AddNodeServiceFlags(&flags, &conf)
 
 		require.NoError(t, LoadConfig(&conf, "", nil))
 		require.NoError(t, flags.Parse([]string{}))
@@ -826,7 +888,7 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		},
 	}
 	var flags pflag.FlagSet
-	cmd.AddFlags(&flags, &conf)
+	cmd.AddNodeServiceFlags(&flags, &conf)
 
 	const value = 100
 	keys := []string{"0x03", "0x04"}
@@ -1225,7 +1287,7 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	builder := activation.NewMockAtxBuilder(gomock.NewController(tb))
+	builder := activation.NewMockatxBuilder(gomock.NewController(tb))
 	builder.EXPECT().Register(sig)
 	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, ps.Start(cmdCfg, postOpts, sig))

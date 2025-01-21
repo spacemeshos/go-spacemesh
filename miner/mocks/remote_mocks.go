@@ -42,6 +42,46 @@ func (m *MockproposalService) EXPECT() *MockproposalServiceMockRecorder {
 	return m.recorder
 }
 
+// CalculateEligibilitySlotsFor mocks base method.
+func (m *MockproposalService) CalculateEligibilitySlotsFor(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CalculateEligibilitySlotsFor", ctx, node, epoch)
+	ret0, _ := ret[0].(uint32)
+	ret1, _ := ret[1].(types.VRFPostIndex)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// CalculateEligibilitySlotsFor indicates an expected call of CalculateEligibilitySlotsFor.
+func (mr *MockproposalServiceMockRecorder) CalculateEligibilitySlotsFor(ctx, node, epoch any) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalculateEligibilitySlotsFor", reflect.TypeOf((*MockproposalService)(nil).CalculateEligibilitySlotsFor), ctx, node, epoch)
+	return &MockproposalServiceCalculateEligibilitySlotsForCall{Call: call}
+}
+
+// MockproposalServiceCalculateEligibilitySlotsForCall wrap *gomock.Call
+type MockproposalServiceCalculateEligibilitySlotsForCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockproposalServiceCalculateEligibilitySlotsForCall) Return(arg0 uint32, arg1 types.VRFPostIndex, arg2 error) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockproposalServiceCalculateEligibilitySlotsForCall) Do(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockproposalServiceCalculateEligibilitySlotsForCall) DoAndReturn(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalServiceCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Proposal mocks base method.
 func (m *MockproposalService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error) {
 	m.ctrl.T.Helper()
@@ -206,15 +246,15 @@ func (c *MockidentityStatesAddProposalCall) DoAndReturn(f func(types.NodeID, *ty
 }
 
 // Set mocks base method.
-func (m *MockidentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State) {
+func (m *MockidentityStates) Set(id types.NodeID, newState identity.State) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Set", id, publishEpoch, newState)
+	m.ctrl.Call(m, "Set", id, newState)
 }
 
 // Set indicates an expected call of Set.
-func (mr *MockidentityStatesMockRecorder) Set(id, publishEpoch, newState any) *MockidentityStatesSetCall {
+func (mr *MockidentityStatesMockRecorder) Set(id, newState any) *MockidentityStatesSetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockidentityStates)(nil).Set), id, publishEpoch, newState)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockidentityStates)(nil).Set), id, newState)
 	return &MockidentityStatesSetCall{Call: call}
 }
 
@@ -230,49 +270,49 @@ func (c *MockidentityStatesSetCall) Return() *MockidentityStatesSetCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockidentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, identity.State)) *MockidentityStatesSetCall {
+func (c *MockidentityStatesSetCall) Do(f func(types.NodeID, identity.State)) *MockidentityStatesSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, identity.State)) *MockidentityStatesSetCall {
+func (c *MockidentityStatesSetCall) DoAndReturn(f func(types.NodeID, identity.State)) *MockidentityStatesSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
 
-// SetEligibilitiesForEpoch mocks base method.
-func (m *MockidentityStates) SetEligibilitiesForEpoch(id types.NodeID, epoch types.EpochID, eligibilities map[types.LayerID][]types.VotingEligibility) {
+// SetEligibilities mocks base method.
+func (m *MockidentityStates) SetEligibilities(id types.NodeID, eligibilities map[types.LayerID][]types.VotingEligibility) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "SetEligibilitiesForEpoch", id, epoch, eligibilities)
+	m.ctrl.Call(m, "SetEligibilities", id, eligibilities)
 }
 
-// SetEligibilitiesForEpoch indicates an expected call of SetEligibilitiesForEpoch.
-func (mr *MockidentityStatesMockRecorder) SetEligibilitiesForEpoch(id, epoch, eligibilities any) *MockidentityStatesSetEligibilitiesForEpochCall {
+// SetEligibilities indicates an expected call of SetEligibilities.
+func (mr *MockidentityStatesMockRecorder) SetEligibilities(id, eligibilities any) *MockidentityStatesSetEligibilitiesCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEligibilitiesForEpoch", reflect.TypeOf((*MockidentityStates)(nil).SetEligibilitiesForEpoch), id, epoch, eligibilities)
-	return &MockidentityStatesSetEligibilitiesForEpochCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetEligibilities", reflect.TypeOf((*MockidentityStates)(nil).SetEligibilities), id, eligibilities)
+	return &MockidentityStatesSetEligibilitiesCall{Call: call}
 }
 
-// MockidentityStatesSetEligibilitiesForEpochCall wrap *gomock.Call
-type MockidentityStatesSetEligibilitiesForEpochCall struct {
+// MockidentityStatesSetEligibilitiesCall wrap *gomock.Call
+type MockidentityStatesSetEligibilitiesCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockidentityStatesSetEligibilitiesForEpochCall) Return() *MockidentityStatesSetEligibilitiesForEpochCall {
+func (c *MockidentityStatesSetEligibilitiesCall) Return() *MockidentityStatesSetEligibilitiesCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockidentityStatesSetEligibilitiesForEpochCall) Do(f func(types.NodeID, types.EpochID, map[types.LayerID][]types.VotingEligibility)) *MockidentityStatesSetEligibilitiesForEpochCall {
+func (c *MockidentityStatesSetEligibilitiesCall) Do(f func(types.NodeID, map[types.LayerID][]types.VotingEligibility)) *MockidentityStatesSetEligibilitiesCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockidentityStatesSetEligibilitiesForEpochCall) DoAndReturn(f func(types.NodeID, types.EpochID, map[types.LayerID][]types.VotingEligibility)) *MockidentityStatesSetEligibilitiesForEpochCall {
+func (c *MockidentityStatesSetEligibilitiesCall) DoAndReturn(f func(types.NodeID, map[types.LayerID][]types.VotingEligibility)) *MockidentityStatesSetEligibilitiesCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

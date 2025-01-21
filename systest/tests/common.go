@@ -24,11 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-func init() {
-	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
-	types.SetNetworkHRP("stest")
-}
-
 const (
 	attempts = 3
 )
@@ -37,25 +32,24 @@ var retryBackoff = 10 * time.Second
 
 func sendTransactions(
 	ctx context.Context,
-	eg *errgroup.Group,
-	logger *zap.SugaredLogger,
+	logger *zap.Logger,
 	cl *cluster.Cluster,
 	first, stop uint32,
 	receiver types.Address,
 	batch, amount int,
 ) error {
+	eg, ctx := errgroup.WithContext(ctx)
 	for i := range cl.Accounts() {
 		client := cl.Client(i % cl.Total())
 		nonce, err := getNonce(ctx, client, cl.Address(i))
 		if err != nil {
-			return fmt.Errorf("get nonce failed (%s:%s): %w", client.Name, cl.Address(i), err)
+			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
 		}
-		watchLayers(ctx, eg, client, logger.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Number.Number == stop {
+		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
+			if layer.Layer.Number.Number >= stop {
 				return false, nil
 			}
-			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED ||
-				layer.Layer.Number.Number < first {
+			if layer.Layer.Status != pb.Layer_LAYER_STATUS_APPROVED || layer.Layer.Number.Number < first {
 				return true, nil
 			}
 			// give some time for a previous layer to be applied
@@ -63,51 +57,47 @@ func sendTransactions(
 			// and outputs events when the tick for the layer is available
 			time.Sleep(200 * time.Millisecond)
 			if nonce == 0 {
-				logger.Infow("address needs to be spawned", "account", i)
+				logger.Info("address needs to be spawned",
+					zap.String("client", client.Name),
+					zap.Stringer("address", cl.Address(i)),
+				)
 				if err := submitSpawn(ctx, cl, i, client); err != nil {
 					return false, fmt.Errorf("failed to spawn %w", err)
 				}
 				nonce++
 				return true, nil
 			}
-			logger.Debugw("submitting transactions",
-				"layer", layer.Layer.Number.Number,
-				"client", client.Name,
-				"account", i,
-				"nonce", nonce,
-				"batch", batch,
+			logger.Debug("submitting transactions",
+				zap.Uint32("layer", layer.Layer.Number.Number),
+				zap.String("client", client.Name),
+				zap.Stringer("address", cl.Address(i)),
+				zap.Uint64("nonce", nonce),
+				zap.Int("batch", batch),
 			)
-			for j := 0; j < batch; j++ {
-				// in case spawn isn't executed on this particular client
-				retries := 3
-				spendClient := client
-				for k := 0; k < retries; k++ {
-					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), spendClient)
+			for j := range batch {
+				var err error
+				for range 3 { // retry on failure 3 times
+					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client)
 					if err == nil {
 						break
 					}
-					logger.Warnw(
-						"failed to spend",
-						"client",
-						spendClient.Name,
-						"account",
-						i,
-						"nonce",
-						nonce+uint64(j),
-						"err",
-						err.Error(),
+					logger.Warn("failed to spend",
+						zap.String("client", client.Name),
+						zap.Stringer("address", cl.Address(i)),
+						zap.Uint64("nonce", nonce+uint64(j)),
+						zap.Error(err),
 					)
-					spendClient = cl.Client((i + k + 1) % cl.Total())
+					time.Sleep(1 * time.Second) // wait before retrying
 				}
 				if err != nil {
-					return false, fmt.Errorf("spend failed %s %w", spendClient.Name, err)
+					return false, fmt.Errorf("spend failed %s %w", client.Name, err)
 				}
 			}
 			nonce += uint64(batch)
 			return true, nil
 		})
 	}
-	return nil
+	return eg.Wait()
 }
 
 func submitTransaction(ctx context.Context, tx []byte, node *cluster.NodeClient) ([]byte, error) {
@@ -143,16 +133,17 @@ BACKOFF:
 		state, err := states.Recv()
 		s, ok := status.FromError(err)
 		if !ok {
-			return err
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("unknown error: %w", err)
 		}
 		switch s.Code() {
 		case codes.OK:
 			if cont, err := collector(state); !cont {
 				return err
 			}
-		case codes.Canceled:
-			return nil
-		case codes.DeadlineExceeded:
+		case codes.Canceled, codes.DeadlineExceeded:
 			return nil
 		case codes.Unavailable:
 			if retries == attempts {
@@ -202,16 +193,17 @@ BACKOFF:
 		layer, err := layers.Recv()
 		s, ok := status.FromError(err)
 		if !ok {
-			return err
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("unknown error: %w", err)
 		}
 		switch s.Code() {
 		case codes.OK:
 			if cont, err := collector(layer); !cont {
 				return err
 			}
-		case codes.Canceled:
-			return nil
-		case codes.DeadlineExceeded:
+		case codes.Canceled, codes.DeadlineExceeded:
 			return nil
 		case codes.Unavailable:
 			if retries == attempts {
@@ -249,16 +241,17 @@ BACKOFF:
 		proof, err := proofs.Recv()
 		s, ok := status.FromError(err)
 		if !ok {
-			return err
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("unknown error: %w", err)
 		}
 		switch s.Code() {
 		case codes.OK:
 			if cont, err := collector(proof); !cont {
 				return err
 			}
-		case codes.Canceled:
-			return nil
-		case codes.DeadlineExceeded:
+		case codes.Canceled, codes.DeadlineExceeded:
 			return nil
 		case codes.Unavailable:
 			if retries == attempts {
@@ -336,53 +329,52 @@ func waitTransaction(ctx context.Context, eg *errgroup.Group, client *cluster.No
 	})
 }
 
-func watchTransactionResults(ctx context.Context,
-	eg *errgroup.Group,
+func watchTransactionResults(
+	ctx context.Context,
 	client *cluster.NodeClient,
 	log *zap.Logger,
 	collector func(*pb.TransactionResult) (bool, error),
-) {
-	eg.Go(func() error {
-		retries := 0
-	BACKOFF:
-		api := pb.NewTransactionServiceClient(client.PubConn())
-		rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
-		if err != nil {
-			return err
+) error {
+	retries := 0
+BACKOFF:
+	api := pb.NewTransactionServiceClient(client.PubConn())
+	rsts, err := api.StreamResults(ctx, &pb.TransactionResultsRequest{Watch: true})
+	if err != nil {
+		return err
+	}
+	for {
+		rst, err := rsts.Recv()
+		s, ok := status.FromError(err)
+		if !ok {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return fmt.Errorf("unknown error: %w", err)
 		}
-		for {
-			rst, err := rsts.Recv()
-			s, ok := status.FromError(err)
-			if !ok {
+		switch s.Code() {
+		case codes.OK:
+			if cont, err := collector(rst); !cont {
 				return err
 			}
-			switch s.Code() {
-			case codes.OK:
-				if cont, err := collector(rst); !cont {
-					return err
-				}
-			case codes.Canceled:
-				return nil
-			case codes.DeadlineExceeded:
-				return nil
-			case codes.Unavailable:
-				if retries == attempts {
-					return errors.New("transaction results unavailable")
-				}
-				retries++
-				time.Sleep(retryBackoff)
-				goto BACKOFF
-			default:
-				log.Warn(
-					"transactions stream error",
-					zap.String("client", client.Name),
-					zap.Error(err),
-					zap.Any("status", s),
-				)
-				return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
+		case codes.Canceled, codes.DeadlineExceeded:
+			return nil
+		case codes.Unavailable:
+			if retries == attempts {
+				return errors.New("transaction results unavailable")
 			}
+			retries++
+			time.Sleep(retryBackoff)
+			goto BACKOFF
+		default:
+			log.Warn(
+				"transactions stream error",
+				zap.String("client", client.Name),
+				zap.Error(err),
+				zap.Any("status", s),
+			)
+			return fmt.Errorf("stream error on receiving result %s: %w", client.Name, err)
 		}
-	})
+	}
 }
 
 func watchProposals(
@@ -404,16 +396,17 @@ func watchProposals(
 			proposal, err := proposals.Recv()
 			s, ok := status.FromError(err)
 			if !ok {
-				return err
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				return fmt.Errorf("unknown error: %w", err)
 			}
 			switch s.Code() {
 			case codes.OK:
 				if cont, err := collector(proposal); !cont {
 					return err
 				}
-			case codes.Canceled:
-				return nil
-			case codes.DeadlineExceeded:
+			case codes.Canceled, codes.DeadlineExceeded:
 				return nil
 			case codes.Unavailable:
 				if retries == attempts {
@@ -513,7 +506,8 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 	defer cancel()
 	_, err := submitTransaction(ctx,
 		wallet.SelfSpawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID())),
-		client)
+		client,
+	)
 	return err
 }
 
@@ -527,13 +521,8 @@ func submitSpend(
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	_, err := submitTransaction(ctx,
-		wallet.Spend(
-			cluster.Private(account), receiver, amount,
-			nonce,
-			sdk.WithGenesisID(cluster.GenesisID()),
-		),
-		client)
+	tx := wallet.Spend(cluster.Private(account), receiver, amount, nonce, sdk.WithGenesisID(cluster.GenesisID()))
+	_, err := submitTransaction(ctx, tx, client)
 	return err
 }
 

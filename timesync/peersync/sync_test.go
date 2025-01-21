@@ -8,6 +8,7 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/go-scale/tester"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -37,7 +38,8 @@ func TestSyncGetOffset(t *testing.T) {
 	)
 
 	t.Run("Success", func(t *testing.T) {
-		mesh, err := mocknet.FullMeshConnected(4)
+		// Don't connect immediately to avoid identify race.
+		mesh, err := mocknet.FullMeshLinked(4)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -47,16 +49,19 @@ func TestSyncGetOffset(t *testing.T) {
 		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
 		for _, h := range mesh.Hosts()[1:] {
 			peers = append(peers, h.ID())
-			_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
+			require.NotNil(t, New(h, nil, WithTime(adjustedTime(peerResponse))))
 		}
 		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
-		offset, err := sync.GetOffset(context.TODO(), 0, peers)
+		// Connect the P2P mesh only after the servers are configured.
+		// This way, we avoid the race causing bad protocol identification.
+		require.NoError(t, mesh.ConnectAllButSelf())
+		offset, err := sync.GetOffset(context.Background(), 0, peers)
 		require.NoError(t, err)
 		require.Equal(t, 5*time.Second, offset)
 	})
 
 	t.Run("Failure", func(t *testing.T) {
-		mesh, err := mocknet.FullMeshConnected(4)
+		mesh, err := mocknet.FullMeshLinked(4)
 		require.NoError(t, err)
 
 		ctrl := gomock.NewController(t)
@@ -69,7 +74,8 @@ func TestSyncGetOffset(t *testing.T) {
 		}
 
 		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
-		offset, err := sync.GetOffset(context.TODO(), 0, peers)
+		require.NoError(t, mesh.ConnectAllButSelf())
+		offset, err := sync.GetOffset(context.Background(), 0, peers)
 		require.ErrorIs(t, err, errTimesyncFailed)
 		require.Empty(t, offset)
 	})
@@ -90,7 +96,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 		responseReceive = start.Add(30 * time.Second)
 	)
 
-	mesh, err := mocknet.FullMeshConnected(4)
+	mesh, err := mocknet.FullMeshLinked(4)
 	require.NoError(t, err)
 	ctrl := gomock.NewController(t)
 	getter := mocks.NewMockgetPeers(ctrl)
@@ -106,10 +112,11 @@ func TestSyncTerminateOnError(t *testing.T) {
 	peers := []p2p.Peer{}
 	for _, h := range mesh.Hosts()[1:] {
 		peers = append(peers, h.ID())
-		_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
+		require.NotNil(t, New(h, nil, WithTime(adjustedTime(peerResponse))))
 	}
 	getter.EXPECT().GetPeers().Return(peers)
 
+	require.NoError(t, mesh.ConnectAllButSelf())
 	sync.Start()
 	t.Cleanup(sync.Stop)
 	errors := make(chan error, 1)
@@ -139,10 +146,9 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	for _, h := range mesh.Hosts() {
 		fh, err := p2p.Upgrade(h)
 		require.NoError(t, err)
-		t.Cleanup(func() { _ = fh.Stop() })
+		t.Cleanup(func() { assert.NoError(t, fh.Stop()) })
 		hosts = append(hosts, fh)
 	}
-	require.NoError(t, mesh.ConnectAllButSelf())
 
 	// First create all instances so they register in the protocol
 	// and then start them.
@@ -154,6 +160,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		)
 		instances = append(instances, sync)
 	}
+	require.NoError(t, mesh.ConnectAllButSelf())
 	for _, sync := range instances {
 		sync.Start()
 		t.Cleanup(sync.Stop)

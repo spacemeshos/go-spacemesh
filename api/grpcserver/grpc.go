@@ -27,7 +27,6 @@ import (
 type ServiceAPI interface {
 	RegisterService(*grpc.Server)
 	RegisterHandlerService(*runtime.ServeMux) error
-	String() string
 }
 
 // Server is a very basic grpc server.

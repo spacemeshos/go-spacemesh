@@ -1,0 +1,113 @@
+{
+    "api": {
+        "grpc-public-listener": "0.0.0.0:19492",
+        "grpc-private-listener": "0.0.0.0:19493",
+        "node-service-listener": "0.0.0.0:19499"
+    },
+    "cache": {
+        "atx-size": 1000
+    },
+    "fetch": {
+        "streaming": true,
+        "servers": {
+            "ax/1": {
+                "interval": "1s",
+                "queue": 10,
+                "requests": 5
+            },
+            "hs/1": {
+                "interval": "1s",
+                "queue": 200,
+                "requests": 100
+            }
+        },
+        "servers-metrics": true
+    },
+    "genesis": {
+        "genesis-time": "2024-12-21T13:00:00.000Z"
+    },
+    "hare3": {
+        "enable": true,
+        "enable-layer": 0,
+        "disable-layer": 4294967295,
+        "committee": 800,
+        "committeeupgrade": {
+            "layer": 4860,
+            "size": 50
+        },
+        "leaders": 5,
+        "iterations-limit": 4,
+        "preround-delay": "25s",
+        "round-duration": "12s"
+    },
+    "logging": {},
+    "main": {
+        "db-prune-interval": "30m",
+        "db-query-cache": true,
+        "db-query-cache-sizes": {
+            "active-set-blob": 200,
+            "atx-blob": 1000000,
+            "epoch-atxs": 100
+        },
+        "pprof-listener": "localhost:6060",
+        "poet-servers": [
+            {
+                "address": "https://testnet-16-poet-0.spacemesh.network",
+                "pubkey": "cBDiEhk9Q+MfVgWh5anDDgyyEKi4x2ORrSvd4YwWoX4="
+            },
+            {
+                "address": "https://testnet-16-poet-1.spacemesh.network",
+                "pubkey": "Yl8KPls3OSQWwfJfg6ekI5Tl4k76wgkMj3Ki6Ji3+mI="
+            },
+            {
+                "address": "https://testnet-16-poet-2.spacemesh.network",
+                "pubkey": "Om4YBKakqZYYtrDzmgzaGdjpj36PWoww8bJt5Mt17rY="
+            }
+        ],
+        "data-folder": "/tmp/spacemesh-node-service",
+        "filelock": "/tmp/spacemesh-node-service/node.lock"
+    },
+    "p2p": {
+        "auto-nat-server": {
+            "global-max": 1000
+        },
+        "autoscale-peers": true,
+        "high-peers": 150,
+        "listen": ["/ip4/0.0.0.0/tcp/7513", "/ip4/0.0.0.0/udp/7513/quic-v1"],
+        "enable-routing-discovery": false,
+        "routing-discovery-advertise": false,
+        "enable-quic-transport": true,
+        "enable-tcp-transport": true,
+        "relay": true,
+        "low-peers": 100,
+        "min-peers": 20,
+        "inbound-fraction": 1.1,
+        "outbound-fraction": 1.1,
+        "p2p-bootnode": true,
+        "p2p-metrics": true,
+        "p2p-reachability": "public",
+        "bootnodes": [
+            "/dns4/testnet-16-bootnode-0.spacemesh.network/tcp/5000/p2p/12D3KooWQMAAL9nkgXJgTM2psJLMbWRgZLjAxJozx7dNkKYczs2V",
+            "/dns4/testnet-16-bootnode-4.spacemesh.network/tcp/5000/p2p/12D3KooWE1YEa3roqamhPt3CNiVRBzS7Lbv8HRbByE7fpSyLAZis",
+            "/dns4/testnet-16-bootnode-7.spacemesh.network/tcp/5000/p2p/12D3KooWRvAVZrK3EURQBh1wdMPRDgjtowU84div3YxWYKuGDaFU"
+        ]
+    },
+    "post": {
+        "post-min-numunits": 2,
+        "post-max-numunits": 100,
+        "post-labels-per-unit": 1024
+    },
+    "tortoise": {
+        "tortoise-window-size": 600
+    },
+    "beacon": {
+        "beacon-rounds-number": 0
+    },
+    "bootstrap": {
+        "bootstrap-url": "https://bootstrap.spacemesh.network/testnet-16"
+    },
+    "preset": "testnet",
+    "smeshing": {
+        "smeshing-start": false
+    }
+}

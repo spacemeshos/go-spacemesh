@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-var statusMap map[types.PostState]pb.PostState_State = map[types.PostState]pb.PostState_State{
+var statusMap = map[types.PostState]pb.PostState_State{
 	types.PostStateIdle:    pb.PostState_IDLE,
 	types.PostStateProving: pb.PostState_PROVING,
 }
@@ -27,11 +27,6 @@ func (s *PostInfoService) RegisterService(server *grpc.Server) {
 
 func (s *PostInfoService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterPostInfoServiceHandlerServer(context.Background(), mux, s)
-}
-
-// String returns the name of this service.
-func (s *PostInfoService) String() string {
-	return "PostInfoService"
 }
 
 // NewPostInfoService creates a new instance of the post info grpc service.

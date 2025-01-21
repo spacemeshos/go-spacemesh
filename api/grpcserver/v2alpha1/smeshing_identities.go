@@ -6,11 +6,14 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 const SmeshingIdentities = "smeshing_identities_v2alpha1"
@@ -41,18 +44,25 @@ func (s *SmeshingIdentitiesService) RegisterHandlerService(mux *runtime.ServeMux
 	return pb.RegisterSmeshingIdentitiesServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *SmeshingIdentitiesService) String() string {
-	return "SmeshingIdentitiesService"
+func (s *SmeshingIdentitiesService) Path() string {
+	return "/spacemesh.v2alpha1.SmeshingIdentitiesService/"
 }
 
 func (s *SmeshingIdentitiesService) States(
 	ctx context.Context,
-	_ *pb.IdentityStatesRequest,
+	request *pb.IdentityStatesRequest,
 ) (*pb.IdentityStatesResponse, error) {
-	pbIdentities := make(map[string]*pb.Identity)
+	switch {
+	case request.Limit > 100:
+		return nil, status.Error(codes.InvalidArgument, "limit is capped at 100")
+	case request.Limit == 0:
+		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
+	}
 
-	for nodeId, history := range s.states.All() {
+	ops := toEventOperations(request)
+
+	pbIdentities := make(map[string]*pb.Identity, request.Limit)
+	for nodeId, history := range s.states.All(ops) {
 		pbIdentities[nodeId.String()] = &pb.Identity{
 			History: []*pb.IdentityStateInfo{},
 		}
@@ -62,16 +72,47 @@ func (s *SmeshingIdentitiesService) States(
 
 			identityStateInfo := info.State.APIStateInfo()
 			identityStateInfo.Time = timestamppb.New(info.Time)
-			if info.PublishEpoch != nil {
-				epoch := info.PublishEpoch.Uint32()
-				identityStateInfo.PublishEpoch = &epoch
-			}
 
 			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)
 		}
 	}
 
 	return &pb.IdentityStatesResponse{Identities: pbIdentities}, nil
+}
+
+func toEventOperations(filter *pb.IdentityStatesRequest) builder.Operations {
+	ops := builder.Operations{}
+	if filter == nil {
+		return ops
+	}
+
+	if len(filter.States) > 0 {
+		// convert []IdentityState to []int32
+		states := make([]int32, len(filter.States))
+		for i, state := range filter.States {
+			states[i] = int32(state)
+		}
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: "kind",
+			Token: builder.In,
+			Value: states,
+		})
+	}
+
+	if filter.Limit != 0 {
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.Limit,
+			Value: int64(filter.Limit),
+		})
+	}
+	if filter.Offset != 0 {
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.Offset,
+			Value: int64(filter.Offset),
+		})
+	}
+
+	return ops
 }
 
 func (s *SmeshingIdentitiesService) PoetInfo(
@@ -99,31 +140,28 @@ func (s *SmeshingIdentitiesService) Eligibilities(
 	eligibilities := s.states.AllEligibilities()
 
 	pbEpochEligibilities := make(map[string]*pb.EpochEligibilities)
-	for nodeId, epochMap := range eligibilities {
-		pbEpochEligibilities[nodeId.String()] = &pb.EpochEligibilities{
-			Epochs: make(map[uint32]*pb.Eligibilities),
-		}
-		for epoch, eli := range epochMap {
-			pbEpochEligibilities[nodeId.String()].Epochs[epoch.Uint32()] = &pb.Eligibilities{
-				Eligibilities: castEligibilities(eli),
+	for nodeId, layersMap := range eligibilities {
+		id := nodeId.String()
+		epochs := make(map[uint32]*pb.Eligibilities)
+		for layer, eligibilitiesInLayer := range layersMap {
+			epoch := layer.GetEpoch().Uint32()
+			if _, ok := epochs[epoch]; !ok {
+				epochs[epoch] = new(pb.Eligibilities)
 			}
+			epochs[epoch].Eligibilities = append(
+				epochs[epoch].Eligibilities,
+				&pb.ProposalEligibility{
+					Layer: layer.Uint32(),
+					Count: uint32(len(eligibilitiesInLayer)),
+				},
+			)
 		}
+		pbEpochEligibilities[id] = &pb.EpochEligibilities{Epochs: epochs}
 	}
 
 	return &pb.EligibilitiesResponse{
 		Identities: pbEpochEligibilities,
 	}, nil
-}
-
-func castEligibilities(proofs map[types.LayerID][]types.VotingEligibility) []*pb.ProposalEligibility {
-	rst := make([]*pb.ProposalEligibility, 0, len(proofs))
-	for lid, eligs := range proofs {
-		rst = append(rst, &pb.ProposalEligibility{
-			Layer: lid.Uint32(),
-			Count: uint32(len(eligs)),
-		})
-	}
-	return rst
 }
 
 func (s *SmeshingIdentitiesService) Proposals(

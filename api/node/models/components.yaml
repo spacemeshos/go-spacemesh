@@ -44,10 +44,31 @@ components:
       format: uint32
     LayerID:
       type: integer
-      format: uint64
+      format: uint32
     HareIter:
       type: integer
       format: uint8
     HareRound:
       type: integer
       format: uint8
+    HareRoundTemplate:
+      type: object
+      properties:
+        Proposals:
+          type: array
+          items:
+            type: string
+            format: hex
+            minLength: 40
+            maxLength: 40
+          description: Array of 32-byte proposal IDs encoded as hex strings
+        Reference:
+          type: string
+          format: hex
+          minLength: 64
+          maxLength: 64
+          description: Optional 32-byte reference hash
+
+      required:
+        - Proposals
+

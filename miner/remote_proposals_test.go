@@ -73,8 +73,13 @@ func TestRemoteProposals(t *testing.T) {
 			prop := createTestProposal(t, activeSet, lid, meshHash, atxId, nodeId, txIds, beaconVal, 1)
 			return prop, 11, nil
 		}).AnyTimes()
-	idStates.EXPECT().SetEligibilitiesForEpoch(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	prop.EXPECT().CalculateEligibilitySlotsFor(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, nodeId types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error) {
+			return 1, 11, nil
+		}).AnyTimes()
+	idStates.EXPECT().SetEligibilities(gomock.Any(), gomock.Any()).AnyTimes()
 	idStates.EXPECT().AddProposal(gomock.Any(), gomock.Any()).AnyTimes()
+	idStates.EXPECT().Set(gomock.Any(), gomock.Any()).AnyTimes()
 	go builder.Run(ctx)
 	defer cancel()
 	select {

@@ -1,4 +1,4 @@
-PRAGMA user_version = 25;
+PRAGMA user_version = 26;
 CREATE TABLE accounts
 (
     address        CHAR(24),
@@ -68,6 +68,11 @@ CREATE TABLE certificates
     cert  BLOB,
     valid bool NOT NULL,
     PRIMARY KEY (layer, block)
+);
+CREATE TABLE evicted_mempool (
+    id CHAR(32) NOT NULL,
+    time INT NOT NULL,
+    PRIMARY KEY (id)
 );
 CREATE TABLE identities
 (

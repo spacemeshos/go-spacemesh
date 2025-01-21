@@ -182,40 +182,40 @@ func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.Node
 	return c
 }
 
-// RoundMessage mocks base method.
-func (m *Mockhare) RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message {
+// RoundTemplate mocks base method.
+func (m *Mockhare) RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RoundMessage", layer, round)
-	ret0, _ := ret[0].(*hare3.Message)
+	ret := m.ctrl.Call(m, "RoundTemplate", layer, round)
+	ret0, _ := ret[0].(*hare3.Body)
 	return ret0
 }
 
-// RoundMessage indicates an expected call of RoundMessage.
-func (mr *MockhareMockRecorder) RoundMessage(layer, round any) *MockhareRoundMessageCall {
+// RoundTemplate indicates an expected call of RoundTemplate.
+func (mr *MockhareMockRecorder) RoundTemplate(layer, round any) *MockhareRoundTemplateCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoundMessage", reflect.TypeOf((*Mockhare)(nil).RoundMessage), layer, round)
-	return &MockhareRoundMessageCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RoundTemplate", reflect.TypeOf((*Mockhare)(nil).RoundTemplate), layer, round)
+	return &MockhareRoundTemplateCall{Call: call}
 }
 
-// MockhareRoundMessageCall wrap *gomock.Call
-type MockhareRoundMessageCall struct {
+// MockhareRoundTemplateCall wrap *gomock.Call
+type MockhareRoundTemplateCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareRoundMessageCall) Return(arg0 *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundTemplateCall) Return(arg0 *hare3.Body) *MockhareRoundTemplateCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareRoundMessageCall) Do(f func(types.LayerID, hare3.IterRound) *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundTemplateCall) Do(f func(types.LayerID, hare3.IterRound) *hare3.Body) *MockhareRoundTemplateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareRoundMessageCall) DoAndReturn(f func(types.LayerID, hare3.IterRound) *hare3.Message) *MockhareRoundMessageCall {
+func (c *MockhareRoundTemplateCall) DoAndReturn(f func(types.LayerID, hare3.IterRound) *hare3.Body) *MockhareRoundTemplateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -319,6 +319,46 @@ func (c *MockproposalBuilderBuildForCall) Do(f func(context.Context, types.Layer
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockproposalBuilderBuildForCall) DoAndReturn(f func(context.Context, types.LayerID, types.NodeID) (*types.Proposal, types.VRFPostIndex, error)) *MockproposalBuilderBuildForCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// CalculateEligibilitySlotsFor mocks base method.
+func (m *MockproposalBuilder) CalculateEligibilitySlotsFor(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CalculateEligibilitySlotsFor", ctx, node, epoch)
+	ret0, _ := ret[0].(uint32)
+	ret1, _ := ret[1].(types.VRFPostIndex)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// CalculateEligibilitySlotsFor indicates an expected call of CalculateEligibilitySlotsFor.
+func (mr *MockproposalBuilderMockRecorder) CalculateEligibilitySlotsFor(ctx, node, epoch any) *MockproposalBuilderCalculateEligibilitySlotsForCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalculateEligibilitySlotsFor", reflect.TypeOf((*MockproposalBuilder)(nil).CalculateEligibilitySlotsFor), ctx, node, epoch)
+	return &MockproposalBuilderCalculateEligibilitySlotsForCall{Call: call}
+}
+
+// MockproposalBuilderCalculateEligibilitySlotsForCall wrap *gomock.Call
+type MockproposalBuilderCalculateEligibilitySlotsForCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockproposalBuilderCalculateEligibilitySlotsForCall) Return(arg0 uint32, arg1 types.VRFPostIndex, arg2 error) *MockproposalBuilderCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Return(arg0, arg1, arg2)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockproposalBuilderCalculateEligibilitySlotsForCall) Do(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalBuilderCalculateEligibilitySlotsForCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockproposalBuilderCalculateEligibilitySlotsForCall) DoAndReturn(f func(context.Context, types.NodeID, types.EpochID) (uint32, types.VRFPostIndex, error)) *MockproposalBuilderCalculateEligibilitySlotsForCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

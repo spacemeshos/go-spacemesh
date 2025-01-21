@@ -483,7 +483,7 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	//
 	// Additionally all activesets that are older than 2 epochs are deleted at the beginning of an epoch anyway, but
 	// maybe we should revisit this when activesets are no longer bootstrapped.
-	return pb.db.WithTx(ctx, func(tx sql.Transaction) error {
+	return pb.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		yes, err := activesets.Has(tx, pb.shared.active.id)
 		if err != nil {
 			return err
@@ -577,6 +577,16 @@ func (pb *ProposalBuilder) initSignerSessionData(
 	return nil
 }
 
+func (pb *ProposalBuilder) CalculateEligibilitySlotsFor(
+	ctx context.Context, node types.NodeID, epoch types.EpochID,
+) (uint32, types.VRFPostIndex, error) {
+	var ss session
+	if err := pb.initSignerSessionData(&ss, epoch.FirstLayer(), node); err != nil {
+		return 0, 0, err
+	}
+	return ss.eligibilities.slots, ss.nonce, nil
+}
+
 func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 	lid types.LayerID,
 	nodeID types.NodeID,
@@ -593,7 +603,8 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 				log.ZContext(ctx),
 				zap.Uint32("epoch_id", signer.session.epoch.Uint32()),
 			)
-			return nil, 0, errors.New("no atx in epoch")
+			// no atx in epoch means not eligible for proposal in layer
+			return nil, 0, nil
 		} else {
 			return nil, 0, err
 		}

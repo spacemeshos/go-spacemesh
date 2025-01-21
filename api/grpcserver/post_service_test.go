@@ -52,19 +52,19 @@ func launchPostSupervisor(
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
 
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	syncer := activation.NewMockSyncer(ctrl)
+	//syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+	//	ch := make(chan struct{})
+	//	close(ch)
+	//	return ch
+	//})
 	db := statesql.InMemoryTest(tb)
 	logger := log.Named("post manager")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	// start post supervisor
-	builder := activation.NewMockAtxBuilder(ctrl)
+	builder := activation.NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))
@@ -96,19 +96,19 @@ func launchPostSupervisorTLS(
 	validator.EXPECT().
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	syncer := activation.NewMockSyncer(ctrl)
+	//syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+	//	ch := make(chan struct{})
+	//	close(ch)
+	//	return ch
+	//})
 	db := statesql.InMemoryTest(tb)
 	logger := log.Named("post supervisor")
 	mgr, err := activation.NewPostSetupManager(postCfg, logger, db, atxsdata.New(), goldenATXID, syncer, validator)
 	require.NoError(tb, err)
 
 	// start post supervisor
-	builder := activation.NewMockAtxBuilder(ctrl)
+	builder := activation.NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, ps.Start(serviceCfg, postOpts, sig))

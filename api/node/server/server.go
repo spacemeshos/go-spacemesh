@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
@@ -30,7 +29,7 @@ type poetDB interface {
 }
 
 type hare interface {
-	RoundMessage(layer types.LayerID, round hare3.IterRound) *hare3.Message
+	RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body
 	TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error)
 	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error)
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
@@ -38,6 +37,8 @@ type hare interface {
 
 type proposalBuilder interface {
 	BuildFor(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, types.VRFPostIndex, error)
+	CalculateEligibilitySlotsFor(
+		ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error)
 }
 
 type Server struct {
@@ -190,9 +191,15 @@ func (s *Server) PostPublishProtocol(
 	proposal := &types.Proposal{}
 	codec.MustDecode(blob, proposal)
 
+	protocol := string(request.Protocol)
+	if protocol == "hare3" {
+		// TODO: hare3 takes that from configuration what also should be done
+		// there instead of using the default value
+		protocol = hare3.DefaultProtocolName
+	}
 	events.EmitProposal(proposal.SmesherID, proposal.Layer, proposal.ID())
 	events.ReportProposal(events.ProposalCreated, proposal)
-	s.publisher.Publish(ctx, string(request.Protocol), blob)
+	s.publisher.Publish(ctx, protocol, blob)
 	return PostPublishProtocol200Response{}, nil
 }
 
@@ -222,47 +229,27 @@ func (s *Server) PostPoet(ctx context.Context, request PostPoetRequestObject) (P
 	return PostPoet200Response{}, nil
 }
 
-type hareResponse struct {
-	message []byte
-}
-
-func (h *hareResponse) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error {
-	if h.message == nil {
-		w.WriteHeader(204) // no content
-		return nil
-	}
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write(h.message)
-	return err
-}
-
 func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
 	request GetHareRoundTemplateLayerIterRoundRequestObject,
 ) (GetHareRoundTemplateLayerIterRoundResponseObject, error) {
-	msg := s.hare.RoundMessage(types.LayerID(request.Layer),
+	body := s.hare.RoundTemplate(types.LayerID(request.Layer),
 		hare3.IterRound{
 			Round: hare3.Round(request.Round),
 			Iter:  (request.Iter),
 		})
-	if msg == nil {
-		return &hareResponse{}, nil
+	if body == nil {
+		return GetHareRoundTemplateLayerIterRound204Response{}, nil
 	}
 
-	return &hareResponse{
-		message: codec.MustEncode(msg),
-	}, nil
-}
-
-type totalWeightResp struct {
-	w uint64
-}
-
-func (t *totalWeightResp) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write([]byte(strconv.FormatUint(t.w, 10)))
-	return err
+	var resp GetHareRoundTemplateLayerIterRound200JSONResponse
+	for _, p := range body.Value.Proposals {
+		resp.Proposals = append(resp.Proposals, hex.EncodeToString(p[:]))
+	}
+	if ref := body.Value.Reference; ref != nil {
+		refHex := hex.EncodeToString(ref[:])
+		resp.Reference = &refHex
+	}
+	return resp, nil
 }
 
 func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
@@ -272,18 +259,7 @@ func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &totalWeightResp{weight}, nil
-}
-
-type nodeWeightResp struct {
-	val uint64
-}
-
-func (n *nodeWeightResp) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write([]byte(strconv.FormatUint(n.val, 10)))
-	return err
+	return &GetHareTotalWeightLayer200JSONResponse{Weight: weight}, nil
 }
 
 func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
@@ -298,16 +274,7 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
 	if err != nil {
 		return nil, fmt.Errorf("miner weight: %w", err)
 	}
-	return &nodeWeightResp{val: weight}, nil
-}
-
-type beaconResp struct{ b types.Beacon }
-
-func (b *beaconResp) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
-	w.Header().Add("content-type", "application/octet-stream")
-	w.WriteHeader(200)
-	_, err := w.Write(b.b[:])
-	return err
+	return &GetHareWeightNodeIdLayer200JSONResponse{Weight: weight}, nil
 }
 
 func (s *Server) GetHareBeaconEpoch(ctx context.Context,
@@ -317,7 +284,7 @@ func (s *Server) GetHareBeaconEpoch(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &beaconResp{b: beacon}, nil
+	return &GetHareBeaconEpoch200JSONResponse{Beacon: beacon[:]}, nil
 }
 
 type proposalResp struct {
@@ -326,15 +293,14 @@ type proposalResp struct {
 }
 
 func (p *proposalResp) VisitGetProposalLayerNodeResponse(w http.ResponseWriter) error {
-	if p.buf == nil {
-		w.WriteHeader(204)
-		return nil
-	}
 	w.Header().Add("content-type", "application/octet-stream")
 	w.Header().Add("x-spacemesh-atx-nonce", fmt.Sprintf("%d", p.nonce))
 	w.WriteHeader(200)
-	_, err := w.Write(p.buf)
-	return err
+	if p.buf != nil {
+		_, err := w.Write(p.buf)
+		return err
+	}
+	return nil
 }
 
 func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (
@@ -361,4 +327,26 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 		return &proposalResp{}, nil
 	}
 	return &proposalResp{buf: codec.MustEncode(proposal), nonce: nonce}, nil
+}
+
+func (s *Server) GetEligibilitySlotsNodeEpoch(
+	ctx context.Context,
+	request GetEligibilitySlotsNodeEpochRequestObject,
+) (GetEligibilitySlotsNodeEpochResponseObject, error) {
+	hexBuf, err := hex.DecodeString(request.Node)
+	if err != nil {
+		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
+	}
+	id := types.BytesToNodeID(hexBuf)
+	epoch := types.EpochID(request.Epoch)
+
+	slots, nonce, err := s.proposals.CalculateEligibilitySlotsFor(ctx, id, epoch)
+	if err != nil {
+		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
+	}
+
+	return GetEligibilitySlotsNodeEpoch200JSONResponse{
+		Slots: slots,
+		Nonce: uint64(nonce),
+	}, nil
 }

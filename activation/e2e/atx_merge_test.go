@@ -25,7 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -97,7 +97,7 @@ func createInitialAtx(
 			Post:          *wire.PostToWireV1(initial),
 		},
 		VRFNonce: uint64(nipost.VRFNonce),
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: wire.MerkleProofV2{
 					Nodes: nipost.Membership.Nodes,
@@ -121,7 +121,7 @@ func createSoloAtx(publish types.EpochID, prev, pos types.ATXID, nipost *nipost.
 		PreviousATXs:   []types.ATXID{prev},
 		PositioningATX: pos,
 		VRFNonce:       uint64(nipost.VRFNonce),
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: wire.MerkleProofV2{
 					Nodes: nipost.Membership.Nodes,
@@ -152,7 +152,7 @@ func createMerged(
 		PreviousATXs:   previous,
 		MarriageATX:    &marriage,
 		PositioningATX: positioning,
-		NiPosts: []wire.NiPostsV2{
+		NIPosts: []wire.NIPostV2{
 			{
 				Membership: membership,
 				Challenge:  types.Hash32(niposts[0].PostMetadata.Challenge),
@@ -163,7 +163,7 @@ func createMerged(
 	for i, nipost := range niposts {
 		idx := slices.IndexFunc(previous, func(a types.ATXID) bool { return a == nipost.previous })
 		require.NotEqual(tb, -1, idx)
-		atx.NiPosts[0].Posts = append(atx.NiPosts[0].Posts, wire.SubPostV2{
+		atx.NIPosts[0].Posts = append(atx.NIPosts[0].Posts, wire.SubPostV2{
 			MarriageIndex:       uint32(i),
 			PrevATXIndex:        uint32(idx),
 			MembershipLeafIndex: nipost.Membership.LeafIndex,
@@ -275,9 +275,10 @@ func Test_MarryAndMerge(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
-	mBeacon := activation.NewMockAtxReceiver(ctrl)
+	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
+	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
 	tickSize := uint64(3)
@@ -287,10 +288,11 @@ func Test_MarryAndMerge(t *testing.T) {
 		atxsdata.New(),
 		signing.NewEdVerifier(),
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
+		mMalPublish,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,
@@ -358,11 +360,11 @@ func Test_MarryAndMerge(t *testing.T) {
 			mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 			mBeacon.EXPECT().OnAtx(gomock.Any())
 			mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-			return atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedIdAtx))
+			return atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedIdAtx))
 		})
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(marriageATX))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(marriageATX))
 	require.NoError(t, err)
 
 	// Verify marriage
@@ -422,7 +424,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedATX))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX))
 	require.NoError(t, err)
 
 	// Step 3. verify the merged ATX
@@ -473,7 +475,7 @@ func Test_MarryAndMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(mergedATX2))
+	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX2))
 	require.NoError(t, err)
 
 	atx, err = atxs.Get(db, mergedATX2.ID())
@@ -511,7 +513,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 		mBeacon.EXPECT().OnAtx(gomock.Any())
 		mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-		err = atxHdlr.HandleGossipAtx(context.Background(), "", codec.MustEncode(atx))
+		err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx))
 		require.NoError(t, err)
 
 		atxFromDb, err := atxs.Get(db, atx.ID())

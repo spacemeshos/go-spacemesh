@@ -50,12 +50,12 @@ func newPostManager(tb testing.TB, cfg PostConfig, opts PostSetupOpts) *PostSetu
 		Post(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 		AnyTimes()
 
-	syncer := NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	})
+	syncer := NewMockSyncer(ctrl)
+	//syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+	//	ch := make(chan struct{})
+	//	close(ch)
+	//	return ch
+	//})
 	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 	mgr, err := NewPostSetupManager(cfg, zaptest.NewLogger(tb), db, atxsdata, types.RandomATXID(), syncer, validator)
@@ -105,7 +105,7 @@ func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
 	mgr := NewMockpostSetupProvider(ctrl)
 	testErr := errors.New("test error")
 	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(testErr)
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
 	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
@@ -141,7 +141,7 @@ func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 	mgr := NewMockpostSetupProvider(ctrl)
 	mgr.EXPECT().PrepareInitializer(gomock.Any(), postOpts, sig.NodeID()).Return(nil)
 	mgr.EXPECT().StartSession(gomock.Any(), sig.NodeID()).Return(errors.New("failed start session"))
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
 	require.NoError(t, ps.Start(cmdCfg, postOpts, sig))
@@ -160,7 +160,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mgr := newPostManager(t, postCfg, postOpts)
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
@@ -197,7 +197,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mgr := newPostManager(t, postCfg, postOpts)
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
@@ -228,7 +228,7 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mgr := newPostManager(t, postCfg, postOpts)
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
@@ -261,7 +261,7 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mgr := newPostManager(t, postCfg, postOpts)
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
@@ -301,7 +301,7 @@ func Test_PostSupervisor_StopOnError(t *testing.T) {
 		require.NoError(t, err)
 		return nil
 	})
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(sig)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
@@ -322,7 +322,7 @@ func Test_PostSupervisor_Providers_includesCPU(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
 	providers, err := ps.Providers()
@@ -344,7 +344,7 @@ func Test_PostSupervisor_Benchmark(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mgr := NewMockpostSetupProvider(ctrl)
-	builder := NewMockAtxBuilder(ctrl)
+	builder := NewMockatxBuilder(ctrl)
 	ps := NewPostSupervisor(log.Named("supervisor"), postCfg, provingOpts, mgr, builder)
 
 	providers, err := ps.Providers()

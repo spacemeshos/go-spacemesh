@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -108,7 +109,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 			lidBytes, err := codec.Encode(&lid)
 			require.NoError(t, err)
 
-			out, err := th.handleLayerDataReq(context.Background(), lidBytes)
+			out, err := th.handleLayerDataReq(context.Background(), p2p.Peer(""), lidBytes)
 			require.NoError(t, err)
 			var got LayerData
 			err = codec.Decode(out, &got)
@@ -155,7 +156,7 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			reqBytes, err := codec.Encode(&req)
 			require.NoError(t, err)
 
-			out, err := th.handleLayerOpinionsReq2(context.Background(), reqBytes)
+			out, err := th.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), reqBytes)
 			require.NoError(t, err)
 
 			var got LayerOpinion
@@ -182,14 +183,14 @@ func TestHandleCertReq(t *testing.T) {
 	reqData, err := codec.Encode(req)
 	require.NoError(t, err)
 
-	resp, err := th.handleLayerOpinionsReq2(context.Background(), reqData)
+	resp, err := th.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), reqData)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, resp)
 
 	cert := &types.Certificate{BlockID: bid}
 	require.NoError(t, certificates.Add(th.cdb, lid, cert))
 
-	resp, err = th.handleLayerOpinionsReq2(context.Background(), reqData)
+	resp, err = th.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), reqData)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	var got types.Certificate
@@ -249,7 +250,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 
-			resp, err := th.handleMeshHashReq(context.Background(), reqData)
+			resp, err := th.handleMeshHashReq(context.Background(), p2p.Peer(""), reqData)
 			if tc.err == nil {
 				require.NoError(t, err)
 				got, err := codec.DecodeSlice[types.Hash32](resp)
@@ -308,7 +309,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Run("non-streamed", func(t *testing.T) {
-				out, err := th.handleEpochInfoReq(context.Background(), epochBytes)
+				out, err := th.handleEpochInfoReq(context.Background(), p2p.Peer(""), epochBytes)
 				require.NoError(t, err)
 				var got EpochData
 				require.NoError(t, codec.Decode(out, &got))
@@ -317,7 +318,8 @@ func TestHandleEpochInfoReq(t *testing.T) {
 
 			t.Run("streamed", func(t *testing.T) {
 				var b bytes.Buffer
-				require.NoError(t, th.handleEpochInfoReqStream(context.Background(), epochBytes, &b))
+				require.NoError(t, th.handleEpochInfoReqStream(context.Background(),
+					p2p.Peer(""), epochBytes, &b))
 				var resp server.Response
 				require.NoError(t, codec.Decode(b.Bytes(), &resp))
 				var got EpochData
@@ -328,7 +330,8 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			t.Run("streamed request failure", func(t *testing.T) {
 				th.db.Close()
 				var b bytes.Buffer
-				require.NoError(t, th.handleEpochInfoReqStream(context.Background(), epochBytes, &b))
+				require.NoError(t, th.handleEpochInfoReqStream(context.Background(),
+					p2p.Peer(""), epochBytes, &b))
 				var resp server.Response
 				require.NoError(t, codec.Decode(b.Bytes(), &resp))
 				require.Empty(t, resp.Data)
@@ -336,70 +339,6 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			})
 		})
 	}
-}
-
-func testHandleEpochInfoReqWithQueryCache(
-	tb testing.TB,
-	getInfo func(th *testHandler, req []byte, ed *EpochData),
-) {
-	th := createTestHandler(tb, sql.WithQueryCache(true))
-	require.True(tb, th.cdb.Database.IsCached())
-	require.True(tb, sql.IsCached(th.cdb))
-	epoch := types.EpochID(11)
-	var expected EpochData
-
-	for i := 0; i < 10; i++ {
-		vatx := newAtx(tb, epoch)
-		require.NoError(tb, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
-		atxs.AtxAdded(th.cdb, vatx)
-		expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
-	}
-
-	require.Equal(tb, 20, th.cdb.Database.QueryCount())
-	epochBytes, err := codec.Encode(epoch)
-	require.NoError(tb, err)
-
-	var got EpochData
-	for i := 0; i < 3; i++ {
-		getInfo(th, epochBytes, &got)
-		require.ElementsMatch(tb, expected.AtxIDs, got.AtxIDs)
-		require.Equal(tb, 21, th.cdb.Database.QueryCount(), "query count @ i = %d", i)
-	}
-
-	// Add another ATX which should be appended to the cached slice
-	vatx := newAtx(tb, epoch)
-	require.NoError(tb, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
-	atxs.AtxAdded(th.cdb, vatx)
-	expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
-	require.Equal(tb, 23, th.cdb.Database.QueryCount())
-
-	getInfo(th, epochBytes, &got)
-	require.ElementsMatch(tb, expected.AtxIDs, got.AtxIDs)
-	// The query count is not incremented as the slice is still
-	// cached and the new atx is just appended to it, even though
-	// the response is re-serialized.
-	require.Equal(tb, 23, th.cdb.Database.QueryCount())
-}
-
-func TestHandleEpochInfoReqWithQueryCache(t *testing.T) {
-	testHandleEpochInfoReqWithQueryCache(t, func(th *testHandler, req []byte, ed *EpochData) {
-		out, err := th.handleEpochInfoReq(context.Background(), req)
-		require.NoError(t, err)
-		require.NoError(t, codec.Decode(out, ed))
-	})
-}
-
-func TestHandleEpochInfoReqStreamWithQueryCache(t *testing.T) {
-	testHandleEpochInfoReqWithQueryCache(t, func(th *testHandler, req []byte, ed *EpochData) {
-		var b bytes.Buffer
-		err := th.handleEpochInfoReqStream(context.Background(), req, &b)
-		require.NoError(t, err)
-		n, err := server.ReadResponse(&b, func(resLen uint32) (int, error) {
-			return codec.DecodeFrom(&b, ed)
-		})
-		require.NoError(t, err)
-		require.NotZero(t, n)
-	})
 }
 
 func TestHandleMaliciousIDsReq(t *testing.T) {
@@ -428,7 +367,7 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 				require.NoError(t, identities.SetMalicious(th.cdb, nid, types.RandomBytes(11), time.Now()))
 			}
 
-			out, err := th.handleMaliciousIDsReq(context.TODO(), []byte{})
+			out, err := th.handleMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
 			require.NoError(t, err)
 			var got MaliciousIDs
 			require.NoError(t, codec.Decode(out, &got))

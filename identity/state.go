@@ -23,7 +23,7 @@ func (s *WaitForATXSynced) APIStateInfo() *pb.IdentityStateInfo {
 }
 
 type Retrying struct {
-	Error error
+	ErrorMsg string
 }
 
 func (s *Retrying) APIStateInfo() *pb.IdentityStateInfo {
@@ -31,31 +31,40 @@ func (s *Retrying) APIStateInfo() *pb.IdentityStateInfo {
 		State: pb.IdentityState_RETRYING,
 		Metadata: &pb.IdentityStateInfo_Retrying{
 			Retrying: &pb.RetryingState{
-				Message: s.Error.Error(),
+				Message: s.ErrorMsg,
 			},
 		},
 	}
 }
 
 // poet.
-type WaitingForPoetRegistrationWindow struct{}
+type WaitingForPoetRegistrationWindow struct {
+	Publish types.EpochID
+}
 
 func (s *WaitingForPoetRegistrationWindow) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
+		State:        pb.IdentityState_WAITING_FOR_POET_REGISTRATION_WINDOW,
+		PublishEpoch: &epoch,
 	}
 }
 
 // building nipost challenge.
-type PoetChallengeReady struct{}
+type PoetChallengeReady struct {
+	Publish types.EpochID
+}
 
 func (s *PoetChallengeReady) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_POET_CHALLENGE_READY,
+		State:        pb.IdentityState_POET_CHALLENGE_READY,
+		PublishEpoch: &epoch,
 	}
 }
 
 type PoetRegistered struct {
+	Publish       types.EpochID
 	Registrations []nipost.PoETRegistration
 }
 
@@ -70,8 +79,10 @@ func (s *PoetRegistered) APIStateInfo() *pb.IdentityStateInfo {
 		})
 	}
 
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_POET_REGISTERED,
+		State:        pb.IdentityState_POET_REGISTERED,
+		PublishEpoch: &epoch,
 		Metadata: &pb.IdentityStateInfo_PoetRegistered{
 			PoetRegistered: &pb.PoetRegisteredState{
 				Registrations: rst,
@@ -84,11 +95,14 @@ func (s *PoetRegistered) APIStateInfo() *pb.IdentityStateInfo {
 type WaitForPoetRoundEnd struct {
 	RoundEnd        time.Time
 	PublishEpochEnd time.Time
+	Publish         types.EpochID
 }
 
 func (s *WaitForPoetRoundEnd) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_WAIT_FOR_POET_ROUND_END,
+		State:        pb.IdentityState_WAIT_FOR_POET_ROUND_END,
+		PublishEpoch: &epoch,
 		Metadata: &pb.IdentityStateInfo_WaitForPoetRoundEnd{
 			WaitForPoetRoundEnd: &pb.WaitForPoetRoundEndState{
 				RoundEnd:        timestamppb.New(s.RoundEnd),
@@ -100,11 +114,14 @@ func (s *WaitForPoetRoundEnd) APIStateInfo() *pb.IdentityStateInfo {
 
 type PoetProofReceived struct {
 	PoetUrl string
+	Publish types.EpochID
 }
 
 func (s *PoetProofReceived) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_POET_PROOF_RECEIVED,
+		State:        pb.IdentityState_POET_PROOF_RECEIVED,
+		PublishEpoch: &epoch,
 		Metadata: &pb.IdentityStateInfo_PoetProofReceived{
 			PoetProofReceived: &pb.PoetProofReceivedState{
 				PoetUrl: s.PoetUrl,
@@ -114,38 +131,53 @@ func (s *PoetProofReceived) APIStateInfo() *pb.IdentityStateInfo {
 }
 
 // post.
-type GeneratingPostProof struct{}
+type GeneratingPostProof struct {
+	Publish types.EpochID
+}
 
 func (s *GeneratingPostProof) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_GENERATING_POST_PROOF,
+		State:        pb.IdentityState_GENERATING_POST_PROOF,
+		PublishEpoch: &epoch,
 	}
 }
 
-type PostProofReady struct{}
+type PostProofReady struct {
+	Publish types.EpochID
+}
 
 func (s *PostProofReady) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_POST_PROOF_READY,
+		State:        pb.IdentityState_POST_PROOF_READY,
+		PublishEpoch: &epoch,
 	}
 }
 
 // atx.
-type ATXReady struct{}
+type ATXReady struct {
+	Publish types.EpochID
+}
 
 func (s *ATXReady) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_ATX_READY,
+		State:        pb.IdentityState_ATX_READY,
+		PublishEpoch: &epoch,
 	}
 }
 
 type ATXBroadcasted struct {
-	AtxId types.ATXID
+	AtxId   types.ATXID
+	Publish types.EpochID
 }
 
 func (s *ATXBroadcasted) APIStateInfo() *pb.IdentityStateInfo {
+	epoch := s.Publish.Uint32()
 	return &pb.IdentityStateInfo{
-		State: pb.IdentityState_ATX_BROADCASTED,
+		State:        pb.IdentityState_ATX_BROADCASTED,
+		PublishEpoch: &epoch,
 		Metadata: &pb.IdentityStateInfo_AtxBroadcasted{
 			AtxBroadcasted: &pb.AtxBroadcastedState{
 				AtxId: s.AtxId.Bytes(),
@@ -155,8 +187,25 @@ func (s *ATXBroadcasted) APIStateInfo() *pb.IdentityStateInfo {
 }
 
 // proposal.
+type ProposalBuildFailed struct {
+	ErrorMsg string
+	Layer    types.LayerID
+}
+
+func (s *ProposalBuildFailed) APIStateInfo() *pb.IdentityStateInfo {
+	return &pb.IdentityStateInfo{
+		State: pb.IdentityState_PROPOSAL_BUILD_FAILED,
+		Metadata: &pb.IdentityStateInfo_ProposalBuildFailed{
+			ProposalBuildFailed: &pb.ProposalBuildFailedState{
+				Message: s.ErrorMsg,
+				Layer:   s.Layer.Uint32(),
+			},
+		},
+	}
+}
+
 type ProposalPublishFailed struct {
-	Error    error
+	ErrorMsg string
 	Proposal types.ProposalID
 	Layer    types.LayerID
 }
@@ -166,7 +215,7 @@ func (s *ProposalPublishFailed) APIStateInfo() *pb.IdentityStateInfo {
 		State: pb.IdentityState_PROPOSAL_PUBLISH_FAILED,
 		Metadata: &pb.IdentityStateInfo_ProposalPublishFailed{
 			ProposalPublishFailed: &pb.ProposalPublishFailedState{
-				Message:  s.Error.Error(),
+				Message:  s.ErrorMsg,
 				Proposal: s.Proposal.Bytes(),
 				Layer:    s.Layer.Uint32(),
 			},
@@ -186,6 +235,29 @@ func (s *ProposalPublished) APIStateInfo() *pb.IdentityStateInfo {
 			ProposalPublished: &pb.ProposalPublishedState{
 				Proposal: s.Proposal.Bytes(),
 				Layer:    s.Layer.Uint32(),
+			},
+		},
+	}
+}
+
+type Eligible struct {
+	Layers map[types.LayerID][]types.VotingEligibility
+}
+
+func (s *Eligible) APIStateInfo() *pb.IdentityStateInfo {
+	rst := make([]*pb.Eligibility, 0, len(s.Layers))
+	for lid, eligs := range s.Layers {
+		rst = append(rst, &pb.Eligibility{
+			Layer: lid.Uint32(),
+			Count: uint32(len(eligs)),
+		})
+	}
+
+	return &pb.IdentityStateInfo{
+		State: pb.IdentityState_ELIGIBLE,
+		Metadata: &pb.IdentityStateInfo_Eligible{
+			Eligible: &pb.Eligible{
+				Layers: rst,
 			},
 		},
 	}

@@ -45,11 +45,6 @@ func (s *TransactionService) RegisterHandlerService(mux *runtime.ServeMux) error
 	return pb.RegisterTransactionServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *TransactionService) String() string {
-	return "TransactionService"
-}
-
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
 	db sql.StateDatabase,
@@ -143,7 +138,15 @@ func (s *TransactionService) getTransactionAndStatus(
 	case types.APPLIED:
 		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
 	default:
-		state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		evicted, err := s.conState.HasEvicted(txID)
+		if err != nil {
+			return nil, state
+		}
+		if evicted {
+			state = pb.TransactionState_TRANSACTION_STATE_INEFFECTUAL
+		} else {
+			state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
+		}
 	}
 	return &tx.Transaction, state
 }

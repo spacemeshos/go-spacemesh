@@ -44,11 +44,6 @@ func (s *PostService) RegisterHandlerService(mux *runtime.ServeMux) error {
 	return pb.RegisterPostServiceHandlerServer(context.Background(), mux, s)
 }
 
-// String returns the name of this service.
-func (s *PostService) String() string {
-	return "PostService"
-}
-
 type PostServiceOpt func(*PostService)
 
 func PostServiceQueryInterval(interval time.Duration) PostServiceOpt {
@@ -123,7 +118,8 @@ func (s *PostService) Register(stream pb.PostService_RegisterServer) error {
 	for {
 		select {
 		case <-stream.Context().Done():
-			return stream.Context().Err()
+			s.log.Debug("stream closed", zap.Error(stream.Context().Err()))
+			return nil
 		case cmd := <-con:
 			if err := stream.SendMsg(cmd.req); err != nil {
 				s.log.Error("failed to send request", zap.Error(err))

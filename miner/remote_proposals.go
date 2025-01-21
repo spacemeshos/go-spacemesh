@@ -22,6 +22,9 @@ import (
 
 type proposalService interface {
 	Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (*types.Proposal, uint64, error)
+	CalculateEligibilitySlotsFor(
+		ctx context.Context, node types.NodeID, epoch types.EpochID,
+	) (uint32, types.VRFPostIndex, error)
 }
 
 type beaconService interface {
@@ -29,12 +32,9 @@ type beaconService interface {
 }
 
 type identityStates interface {
-	SetEligibilitiesForEpoch(
-		id types.NodeID,
-		epoch types.EpochID,
-		eligibilities map[types.LayerID][]types.VotingEligibility)
+	SetEligibilities(id types.NodeID, eligibilities map[types.LayerID][]types.VotingEligibility)
 	AddProposal(id types.NodeID, proposals *types.Proposal)
-	Set(id types.NodeID, publishEpoch *types.EpochID, newState smesherIdentity.State)
+	Set(id types.NodeID, newState smesherIdentity.State)
 }
 
 type RemoteProposalBuilder struct {
@@ -148,7 +148,6 @@ func (pb *RemoteProposalBuilder) Run(ctx context.Context) error {
 					zap.Error(err),
 				)
 			}
-
 		}
 	}
 }
@@ -163,51 +162,64 @@ func (pb *RemoteProposalBuilder) build(
 	pb.signers.mu.Lock()
 	signers := maps.Values(pb.signers.signers)
 	pb.signers.mu.Unlock()
-	var err error
 	bcn, ok := beacons[epoch]
 	if !ok {
+		var err error
 		bcn, err = pb.beaconSvc.Beacon(ctx, epoch)
 		if err != nil {
-			return fmt.Errorf("beacon: %w", err)
+			err = fmt.Errorf("getting beacon: %w", err)
+			for _, s := range signers {
+				pb.identityStates.Set(s.signer.NodeID(), &smesherIdentity.ProposalBuildFailed{
+					ErrorMsg: err.Error(),
+					Layer:    layer,
+				})
+			}
+			return err
 		}
 		beacons[epoch] = bcn
 	}
 
 	for _, signer := range signers {
 		nodeId := signer.signer.NodeID()
-		proposal, nonce, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
+
+		var proofs map[types.LayerID][]types.VotingEligibility
+		nodeElig, ok := eligibilities[nodeId]
+		if !ok {
+			slots, nonce, err := pb.proposalSvc.CalculateEligibilitySlotsFor(ctx, nodeId, epoch)
+			if err != nil {
+				pb.logger.Error("calculate eligibility slots error", zap.Error(err))
+				continue
+			}
+			proofs = calcEligibilityProofs(
+				signer.signer.VRFSigner(),
+				epoch,
+				bcn,
+				nonce,
+				slots,
+				pb.cfg.layersPerEpoch,
+			)
+			eligibilities[nodeId] = proofs
+			pb.identityStates.SetEligibilities(nodeId, proofs)
+			pb.identityStates.Set(nodeId, &smesherIdentity.Eligible{
+				Layers: proofs,
+			})
+		} else {
+			proofs = nodeElig
+		}
+
+		proposal, _, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
 			pb.logger.Error("get partial proposal", zap.Error(err))
+			pb.identityStates.Set(nodeId, &smesherIdentity.ProposalBuildFailed{
+				ErrorMsg: fmt.Sprintf("get partial proposal: %v", err),
+				Layer:    layer,
+			})
 			continue
 		}
 		if proposal == nil {
 			// this node signer isn't eligible this epoch, continue
 			pb.logger.Info("node not eligible on this layer. will try later")
 			continue
-		}
-
-		var proofs map[types.LayerID][]types.VotingEligibility
-		if proposal.Ballot.EpochData != nil {
-			nodeElig, ok := eligibilities[nodeId]
-			if !ok {
-				proofs = calcEligibilityProofs(
-					signer.signer.VRFSigner(),
-					epoch,
-					bcn,
-					types.VRFPostIndex(nonce),
-					proposal.Ballot.EpochData.EligibilityCount,
-					pb.cfg.layersPerEpoch,
-				)
-				eligibilities[nodeId] = proofs
-				pb.identityStates.SetEligibilitiesForEpoch(nodeId, epoch, proofs)
-			} else {
-				proofs = nodeElig
-			}
-		} else {
-			proofs, ok = eligibilities[nodeId]
-			if !ok {
-				panic("missing node epoch eligibilities")
-			}
 		}
 
 		eligibilities, ok := proofs[layer]
@@ -223,6 +235,10 @@ func (pb *RemoteProposalBuilder) build(
 		err = proposal.Initialize()
 		if err != nil {
 			pb.logger.Error("failed to initialize proposal", zap.Error(err))
+			pb.identityStates.Set(nodeId, &smesherIdentity.ProposalBuildFailed{
+				ErrorMsg: fmt.Sprintf("failed to initialize proposal: %v", err),
+				Layer:    layer,
+			})
 			continue
 		}
 		pb.logger.Info("publishing proposal", zap.Inline(proposal))
@@ -233,8 +249,8 @@ func (pb *RemoteProposalBuilder) build(
 				zap.Stringer("id", proposal.ID()),
 				zap.Error(err),
 			)
-			pb.identityStates.Set(nodeId, &epoch, &smesherIdentity.ProposalPublishFailed{
-				Error:    err,
+			pb.identityStates.Set(nodeId, &smesherIdentity.ProposalPublishFailed{
+				ErrorMsg: err.Error(),
 				Proposal: proposal.ID(),
 				Layer:    proposal.Layer,
 			})

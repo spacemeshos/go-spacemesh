@@ -103,6 +103,9 @@ func (s *NodeService) PositioningATX(ctx context.Context, maxPublish types.Epoch
 // Publish implements pubsub.Publisher.
 func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) error {
 	buf := bytes.NewBuffer(blob)
+	if proto == hare3.DefaultProtocolName {
+		proto = "hare3"
+	}
 	protocol := PostPublishProtocolParamsProtocol(proto)
 	resp, err := s.client.PostPublishProtocolWithBody(ctx, protocol, "application/octet-stream", buf)
 	if err != nil {
@@ -128,83 +131,99 @@ func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProof
 	return nil
 }
 
-func (s *NodeService) GetHareMessage(ctx context.Context, layer types.LayerID, round hare3.IterRound) ([]byte, error) {
-	resp, err := s.client.GetHareRoundTemplateLayerIterRound(ctx,
+func (s *NodeService) HareRoundTemplate(
+	ctx context.Context,
+	layer types.LayerID,
+	round hare3.IterRound,
+) (*hare3.Body, error) {
+	resp, err := s.client.GetHareRoundTemplateLayerIterRoundWithResponse(ctx,
 		externalRef0.LayerID(layer),
 		externalRef0.HareIter(round.Iter),
 		externalRef0.HareRound(round.Round))
 	if err != nil {
 		return nil, fmt.Errorf("get hare message: %w", err)
 	}
-	switch resp.StatusCode {
+	switch resp.StatusCode() {
 	case http.StatusOK:
-		bytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, fmt.Errorf("read all: %w", err)
+		body := hare3.Body{
+			Layer:     layer,
+			IterRound: round,
 		}
-		return bytes, nil
-
+		for _, proposalHex := range resp.JSON200.Proposals {
+			if len(proposalHex) != 40 {
+				return nil, errors.New("invalid proposal ID length")
+			}
+			proposal, err := hex.DecodeString(proposalHex)
+			if err != nil {
+				return nil, fmt.Errorf("decoding proposal ID: %w", err)
+			}
+			body.Value.Proposals = append(body.Value.Proposals, types.ProposalID(proposal))
+		}
+		if refHex := resp.JSON200.Reference; refHex != nil {
+			if len(*refHex) != 64 {
+				return nil, errors.New("invalid reference length")
+			}
+			reference, err := hex.DecodeString(*refHex)
+			if err != nil {
+				return nil, fmt.Errorf("decoding proposal ID: %w", err)
+			}
+			refHash := types.Hash32(reference)
+			body.Value.Reference = &refHash
+		}
+		return &body, nil
 	case http.StatusNoContent:
 		// no message to return, special case, return nil,nil
 		// and the caller should assume there's no message to process,
 		// therefore hare probably terminated.
 		return nil, nil
 	default:
-		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
+		return nil, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
 }
 
 func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	resp, err := s.client.GetHareTotalWeightLayer(ctx, uint32(layer))
+	resp, err := s.client.GetHareTotalWeightLayerWithResponse(ctx, layer.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get total weight: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return resp.JSON200.Weight, nil
+	default:
+		return 0, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("read all: %w", err)
-	}
-	return strconv.ParseUint(string(bytes), 10, 64)
 }
 
 func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
-	resp, err := s.client.GetHareWeightNodeIdLayer(ctx, node.String(), uint32(layer))
+	resp, err := s.client.GetHareWeightNodeIdLayerWithResponse(ctx, node.String(), layer.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("unexpected status: %s", resp.Status)
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return resp.JSON200.Weight, nil
+	default:
+		return 0, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, fmt.Errorf("read all: %w", err)
-	}
-	return strconv.ParseUint(string(bytes), 10, 64)
 }
 
 func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
-	v := types.Beacon{}
-	resp, err := s.client.GetHareBeaconEpoch(ctx, externalRef0.EpochID(epoch))
+	resp, err := s.client.GetHareBeaconEpochWithResponse(ctx, epoch.Uint32())
 	if err != nil {
-		return v, fmt.Errorf("get hare beacon: %w", err)
+		return types.Beacon{}, fmt.Errorf("get hare beacon: %w", err)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return v, fmt.Errorf("unexpected status: %s", resp.Status)
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return types.Beacon(resp.JSON200.Beacon), nil
+	default:
+		return types.Beacon{}, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return v, fmt.Errorf("read all: %w", err)
-	}
-	copy(v[:], bytes)
-	return v, nil
 }
 
 func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
 	*types.Proposal, uint64, error,
 ) {
-	resp, err := s.client.GetProposalLayerNode(ctx, externalRef0.LayerID(layer), node.String())
+	resp, err := s.client.GetProposalLayerNode(ctx, layer.Uint32(), node.String())
 	if err != nil {
 		return nil, 0, fmt.Errorf("get proposal layer: %w", err)
 	}
@@ -212,7 +231,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	case http.StatusOK:
 	case http.StatusNoContent:
 		// special case - no error but also no proposal, means
-		// we're no eligibile this epoch with this node ID
+		// we're no eligible this epoch with this node ID
 		return nil, 0, nil
 	default:
 		return nil, 0, fmt.Errorf("unexpected status: %s", resp.Status)
@@ -221,6 +240,13 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	bytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, 0, fmt.Errorf("read all: %w", err)
+	}
+
+	if len(bytes) == 0 {
+		// there was no http.StatusNoContent but proposal body was empty
+		// what means no proposal and in effect we're no eligible this epoch
+		// with this node ID
+		return nil, 0, nil
 	}
 
 	prop := types.Proposal{}
@@ -237,4 +263,19 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 		return nil, 0, fmt.Errorf("nonce parse: %w", err)
 	}
 	return &prop, nonce, nil
+}
+
+func (s *NodeService) CalculateEligibilitySlotsFor(
+	ctx context.Context, node types.NodeID, epoch types.EpochID,
+) (uint32, types.VRFPostIndex, error) {
+	resp, err := s.client.GetEligibilitySlotsNodeEpochWithResponse(ctx, node.String(), externalRef0.EpochID(epoch))
+	if err != nil {
+		return 0, 0, err
+	}
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return resp.JSON200.Slots, types.VRFPostIndex(resp.JSON200.Nonce), nil
+	default:
+		return 0, 0, fmt.Errorf("unexpected status: %q", resp.Status())
+	}
 }

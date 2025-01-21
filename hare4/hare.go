@@ -361,7 +361,7 @@ func (h *Hare) fetchFull(ctx context.Context, peer p2p.Peer, msgId types.Hash32)
 	return resp.Ids, nil
 }
 
-func (h *Hare) handleProposalsStream(ctx context.Context, msg []byte, s io.ReadWriter) error {
+func (h *Hare) handleProposalsStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
 	requestCompactHandlerCounter.Inc()
 	compactProps := &CompactIdRequest{}
 	if err := codec.Decode(msg, compactProps); err != nil {
@@ -684,7 +684,7 @@ func (h *Hare) run(session *session) error {
 			if err := h.onOutput(session, current, out); err != nil {
 				return err
 			}
-			// we are logginng stats 1 network delay after new iteration start
+			// we are logging stats 1 network delay after new iteration start
 			// so that we can receive notify messages from previous iteration
 			if session.proto.Round == softlock && h.config.LogStats {
 				h.log.Info("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))

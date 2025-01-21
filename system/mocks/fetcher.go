@@ -865,68 +865,6 @@ func (c *MockActiveSetFetcherGetActiveSetCall) DoAndReturn(f func(context.Contex
 	return c
 }
 
-// MockMalfeasanceProofFetcher is a mock of MalfeasanceProofFetcher interface.
-type MockMalfeasanceProofFetcher struct {
-	ctrl     *gomock.Controller
-	recorder *MockMalfeasanceProofFetcherMockRecorder
-	isgomock struct{}
-}
-
-// MockMalfeasanceProofFetcherMockRecorder is the mock recorder for MockMalfeasanceProofFetcher.
-type MockMalfeasanceProofFetcherMockRecorder struct {
-	mock *MockMalfeasanceProofFetcher
-}
-
-// NewMockMalfeasanceProofFetcher creates a new mock instance.
-func NewMockMalfeasanceProofFetcher(ctrl *gomock.Controller) *MockMalfeasanceProofFetcher {
-	mock := &MockMalfeasanceProofFetcher{ctrl: ctrl}
-	mock.recorder = &MockMalfeasanceProofFetcherMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockMalfeasanceProofFetcher) EXPECT() *MockMalfeasanceProofFetcherMockRecorder {
-	return m.recorder
-}
-
-// GetMalfeasanceProofs mocks base method.
-func (m *MockMalfeasanceProofFetcher) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMalfeasanceProofs", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// GetMalfeasanceProofs indicates an expected call of GetMalfeasanceProofs.
-func (mr *MockMalfeasanceProofFetcherMockRecorder) GetMalfeasanceProofs(arg0, arg1 any) *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProofs", reflect.TypeOf((*MockMalfeasanceProofFetcher)(nil).GetMalfeasanceProofs), arg0, arg1)
-	return &MockMalfeasanceProofFetcherGetMalfeasanceProofsCall{Call: call}
-}
-
-// MockMalfeasanceProofFetcherGetMalfeasanceProofsCall wrap *gomock.Call
-type MockMalfeasanceProofFetcherGetMalfeasanceProofsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall) Return(arg0 error) *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall) Do(f func(context.Context, []types.NodeID) error) *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []types.NodeID) error) *MockMalfeasanceProofFetcherGetMalfeasanceProofsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // MockPeerTracker is a mock of PeerTracker interface.
 type MockPeerTracker struct {
 	ctrl     *gomock.Controller

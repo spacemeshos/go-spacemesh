@@ -29,7 +29,7 @@ func init() {
 
 // RequestMessage is sent to the peer for hash query.
 type RequestMessage struct {
-	Hint datastore.Hint `scale:"max=256"` // TODO(mafa): covert to an enum
+	Hint datastore.Hint `scale:"max=256"`
 	Hash types.Hash32
 }
 

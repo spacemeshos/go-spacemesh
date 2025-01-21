@@ -51,13 +51,11 @@ func TestMalfeasanceProof_Dishonest(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
 	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
-	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	proof := types.RandomBytes(100)
 
 	nodeID1 := types.NodeID{1}
 	cdb.CacheMalfeasanceProof(nodeID1, proof)
-	require.Equal(t, 1, cdb.MalfeasanceCacheSize())
 
 	got, err := cdb.MalfeasanceProof(nodeID1)
 	require.NoError(t, err)
@@ -68,7 +66,6 @@ func TestIterateMalfeasanceProofs(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(t))
 	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
-	require.Equal(t, 0, cdb.MalfeasanceCacheSize())
 
 	proofs := map[types.NodeID][]byte{
 		{1}: types.RandomBytes(100),

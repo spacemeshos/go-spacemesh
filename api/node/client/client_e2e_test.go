@@ -185,27 +185,58 @@ func Test_Hare(t *testing.T) {
 		require.NoError(t, err)
 	})
 	t.Run("hare message", func(t *testing.T) {
-		exp := make([]byte, 182)
-		mock.hare.EXPECT().RoundMessage(gomock.Any(), gomock.Any()).Return(&hare3.Message{})
-		v, err := svc.GetHareMessage(context.Background(), types.LayerID(113), hare3.IterRound{})
-		require.Equal(t, exp, v)
+		body := hare3.Body{
+			Layer:     113,
+			IterRound: hare3.IterRound{Iter: 7, Round: 2},
+			Value: hare3.Value{
+				Proposals: []types.ProposalID{
+					types.RandomProposalID(),
+					types.RandomProposalID(),
+				},
+			},
+		}
+		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(&body)
+		gotBody, err := svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
 		require.NoError(t, err)
+		require.Equal(t, body, *gotBody)
+
+		// non-nil reference
+		ref := types.RandomHash()
+		body.Value.Reference = &ref
+		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(&body)
+		gotBody, err = svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
+		require.NoError(t, err)
+		require.Equal(t, body, *gotBody)
+
+		// no template
+		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(nil)
+		gotBody, err = svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
+		require.NoError(t, err)
+		require.Nil(t, gotBody)
 	})
 }
 
 func TestProposals(t *testing.T) {
 	svc, mock := setupE2E(t)
 	t.Run("build for", func(t *testing.T) {
-		p := createProposal(t)
+		p := createProposal(t, true)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
 		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
 		prop.MustInitialize()
 		require.NoError(t, err)
 		require.Equal(t, p, prop)
 	})
+	svc, mock = setupE2E(t)
+	t.Run("build for - no eligibility", func(t *testing.T) {
+		p := createProposal(t, false)
+		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
+		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
+		require.NoError(t, err)
+		require.Empty(t, prop)
+	})
 }
 
-func createProposal(tb testing.TB) *types.Proposal {
+func createProposal(tb testing.TB, eligible bool) *types.Proposal {
 	tb.Helper()
 	b := types.RandomBallot()
 	b.Layer = 10000
@@ -217,6 +248,10 @@ func createProposal(tb testing.TB) *types.Proposal {
 	}
 	p.Ballot.EpochData = &types.EpochData{
 		EligibilityCount: 1,
+	}
+	if !eligible {
+		p.Ballot.EpochData.EligibilityCount = 0
+		p.Ballot.RefBallot = types.EmptyBallotID
 	}
 
 	signer, err := signing.NewEdSigner()

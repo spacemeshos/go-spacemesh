@@ -26,8 +26,17 @@ type HareIter = uint8
 // HareRound defines model for HareRound.
 type HareRound = uint8
 
+// HareRoundTemplate defines model for HareRoundTemplate.
+type HareRoundTemplate struct {
+	// Proposals Array of 32-byte proposal IDs encoded as hex strings
+	Proposals []string `json:"Proposals"`
+
+	// Reference Optional 32-byte reference hash
+	Reference *string `json:"Reference,omitempty"`
+}
+
 // LayerID defines model for LayerID.
-type LayerID = uint64
+type LayerID = uint32
 
 // NodeID defines model for NodeID.
 type NodeID = string

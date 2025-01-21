@@ -26,6 +26,7 @@ temp.js
 /cover-all.out
 /trace
 cover.out
+junit.xml
 coverage.html
 gcloud.json
 spacemesh.json

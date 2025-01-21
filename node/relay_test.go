@@ -31,7 +31,7 @@ func TestRelay(t *testing.T) {
 	relayAddrInfoCh = make(chan peer.AddrInfo)
 	t.Cleanup(func() { relayAddrInfoCh = nil })
 
-	cmd := GetCommand()
+	cmd := GetNodeServiceCommand()
 	cmd.SetArgs([]string{"relay", "--config", configPath})
 	var eg errgroup.Group
 	ctx, cancel := context.WithCancel(context.Background())

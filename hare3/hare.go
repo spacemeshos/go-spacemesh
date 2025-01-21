@@ -32,6 +32,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
+const (
+	DefaultProtocolName = "/h/3.0"
+)
+
 type CommitteeUpgrade struct {
 	Layer types.LayerID
 	Size  uint16
@@ -112,7 +116,7 @@ func DefaultConfig() Config {
 		PreroundDelay:   25 * time.Second,
 		RoundDuration:   12 * time.Second,
 		// can be bumped to 3.1 when oracle upgrades
-		ProtocolName: "/h/3.0",
+		ProtocolName: DefaultProtocolName,
 		DisableLayer: math.MaxUint32,
 	}
 }
@@ -491,7 +495,7 @@ func (h *Hare) run(session *session) error {
 			if err := h.onOutput(session, current, out); err != nil {
 				return err
 			}
-			// we are logginng stats 1 network delay after new iteration start
+			// we are logging stats 1 network delay after new iteration start
 			// so that we can receive notify messages from previous iteration
 			if session.proto.Round == softlock && h.config.LogStats {
 				h.log.Debug("stats", zap.Uint32("lid", session.lid.Uint32()), zap.Inline(session.proto.Stats()))
@@ -671,7 +675,7 @@ func (h *Hare) cleanupLayer(l types.LayerID) {
 	}
 }
 
-func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
+func (h *Hare) RoundTemplate(layer types.LayerID, round IterRound) *Body {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -683,7 +687,7 @@ func (h *Hare) RoundMessage(layer types.LayerID, round IterRound) *Message {
 	if !ok {
 		return nil
 	}
-	return r.message
+	return &r.message.Body
 }
 
 func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {

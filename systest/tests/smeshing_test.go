@@ -3,7 +3,9 @@ package tests
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"sync"
 	"testing"
@@ -29,6 +31,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
+func TestMain(m *testing.M) {
+	// systest runs with `fastnet` preset. this init need to generate addresses with same hrp network prefix as fastnet.
+	types.SetNetworkHRP("stest")
+	res := m.Run()
+	os.Exit(res)
+}
+
 // TestSmeshing tests the network is healthy, smeshers are creating proposals, transactions are processed, and vesting
 // is working.
 func TestSmeshing(t *testing.T) {
@@ -36,10 +45,6 @@ func TestSmeshing(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
-	tctx.RemoteSize = tctx.ClusterSize / 4 // 25% of nodes are remote
-
-	// commented out for node split testing
-	// tctx.OldSize = tctx.ClusterSize / 4    // 25% of nodes are old
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
 		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
@@ -52,7 +57,7 @@ func TestSmeshing(t *testing.T) {
 	)
 	require.NoError(t, err)
 	testSmeshing(t, tctx, cl)
-	testTransactions(t, tctx, cl, 8)
+	testTransactions(t, tctx, cl, 10)
 	testVesting(t, tctx, cl, vests...)
 }
 
@@ -66,7 +71,6 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
 
 	var m sync.Mutex
-	eg, ctx := errgroup.WithContext(tctx)
 	clients := cl.Clients()
 	if cl.NodeService() != nil {
 		clients = append(clients, cl.NodeService())
@@ -74,6 +78,12 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
 	includedAll := make(map[string]map[uint32][]*pb.Proposal, cl.Total())
 
+	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
+	deadline := cl.Genesis().Add(time.Duration(last+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
+	ctx, cancel := context.WithDeadline(tctx, deadline)
+	defer cancel()
+
+	eg, ctx := errgroup.WithContext(ctx)
 	for i, client := range clients {
 		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
 		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
@@ -84,8 +94,32 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 				return false, nil
 			}
 			if proposal.Status == pb.Proposal_Created {
-				createdCh <- proposal
-				tctx.Log.Debugw("received proposal event",
+				if proposal.Layer.Number > last {
+					return false, nil
+				}
+				if proposal.Status == pb.Proposal_Created {
+					createdCh <- proposal
+					tctx.Log.Debugw("received proposal created event",
+						"client", client.Name,
+						"layer", proposal.Layer.Number,
+						"smesher", prettyHex(proposal.Smesher.Id),
+						"eligibilities", len(proposal.Eligibilities),
+					)
+					select {
+					case createdCh <- proposal:
+					case <-ctx.Done():
+						return false, ctx.Err()
+					default:
+						tctx.Log.Errorw("proposal channel is full",
+							"client", client.Name,
+							"layer", proposal.Layer.Number,
+						)
+						return false, errors.New("proposal channel is full")
+					}
+					return true, nil
+				}
+
+				tctx.Log.Debugw("received other proposal event",
 					"client", client.Name,
 					"layer", proposal.Layer.Number,
 					"smesher", prettyHex(proposal.Smesher.Id),
@@ -104,11 +138,12 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			m.Lock()
 			defer m.Unlock()
 			if includedAll[client.Name] == nil {
-
 				includedAll[client.Name] = map[uint32][]*pb.Proposal{}
 			}
-			includedAll[client.Name][proposal.Layer.Number] =
-				append(includedAll[client.Name][proposal.Layer.Number], proposal)
+			includedAll[client.Name][proposal.Layer.Number] = append(
+				includedAll[client.Name][proposal.Layer.Number],
+				proposal,
+			)
 			return true, nil
 		})
 	}
@@ -138,7 +173,11 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	require.Len(t, beaconSet, len(beacons), "beacons=%v", beaconSet)
 }
 
-func requireEqualProposals(tb testing.TB, reference map[uint32][]*pb.Proposal, received map[string]map[uint32][]*pb.Proposal) {
+func requireEqualProposals(
+	tb testing.TB,
+	reference map[uint32][]*pb.Proposal,
+	received map[string]map[uint32][]*pb.Proposal,
+) {
 	tb.Helper()
 	for layer := range reference {
 		sort.Slice(reference[layer], func(i, j int) bool {

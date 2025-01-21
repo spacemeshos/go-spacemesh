@@ -70,11 +70,26 @@ func Test_GetMalicious(t *testing.T) {
 	for i := 0; i < numBad; i++ {
 		nid := types.NodeID{byte(i + 1)}
 		bad = append(bad, nid)
-		require.NoError(t, identities.SetMalicious(db, nid, types.RandomBytes(11), time.Now().Local()))
+		require.NoError(t, identities.SetMalicious(db, nid, types.RandomBytes(11), time.Now()))
 	}
 	got, err = identities.AllMalicious(db)
 	require.NoError(t, err)
 	require.Equal(t, bad, got)
+}
+
+func Test_CountMalicious(t *testing.T) {
+	db := statesql.InMemoryTest(t)
+	got, err := identities.CountMalicious(db)
+	require.NoError(t, err)
+	require.Zero(t, got)
+
+	const numBad = uint64(11)
+	for range numBad {
+		require.NoError(t, identities.SetMalicious(db, types.RandomNodeID(), types.RandomBytes(11), time.Now()))
+	}
+	got, err = identities.CountMalicious(db)
+	require.NoError(t, err)
+	require.Equal(t, numBad, got)
 }
 
 func TestLoadMalfeasanceBlob(t *testing.T) {
@@ -83,7 +98,7 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 
 	nid1 := types.RandomNodeID()
 	proof1 := types.RandomBytes(11)
-	identities.SetMalicious(db, nid1, proof1, time.Now().Local())
+	require.NoError(t, identities.SetMalicious(db, nid1, proof1, time.Now()))
 
 	var blob1 sql.Blob
 	require.NoError(t, identities.LoadMalfeasanceBlob(ctx, db, nid1.Bytes(), &blob1))
@@ -95,7 +110,7 @@ func TestLoadMalfeasanceBlob(t *testing.T) {
 
 	nid2 := types.RandomNodeID()
 	proof2 := types.RandomBytes(12)
-	identities.SetMalicious(db, nid2, proof2, time.Now().Local())
+	require.NoError(t, identities.SetMalicious(db, nid2, proof2, time.Now()))
 
 	var blob2 sql.Blob
 	require.NoError(t, identities.LoadMalfeasanceBlob(ctx, db, nid2.Bytes(), &blob2))

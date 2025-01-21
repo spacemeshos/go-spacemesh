@@ -99,8 +99,7 @@ type BaseConfig struct {
 	LayerAvgSize   uint32        `mapstructure:"layer-average-size"`
 	LayersPerEpoch uint32        `mapstructure:"layers-per-epoch"`
 
-	PoETServers DeprecatedPoETServers `mapstructure:"poet-server"`
-	PoetServers []types.PoetServer    `mapstructure:"poet-servers"`
+	PoetServers []types.PoetServer `mapstructure:"poet-servers"`
 
 	PprofHTTPServer         bool   `mapstructure:"pprof-server"`
 	PprofHTTPServerListener string `mapstructure:"pprof-listener"`
@@ -123,6 +122,7 @@ type BaseConfig struct {
 	DatabaseQueryCache           bool                    `mapstructure:"db-query-cache"`
 	DatabaseQueryCacheSizes      DatabaseQueryCacheSizes `mapstructure:"db-query-cache-sizes"`
 	DatabaseSchemaAllowDrift     bool                    `mapstructure:"db-allow-schema-drift"`
+	DatabaseConnIdleTimeout      time.Duration           `mapstructure:"db-conn-idle-timeout"`
 
 	PruneActivesetsFrom types.EpochID `mapstructure:"prune-activesets-from"`
 
@@ -162,14 +162,6 @@ type DatabaseQueryCacheSizes struct {
 	EpochATXs     int `mapstructure:"epoch-atxs"`
 	ATXBlob       int `mapstructure:"atx-blob"`
 	ActiveSetBlob int `mapstructure:"active-set-blob"`
-}
-
-type DeprecatedPoETServers struct{}
-
-// DeprecatedMsg implements Deprecated interface.
-func (DeprecatedPoETServers) DeprecatedMsg() string {
-	return `The 'poet-server' is deprecated. Please migrate to the 'poet-servers'. ` +
-		`Check 'Upgrade Information' in CHANGELOG.md for details.`
 }
 
 type PublicMetrics struct {
@@ -253,9 +245,10 @@ func defaultBaseConfig() BaseConfig {
 			ATXBlob:       10000,
 			ActiveSetBlob: 200,
 		},
-		NetworkHRP:     "sm",
-		ATXGradeDelay:  10 * time.Second,
-		PostValidDelay: 12 * time.Hour,
+		DatabaseConnIdleTimeout: 10 * time.Millisecond,
+		NetworkHRP:              "sm",
+		ATXGradeDelay:           10 * time.Second,
+		PostValidDelay:          12 * time.Hour,
 
 		PprofHTTPServerListener: "localhost:6060",
 	}

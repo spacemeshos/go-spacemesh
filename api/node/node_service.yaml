@@ -147,10 +147,9 @@ paths:
         "200":
           description: successfully found the message to return to client
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                $ref: "models/components.yaml#/components/schemas/HareRoundTemplate"
         "204":
           description: did not find a message to retrieve
   /hare/total_weight/{layer}:
@@ -163,16 +162,20 @@ paths:
           name: layer
           required: true
           schema:
-            type: integer
-            format: uint32
+            $ref: "models/components.yaml#/components/schemas/LayerID"
       responses:
         "200":
-          description: successfully found the total weight to return to client
+          description: successfully found the total weight
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  weight:
+                    type: integer
+                    format: uint64
+                required:
+                  - weight
         "204":
           description: did not find a message to retrieve
   /hare/weight/{node_id}/{layer}:
@@ -190,16 +193,20 @@ paths:
           name: layer
           required: true
           schema:
-            type: integer
-            format: uint32
+            $ref: "models/components.yaml#/components/schemas/LayerID"
       responses:
         "200":
-          description: successfully found the total weight to return to client
+          description: successfully found the miner's weight
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  weight:
+                    type: integer
+                    format: uint64
+                required:
+                  - weight
         "204":
           description: did not find a message to retrieve
   /hare/beacon/{epoch}:
@@ -217,10 +224,19 @@ paths:
         "200":
           description: successfully found the epoch id
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                type: object
+                properties:
+                  beacon:
+                    type: array
+                    items:
+                      type: integer
+                      format: uint8
+                    minItems: 4
+                    maxItems: 4
+                required:
+                  - beacon
         "204":
           description: did not find a message to retrieve
   /proposal/{layer}/{node}:
@@ -251,4 +267,39 @@ paths:
           description: no eligibilities for this node in this epoch
         "500":
           description: could not generate proposal
+  /eligibility/slots/{node}/{epoch}:
+    get:
+      summary: Get eligibility slots for a given node id in given epoch
+      tags:
+        - "proposals"
+      parameters:
+        - in: path
+          name: node
+          required: true
+          schema:
+              $ref: "models/components.yaml#/components/schemas/NodeID"
+        - in: path
+          name: epoch
+          required: true
+          schema:
+            $ref: "models/components.yaml#/components/schemas/EpochID"
+      responses:
+        "200":
+          description: successfully calculated the slots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slots:
+                    type: integer
+                    format: uint32
+                  nonce:
+                    type: integer
+                    format: uint64
+                required:
+                  - slots
+                  - nonce
+        "500":
+            description: could not calculate eligibility slots
 

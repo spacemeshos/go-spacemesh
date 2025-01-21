@@ -89,7 +89,7 @@ type Builder struct {
 	nipostBuilder     nipostBuilder
 	validator         nipostValidator
 	layerClock        layerClock
-	syncer            syncer
+	syncer            Syncer
 	logger            *zap.Logger
 	parentCtx         context.Context
 	poets             []PoetService
@@ -100,7 +100,7 @@ type Builder struct {
 
 	posAtxFinder positioningAtxFinder
 
-	// states of each known identity
+	// post states of each known identity
 	postStates PostStates
 
 	// identity states of each known identity
@@ -183,7 +183,7 @@ func NewBuilder(
 	nipostValidator nipostValidator,
 	nipostBuilder nipostBuilder,
 	layerClock layerClock,
-	syncer syncer,
+	syncer Syncer,
 	log *zap.Logger,
 	opts ...BuilderOption,
 ) *Builder {
@@ -201,7 +201,7 @@ func NewBuilder(
 		logger:            log,
 		poetRetryInterval: defaultPoetRetryInterval,
 		postStates:        NewPostStates(log),
-		identitiesStates:  identity.NewIdentityStateStorage(),
+		identitiesStates:  identity.NewIdentityStateStorage(localDB, log),
 		versions:          []atxVersion{{0, types.AtxV1}},
 		posAtxFinder: positioningAtxFinder{
 			logger: log,
@@ -238,7 +238,7 @@ func (b *Builder) Smeshing() bool {
 	return b.stop != nil
 }
 
-// PostState returns the current state of the post service for each registered smesher.
+// PostStates returns the current state of the post service for each registered smesher.
 func (b *Builder) PostStates() map[types.IdentityDescriptor]types.PostState {
 	states := b.postStates.Get()
 	res := make(map[types.IdentityDescriptor]types.PostState, len(states))
@@ -339,7 +339,7 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 }
 
-// SmesherID returns the ID of the smesher that created this activation.
+// SmesherIDs returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherIDs() []types.NodeID {
 	b.smeshingMutex.Lock()
 	defer b.smeshingMutex.Unlock()
@@ -428,7 +428,7 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 		eg.Go(func() error {
 			_, err := poet.Certify(ctx, sig.NodeID())
 			switch {
-			case errors.Is(err, ErrCertificatesNotSupported):
+			case errors.Is(err, errCertificatesNotSupported):
 				b.logger.Debug("not certifying (not supported in poet)",
 					log.ZShortStringer("smesherID", sig.NodeID()),
 					zap.String("poet", poet.Address()),
@@ -451,15 +451,13 @@ func (b *Builder) run(ctx context.Context, sig *signing.EdSigner) {
 
 		b.logger.Warn("failed to publish atx", zap.Error(err))
 
-		b.identitiesStates.Set(sig.NodeID(), nil,
-			&identity.Retrying{
-				Error: err,
-			},
-		)
+		b.identitiesStates.Set(sig.NodeID(), &identity.Retrying{
+			ErrorMsg: err.Error(),
+		})
 
 		poetErr := &PoetSvcUnstableError{}
 		switch {
-		case errors.Is(err, ErrATXChallengeExpired):
+		case errors.Is(err, errATXChallengeExpired):
 			b.logger.Debug("retrying with new challenge after waiting for a layer")
 			if err := b.nipostBuilder.ResetState(sig.NodeID()); err != nil {
 				b.logger.Error("failed to reset nipost builder state", zap.Error(err))
@@ -520,7 +518,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	select {
 	case <-atxSyncedCh:
 	default:
-		b.identitiesStates.Set(nodeID, nil, &identity.WaitForATXSynced{})
+		b.identitiesStates.Set(nodeID, &identity.WaitForATXSynced{})
 	}
 
 	select {
@@ -576,7 +574,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		)
 		events.EmitPoetWaitRound(nodeID, currentEpochId, publishEpochId, wait)
 		events.EmitWaitingForPoETRegistrationWindow(nodeID, currentEpochId, publishEpochId, wait)
-		b.identitiesStates.Set(nodeID, &publishEpochId, &identity.WaitingForPoetRegistrationWindow{})
+		b.identitiesStates.Set(nodeID, &identity.WaitingForPoetRegistrationWindow{Publish: publishEpochId})
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
@@ -623,6 +621,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 	if err := nipost.AddChallenge(b.localDB, nodeID, challenge); err != nil {
 		return nil, fmt.Errorf("add nipost challenge: %w", err)
 	}
+	b.identitiesStates.Set(nodeID, &identity.PoetChallengeReady{Publish: challenge.PublishEpoch})
 	return challenge, nil
 }
 
@@ -741,7 +740,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_epoch", b.layerClock.CurrentLayer().GetEpoch().Uint32()),
 		zap.Object("challenge", challenge),
 	)
-	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, &identity.PoetChallengeReady{})
 
 	targetEpoch := challenge.PublishEpoch.Add(1)
 	ctx, cancel := context.WithDeadline(ctx, b.layerClock.LayerToTime(targetEpoch.FirstLayer()))
@@ -757,7 +755,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 		zap.Uint32("current_layer", b.layerClock.CurrentLayer().Uint32()),
 		log.ZShortStringer("smesherID", sig.NodeID()),
 	)
-	b.identitiesStates.Set(sig.NodeID(), &challenge.PublishEpoch, &identity.ATXReady{})
+	b.identitiesStates.Set(sig.NodeID(), &identity.ATXReady{Publish: challenge.PublishEpoch})
 	select {
 	case <-ctx.Done():
 		return fmt.Errorf("wait for publication epoch: %w", ctx.Err())
@@ -808,9 +806,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	)
 	b.identitiesStates.Set(
 		sig.NodeID(),
-		&challenge.PublishEpoch,
 		&identity.ATXBroadcasted{
-			AtxId: atx.ID(),
+			AtxId:   atx.ID(),
+			Publish: challenge.PublishEpoch,
 		},
 	)
 	return nil
@@ -853,7 +851,7 @@ func (b *Builder) createAtx(
 			// initial NIPoST challenge is not discarded; don't return ErrATXChallengeExpired
 			return nil, errors.New("atx publish epoch has passed during nipost construction")
 		}
-		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", ErrATXChallengeExpired)
+		return nil, fmt.Errorf("%w: atx publish epoch has passed during nipost construction", errATXChallengeExpired)
 	}
 
 	switch version {
@@ -898,7 +896,7 @@ func (b *Builder) createAtx(
 			PositioningATX: challenge.PositioningATX,
 			Coinbase:       b.Coinbase(),
 			VRFNonce:       (uint64)(nipostState.VRFNonce),
-			NiPosts: []wire.NiPostsV2{
+			NIPosts: []wire.NIPostV2{
 				{
 					Membership: wire.MerkleProofV2{
 						Nodes: nipostState.Membership.Nodes,

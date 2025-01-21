@@ -21,6 +21,13 @@ type EpochData struct {
 	ActiveSet []string `json:"activeSet"`
 }
 
+func (ed *EpochData) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	encoder.AddUint32("epoch", ed.ID)
+	encoder.AddString("beacon", ed.Beacon)
+	encoder.AddInt("activeset_size", len(ed.ActiveSet))
+	return nil
+}
+
 type VerifiedUpdate struct {
 	Data      *EpochOverride
 	Persisted string

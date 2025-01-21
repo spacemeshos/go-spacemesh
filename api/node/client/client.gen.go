@@ -115,6 +115,9 @@ type ClientInterface interface {
 	// GetActivationPositioningAtxPublishEpoch request
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetEligibilitySlotsNodeEpoch request
+	GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetHareBeaconEpoch request
 	GetHareBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -122,10 +125,10 @@ type ClientInterface interface {
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHareTotalWeightLayer request
-	GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetHareTotalWeightLayer(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHareWeightNodeIdLayer request
-	GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostPoetWithBody request with any body
 	PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -173,6 +176,18 @@ func (c *Client) GetActivationPositioningAtxPublishEpoch(ctx context.Context, pu
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetEligibilitySlotsNodeEpochRequest(c.Server, node, epoch)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) GetHareBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHareBeaconEpochRequest(c.Server, epoch)
 	if err != nil {
@@ -197,7 +212,7 @@ func (c *Client) GetHareRoundTemplateLayerIterRound(ctx context.Context, layer e
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHareTotalWeightLayerRequest(c.Server, layer)
 	if err != nil {
 		return nil, err
@@ -209,7 +224,7 @@ func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer uint32, reqE
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHareWeightNodeIdLayerRequest(c.Server, nodeId, layer)
 	if err != nil {
 		return nil, err
@@ -359,6 +374,47 @@ func NewGetActivationPositioningAtxPublishEpochRequest(server string, publishEpo
 	return req, nil
 }
 
+// NewGetEligibilitySlotsNodeEpochRequest generates requests for GetEligibilitySlotsNodeEpoch
+func NewGetEligibilitySlotsNodeEpochRequest(server string, node externalRef0.NodeID, epoch externalRef0.EpochID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "node", runtime.ParamLocationPath, node)
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithLocation("simple", false, "epoch", runtime.ParamLocationPath, epoch)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/eligibility/slots/%s/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetHareBeaconEpochRequest generates requests for GetHareBeaconEpoch
 func NewGetHareBeaconEpochRequest(server string, epoch externalRef0.EpochID) (*http.Request, error) {
 	var err error
@@ -442,7 +498,7 @@ func NewGetHareRoundTemplateLayerIterRoundRequest(server string, layer externalR
 }
 
 // NewGetHareTotalWeightLayerRequest generates requests for GetHareTotalWeightLayer
-func NewGetHareTotalWeightLayerRequest(server string, layer uint32) (*http.Request, error) {
+func NewGetHareTotalWeightLayerRequest(server string, layer externalRef0.LayerID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -476,7 +532,7 @@ func NewGetHareTotalWeightLayerRequest(server string, layer uint32) (*http.Reque
 }
 
 // NewGetHareWeightNodeIdLayerRequest generates requests for GetHareWeightNodeIdLayer
-func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.NodeID, layer uint32) (*http.Request, error) {
+func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.NodeID, layer externalRef0.LayerID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -674,6 +730,9 @@ type ClientWithResponsesInterface interface {
 	// GetActivationPositioningAtxPublishEpochWithResponse request
 	GetActivationPositioningAtxPublishEpochWithResponse(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetActivationPositioningAtxPublishEpochResponse, error)
 
+	// GetEligibilitySlotsNodeEpochWithResponse request
+	GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error)
+
 	// GetHareBeaconEpochWithResponse request
 	GetHareBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetHareBeaconEpochResponse, error)
 
@@ -681,10 +740,10 @@ type ClientWithResponsesInterface interface {
 	GetHareRoundTemplateLayerIterRoundWithResponse(ctx context.Context, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound, reqEditors ...RequestEditorFn) (*GetHareRoundTemplateLayerIterRoundResponse, error)
 
 	// GetHareTotalWeightLayerWithResponse request
-	GetHareTotalWeightLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error)
+	GetHareTotalWeightLayerWithResponse(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error)
 
 	// GetHareWeightNodeIdLayerWithResponse request
-	GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error)
+	GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error)
 
 	// PostPoetWithBodyWithResponse request with any body
 	PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error)
@@ -764,9 +823,37 @@ func (r GetActivationPositioningAtxPublishEpochResponse) StatusCode() int {
 	return 0
 }
 
+type GetEligibilitySlotsNodeEpochResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		Nonce uint64 `json:"nonce"`
+		Slots uint32 `json:"slots"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetEligibilitySlotsNodeEpochResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetEligibilitySlotsNodeEpochResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetHareBeaconEpochResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *struct {
+		Beacon []uint8 `json:"beacon"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -788,6 +875,7 @@ func (r GetHareBeaconEpochResponse) StatusCode() int {
 type GetHareRoundTemplateLayerIterRoundResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *externalRef0.HareRoundTemplate
 }
 
 // Status returns HTTPResponse.Status
@@ -809,6 +897,9 @@ func (r GetHareRoundTemplateLayerIterRoundResponse) StatusCode() int {
 type GetHareTotalWeightLayerResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *struct {
+		Weight uint64 `json:"weight"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -830,6 +921,9 @@ func (r GetHareTotalWeightLayerResponse) StatusCode() int {
 type GetHareWeightNodeIdLayerResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	JSON200      *struct {
+		Weight uint64 `json:"weight"`
+	}
 }
 
 // Status returns HTTPResponse.Status
@@ -938,6 +1032,15 @@ func (c *ClientWithResponses) GetActivationPositioningAtxPublishEpochWithRespons
 	return ParseGetActivationPositioningAtxPublishEpochResponse(rsp)
 }
 
+// GetEligibilitySlotsNodeEpochWithResponse request returning *GetEligibilitySlotsNodeEpochResponse
+func (c *ClientWithResponses) GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error) {
+	rsp, err := c.GetEligibilitySlotsNodeEpoch(ctx, node, epoch, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetEligibilitySlotsNodeEpochResponse(rsp)
+}
+
 // GetHareBeaconEpochWithResponse request returning *GetHareBeaconEpochResponse
 func (c *ClientWithResponses) GetHareBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetHareBeaconEpochResponse, error) {
 	rsp, err := c.GetHareBeaconEpoch(ctx, epoch, reqEditors...)
@@ -957,7 +1060,7 @@ func (c *ClientWithResponses) GetHareRoundTemplateLayerIterRoundWithResponse(ctx
 }
 
 // GetHareTotalWeightLayerWithResponse request returning *GetHareTotalWeightLayerResponse
-func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error) {
+func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error) {
 	rsp, err := c.GetHareTotalWeightLayer(ctx, layer, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -966,7 +1069,7 @@ func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Co
 }
 
 // GetHareWeightNodeIdLayerWithResponse request returning *GetHareWeightNodeIdLayerResponse
-func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer uint32, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error) {
+func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error) {
 	rsp, err := c.GetHareWeightNodeIdLayer(ctx, nodeId, layer, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1081,6 +1184,35 @@ func ParseGetActivationPositioningAtxPublishEpochResponse(rsp *http.Response) (*
 	return response, nil
 }
 
+// ParseGetEligibilitySlotsNodeEpochResponse parses an HTTP response from a GetEligibilitySlotsNodeEpochWithResponse call
+func ParseGetEligibilitySlotsNodeEpochResponse(rsp *http.Response) (*GetEligibilitySlotsNodeEpochResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetEligibilitySlotsNodeEpochResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Nonce uint64 `json:"nonce"`
+			Slots uint32 `json:"slots"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetHareBeaconEpochResponse parses an HTTP response from a GetHareBeaconEpochWithResponse call
 func ParseGetHareBeaconEpochResponse(rsp *http.Response) (*GetHareBeaconEpochResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -1092,6 +1224,18 @@ func ParseGetHareBeaconEpochResponse(rsp *http.Response) (*GetHareBeaconEpochRes
 	response := &GetHareBeaconEpochResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Beacon []uint8 `json:"beacon"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	}
 
 	return response, nil
@@ -1110,6 +1254,16 @@ func ParseGetHareRoundTemplateLayerIterRoundResponse(rsp *http.Response) (*GetHa
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest externalRef0.HareRoundTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -1126,6 +1280,18 @@ func ParseGetHareTotalWeightLayerResponse(rsp *http.Response) (*GetHareTotalWeig
 		HTTPResponse: rsp,
 	}
 
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Weight uint64 `json:"weight"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
 	return response, nil
 }
 
@@ -1140,6 +1306,18 @@ func ParseGetHareWeightNodeIdLayerResponse(rsp *http.Response) (*GetHareWeightNo
 	response := &GetHareWeightNodeIdLayerResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Weight uint64 `json:"weight"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	}
 
 	return response, nil

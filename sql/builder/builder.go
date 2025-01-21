@@ -120,14 +120,14 @@ func FilterFrom(operations Operations) string {
 					queryBuilder.WriteString(fmt.Sprintf(" %s", op.GroupOperator))
 				}
 				if groupOp.Token == In {
-					values, ok := groupOp.Value.([][]byte)
-					if !ok {
-						panic("value for 'In' token must be a slice of []byte")
-					}
-					params := make([]string, len(values))
-					for j := range values {
-						params[j] = fmt.Sprintf("?%d", bindIndex)
-						bindIndex++
+					var params []string
+					switch values := op.Value.(type) {
+					case [][]byte:
+						params = buildInParams(len(values), &bindIndex)
+					case []int32:
+						params = buildInParams(len(values), &bindIndex)
+					default:
+						panic("value for 'In' token must be a slice of []byte or []int32")
 					}
 					fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", groupOp.Prefix, groupOp.Field, groupOp.Token,
 						strings.Join(params, ", "))
@@ -142,16 +142,17 @@ func FilterFrom(operations Operations) string {
 
 		switch op.Token {
 		case In:
-			values, ok := op.Value.([][]byte)
-			if !ok {
-				panic("value for 'In' token must be a slice of []byte")
+			var params []string
+			switch values := op.Value.(type) {
+			case [][]byte:
+				params = buildInParams(len(values), &bindIndex)
+			case []int32:
+				params = buildInParams(len(values), &bindIndex)
+			default:
+				panic("value for 'In' token must be a slice of []byte or []int32")
 			}
-			params := make([]string, len(values))
-			for j := range values {
-				params[j] = fmt.Sprintf("?%d", bindIndex)
-				bindIndex++
-			}
-			fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field, op.Token, strings.Join(params, ", "))
+			fmt.Fprintf(&queryBuilder, " %s%s %s (%s)", op.Prefix, op.Field,
+				op.Token, strings.Join(params, ", "))
 		case IsNotNull:
 			fmt.Fprintf(&queryBuilder, " %s%s %s", op.Prefix, op.Field, op.Token)
 		default:
@@ -197,6 +198,11 @@ func bindValue(stmt *sql.Statement, bindIndex int, value any) int {
 			stmt.BindBytes(bindIndex, v)
 			bindIndex++
 		}
+	case []int32:
+		for _, v := range val {
+			stmt.BindInt64(bindIndex, int64(v))
+			bindIndex++
+		}
 	case nil:
 		// do nothing
 	default:
@@ -204,4 +210,13 @@ func bindValue(stmt *sql.Statement, bindIndex int, value any) int {
 	}
 
 	return bindIndex
+}
+
+func buildInParams(valuesLen int, bindIndex *int) []string {
+	params := make([]string, valuesLen)
+	for j := 0; j < valuesLen; j++ {
+		params[j] = fmt.Sprintf("?%d", *bindIndex)
+		*bindIndex++
+	}
+	return params
 }

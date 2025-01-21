@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -30,7 +31,7 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 		return nil
 	}
 
-	options := system.GetAtxOpts{}
+	var options system.GetAtxOpts
 	for _, opt := range opts {
 		opt(&options)
 	}
@@ -41,10 +42,17 @@ func (f *Fetch) GetAtxs(ctx context.Context, ids []types.ATXID, opts ...system.G
 		zap.Bool("limiting", !options.LimitingOff),
 	)
 	hashes := types.ATXIDsToHashes(ids)
-	if options.LimitingOff {
-		return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage)
+	handler := f.validators.atx.HandleMessage
+	var ghOpts []getHashesOpt
+	if !options.LimitingOff {
+		ghOpts = append(ghOpts, withLimiter(f.getAtxsLimiter))
 	}
-	return f.getHashes(ctx, hashes, datastore.ATXDB, f.validators.atx.HandleMessage, withLimiter(f.getAtxsLimiter))
+	if options.Callback != nil {
+		ghOpts = append(ghOpts, withHashCallback(func(hash types.Hash32, err error) {
+			options.Callback(types.ATXID(hash), err)
+		}))
+	}
+	return f.getHashes(ctx, hashes, datastore.ATXDB, handler, ghOpts...)
 }
 
 type dataReceiver func(context.Context, types.Hash32, p2p.Peer, []byte) error
@@ -57,6 +65,12 @@ func withLimiter(l limiter) getHashesOpt {
 	}
 }
 
+func withHashCallback(callback func(types.Hash32, error)) getHashesOpt {
+	return func(o *getHashesOpts) {
+		o.callback = callback
+	}
+}
+
 func (f *Fetch) getHashes(
 	ctx context.Context,
 	hashes []types.Hash32,
@@ -65,7 +79,8 @@ func (f *Fetch) getHashes(
 	opts ...getHashesOpt,
 ) error {
 	options := getHashesOpts{
-		limiter: noLimit{},
+		limiter:  noLimit{},
+		callback: func(types.Hash32, error) {},
 	}
 	for _, opt := range opts {
 		opt(&options)
@@ -82,18 +97,26 @@ func (f *Fetch) getHashes(
 	for i, hash := range hashes {
 		if err := options.limiter.Acquire(ctx, 1); err != nil {
 			pendingMetric.Add(float64(i - len(hashes)))
-			return fmt.Errorf("acquiring slot to get hash: %w", err)
+			err = fmt.Errorf("acquiring slot to get hash: %w", err)
+			for _, h := range hashes[i:] {
+				options.callback(h, err)
+			}
+			return err
 		}
 		p, err := f.getHash(ctx, hash, hint, receiver)
 		if err != nil {
 			options.limiter.Release(1)
 			pendingMetric.Add(float64(i - len(hashes)))
+			for _, h := range hashes[i:] {
+				options.callback(h, err)
+			}
 			return err
 		}
 		if p == nil {
 			// data is available locally
 			options.limiter.Release(1)
 			pendingMetric.Add(-1)
+			options.callback(hash, nil)
 			continue
 		}
 
@@ -102,6 +125,7 @@ func (f *Fetch) getHashes(
 			case <-ctx.Done():
 				options.limiter.Release(1)
 				pendingMetric.Add(-1)
+				options.callback(hash, ctx.Err())
 				return ctx.Err()
 			case <-p.completed:
 				options.limiter.Release(1)
@@ -117,6 +141,7 @@ func (f *Fetch) getHashes(
 					bfailure.Add(hash, p.err)
 					mu.Unlock()
 				}
+				options.callback(hash, p.err)
 				return nil
 			}
 		})
@@ -177,12 +202,32 @@ func (f *Fetch) GetBlocks(ctx context.Context, ids []types.BlockID) error {
 
 // GetProposalTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
 func (f *Fetch) GetProposalTxs(ctx context.Context, ids []types.TransactionID) error {
+	f.logger.Debug("requesting proposal txs from peer",
+		log.ZContext(ctx),
+		zap.Int("num_txs", len(ids)),
+		zap.Array("txs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, id := range ids {
+				enc.AppendString(id.ShortString())
+			}
+			return nil
+		})),
+	)
 	return f.getTxs(ctx, ids, f.validators.txProposal.HandleMessage)
 }
 
 // GetBlockTxs fetches the txs provided as IDs and saves them, they will be validated
 // before block is applied.
 func (f *Fetch) GetBlockTxs(ctx context.Context, ids []types.TransactionID) error {
+	f.logger.Debug("requesting block txs from peer",
+		log.ZContext(ctx),
+		zap.Int("num_txs", len(ids)),
+		zap.Array("txs", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, id := range ids {
+				enc.AppendString(id.ShortString())
+			}
+			return nil
+		})),
+	)
 	return f.getTxs(ctx, ids, f.validators.txBlock.HandleMessage)
 }
 
@@ -190,7 +235,6 @@ func (f *Fetch) getTxs(ctx context.Context, ids []types.TransactionID, receiver 
 	if len(ids) == 0 {
 		return nil
 	}
-	f.logger.Debug("requesting txs from peer", log.ZContext(ctx), zap.Int("num_txs", len(ids)))
 	hashes := types.TransactionIDsToHashes(ids)
 	return f.getHashes(ctx, hashes, datastore.TXDB, receiver)
 }
@@ -236,7 +280,11 @@ func (f *Fetch) GetMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.Nod
 		if err := f.meteredStreamRequest(
 			ctx, malProtocol, peer, []byte{},
 			func(ctx context.Context, s io.ReadWriter) (int, error) {
-				return readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
+				total, err := readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
+				if ctx.Err() != nil {
+					return total, ctx.Err()
+				}
+				return total, err
 			},
 		); err != nil {
 			return nil, err
@@ -272,7 +320,11 @@ func (f *Fetch) peerEpochInfoStreamed(ctx context.Context, peer p2p.Peer, epochB
 	if err := f.meteredStreamRequest(
 		ctx, atxProtocol, peer, epochBytes,
 		func(ctx context.Context, s io.ReadWriter) (int, error) {
-			return readIDSlice(s, &ed.AtxIDs, maxEpochDataAtxIDs)
+			total, err := readIDSlice(s, &ed.AtxIDs, maxEpochDataAtxIDs)
+			if ctx.Err() != nil {
+				return total, ctx.Err()
+			}
+			return total, err
 		},
 	); err != nil {
 		return nil, err
@@ -285,7 +337,8 @@ func (f *Fetch) PeerEpochInfo(ctx context.Context, peer p2p.Peer, epoch types.Ep
 	f.logger.Debug("requesting epoch info from peer",
 		log.ZContext(ctx),
 		zap.Stringer("peer", peer),
-		zap.Stringer("epoch", epoch))
+		zap.Stringer("epoch", epoch),
+	)
 	epochBytes := codec.MustEncode(epoch)
 
 	var (

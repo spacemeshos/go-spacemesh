@@ -18,6 +18,7 @@ import (
 	wire "github.com/spacemeshos/go-spacemesh/activation/wire"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	identity "github.com/spacemeshos/go-spacemesh/identity"
+	wire0 "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
 	certifier "github.com/spacemeshos/go-spacemesh/sql/localsql/certifier"
 	nipost "github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
@@ -25,62 +26,62 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockAtxReceiver is a mock of AtxReceiver interface.
-type MockAtxReceiver struct {
+// MockatxReceiver is a mock of atxReceiver interface.
+type MockatxReceiver struct {
 	ctrl     *gomock.Controller
-	recorder *MockAtxReceiverMockRecorder
+	recorder *MockatxReceiverMockRecorder
 	isgomock struct{}
 }
 
-// MockAtxReceiverMockRecorder is the mock recorder for MockAtxReceiver.
-type MockAtxReceiverMockRecorder struct {
-	mock *MockAtxReceiver
+// MockatxReceiverMockRecorder is the mock recorder for MockatxReceiver.
+type MockatxReceiverMockRecorder struct {
+	mock *MockatxReceiver
 }
 
-// NewMockAtxReceiver creates a new mock instance.
-func NewMockAtxReceiver(ctrl *gomock.Controller) *MockAtxReceiver {
-	mock := &MockAtxReceiver{ctrl: ctrl}
-	mock.recorder = &MockAtxReceiverMockRecorder{mock}
+// NewMockatxReceiver creates a new mock instance.
+func NewMockatxReceiver(ctrl *gomock.Controller) *MockatxReceiver {
+	mock := &MockatxReceiver{ctrl: ctrl}
+	mock.recorder = &MockatxReceiverMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockAtxReceiver) EXPECT() *MockAtxReceiverMockRecorder {
+func (m *MockatxReceiver) EXPECT() *MockatxReceiverMockRecorder {
 	return m.recorder
 }
 
 // OnAtx mocks base method.
-func (m *MockAtxReceiver) OnAtx(arg0 *types.ActivationTx) {
+func (m *MockatxReceiver) OnAtx(arg0 *types.ActivationTx) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "OnAtx", arg0)
 }
 
 // OnAtx indicates an expected call of OnAtx.
-func (mr *MockAtxReceiverMockRecorder) OnAtx(arg0 any) *MockAtxReceiverOnAtxCall {
+func (mr *MockatxReceiverMockRecorder) OnAtx(arg0 any) *MockatxReceiverOnAtxCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockAtxReceiver)(nil).OnAtx), arg0)
-	return &MockAtxReceiverOnAtxCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnAtx", reflect.TypeOf((*MockatxReceiver)(nil).OnAtx), arg0)
+	return &MockatxReceiverOnAtxCall{Call: call}
 }
 
-// MockAtxReceiverOnAtxCall wrap *gomock.Call
-type MockAtxReceiverOnAtxCall struct {
+// MockatxReceiverOnAtxCall wrap *gomock.Call
+type MockatxReceiverOnAtxCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockAtxReceiverOnAtxCall) Return() *MockAtxReceiverOnAtxCall {
+func (c *MockatxReceiverOnAtxCall) Return() *MockatxReceiverOnAtxCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockAtxReceiverOnAtxCall) Do(f func(*types.ActivationTx)) *MockAtxReceiverOnAtxCall {
+func (c *MockatxReceiverOnAtxCall) Do(f func(*types.ActivationTx)) *MockatxReceiverOnAtxCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockAtxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTx)) *MockAtxReceiverOnAtxCall {
+func (c *MockatxReceiverOnAtxCall) DoAndReturn(f func(*types.ActivationTx)) *MockatxReceiverOnAtxCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -510,17 +511,17 @@ func (c *MocknipostValidatorPoetMembershipCall) DoAndReturn(f func(context.Conte
 }
 
 // PositioningAtx mocks base method.
-func (m *MocknipostValidator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubepoch types.EpochID) error {
+func (m *MocknipostValidator) PositioningAtx(id types.ATXID, atxs atxProvider, goldenATXID types.ATXID, pubEpoch types.EpochID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, pubepoch)
+	ret := m.ctrl.Call(m, "PositioningAtx", id, atxs, goldenATXID, pubEpoch)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // PositioningAtx indicates an expected call of PositioningAtx.
-func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID, pubepoch any) *MocknipostValidatorPositioningAtxCall {
+func (mr *MocknipostValidatorMockRecorder) PositioningAtx(id, atxs, goldenATXID, pubEpoch any) *MocknipostValidatorPositioningAtxCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningAtx", reflect.TypeOf((*MocknipostValidator)(nil).PositioningAtx), id, atxs, goldenATXID, pubepoch)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PositioningAtx", reflect.TypeOf((*MocknipostValidator)(nil).PositioningAtx), id, atxs, goldenATXID, pubEpoch)
 	return &MocknipostValidatorPositioningAtxCall{Call: call}
 }
 
@@ -1031,32 +1032,32 @@ func (c *MocknipostBuilderResetStateCall) DoAndReturn(f func(types.NodeID) error
 	return c
 }
 
-// Mocksyncer is a mock of syncer interface.
-type Mocksyncer struct {
+// MockSyncer is a mock of Syncer interface.
+type MockSyncer struct {
 	ctrl     *gomock.Controller
-	recorder *MocksyncerMockRecorder
+	recorder *MockSyncerMockRecorder
 	isgomock struct{}
 }
 
-// MocksyncerMockRecorder is the mock recorder for Mocksyncer.
-type MocksyncerMockRecorder struct {
-	mock *Mocksyncer
+// MockSyncerMockRecorder is the mock recorder for MockSyncer.
+type MockSyncerMockRecorder struct {
+	mock *MockSyncer
 }
 
-// NewMocksyncer creates a new mock instance.
-func NewMocksyncer(ctrl *gomock.Controller) *Mocksyncer {
-	mock := &Mocksyncer{ctrl: ctrl}
-	mock.recorder = &MocksyncerMockRecorder{mock}
+// NewMockSyncer creates a new mock instance.
+func NewMockSyncer(ctrl *gomock.Controller) *MockSyncer {
+	mock := &MockSyncer{ctrl: ctrl}
+	mock.recorder = &MockSyncerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mocksyncer) EXPECT() *MocksyncerMockRecorder {
+func (m *MockSyncer) EXPECT() *MockSyncerMockRecorder {
 	return m.recorder
 }
 
 // RegisterForATXSynced mocks base method.
-func (m *Mocksyncer) RegisterForATXSynced() <-chan struct{} {
+func (m *MockSyncer) RegisterForATXSynced() <-chan struct{} {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "RegisterForATXSynced")
 	ret0, _ := ret[0].(<-chan struct{})
@@ -1064,31 +1065,193 @@ func (m *Mocksyncer) RegisterForATXSynced() <-chan struct{} {
 }
 
 // RegisterForATXSynced indicates an expected call of RegisterForATXSynced.
-func (mr *MocksyncerMockRecorder) RegisterForATXSynced() *MocksyncerRegisterForATXSyncedCall {
+func (mr *MockSyncerMockRecorder) RegisterForATXSynced() *MockSyncerRegisterForATXSyncedCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForATXSynced", reflect.TypeOf((*Mocksyncer)(nil).RegisterForATXSynced))
-	return &MocksyncerRegisterForATXSyncedCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterForATXSynced", reflect.TypeOf((*MockSyncer)(nil).RegisterForATXSynced))
+	return &MockSyncerRegisterForATXSyncedCall{Call: call}
 }
 
-// MocksyncerRegisterForATXSyncedCall wrap *gomock.Call
-type MocksyncerRegisterForATXSyncedCall struct {
+// MockSyncerRegisterForATXSyncedCall wrap *gomock.Call
+type MockSyncerRegisterForATXSyncedCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MocksyncerRegisterForATXSyncedCall) Return(arg0 <-chan struct{}) *MocksyncerRegisterForATXSyncedCall {
+func (c *MockSyncerRegisterForATXSyncedCall) Return(arg0 <-chan struct{}) *MockSyncerRegisterForATXSyncedCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MocksyncerRegisterForATXSyncedCall) Do(f func() <-chan struct{}) *MocksyncerRegisterForATXSyncedCall {
+func (c *MockSyncerRegisterForATXSyncedCall) Do(f func() <-chan struct{}) *MockSyncerRegisterForATXSyncedCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocksyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{}) *MocksyncerRegisterForATXSyncedCall {
+func (c *MockSyncerRegisterForATXSyncedCall) DoAndReturn(f func() <-chan struct{}) *MockSyncerRegisterForATXSyncedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MocklegacyMalfeasancePublisher is a mock of legacyMalfeasancePublisher interface.
+type MocklegacyMalfeasancePublisher struct {
+	ctrl     *gomock.Controller
+	recorder *MocklegacyMalfeasancePublisherMockRecorder
+	isgomock struct{}
+}
+
+// MocklegacyMalfeasancePublisherMockRecorder is the mock recorder for MocklegacyMalfeasancePublisher.
+type MocklegacyMalfeasancePublisherMockRecorder struct {
+	mock *MocklegacyMalfeasancePublisher
+}
+
+// NewMocklegacyMalfeasancePublisher creates a new mock instance.
+func NewMocklegacyMalfeasancePublisher(ctrl *gomock.Controller) *MocklegacyMalfeasancePublisher {
+	mock := &MocklegacyMalfeasancePublisher{ctrl: ctrl}
+	mock.recorder = &MocklegacyMalfeasancePublisherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocklegacyMalfeasancePublisher) EXPECT() *MocklegacyMalfeasancePublisherMockRecorder {
+	return m.recorder
+}
+
+// PublishProof mocks base method.
+func (m *MocklegacyMalfeasancePublisher) PublishProof(ctx context.Context, smesherID types.NodeID, proof *wire0.MalfeasanceProof) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishProof", ctx, smesherID, proof)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PublishProof indicates an expected call of PublishProof.
+func (mr *MocklegacyMalfeasancePublisherMockRecorder) PublishProof(ctx, smesherID, proof any) *MocklegacyMalfeasancePublisherPublishProofCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishProof", reflect.TypeOf((*MocklegacyMalfeasancePublisher)(nil).PublishProof), ctx, smesherID, proof)
+	return &MocklegacyMalfeasancePublisherPublishProofCall{Call: call}
+}
+
+// MocklegacyMalfeasancePublisherPublishProofCall wrap *gomock.Call
+type MocklegacyMalfeasancePublisherPublishProofCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocklegacyMalfeasancePublisherPublishProofCall) Return(arg0 error) *MocklegacyMalfeasancePublisherPublishProofCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocklegacyMalfeasancePublisherPublishProofCall) Do(f func(context.Context, types.NodeID, *wire0.MalfeasanceProof) error) *MocklegacyMalfeasancePublisherPublishProofCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocklegacyMalfeasancePublisherPublishProofCall) DoAndReturn(f func(context.Context, types.NodeID, *wire0.MalfeasanceProof) error) *MocklegacyMalfeasancePublisherPublishProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockatxMalfeasancePublisher is a mock of atxMalfeasancePublisher interface.
+type MockatxMalfeasancePublisher struct {
+	ctrl     *gomock.Controller
+	recorder *MockatxMalfeasancePublisherMockRecorder
+	isgomock struct{}
+}
+
+// MockatxMalfeasancePublisherMockRecorder is the mock recorder for MockatxMalfeasancePublisher.
+type MockatxMalfeasancePublisherMockRecorder struct {
+	mock *MockatxMalfeasancePublisher
+}
+
+// NewMockatxMalfeasancePublisher creates a new mock instance.
+func NewMockatxMalfeasancePublisher(ctrl *gomock.Controller) *MockatxMalfeasancePublisher {
+	mock := &MockatxMalfeasancePublisher{ctrl: ctrl}
+	mock.recorder = &MockatxMalfeasancePublisherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockatxMalfeasancePublisher) EXPECT() *MockatxMalfeasancePublisherMockRecorder {
+	return m.recorder
+}
+
+// Publish mocks base method.
+func (m *MockatxMalfeasancePublisher) Publish(ctx context.Context, nodeID types.NodeID, proof wire.Proof) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Publish", ctx, nodeID, proof)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Publish indicates an expected call of Publish.
+func (mr *MockatxMalfeasancePublisherMockRecorder) Publish(ctx, nodeID, proof any) *MockatxMalfeasancePublisherPublishCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockatxMalfeasancePublisher)(nil).Publish), ctx, nodeID, proof)
+	return &MockatxMalfeasancePublisherPublishCall{Call: call}
+}
+
+// MockatxMalfeasancePublisherPublishCall wrap *gomock.Call
+type MockatxMalfeasancePublisherPublishCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxMalfeasancePublisherPublishCall) Return(arg0 error) *MockatxMalfeasancePublisherPublishCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxMalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, wire.Proof) error) *MockatxMalfeasancePublisherPublishCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxMalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, wire.Proof) error) *MockatxMalfeasancePublisherPublishCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Regossip mocks base method.
+func (m *MockatxMalfeasancePublisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Regossip", ctx, nodeID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Regossip indicates an expected call of Regossip.
+func (mr *MockatxMalfeasancePublisherMockRecorder) Regossip(ctx, nodeID any) *MockatxMalfeasancePublisherRegossipCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Regossip", reflect.TypeOf((*MockatxMalfeasancePublisher)(nil).Regossip), ctx, nodeID)
+	return &MockatxMalfeasancePublisherRegossipCall{Call: call}
+}
+
+// MockatxMalfeasancePublisherRegossipCall wrap *gomock.Call
+type MockatxMalfeasancePublisherRegossipCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockatxMalfeasancePublisherRegossipCall) Return(arg0 error) *MockatxMalfeasancePublisherRegossipCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockatxMalfeasancePublisherRegossipCall) Do(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRegossipCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockatxMalfeasancePublisherRegossipCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockatxMalfeasancePublisherRegossipCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -1117,40 +1280,78 @@ func (m *MockmalfeasancePublisher) EXPECT() *MockmalfeasancePublisherMockRecorde
 	return m.recorder
 }
 
-// Publish mocks base method.
-func (m *MockmalfeasancePublisher) Publish(ctx context.Context, id types.NodeID, proof wire.Proof) error {
+// PublishATXProof mocks base method.
+func (m *MockmalfeasancePublisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Publish", ctx, id, proof)
+	ret := m.ctrl.Call(m, "PublishATXProof", ctx, nodeID, proof)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// Publish indicates an expected call of Publish.
-func (mr *MockmalfeasancePublisherMockRecorder) Publish(ctx, id, proof any) *MockmalfeasancePublisherPublishCall {
+// PublishATXProof indicates an expected call of PublishATXProof.
+func (mr *MockmalfeasancePublisherMockRecorder) PublishATXProof(ctx, nodeID, proof any) *MockmalfeasancePublisherPublishATXProofCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Publish), ctx, id, proof)
-	return &MockmalfeasancePublisherPublishCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishATXProof", reflect.TypeOf((*MockmalfeasancePublisher)(nil).PublishATXProof), ctx, nodeID, proof)
+	return &MockmalfeasancePublisherPublishATXProofCall{Call: call}
 }
 
-// MockmalfeasancePublisherPublishCall wrap *gomock.Call
-type MockmalfeasancePublisherPublishCall struct {
+// MockmalfeasancePublisherPublishATXProofCall wrap *gomock.Call
+type MockmalfeasancePublisherPublishATXProofCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockmalfeasancePublisherPublishCall) Return(arg0 error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishATXProofCall) Return(arg0 error) *MockmalfeasancePublisherPublishATXProofCall {
 	c.Call = c.Call.Return(arg0)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalfeasancePublisherPublishCall) Do(f func(context.Context, types.NodeID, wire.Proof) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishATXProofCall) Do(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishATXProofCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalfeasancePublisherPublishCall) DoAndReturn(f func(context.Context, types.NodeID, wire.Proof) error) *MockmalfeasancePublisherPublishCall {
+func (c *MockmalfeasancePublisherPublishATXProofCall) DoAndReturn(f func(context.Context, types.NodeID, []byte) error) *MockmalfeasancePublisherPublishATXProofCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Regossip mocks base method.
+func (m *MockmalfeasancePublisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Regossip", ctx, nodeID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Regossip indicates an expected call of Regossip.
+func (mr *MockmalfeasancePublisherMockRecorder) Regossip(ctx, nodeID any) *MockmalfeasancePublisherRegossipCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Regossip", reflect.TypeOf((*MockmalfeasancePublisher)(nil).Regossip), ctx, nodeID)
+	return &MockmalfeasancePublisherRegossipCall{Call: call}
+}
+
+// MockmalfeasancePublisherRegossipCall wrap *gomock.Call
+type MockmalfeasancePublisherRegossipCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalfeasancePublisherRegossipCall) Return(arg0 error) *MockmalfeasancePublisherRegossipCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalfeasancePublisherRegossipCall) Do(f func(context.Context, types.NodeID) error) *MockmalfeasancePublisherRegossipCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalfeasancePublisherRegossipCall) DoAndReturn(f func(context.Context, types.NodeID) error) *MockmalfeasancePublisherRegossipCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -2409,62 +2610,62 @@ func (c *MockpoetDbAPIValidateAndStoreCall) DoAndReturn(f func(context.Context, 
 	return c
 }
 
-// MockAtxBuilder is a mock of AtxBuilder interface.
-type MockAtxBuilder struct {
+// MockatxBuilder is a mock of atxBuilder interface.
+type MockatxBuilder struct {
 	ctrl     *gomock.Controller
-	recorder *MockAtxBuilderMockRecorder
+	recorder *MockatxBuilderMockRecorder
 	isgomock struct{}
 }
 
-// MockAtxBuilderMockRecorder is the mock recorder for MockAtxBuilder.
-type MockAtxBuilderMockRecorder struct {
-	mock *MockAtxBuilder
+// MockatxBuilderMockRecorder is the mock recorder for MockatxBuilder.
+type MockatxBuilderMockRecorder struct {
+	mock *MockatxBuilder
 }
 
-// NewMockAtxBuilder creates a new mock instance.
-func NewMockAtxBuilder(ctrl *gomock.Controller) *MockAtxBuilder {
-	mock := &MockAtxBuilder{ctrl: ctrl}
-	mock.recorder = &MockAtxBuilderMockRecorder{mock}
+// NewMockatxBuilder creates a new mock instance.
+func NewMockatxBuilder(ctrl *gomock.Controller) *MockatxBuilder {
+	mock := &MockatxBuilder{ctrl: ctrl}
+	mock.recorder = &MockatxBuilderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockAtxBuilder) EXPECT() *MockAtxBuilderMockRecorder {
+func (m *MockatxBuilder) EXPECT() *MockatxBuilderMockRecorder {
 	return m.recorder
 }
 
 // Register mocks base method.
-func (m *MockAtxBuilder) Register(sig *signing.EdSigner) {
+func (m *MockatxBuilder) Register(sig *signing.EdSigner) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Register", sig)
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockAtxBuilderMockRecorder) Register(sig any) *MockAtxBuilderRegisterCall {
+func (mr *MockatxBuilderMockRecorder) Register(sig any) *MockatxBuilderRegisterCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockAtxBuilder)(nil).Register), sig)
-	return &MockAtxBuilderRegisterCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockatxBuilder)(nil).Register), sig)
+	return &MockatxBuilderRegisterCall{Call: call}
 }
 
-// MockAtxBuilderRegisterCall wrap *gomock.Call
-type MockAtxBuilderRegisterCall struct {
+// MockatxBuilderRegisterCall wrap *gomock.Call
+type MockatxBuilderRegisterCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockAtxBuilderRegisterCall) Return() *MockAtxBuilderRegisterCall {
+func (c *MockatxBuilderRegisterCall) Return() *MockatxBuilderRegisterCall {
 	c.Call = c.Call.Return()
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockAtxBuilderRegisterCall) Do(f func(*signing.EdSigner)) *MockAtxBuilderRegisterCall {
+func (c *MockatxBuilderRegisterCall) Do(f func(*signing.EdSigner)) *MockatxBuilderRegisterCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockAtxBuilderRegisterCall) DoAndReturn(f func(*signing.EdSigner)) *MockAtxBuilderRegisterCall {
+func (c *MockatxBuilderRegisterCall) DoAndReturn(f func(*signing.EdSigner)) *MockatxBuilderRegisterCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
@@ -2758,15 +2959,15 @@ func (m *MockIdentityStates) EXPECT() *MockIdentityStatesMockRecorder {
 }
 
 // Set mocks base method.
-func (m *MockIdentityStates) Set(id types.NodeID, publishEpoch *types.EpochID, newState identity.State) {
+func (m *MockIdentityStates) Set(id types.NodeID, newState identity.State) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Set", id, publishEpoch, newState)
+	m.ctrl.Call(m, "Set", id, newState)
 }
 
 // Set indicates an expected call of Set.
-func (mr *MockIdentityStatesMockRecorder) Set(id, publishEpoch, newState any) *MockIdentityStatesSetCall {
+func (mr *MockIdentityStatesMockRecorder) Set(id, newState any) *MockIdentityStatesSetCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockIdentityStates)(nil).Set), id, publishEpoch, newState)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Set", reflect.TypeOf((*MockIdentityStates)(nil).Set), id, newState)
 	return &MockIdentityStatesSetCall{Call: call}
 }
 
@@ -2782,13 +2983,13 @@ func (c *MockIdentityStatesSetCall) Return() *MockIdentityStatesSetCall {
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, *types.EpochID, identity.State)) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) Do(f func(types.NodeID, identity.State)) *MockIdentityStatesSetCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, *types.EpochID, identity.State)) *MockIdentityStatesSetCall {
+func (c *MockIdentityStatesSetCall) DoAndReturn(f func(types.NodeID, identity.State)) *MockIdentityStatesSetCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

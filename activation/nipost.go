@@ -101,7 +101,7 @@ func NewNIPostBuilder(
 		layerClock:     layerClock,
 		postStates:     NewPostStates(lg),
 		validator:      validator,
-		identityStates: identity.NewIdentityStateStorage(),
+		identityStates: identity.NewIdentityStateStorage(db, lg),
 	}
 
 	for _, opt := range opts {
@@ -203,7 +203,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 	postChallenge *types.NIPostChallenge,
 ) (*nipost.NIPostState, error) {
 	logger := nb.logger.With(log.ZContext(ctx), log.ZShortStringer("smesherID", signer.NodeID()))
-	// Note: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
+	// NOTE: to avoid missing next PoET round, we need to publish the ATX before the next PoET round starts.
 	//   We can still publish an ATX late (i.e. within publish epoch) and receive rewards, but we will miss one
 	//   epoch because we didn't submit the challenge to PoET in time for next round.
 	//                                 PoST
@@ -243,7 +243,9 @@ func (nb *NIPostBuilder) BuildNIPost(
 		ctx,
 		signer,
 		poetProofDeadline,
-		poetRoundStart, challenge.Bytes(),
+		poetRoundStart,
+		challenge.Bytes(),
+		postChallenge.PublishEpoch,
 	)
 	regErr := &PoetRegistrationMismatchError{}
 	switch {
@@ -259,11 +261,6 @@ func (nb *NIPostBuilder) BuildNIPost(
 		return nil, fmt.Errorf("submitting to poets: %w", err)
 	}
 
-	nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
-		&identity.PoetRegistered{
-			Registrations: submittedRegistrations,
-		},
-	)
 	// Phase 1: query PoET services for proofs
 	poetProofRef, membership, err := nipost.PoetProofRef(nb.localDB, signer.NodeID())
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
@@ -276,7 +273,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if poetProofDeadline.Before(now) {
 			return nil, fmt.Errorf(
 				"%w: deadline to query poet proof for pub epoch %d exceeded (deadline: %s, now: %s)",
-				ErrATXChallengeExpired,
+				errATXChallengeExpired,
 				postChallenge.PublishEpoch,
 				poetProofDeadline,
 				now,
@@ -287,10 +284,10 @@ func (nb *NIPostBuilder) BuildNIPost(
 		events.EmitWaitingForPoETRoundEnd(signer.NodeID(), postChallenge.PublishEpoch, curPoetRoundEnd)
 		nb.identityStates.Set(
 			signer.NodeID(),
-			&postChallenge.PublishEpoch,
 			&identity.WaitForPoetRoundEnd{
 				RoundEnd:        curPoetRoundEnd,
 				PublishEpochEnd: publishEpochEnd,
+				Publish:         postChallenge.PublishEpoch,
 			},
 		)
 
@@ -301,14 +298,15 @@ func (nb *NIPostBuilder) BuildNIPost(
 			return nil, &PoetSvcUnstableError{msg: "getBestProof failed", source: err}
 		}
 		if poetProofRef == types.EmptyPoetProofRef {
-			return nil, &PoetSvcUnstableError{source: ErrPoetProofNotReceived}
+			return nil, &PoetSvcUnstableError{source: errPoetProofNotReceived}
 		}
 		if err := nipost.UpdatePoetProofRef(nb.localDB, signer.NodeID(), poetProofRef, membership); err != nil {
 			nb.logger.Warn("cannot persist poet proof ref", zap.Error(err))
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch,
+		nb.identityStates.Set(signer.NodeID(),
 			&identity.PoetProofReceived{
 				PoetUrl: poetUrl,
+				Publish: postChallenge.PublishEpoch,
 			},
 		)
 	}
@@ -325,7 +323,7 @@ func (nb *NIPostBuilder) BuildNIPost(
 		if publishEpochEnd.Before(now) {
 			return nil, fmt.Errorf(
 				"%w: deadline to publish ATX for pub epoch %d exceeded (deadline: %s, now: %s)",
-				ErrATXChallengeExpired,
+				errATXChallengeExpired,
 				postChallenge.PublishEpoch,
 				publishEpochEnd,
 				now,
@@ -335,14 +333,14 @@ func (nb *NIPostBuilder) BuildNIPost(
 		defer cancel()
 
 		nb.logger.Info("starting post execution", zap.Binary("challenge", poetProofRef[:]))
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.GeneratingPostProof{})
+		nb.identityStates.Set(signer.NodeID(), &identity.GeneratingPostProof{Publish: postChallenge.PublishEpoch})
 
 		startTime := time.Now()
 		proof, postInfo, err := nb.Proof(postCtx, signer.NodeID(), poetProofRef[:], postChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to generate Post: %w", err)
 		}
-		nb.identityStates.Set(signer.NodeID(), &postChallenge.PublishEpoch, &identity.PostProofReady{})
+		nb.identityStates.Set(signer.NodeID(), &identity.PostProofReady{Publish: postChallenge.PublishEpoch})
 
 		postGenDuration := time.Since(startTime)
 
@@ -427,6 +425,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 	poetProofDeadline time.Time,
 	curPoetRoundStartDeadline time.Time,
 	challenge []byte,
+	publishEpoch types.EpochID,
 ) ([]nipost.PoETRegistration, error) {
 	// check if some registrations missing or were removed
 	nodeID := signer.NodeID()
@@ -478,7 +477,7 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 			// no existing registration at all, drop current registration challenge
 			return nil, fmt.Errorf(
 				"%w: poet round has already started at %s (now: %s)",
-				ErrATXChallengeExpired,
+				errATXChallengeExpired,
 				curPoetRoundStartDeadline,
 				now,
 			)
@@ -531,10 +530,16 @@ func (nb *NIPostBuilder) submitPoetChallenges(
 
 	if len(existingRegistrations) == 0 {
 		if curPoetRoundStartDeadline.Before(time.Now()) {
-			return nil, ErrATXChallengeExpired
+			return nil, errATXChallengeExpired
 		}
 		return nil, &PoetSvcUnstableError{msg: "failed to submit challenge to any PoET", source: ctx.Err()}
 	}
+	nb.identityStates.Set(signer.NodeID(),
+		&identity.PoetRegistered{
+			Registrations: existingRegistrations,
+			Publish:       publishEpoch,
+		},
+	)
 
 	return existingRegistrations, nil
 }
@@ -648,7 +653,7 @@ func (nb *NIPostBuilder) getBestProof(
 		return ref, bestProof.membership, bestProof.url, nil
 	}
 
-	return types.PoetProofRef{}, nil, "", ErrPoetProofNotReceived
+	return types.PoetProofRef{}, nil, "", errPoetProofNotReceived
 }
 
 func constructMerkleProof(challenge types.Hash32, members []types.Hash32) (*types.MerkleProof, error) {

@@ -118,7 +118,9 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	edVerifier := signing.NewEdVerifier()
 	mpub := mocks.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
-	mBeacon := activation.NewMockAtxReceiver(ctrl)
+	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
+	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
+	mBeacon := activation.NewMockatxReceiver(ctrl)
 	mTortoise := smocks.NewMockTortoise(ctrl)
 
 	atxHdlr := activation.NewHandler(
@@ -127,10 +129,11 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		atxsdata,
 		edVerifier,
 		clock,
-		mpub,
 		mFetch,
 		goldenATX,
 		validator,
+		mMalPublish,
+		mLegacyPublish,
 		mBeacon,
 		mTortoise,
 		logger,

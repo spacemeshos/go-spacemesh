@@ -96,3 +96,16 @@ func AllMalicious(db sql.Executor) ([]types.NodeID, error) {
 	}
 	return ids, nil
 }
+
+// CountMalicious returns the number of malicious nodes.
+func CountMalicious(db sql.Executor) (uint64, error) {
+	var count uint64
+	_, err := db.Exec(`
+		SELECT COUNT(*)
+		FROM identities
+	`, nil, func(stmt *sql.Statement) bool {
+		count = uint64(stmt.ColumnInt64(0))
+		return false
+	})
+	return count, err
+}

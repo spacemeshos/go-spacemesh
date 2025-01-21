@@ -21,6 +21,7 @@ type Config struct {
 	GrpcRecvMsgSize        int       `mapstructure:"grpc-recv-msg-size"`
 	JSONListener           string    `mapstructure:"grpc-json-listener"`
 	JSONCorsAllowedOrigins []string  `mapstructure:"grpc-cors-allowed-origins"`
+	JSONCorsEverywhere     bool      `mapstructure:"json-cors-everywhere"`
 
 	NodeServiceListener string `mapstructure:"node-service-listener"`
 
@@ -29,10 +30,8 @@ type Config struct {
 	DatabaseConnections int `mapstructure:"db-connections"`
 
 	// Address of the Node API V2 to connect to
-	ProxyApiV2Address string `mapstructure:"proxy-api-v2-address"`
-
-	// Endpoint to expose proxy via HTTP/JSON
-	ProxyListener string `mapstructure:"proxy-listener"`
+	ProxyApiV2Address  string    `mapstructure:"proxy-api-v2-address"`
+	NonProxiedServices []Service `mapstructure:"grpc-local-services"`
 }
 
 type Service = string
@@ -85,6 +84,7 @@ func DefaultConfig() Config {
 		TLSListener:            "",
 		JSONListener:           "",
 		JSONCorsAllowedOrigins: []string{""},
+		JSONCorsEverywhere:     false,
 		GrpcSendMsgSize:        1024 * 1024 * 10,
 		GrpcRecvMsgSize:        1024 * 1024 * 10,
 		SmesherStreamInterval:  time.Second,

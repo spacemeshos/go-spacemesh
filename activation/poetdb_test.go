@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	proof           *types.PoetProofMessage
+	poetProofMsg    *types.PoetProofMessage
 	createProofOnce sync.Once
 )
 
@@ -47,7 +47,7 @@ func getPoetProof(tb testing.TB) types.PoetProofMessage {
 		)
 		require.NoError(tb, err)
 
-		proof = &types.PoetProofMessage{
+		poetProofMsg = &types.PoetProofMessage{
 			PoetProof: types.PoetProof{
 				MerkleProof: *merkleProof,
 				LeafCount:   leaves,
@@ -57,7 +57,7 @@ func getPoetProof(tb testing.TB) types.PoetProofMessage {
 			Statement:     types.BytesToHash(challenge),
 		}
 	})
-	return *proof
+	return *poetProofMsg
 }
 
 func TestPoetDbHappyFlow(t *testing.T) {

@@ -332,8 +332,7 @@ func Test_Validation_PositioningAtx(t *testing.T) {
 		atxProvider.EXPECT().GetAtx(posAtxId).Return(nil, errors.New("db error"))
 
 		err := v.PositioningAtx(posAtxId, atxProvider, goldenAtxId, types.LayerID(1012).GetEpoch())
-		require.ErrorIs(t, err, &ErrAtxNotFound{Id: posAtxId})
-		require.ErrorContains(t, err, "db error")
+		require.EqualError(t, err, fmt.Sprintf("positioning atx (%s) not found: db error", posAtxId.ShortString()))
 	})
 
 	t.Run("positioning atx published in higher epoch than expected", func(t *testing.T) {
@@ -588,7 +587,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		v := NewMockPostVerifier(gomock.NewController(t))
-		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NIPosts[0].Posts[0].Post))
 		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
 		err = validator.VerifyChain(ctx, watx.ID(), goldenATXID)
@@ -609,7 +608,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		v := NewMockPostVerifier(gomock.NewController(t))
-		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NIPosts[0].Posts[0].Post))
 		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx.NIPost.Post), gomock.Any(), gomock.Any())
 		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())
 		validator := NewValidator(db, nil, DefaultPostConfig(), config.ScryptParams{}, v)
@@ -629,7 +628,7 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, toAtx(t, initialAtx2), initialAtx2.Blob()))
 
 		watx := newSoloATXv2(t, initialAtx.PublishEpoch+1, initialAtx.ID(), initialAtx.ID())
-		watx.NiPosts[0].Posts = append(watx.NiPosts[0].Posts, wire.SubPostV2{
+		watx.NIPosts[0].Posts = append(watx.NIPosts[0].Posts, wire.SubPostV2{
 			MarriageIndex: 1,
 			PrevATXIndex:  1,
 			Post: wire.PostV1{
@@ -649,8 +648,8 @@ func TestVerifyChainDeps(t *testing.T) {
 		require.NoError(t, atxs.Add(db, atx, watx.Blob()))
 
 		v := NewMockPostVerifier(gomock.NewController(t))
-		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[0].Post))
-		expectedPost2 := (*shared.Proof)(wire.PostFromWireV1(&watx.NiPosts[0].Posts[1].Post))
+		expectedPost := (*shared.Proof)(wire.PostFromWireV1(&watx.NIPosts[0].Posts[0].Post))
+		expectedPost2 := (*shared.Proof)(wire.PostFromWireV1(&watx.NIPosts[0].Posts[1].Post))
 		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx.NIPost.Post), gomock.Any(), gomock.Any())
 		v.EXPECT().Verify(ctx, (*shared.Proof)(initialAtx2.NIPost.Post), gomock.Any(), gomock.Any())
 		v.EXPECT().Verify(ctx, expectedPost, gomock.Any(), gomock.Any())

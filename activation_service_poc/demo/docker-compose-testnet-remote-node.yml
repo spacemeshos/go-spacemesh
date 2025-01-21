@@ -1,0 +1,60 @@
+services:
+  activation-service-remote-1:
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://testnet-16-node-service.spacemesh.network:9099",
+        "--grpc-json-listener",
+        "0.0.0.0:19071",
+        "--proxy-api-v2-address",
+        "http://testnet-16-node-service.spacemesh.network",
+        "--grpc-public-listener",
+        "0.0.0.0:19082",
+        "--grpc-private-listener",
+        "0.0.0.0:19083",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-remote-1:/tmp/spacemesh-client
+      - ./config.testnet-16-smesher-service.json:/config.json
+    networks:
+      - spacemesh-net-rn
+    ports:
+      - 19071:19071
+      - 19082:19082
+      - 19083:19083
+
+  activation-service-remote-2:
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    command:
+      [
+        "-c",
+        "/config.json",
+        "--node-service-address",
+        "http://testnet-16-node-service.spacemesh.network:9099",
+        "--grpc-json-listener",
+        "0.0.0.0:19171",
+        "--proxy-api-v2-address",
+        "http://testnet-16-node-service.spacemesh.network",
+        "--grpc-public-listener",
+        "0.0.0.0:19182",
+        "--grpc-private-listener",
+        "0.0.0.0:19183",
+        "--json-cors-everywhere",
+      ]
+    volumes:
+      - ./spacemesh-client-remote-2:/tmp/spacemesh-client
+      - ./config.testnet-16-smesher-service.json:/config.json
+    networks:
+      - spacemesh-net-rn
+    ports:
+      - 19171:19171
+      - 19182:19182
+      - 19183:19183
+
+networks:
+  spacemesh-net-rn:
+    driver: bridge
