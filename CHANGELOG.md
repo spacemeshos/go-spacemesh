@@ -16,6 +16,25 @@ pointing to the running `node` service.
 
 * [#6625](https://github.com/spacemeshos/go-spacemesh/pull/6625) Add command for starting services
 
+## v1.7.11
+
+### Upgrade information
+
+This release enables the new sync improvements on server side. The node will still use syncv1 by default, but this will
+allow for more testing of the new syncv2 code. No action from users is necessary at the moment.
+
+### Improvements
+
+* [#6588](https://github.com/spacemeshos/go-spacemesh/pull/6588) Fix a possible race in syncv2.
+
+* [#6596](https://github.com/spacemeshos/go-spacemesh/pull/6596) Further reduce the amount of DB connections used by
+  syncv2.
+
+* [#6573](https://github.com/spacemeshos/go-spacemesh/pull/6573) Fix a possible race in how libp2p connections are
+  handled in the node.
+
+* [#6614](https://github.com/spacemeshos/go-spacemesh/pull/6614) Enable syncv2 on server side by default.
+
 ## v1.7.10
 
 ### Upgrade information
