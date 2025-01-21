@@ -34,14 +34,14 @@ require (
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a
 	github.com/prometheus/client_golang v1.20.5
 	github.com/prometheus/client_model v0.6.1
-	github.com/prometheus/common v0.61.0
+	github.com/prometheus/common v0.62.0
 	github.com/quic-go/quic-go v0.48.2
 	github.com/rqlite/sql v0.0.0-20241111133259-a4122fabb196
 	github.com/rs/cors v1.11.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
-	github.com/spacemeshos/api/release/go v1.59.1-0.20250115154854-4af1dcf6a04a
+	github.com/spacemeshos/api/release/go 0d7689b39f8602f766e2a2f25cf03c05113e0954
 	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.1
@@ -63,10 +63,10 @@ require (
 	golang.org/x/time v0.9.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250106144421-5f5ef82da422
 	google.golang.org/grpc v1.69.4
-	google.golang.org/protobuf v1.36.2
-	k8s.io/api v0.32.0
-	k8s.io/apimachinery v0.32.0
-	k8s.io/client-go v0.32.0
+	google.golang.org/protobuf v1.36.3
+	k8s.io/api v0.32.1
+	k8s.io/apimachinery v0.32.1
+	k8s.io/client-go v0.32.1
 	sigs.k8s.io/controller-runtime v0.19.4
 )
 

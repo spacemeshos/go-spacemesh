@@ -149,7 +149,7 @@ func (cfg *MultiPeerReconcilerConfig) Validate(logger *zap.Logger) bool {
 // DefaultConfig returns the default configuration for the MultiPeerReconciler.
 func DefaultConfig() MultiPeerReconcilerConfig {
 	return MultiPeerReconcilerConfig{
-		SyncPeerCount:          20,
+		SyncPeerCount:          10,
 		MinSplitSyncPeers:      2,
 		MinSplitSyncCount:      1000,
 		MaxFullDiff:            10000,

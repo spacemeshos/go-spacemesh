@@ -69,6 +69,7 @@ func testnet() config.Config {
 
 	oldAtxSyncCfg := sync2.DefaultConfig()
 	oldAtxSyncCfg.MaxDepth = 16
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 10 * time.Minute
 	newAtxSyncCfg := sync2.DefaultConfig()
 	newAtxSyncCfg.MaxDepth = 21
 	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
@@ -79,7 +80,7 @@ func testnet() config.Config {
 			DataDirParent:                defaultdir,
 			FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
 			MetricsPort:                  1010,
-			DatabaseConnections:          16,
+			DatabaseConnections:          32,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
 			DatabasePruneInterval:        30 * time.Minute,
 			DatabaseConnIdleTimeout:      10 * time.Millisecond,

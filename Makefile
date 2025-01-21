@@ -8,6 +8,8 @@ GOSCALE_VERSION := v1.2.0
 MOCKGEN_VERSION := v0.5.0
 OAPI_CODEGEN_VERSION := v2.4.0
 
+TAG_SUFIX ?= ""
+
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
     BRANCH = $(SHA)
@@ -158,7 +160,7 @@ dockerbuild-go:
 		--secret id=mynetrc,src=$(HOME)/.netrc \
 		--build-arg VERSION=${VERSION} \
 		-t go-spacemesh:$(SHA) \
-		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)$(TAG_SUFIX) \
 		.
 .PHONY: dockerbuild-go
 
@@ -169,15 +171,15 @@ dockerpush-only:
 ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
-	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
-	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+	docker tag go-spacemesh:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)$(TAG_SUFIX)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)$(TAG_SUFIX)
 .PHONY: dockerpush-only
 
 dockerbuild-bs:
 	DOCKER_BUILDKIT=1 docker build \
 		--secret id=mynetrc,src=$(HOME)/.netrc \
 		-t go-spacemesh-bs:$(SHA) \
-		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) \
+		-t $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)$(TAG_SUFIX) \
 		-f ./bootstrap.Dockerfile \
 		.
 .PHONY: dockerbuild-bs
@@ -189,9 +191,29 @@ dockerpush-bs-only:
 ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
 endif
-	docker tag go-spacemesh-bs:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
-	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
+	docker tag go-spacemesh-bs:$(SHA) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)$(TAG_SUFIX)
+	docker push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)$(TAG_SUFIX)
 .PHONY: dockerpush-bs-only
+
+dockerpush-go-manifest:
+ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
+	@echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+endif
+	docker manifest create $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) --amend $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-amd64 $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64
+	docker manifest annotate $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-amd64 --os linux --arch amd64
+	docker manifest annotate $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)-arm64 --os linux --arch arm64
+	docker manifest push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO):$(DOCKER_IMAGE_VERSION)
+.PHONY: dockerpush-go-manifest
+
+dockerpush-bs-manifest:
+ifneq ($(DOCKER_USERNAME):$(DOCKER_PASSWORD),:)
+	@echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
+endif
+	docker manifest create $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) --amend $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)-amd64 $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)-arm64
+	docker manifest annotate $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)-amd64 --os linux --arch amd64
+	docker manifest annotate $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION) $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)-arm64 --os linux --arch arm64
+	docker manifest push $(DOCKER_HUB)/$(DOCKER_IMAGE_REPO)-bs:$(DOCKER_IMAGE_VERSION)
+.PHONY: dockerpush-bs-manifest
 
 fuzz:
 	@$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" ./scripts/fuzz.sh $(FUZZTIME)
