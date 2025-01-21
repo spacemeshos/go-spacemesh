@@ -47,7 +47,6 @@ type fetcher interface {
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
 	GetAtxs(context.Context, []types.ATXID, ...system.GetAtxOpt) error
-	MalfeasanceProofs(context.Context, []types.NodeID) error
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
