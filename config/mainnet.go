@@ -80,18 +80,20 @@ func MainnetConfig() Config {
 	hare4conf.Enable = false
 
 	oldAtxSyncCfg := sync2.DefaultConfig()
-	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = time.Hour
 	oldAtxSyncCfg.MaxDepth = 16
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 10 * time.Hour
+	oldAtxSyncCfg.AdvanceInterval = time.Hour
 	newAtxSyncCfg := sync2.DefaultConfig()
 	newAtxSyncCfg.MaxDepth = 21
-	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
+	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
+	newAtxSyncCfg.AdvanceInterval = 5 * time.Minute
 
 	return Config{
 		BaseConfig: BaseConfig{
 			DataDirParent:           defaultDataDir,
 			FileLock:                filepath.Join(os.TempDir(), "spacemesh.lock"),
 			MetricsPort:             1010,
-			DatabaseConnections:     16,
+			DatabaseConnections:     32,
 			DatabasePruneInterval:   30 * time.Minute,
 			DatabaseVacuumState:     21,
 			DatabaseConnIdleTimeout: 10 * time.Millisecond,
