@@ -215,15 +215,16 @@ type Hint string
 
 // DB hints per DB.
 const (
-	NoHint      Hint = ""
-	BallotDB    Hint = "ballotDB"
-	BlockDB     Hint = "blocksDB"
-	ProposalDB  Hint = "proposalDB"
-	ATXDB       Hint = "ATXDB"
-	TXDB        Hint = "TXDB"
-	POETDB      Hint = "POETDB"
-	Malfeasance Hint = "malfeasance"
-	ActiveSet   Hint = "activeset"
+	NoHint            Hint = ""
+	BallotDB          Hint = "ballotDB"
+	BlockDB           Hint = "blocksDB"
+	ProposalDB        Hint = "proposalDB"
+	ATXDB             Hint = "ATXDB"
+	TXDB              Hint = "TXDB"
+	POETDB            Hint = "POETDB"
+	LegacyMalfeasance Hint = "malfeasance"
+	Malfeasance       Hint = "malfeasance2"
+	ActiveSet         Hint = "activeset"
 )
 
 // NewBlobStore returns a BlobStore.
@@ -247,22 +248,26 @@ var loadBlobDispatch = map[Hint]loadBlobFunc{
 		_, err := atxs.LoadBlob(ctx, db, key, blob)
 		return err
 	},
-	BallotDB:    ballots.LoadBlob,
-	BlockDB:     blocks.LoadBlob,
-	TXDB:        transactions.LoadBlob,
-	POETDB:      poets.LoadBlob,
-	Malfeasance: identities.LoadMalfeasanceBlob,
-	ActiveSet:   activesets.LoadBlob,
+	BallotDB:          ballots.LoadBlob,
+	BlockDB:           blocks.LoadBlob,
+	TXDB:              transactions.LoadBlob,
+	POETDB:            poets.LoadBlob,
+	LegacyMalfeasance: identities.LoadMalfeasanceBlob,
+	// TODO(mafa): implement malfeasance2
+	// Malfeasance:      malfeasance.LoadBlob,
+	ActiveSet: activesets.LoadBlob,
 }
 
 var blobSizeDispatch = map[Hint]blobSizeFunc{
-	ATXDB:       atxs.GetBlobSizes,
-	BallotDB:    ballots.GetBlobSizes,
-	BlockDB:     blocks.GetBlobSizes,
-	TXDB:        transactions.GetBlobSizes,
-	POETDB:      poets.GetBlobSizes,
-	Malfeasance: identities.GetBlobSizes,
-	ActiveSet:   activesets.GetBlobSizes,
+	ATXDB:             atxs.GetBlobSizes,
+	BallotDB:          ballots.GetBlobSizes,
+	BlockDB:           blocks.GetBlobSizes,
+	TXDB:              transactions.GetBlobSizes,
+	POETDB:            poets.GetBlobSizes,
+	LegacyMalfeasance: identities.GetBlobSizes,
+	// TODO(mafa): implement malfeasance2
+	// Malfeasance:       malfeasance.BlobSizes,
+	ActiveSet: activesets.GetBlobSizes,
 }
 
 func (bs *BlobStore) loadProposal(key []byte, blob *sql.Blob) error {
@@ -349,8 +354,10 @@ func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 		return transactions.Has(bs.DB, types.TransactionID(types.BytesToHash(key)))
 	case POETDB:
 		return poets.Has(bs.DB, types.ByteToPoetProofRef(key))
-	case Malfeasance:
+	case LegacyMalfeasance:
 		return identities.IsMalicious(bs.DB, types.BytesToNodeID(key))
+	case Malfeasance:
+		// TODO (mafa): implement malfeasance2
 	case ActiveSet:
 		return activesets.Has(bs.DB, types.BytesToHash(key))
 	}
