@@ -189,8 +189,7 @@ func (s *Server) PostPublishProtocol(
 	}
 
 	protocol := string(request.Protocol)
-	switch protocol {
-	case "hare3":
+	if protocol == "hare3" {
 		// Revert protocol change (avoiding slashes) done on the client side.
 		// TODO: hare3 takes that from configuration what also should be done
 		// there instead of using the default value
