@@ -264,7 +264,7 @@ jobs:
 
   delete-pool:
     runs-on: ubuntu-22.04
-    if: ${{ needs.provision-cluster.result == 'success' }}
+    if: ${{ always() && needs.provision-cluster.result == 'success' }}
     needs:
       - filter-changes
       - provision-cluster
