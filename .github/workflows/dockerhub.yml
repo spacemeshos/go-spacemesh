@@ -19,7 +19,70 @@ on:
         description: 'A custom image tag'
         default: ''
 jobs:
-  dockerpush:
+  dockerpush-images:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            outname_sufix: "linux-amd64"
+          - os: ubuntu-latest-arm-8-cores
+            outname_sufix: "linux-arm64"
+    steps:
+    - name: checkout
+      uses: actions/checkout@v4
+      with:
+        ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
+
+    - uses: extractions/netrc@v2
+      with:
+        machine: github.com
+        username: ${{ secrets.GH_ACTION_TOKEN_USER }}
+        password: ${{ secrets.GH_ACTION_TOKEN }}
+      if: vars.GOPRIVATE
+
+    - name: get tag sufix arm64
+      if: ${{ runner.arch == 'arm64' }}
+      run: |
+        echo "SUFIX=-arm64" >> $GITHUB_ENV
+    
+    - name: get tag sufix amd64
+      if: ${{ runner.arch != 'arm64' }}
+      run: |
+        echo "SUFIX=-amd64" >> $GITHUB_ENV
+
+    - name: Build docker images
+      run: |
+        export VERSION="${{ github.ref_name }}" TAG_SUFIX=$SUFIX
+        make dockerbuild-go
+        make dockerbuild-bs
+
+    - name: Push docker images to dockerhub
+      run: |
+        export TAG_SUFIX=$SUFIX
+        make dockerpush-only
+        make dockerpush-bs-only
+
+    - name: Push docker images to dockerhub
+      if: inputs.custom_image_tag
+      run: |
+        export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}" TAG_SUFIX=$SUFIX
+        make dockerpush-only
+        make dockerpush-bs-only
+
+    - name: Push docker images with version tag to dockerhub
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        export DOCKER_IMAGE_VERSION="${{ github.ref_name }}" TAG_SUFIX=$SUFIX
+        make dockerpush-only
+        make dockerpush-bs-only
+
+        export DOCKER_IMAGE_REPO="go-spacemesh"
+        make dockerpush-only
+        make dockerpush-bs-only
+  
+  dockerpush-manifest:
+    needs: [dockerpush-images]
     runs-on: ubuntu-22.04
     steps:
     - name: checkout
@@ -33,32 +96,26 @@ jobs:
         username: ${{ secrets.GH_ACTION_TOKEN_USER }}
         password: ${{ secrets.GH_ACTION_TOKEN }}
       if: vars.GOPRIVATE
-    
-    - name: Build docker images
-      run: |
-        export VERSION="${{ github.ref_name }}"
-        make dockerbuild-go
-        make dockerbuild-bs
 
-    - name: Push docker images to dockerhub
+    - name: Push docker manifest to dockerhub
       run: |
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-go-manifest
+        make dockerpush-bs-manifest
 
-    - name: Push docker images to dockerhub
+    - name: Push docker manifest to dockerhub
       if: inputs.custom_image_tag
       run: |
         export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}"
-        make dockerpush-only
-        make dockerpush-bs-only
-
-    - name: Push docker images with version tag to dockerhub
+        make dockerpush-go-manifest
+        make dockerpush-bs-manifest
+        
+    - name: Push docker manifest with version tag to dockerhub
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         export DOCKER_IMAGE_VERSION="${{ github.ref_name }}"
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-go-manifest
+        make dockerpush-bs-manifest
 
         export DOCKER_IMAGE_REPO="go-spacemesh"
-        make dockerpush-only
-        make dockerpush-bs-only
+        make dockerpush-go-manifest
+        make dockerpush-bs-manifest

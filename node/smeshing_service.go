@@ -118,7 +118,7 @@ func GetSmeshingServiceCommand() *cobra.Command {
 		},
 	}
 
-	configPath = cmd.AddNodeServiceFlags(c.PersistentFlags(), &conf)
+	configPath = cmd.AddSmeshingServiceFlags(c.PersistentFlags(), &conf)
 
 	// versionCmd returns the current version of spacemesh.
 	versionCmd := &cobra.Command{
