@@ -381,7 +381,7 @@ func TestProxyingJsonService(t *testing.T) {
 
 	// Make a request to a local SmeshingIdentities service
 	endpoint = fmt.Sprintf(
-		"http://%s/spacemesh.v2alpha1.SmeshingIdentitiesService/States",
+		"http://%s/spacemesh.v2beta1.SmeshingIdentitiesService/States",
 		clientApp.apiProxy.BoundAddress,
 	)
 
