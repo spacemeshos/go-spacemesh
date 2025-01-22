@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
@@ -188,17 +187,15 @@ func (s *Server) PostPublishProtocol(
 	if err != nil {
 		return nil, err
 	}
-	proposal := &types.Proposal{}
-	codec.MustDecode(blob, proposal)
 
 	protocol := string(request.Protocol)
-	if protocol == "hare3" {
+	switch protocol {
+	case "hare3":
+		// Revert protocol change (avoiding slashes) done on the client side.
 		// TODO: hare3 takes that from configuration what also should be done
 		// there instead of using the default value
 		protocol = hare3.DefaultProtocolName
 	}
-	events.EmitProposal(proposal.SmesherID, proposal.Layer, proposal.ID())
-	events.ReportProposal(events.ProposalCreated, proposal)
 	s.publisher.Publish(ctx, protocol, blob)
 	return PostPublishProtocol200Response{}, nil
 }

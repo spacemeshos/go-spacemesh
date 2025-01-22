@@ -57,16 +57,23 @@ func testTransactions(
 	eg.Go(func() error {
 		return sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, receiver, batch, amount)
 	})
-	txs := make([][]*pb.Transaction, cl.Total())
 
-	for i := range cl.Total() {
-		client := cl.Client(i)
+	// Watch for transactions
+	// Transactions are received by nodes connected to the P2P network:
+	// - full nodes (smeshing-service + node-service)
+	// - node-service nodes
+	var nodesReceivingTxs []*cluster.NodeClient
+	nodesReceivingTxs = append(nodesReceivingTxs, cl.SmeshingNodes...)
+	nodesReceivingTxs = append(nodesReceivingTxs, cl.NodeService())
+	txs := make([][]*pb.Transaction, len(nodesReceivingTxs))
+	for i, client := range nodesReceivingTxs {
+		tctx.Log.Infow("watching for TXs", "client", client.Name)
 		eg.Go(func() error {
 			err := watchTransactionResults(ctx, client, tctx.Log.Desugar(),
 				func(rst *pb.TransactionResult) (bool, error) {
 					txs[i] = append(txs[i], rst.Tx)
 					count := len(txs[i])
-					tctx.Log.Desugar().Debug("received transaction client",
+					tctx.Log.Desugar().Debug("received transaction",
 						zap.Uint32("layer", rst.Layer),
 						zap.String("client", client.Name),
 						zap.String("tx", "0x"+hex.EncodeToString(rst.Tx.Id)),

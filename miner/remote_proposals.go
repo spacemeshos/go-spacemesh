@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	smesherIdentity "github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -255,7 +256,10 @@ func (pb *RemoteProposalBuilder) build(
 				Layer:    proposal.Layer,
 			})
 		} else {
+			pb.logger.Info("proposal published", zap.Stringer("id", proposal.ID()))
 			pb.identityStates.AddProposal(nodeId, proposal)
+			events.EmitProposal(signer.signer.NodeID(), layer, proposal.ID())
+			events.ReportProposal(events.ProposalCreated, proposal)
 		}
 	}
 	return nil

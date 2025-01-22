@@ -23,7 +23,7 @@ level ?= debug
 bootstrap ?= 5m
 storage ?= standard=1Gi
 node_selector ?=
-node_split_size ?=
+node_split_size ?= 2
 namespace ?=
 count ?= 1
 failfast ?= true

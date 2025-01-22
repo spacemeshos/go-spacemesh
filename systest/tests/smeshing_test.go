@@ -3,11 +3,11 @@ package tests
 import (
 	"bytes"
 	"context"
-	"errors"
+	"encoding/hex"
 	"fmt"
+	"maps"
 	"os"
 	"sort"
-	"sync"
 	"testing"
 	"time"
 
@@ -45,6 +45,7 @@ func TestSmeshing(t *testing.T) {
 	t.Parallel()
 
 	tctx := testcontext.New(t)
+	tctx.OldSize = 0 // Official images don't support new config and fail to boot with them
 	vests := vestingAccs{
 		prepareVesting(t, 3, 8, 20, 1e15, 10e15),
 		prepareVesting(t, 5, 8, 20, 1e15, 10e15),
@@ -68,15 +69,10 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
 	first = nextFirstLayer(first, layersPerEpoch)
 	last := first + limit
-	tctx.Log.Debugw("watching layer between", "first", first, "last", last)
+	tctx.Log.Infow("watching layer between", "first", first, "last", last)
 
-	var m sync.Mutex
-	clients := cl.Clients()
-	if cl.NodeService() != nil {
-		clients = append(clients, cl.NodeService())
-	}
-	createdCh := make(chan *pb.Proposal, cl.Total()*(limit+1))
-	includedAll := make(map[string]map[uint32][]*pb.Proposal, cl.Total())
+	createdProposals := make(map[string]map[types.LayerID][]*pb.Proposal, cl.Total())
+	includedProposals := make(map[string]map[types.LayerID][]*pb.Proposal, cl.Total())
 
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
 	deadline := cl.Genesis().Add(time.Duration(last+2*layersPerEpoch) * layerDuration) // add 2 epochs of buffer
@@ -84,8 +80,17 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	defer cancel()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	for i, client := range clients {
-		tctx.Log.Debugw("watching", "client", client.Name, "i", i)
+	// Watch for created proposals
+	// Proposals are created on:
+	// - full nodes (smeshing-service + node-service)
+	// - smeshing-service nodes
+	var nodesCreatingProposals []*cluster.NodeClient
+	nodesCreatingProposals = append(nodesCreatingProposals, cl.SmeshingNodes...)
+	nodesCreatingProposals = append(nodesCreatingProposals, cl.SmeshingServiceNodes...)
+	for _, client := range nodesCreatingProposals {
+		tctx.Log.Debugw("watching for created proposals", "client", client.Name)
+		proposals := make(map[types.LayerID][]*pb.Proposal)
+		createdProposals[client.Name] = proposals
 		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
 			if proposal.Layer.Number < first {
 				return true, nil
@@ -93,90 +98,95 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 			if proposal.Layer.Number > last {
 				return false, nil
 			}
-			if proposal.Status == pb.Proposal_Created {
-				if proposal.Layer.Number > last {
-					return false, nil
-				}
-				if proposal.Status == pb.Proposal_Created {
-					createdCh <- proposal
-					tctx.Log.Debugw("received proposal created event",
-						"client", client.Name,
-						"layer", proposal.Layer.Number,
-						"smesher", prettyHex(proposal.Smesher.Id),
-						"eligibilities", len(proposal.Eligibilities),
-					)
-					select {
-					case createdCh <- proposal:
-					case <-ctx.Done():
-						return false, ctx.Err()
-					default:
-						tctx.Log.Errorw("proposal channel is full",
-							"client", client.Name,
-							"layer", proposal.Layer.Number,
-						)
-						return false, errors.New("proposal channel is full")
-					}
-					return true, nil
-				}
-
-				tctx.Log.Debugw("received other proposal event",
-					"client", client.Name,
-					"layer", proposal.Layer.Number,
-					"smesher", prettyHex(proposal.Smesher.Id),
-					"eligibilities", len(proposal.Eligibilities),
-				)
-				return true, nil
-			}
-
-			tctx.Log.Debugw("received other proposal event",
+			tctx.Log.Debugw("received proposal event",
 				"client", client.Name,
 				"layer", proposal.Layer.Number,
 				"smesher", prettyHex(proposal.Smesher.Id),
 				"eligibilities", len(proposal.Eligibilities),
-				"status", pb.Proposal_Status_name[int32(proposal.Status)],
+				"status", proposal.Status.String(),
 			)
-			m.Lock()
-			defer m.Unlock()
-			if includedAll[client.Name] == nil {
-				includedAll[client.Name] = map[uint32][]*pb.Proposal{}
+			if proposal.Status != pb.Proposal_Created {
+				return true, nil
 			}
-			includedAll[client.Name][proposal.Layer.Number] = append(
-				includedAll[client.Name][proposal.Layer.Number],
-				proposal,
-			)
+			proposalsInLayer := proposals[types.LayerID(proposal.Layer.Number)]
+			proposalsInLayer = append(proposalsInLayer, proposal)
+			proposals[types.LayerID(proposal.Layer.Number)] = proposalsInLayer
+
 			return true, nil
 		})
 	}
 
-	require.NoError(t, eg.Wait())
-	close(createdCh)
-
-	created := map[uint32][]*pb.Proposal{}
-	beacons := map[uint32]map[string]struct{}{}
-	beaconSet := map[string]struct{}{}
-	for proposal := range createdCh {
-		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
-		if edata := proposal.GetData(); edata != nil {
-			if _, exist := beacons[proposal.Epoch.Number]; !exist {
-				beacons[proposal.Epoch.Number] = map[string]struct{}{}
+	// Watch for received (included) proposals
+	// Proposals are received on nodes connected to the P2P network:
+	// - full nodes (smeshing-service + node-service)
+	// - node-service nodes
+	var nodesReceivingProposals []*cluster.NodeClient
+	nodesReceivingProposals = append(nodesReceivingProposals, cl.SmeshingNodes...)
+	nodesReceivingProposals = append(nodesReceivingProposals, cl.NodeService())
+	for _, client := range nodesReceivingProposals {
+		tctx.Log.Debugw("watching for received proposals", "client", client.Name)
+		proposals := make(map[types.LayerID][]*pb.Proposal)
+		includedProposals[client.Name] = proposals
+		watchProposals(ctx, eg, client, tctx.Log.Desugar(), func(proposal *pb.Proposal) (bool, error) {
+			if proposal.Layer.Number < first {
+				return true, nil
 			}
-			beacons[proposal.Epoch.Number][prettyHex(edata.Beacon)] = struct{}{}
-			beaconSet[prettyHex(edata.Beacon)] = struct{}{}
+			if proposal.Layer.Number > last {
+				return false, nil
+			}
+			tctx.Log.Debugw("received proposal event",
+				"client", client.Name,
+				"layer", proposal.Layer.Number,
+				"smesher", prettyHex(proposal.Smesher.Id),
+				"eligibilities", len(proposal.Eligibilities),
+				"status", proposal.Status.String(),
+			)
+			if proposal.Status != pb.Proposal_Included {
+				return true, nil
+			}
+
+			proposalsInLayer := proposals[types.LayerID(proposal.Layer.Number)]
+			proposalsInLayer = append(proposalsInLayer, proposal)
+			proposals[types.LayerID(proposal.Layer.Number)] = proposalsInLayer
+			return true, nil
+		})
+	}
+	require.NoError(t, eg.Wait())
+
+	created := make(map[types.LayerID][]*pb.Proposal)
+	beacons := make(map[types.EpochID]map[string]struct{})
+	for _, client := range nodesCreatingProposals {
+		require.Contains(t, createdProposals, client.Name)
+		proposalsByLayer := createdProposals[client.Name]
+		for lid, proposals := range proposalsByLayer {
+			created[lid] = append(created[lid], proposals...)
+			for _, proposal := range proposals {
+				if edata := proposal.GetData(); edata != nil {
+					epoch := types.EpochID(proposal.Epoch.Number)
+					if _, exist := beacons[epoch]; !exist {
+						beacons[epoch] = make(map[string]struct{})
+					}
+					beacons[epoch][hex.EncodeToString(edata.Beacon)] = struct{}{}
+				}
+			}
 		}
+
 	}
 	requireEqualEligibilities(tctx, t, created)
-	requireEqualProposals(t, created, includedAll)
-	for epoch := range beacons {
-		require.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
+	requireEqualProposals(t, created, includedProposals)
+
+	beaconSet := make(map[string]struct{})
+	for epoch, beacons := range beacons {
+		require.Len(t, beacons, 1, "epoch=%d", epoch)
+		maps.Copy(beaconSet, beacons)
 	}
-	// each epoch should have a unique beacon
-	require.Len(t, beaconSet, len(beacons), "beacons=%v", beaconSet)
+	require.Len(t, beaconSet, len(beacons), "each epoch should have a unique beacon beaconSet=%v", beaconSet)
 }
 
 func requireEqualProposals(
 	tb testing.TB,
-	reference map[uint32][]*pb.Proposal,
-	received map[string]map[uint32][]*pb.Proposal,
+	reference map[types.LayerID][]*pb.Proposal,
+	received map[string]map[types.LayerID][]*pb.Proposal,
 ) {
 	tb.Helper()
 	for layer := range reference {
@@ -199,7 +209,7 @@ func requireEqualProposals(
 	}
 }
 
-func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposals map[uint32][]*pb.Proposal) {
+func requireEqualEligibilities(tctx *testcontext.Context, tb testing.TB, proposals map[types.LayerID][]*pb.Proposal) {
 	tb.Helper()
 
 	aggregated := map[string]int{}

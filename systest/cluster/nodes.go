@@ -775,16 +775,16 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 	return rst, nil
 }
 
-func deployActivationNodes(
+func deploySmeshingServiceNodes(
 	ctx *testcontext.Context,
 	node string,
-	from, to int,
+	keys []ed25519.PrivateKey,
 	opts ...DeploymentOpt,
 ) ([]*NodeClient, error) {
-	ctx.Log.Debugw("deploying activation nodes", "from", from, "to", to)
+	ctx.Log.Debugw("deploying smeshing-service nodes", "count", len(keys))
 	var (
 		eg      errgroup.Group
-		clients = make(chan *NodeClient, to-from)
+		clients = make(chan *NodeClient, len(keys))
 		cfg     = SmesherDeploymentConfig{
 			image: ctx.Image,
 		}
@@ -795,15 +795,7 @@ func deployActivationNodes(
 	if cfg.image == "" {
 		return nil, errors.New("go-spacemesh image must be set")
 	}
-	if delta := to - from; len(cfg.keys) > 0 && len(cfg.keys) != delta {
-		return nil, fmt.Errorf(
-			"keys must be overwritten for all or no members of the cluster: delta %d, keys %d %v",
-			delta,
-			len(cfg.keys),
-			cfg.keys,
-		)
-	}
-	for i := from; i < to; i++ {
+	for i, key := range cfg.keys {
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
 		if !cfg.noDefaultPoets {
@@ -813,21 +805,13 @@ func deployActivationNodes(
 			}
 			finalFlags = append(finalFlags, PoetEndpoints(poetIds...))
 		}
-		if ctx.BootstrapperSize > 1 {
-			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
-		} else {
-			finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(0)))
-		}
+		finalFlags = append(finalFlags, BootstrapperUrl(BootstrapperEndpoint(i%ctx.BootstrapperSize)))
 
-		var key ed25519.PrivateKey
-		if len(cfg.keys) > 0 {
-			key = cfg.keys[i-from]
-		}
 		eg.Go(func() error {
-			id := fmt.Sprintf("%s-%d", activationApp, i)
-			labels := nodeLabels(activationApp, id)
+			id := fmt.Sprintf("%s-%d", smeshingServiceApp, i)
+			labels := nodeLabels(smeshingServiceApp, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployActivationNode(
+			if err := deploySmeshingServiceNode(
 				ctx, id, node, key, cfg.image, "local.key", labels, finalFlags,
 			); err != nil {
 				return err
@@ -975,7 +959,7 @@ func deleteNode(ctx *testcontext.Context, id string) error {
 	return nil
 }
 
-func deployActivationNode(
+func deploySmeshingServiceNode(
 	ctx *testcontext.Context,
 	id string,
 	node string,
@@ -985,9 +969,10 @@ func deployActivationNode(
 	labels map[string]string,
 	flags []DeploymentFlag,
 ) error {
-	ctx.Log.Debugw("deploying node", "id", id)
+	ctx.Log.Debugw("deploying smeshing service", "id", id, "node", node)
 	cmd := []string{
 		"/bin/go-spacemesh",
+		"smeshing",
 		"-c=" + configDir + attachedActivationConfig,
 		"--pprof-server",
 		"--smeshing-opts-datadir=/data/post",
@@ -998,7 +983,6 @@ func deployActivationNode(
 		"--node-service-address", fmt.Sprintf("http://%s:9099", node),
 		"--proxy-api-v2-address", fmt.Sprintf("http://%s:9070", node),
 		"--grpc-json-listener", "0.0.0.0:9071",
-		"--proxy-listener", "0.0.0.0:9072",
 	}
 	for _, flag := range flags {
 		cmd = append(cmd, flag.Flag())

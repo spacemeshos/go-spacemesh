@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/parameters"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -96,10 +97,11 @@ func TestPoetsFailures(t *testing.T) {
 	require.NoError(t, eg.Wait())
 	close(createdch)
 
-	created := map[uint32][]*pb.Proposal{}
+	created := map[types.LayerID][]*pb.Proposal{}
 	beacons := map[uint32]map[string]struct{}{}
 	for proposal := range createdch {
-		created[proposal.Layer.Number] = append(created[proposal.Layer.Number], proposal)
+		layer := types.LayerID(proposal.Layer.Number)
+		created[layer] = append(created[layer], proposal)
 		if edata := proposal.GetData(); edata != nil {
 			if _, exist := beacons[proposal.Epoch.Number]; !exist {
 				beacons[proposal.Epoch.Number] = map[string]struct{}{}
