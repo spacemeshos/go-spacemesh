@@ -1,5 +1,5 @@
-name: Build and Release
-run-name: Release v1.7.12
+name: Build and Release (Manual)
+run-name: Release v1.7.12 - manual
 
 on:
   workflow_dispatch:
