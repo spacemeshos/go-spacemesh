@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/hashicorp/go-retryablehttp"
@@ -214,7 +212,11 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 	}
 	switch resp.StatusCode() {
 	case http.StatusOK:
-		return types.Beacon(resp.JSON200.Beacon), nil
+		beacon, err := models.ParseBeacon(resp.JSON200.Beacon)
+		if err != nil {
+			return types.Beacon{}, err
+		}
+		return beacon, nil
 	default:
 		return types.Beacon{}, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
@@ -223,46 +225,95 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
 	*types.Proposal, uint64, error,
 ) {
-	resp, err := s.client.GetProposalLayerNode(ctx, layer.Uint32(), node.String())
+	resp, err := s.client.GetProposalLayerNodeWithResponse(ctx, layer.Uint32(), node.String())
 	if err != nil {
 		return nil, 0, fmt.Errorf("get proposal layer: %w", err)
 	}
-	switch resp.StatusCode {
+	switch resp.StatusCode() {
 	case http.StatusOK:
 	case http.StatusNoContent:
 		// special case - no error but also no proposal, means
 		// we're no eligible this epoch with this node ID
 		return nil, 0, nil
 	default:
-		return nil, 0, fmt.Errorf("unexpected status: %s", resp.Status)
+		return nil, 0, fmt.Errorf("unexpected status: %q", resp.Status())
 	}
 
-	bytes, err := io.ReadAll(resp.Body)
+	atxID, err := models.ParseATXID(resp.JSON200.Ballot.AtxID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("read all: %w", err)
+		return nil, 0, err
+	}
+	opinionHash, err := models.ParseHash32(resp.JSON200.Ballot.OpinionHash)
+	if err != nil {
+		return nil, 0, err
+	}
+	meshHash, err := models.ParseHash32(resp.JSON200.MeshHash)
+	if err != nil {
+		return nil, 0, err
+	}
+	baseVote, err := models.ParseHash20(resp.JSON200.Ballot.Votes.Base)
+	if err != nil {
+		return nil, 0, err
 	}
 
-	if len(bytes) == 0 {
-		// there was no http.StatusNoContent but proposal body was empty
-		// what means no proposal and in effect we're no eligible this epoch
-		// with this node ID
-		return nil, 0, nil
+	support, err := models.ParseVotes(resp.JSON200.Ballot.Votes.Support)
+	if err != nil {
+		return nil, 0, fmt.Errorf("parsing support votes: %w", err)
+	}
+	against, err := models.ParseVotes(resp.JSON200.Ballot.Votes.Against)
+	if err != nil {
+		return nil, 0, fmt.Errorf("parsing against votes: %w", err)
+	}
+	txIds, err := models.ParseTransactionIDs(resp.JSON200.TxIDs)
+	if err != nil {
+		return nil, 0, err
 	}
 
-	prop := types.Proposal{}
-	err = codec.Decode(bytes, &prop)
-	if err != nil {
-		return nil, 0, fmt.Errorf("decode proposal: %w", err)
+	prop := types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: types.Ballot{
+				InnerBallot: types.InnerBallot{
+					Layer:       layer,
+					AtxID:       atxID,
+					OpinionHash: opinionHash,
+				},
+				SmesherID: node,
+				Votes: types.Votes{
+					Base:    types.BallotID(baseVote),
+					Support: support,
+					Against: against,
+					Abstain: models.ParseLayers(resp.JSON200.Ballot.Votes.Abstain),
+				},
+			},
+			TxIDs:    txIds,
+			MeshHash: meshHash,
+		},
 	}
-	atxNonce := resp.Header.Get("X-Spacemesh-Atx-Nonce")
-	if atxNonce == "" {
-		return nil, 0, errors.New("missing atx nonce")
+	if ref := resp.JSON200.Ballot.RefBallotID; ref != nil {
+		ref, err := models.ParseHash20(*ref)
+		if err != nil {
+			return nil, 0, err
+		}
+		prop.RefBallot = types.BallotID(ref)
+	} else {
+		if resp.JSON200.Ballot.EpochData == nil {
+			return nil, 0, errors.New("epoch data and refballot are both nil")
+		}
+		asHash, err := models.ParseHash32(resp.JSON200.Ballot.EpochData.ActiveSetHash)
+		if err != nil {
+			return nil, 0, err
+		}
+		beacon, err := models.ParseBeacon(resp.JSON200.Ballot.EpochData.Beacon)
+		if err != nil {
+			return nil, 0, err
+		}
+		prop.EpochData = &types.EpochData{
+			ActiveSetHash:    asHash,
+			Beacon:           beacon,
+			EligibilityCount: resp.JSON200.Ballot.EpochData.EligibilityCount,
+		}
 	}
-	nonce, err := strconv.ParseUint(atxNonce, 10, 64)
-	if err != nil {
-		return nil, 0, fmt.Errorf("nonce parse: %w", err)
-	}
-	return &prop, nonce, nil
+	return &prop, resp.JSON200.VrfNonce, nil
 }
 
 func (s *NodeService) CalculateEligibilitySlotsFor(

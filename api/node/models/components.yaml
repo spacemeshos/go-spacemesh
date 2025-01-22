@@ -51,24 +51,118 @@ components:
     HareRound:
       type: integer
       format: uint8
+    Hash20:
+      type: string
+      format: hex
+      minLength: 40
+      maxLength: 40
+    Hash32:
+      type: string
+      format: hex
+      minLength: 64
+      maxLength: 64
+    Beacon:
+      type: string
+      format: hex
+      minItems: 8
+      maxItems: 8
     HareRoundTemplate:
       type: object
       properties:
         Proposals:
           type: array
           items:
-            type: string
-            format: hex
-            minLength: 40
-            maxLength: 40
+            $ref: "#/components/schemas/Hash20"
           description: Array of 32-byte proposal IDs encoded as hex strings
         Reference:
-          type: string
-          format: hex
-          minLength: 64
-          maxLength: 64
+          $ref: "#/components/schemas/Hash32"
           description: Optional 32-byte reference hash
-
       required:
         - Proposals
+    Vote:
+      type: object
+      properties:
+        ID:
+          $ref: "#/components/schemas/Hash20"
+        LayerID:
+          $ref: "#/components/schemas/LayerID"
+        Height:
+          type: integer
+          format: uint64
+      required:
+        - ID
+        - LayerID
+        - Height
+    Votes:
+      type: object
+      properties:
+        Base:
+          $ref: "#/components/schemas/Hash20"
+        Support:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vote"
+        Against:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vote"
+        Abstain:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayerID"
+      required:
+        - Base
+        - Support
+        - Against
+        - Abstain
+    EpochData:
+      type: object
+      properties:
+        ActiveSetHash:
+          $ref: "#/components/schemas/Hash32"
+        Beacon:
+          $ref: "#/components/schemas/Beacon"
+        EligibilityCount:
+          type: integer
+          format: uint32
+      required:
+        - ActiveSetHash
+        - Beacon
+        - EligibilityCount
+    Ballot:
+      type: object
+      properties:
+        AtxID:
+          $ref: "#/components/schemas/ATXID"
+        OpinionHash:
+          $ref: "#/components/schemas/Hash32"
+        RefBallotID:
+          $ref: "#/components/schemas/Hash20"
+        EpochData:
+          $ref: "#/components/schemas/EpochData"
+        Votes:
+          $ref: "#/components/schemas/Votes"
+      required:
+        - AtxID
+        - OpinionHash
+        - Votes
 
+    PartialProposal:
+      type: object
+      properties:
+        Ballot:
+          $ref: "#/components/schemas/Ballot"
+        VrfNonce:
+          type: integer
+          format: uint64
+        MeshHash:
+          $ref: "#/components/schemas/Hash32"
+        TxIDs:
+          type: array
+          items:
+            $ref: "#/components/schemas/Hash32"
+      required:
+        - VrfNonce
+        - TxIDs
+        - Ballot
+        - MeshHash

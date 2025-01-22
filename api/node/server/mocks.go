@@ -362,3 +362,65 @@ func (c *MockproposalBuilderCalculateEligibilitySlotsForCall) DoAndReturn(f func
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// MockasBytes is a mock of asBytes interface.
+type MockasBytes struct {
+	ctrl     *gomock.Controller
+	recorder *MockasBytesMockRecorder
+	isgomock struct{}
+}
+
+// MockasBytesMockRecorder is the mock recorder for MockasBytes.
+type MockasBytesMockRecorder struct {
+	mock *MockasBytes
+}
+
+// NewMockasBytes creates a new mock instance.
+func NewMockasBytes(ctrl *gomock.Controller) *MockasBytes {
+	mock := &MockasBytes{ctrl: ctrl}
+	mock.recorder = &MockasBytesMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockasBytes) EXPECT() *MockasBytesMockRecorder {
+	return m.recorder
+}
+
+// Bytes mocks base method.
+func (m *MockasBytes) Bytes() []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Bytes")
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Bytes indicates an expected call of Bytes.
+func (mr *MockasBytesMockRecorder) Bytes() *MockasBytesBytesCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Bytes", reflect.TypeOf((*MockasBytes)(nil).Bytes))
+	return &MockasBytesBytesCall{Call: call}
+}
+
+// MockasBytesBytesCall wrap *gomock.Call
+type MockasBytesBytesCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockasBytesBytesCall) Return(arg0 []byte) *MockasBytesBytesCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockasBytesBytesCall) Do(f func() []byte) *MockasBytesBytesCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockasBytesBytesCall) DoAndReturn(f func() []byte) *MockasBytesBytesCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

@@ -229,12 +229,7 @@ paths:
                 type: object
                 properties:
                   beacon:
-                    type: array
-                    items:
-                      type: integer
-                      format: uint8
-                    minItems: 4
-                    maxItems: 4
+                    $ref: "models/components.yaml#/components/schemas/Beacon"
                 required:
                   - beacon
         "204":
@@ -259,10 +254,9 @@ paths:
         "200":
           description: successfully created a partial proposal
           content:
-            application/octet-stream:
+            application/json:
               schema:
-                type: string
-                format: binary
+                $ref: "models/components.yaml#/components/schemas/PartialProposal"
         "204":
           description: no eligibilities for this node in this epoch
         "500":

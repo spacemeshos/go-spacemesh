@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 const retries = 3
@@ -221,10 +220,10 @@ func TestProposals(t *testing.T) {
 	t.Run("build for", func(t *testing.T) {
 		p := createProposal(t, true)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
-		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
-		prop.MustInitialize()
+		prop, _, err := svc.Proposal(context.Background(), p.Layer, p.SmesherID)
 		require.NoError(t, err)
-		require.Equal(t, p, prop)
+		prop.MustInitialize()
+		require.EqualValues(t, p, prop)
 	})
 	svc, mock = setupE2E(t)
 	t.Run("build for - no eligibility", func(t *testing.T) {
@@ -240,6 +239,7 @@ func createProposal(tb testing.TB, eligible bool) *types.Proposal {
 	tb.Helper()
 	b := types.RandomBallot()
 	b.Layer = 10000
+	b.EligibilityProofs = nil
 	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: *b,
@@ -249,17 +249,14 @@ func createProposal(tb testing.TB, eligible bool) *types.Proposal {
 	p.Ballot.EpochData = &types.EpochData{
 		EligibilityCount: 1,
 	}
+	p.Ballot.RefBallot = types.EmptyBallotID
 	if !eligible {
 		p.Ballot.EpochData.EligibilityCount = 0
-		p.Ballot.RefBallot = types.EmptyBallotID
 	}
 
-	signer, err := signing.NewEdSigner()
-	require.NoError(tb, err)
-	p.Ballot.Signature = signer.Sign(signing.BALLOT, p.Ballot.SignedBytes())
-	p.Ballot.SmesherID = signer.NodeID()
-	p.Signature = signer.Sign(signing.PROPOSAL, p.SignedBytes())
-	p.SmesherID = signer.NodeID()
+	nodeID := types.RandomNodeID()
+	p.Ballot.SmesherID = nodeID
+	p.SmesherID = nodeID
 	require.NoError(tb, p.Initialize())
 	return p
 }
