@@ -2,6 +2,17 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.12
+
+Sync v2 is now enabled by default for all nodes. Nodes will sync faster and use less resources. At the moment only ATXs
+use the new sync method, but more data types will be added gradually in the future.
+
+### Improvements
+
+* [#6629](https://github.com/spacemeshos/go-spacemesh/pull/6629) Improve syncv2 default settings for mainnet.
+
+* [#6656](https://github.com/spacemeshos/go-spacemesh/pull/6656) Enable syncv2 for ATXs by default for all nodes.
+
 ## v1.7.11
 
 ### Upgrade information
