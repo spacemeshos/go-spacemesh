@@ -5,6 +5,7 @@ package main
 import (
 	_ "net/http/pprof"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -34,7 +35,7 @@ func main() { // run the app
 	// TODO: Move version, relay subcommands from node service and smeshing
 	// service subcommands to root command.
 
-	if len(os.Args) > 1 {
+	if len(os.Args) > 1 && !slices.Contains(os.Args, "--help") && !slices.Contains(os.Args, "-h") {
 		firstArg := os.Args[1]
 		foundMatch := false
 		for _, command := range rootCmd.Commands() {
