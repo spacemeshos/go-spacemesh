@@ -17,7 +17,7 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	pbV2 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	pbV2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
@@ -357,7 +357,7 @@ func TestProxyingJsonService(t *testing.T) {
 
 	// Start client proxying to the server
 	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
-	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Alpha1}
+	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Beta1}
 	clientApp := New(WithConfig(&cfg), WithLog(logger.Named("client")))
 	clientApp.idStates = identity.NewIdentityStateStorage(db, logger.Named("idStates").Zap())
 
