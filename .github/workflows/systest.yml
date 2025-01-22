@@ -173,7 +173,6 @@ jobs:
   systest-gke:
     runs-on: ubuntu-22.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    continue-on-error: true
     needs:
       - filter-changes
       - provision-cluster
@@ -262,9 +261,10 @@ jobs:
 
   delete-pool:
     runs-on: ubuntu-22.04
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    if: ${{ needs.provision-cluster.result == 'success' }}
     needs:
       - filter-changes
+      - provision-cluster
       - systest-gke
     timeout-minutes: 20
     permissions:
