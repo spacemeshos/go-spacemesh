@@ -337,13 +337,13 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 	}
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
-		corev1.ConfigMap(activationConfigMapName, ctx.Namespace).WithData(map[string]string{
-			attachedActivationConfig: activationConfig.Get(ctx.Parameters),
+		corev1.ConfigMap(smeshingServiceConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedSmeshingServiceConfig: smeshingServiceConfig.Get(ctx.Parameters),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
-		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, smeshingServiceConfigMapName, err)
 	}
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
@@ -353,7 +353,7 @@ func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
-		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, poetConfigMapName, err)
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, certifierConfigMapName, err)
 	}
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,

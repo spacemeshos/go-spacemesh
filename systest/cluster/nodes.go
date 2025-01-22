@@ -49,13 +49,13 @@ var (
 	)
 	smesherConfig = parameters.String(
 		"smesher",
-		"configuration for smesher service",
+		"configuration for smesher nodes",
 		fastnet.SmesherConfig,
 	)
-	activationConfig = parameters.String(
-		"activation",
-		"configuration for activation service",
-		fastnet.ActivationConfig,
+	smeshingServiceConfig = parameters.String(
+		"smeshing_service",
+		"configuration for smeshing service",
+		fastnet.SmeshingServiceConfig,
 	)
 
 	smesherResources = parameters.NewParameter(
@@ -131,15 +131,15 @@ func toResources(value string) (*apiv1.ResourceRequirements, error) {
 const (
 	configDir = "/etc/config/"
 
-	attachedCertifierConfig  = "certifier.yaml"
-	attachedPoetConfig       = "poet.conf"
-	attachedSmesherConfig    = "smesher.json"
-	attachedActivationConfig = "activation.json"
+	attachedCertifierConfig       = "certifier.yaml"
+	attachedPoetConfig            = "poet.conf"
+	attachedSmesherConfig         = "smesher.json"
+	attachedSmeshingServiceConfig = "activation.json"
 
-	certifierConfigMapName  = "certifier"
-	poetConfigMapName       = "poet"
-	spacemeshConfigMapName  = "spacemesh"
-	activationConfigMapName = "activation"
+	certifierConfigMapName       = "certifier"
+	poetConfigMapName            = "poet"
+	spacemeshConfigMapName       = "spacemesh"
+	smeshingServiceConfigMapName = "activation"
 
 	// smeshers are split in 10 approximately equal buckets
 	// to enable running chaos mesh tasks on the different parts of the cluster.
@@ -973,7 +973,7 @@ func deploySmeshingServiceNode(
 	cmd := []string{
 		"/bin/go-spacemesh",
 		"smeshing",
-		"-c=" + configDir + attachedActivationConfig,
+		"-c=" + configDir + attachedSmeshingServiceConfig,
 		"--pprof-server",
 		"--smeshing-opts-datadir=/data/post",
 		"-d=/data",
@@ -992,7 +992,7 @@ func deploySmeshingServiceNode(
 		WithNodeSelector(ctx.NodeSelector).
 		WithVolumes(
 			corev1.Volume().WithName("config").
-				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(activationConfigMapName)),
+				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(smeshingServiceConfigMapName)),
 			corev1.Volume().WithName("data").
 				WithEmptyDir(corev1.EmptyDirVolumeSource().
 					WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
