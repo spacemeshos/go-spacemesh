@@ -182,6 +182,9 @@ jobs:
       contents: 'read'
       id-token: 'write'
     steps:
+      - name: fail job
+        run: exit 1
+
       - uses: actions/checkout@v4
         with:
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
