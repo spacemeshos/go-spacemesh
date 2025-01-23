@@ -413,10 +413,13 @@ func TestFetch_GetMalfeasanceProofsWithCallback(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
+	var mtx sync.Mutex
 	var ids []types.NodeID
 	require.NoError(t, f.GetMalfeasanceProofsWithCallback(
 		context.Background(), nodeIDs,
 		func(nodeID types.NodeID, err error) {
+			mtx.Lock()
+			defer mtx.Unlock()
 			require.NotContains(t, ids, nodeID)
 			ids = append(ids, nodeID)
 			require.NoError(t, err)
