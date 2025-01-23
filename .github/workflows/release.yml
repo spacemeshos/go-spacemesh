@@ -101,7 +101,7 @@ jobs:
           mkdir build-zip
           cp ${{ env.OUTNAME }}.zip build-zip
       - name: Install aws-cli
-        if: ${{ matrix.os != '[self-hosted, macOS, ARM64, go-spacemesh]' }}
+        if: ${{ !contains(matrix.os, 'self-hosted') }}
         uses: unfor19/install-aws-cli-action@v1
         with:
           version: 2.22.33
@@ -116,7 +116,7 @@ jobs:
             AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
             AWS_REGION: us-east-1
       - name: Install coreutils
-        if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
+        if: ${{ matrix.os == 'macos-13' }}
         run: brew install coreutils
       - name: Calculate the hashsum of the zip file
         if: ${{ matrix.os != 'windows-2022' }}
