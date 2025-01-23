@@ -73,9 +73,9 @@ var (
 		},
 		toResources,
 	)
-	activationResources = parameters.NewParameter(
+	smeshingServiceResources = parameters.NewParameter(
 		"smesher_resources",
-		"requests and limits for activation container",
+		"requests and limits for smeshing service container",
 		&apiv1.ResourceRequirements{
 			Requests: apiv1.ResourceList{
 				apiv1.ResourceCPU:    resource.MustParse("1.3"),
@@ -134,12 +134,12 @@ const (
 	attachedCertifierConfig       = "certifier.yaml"
 	attachedPoetConfig            = "poet.conf"
 	attachedSmesherConfig         = "smesher.json"
-	attachedSmeshingServiceConfig = "activation.json"
+	attachedSmeshingServiceConfig = "smeshing_service.json"
 
 	certifierConfigMapName       = "certifier"
 	poetConfigMapName            = "poet"
 	spacemeshConfigMapName       = "spacemesh"
-	smeshingServiceConfigMapName = "activation"
+	smeshingServiceConfigMapName = "smeshing-service"
 
 	// smeshers are split in 10 approximately equal buckets
 	// to enable running chaos mesh tasks on the different parts of the cluster.
@@ -1018,8 +1018,8 @@ func deploySmeshingServiceNode(
 				corev1.VolumeMount().WithName("config").WithMountPath(configDir),
 			).
 			WithResources(corev1.ResourceRequirements().
-				WithRequests(activationResources.Get(ctx.Parameters).Requests).
-				WithLimits(activationResources.Get(ctx.Parameters).Limits),
+				WithRequests(smeshingServiceResources.Get(ctx.Parameters).Requests).
+				WithLimits(smeshingServiceResources.Get(ctx.Parameters).Limits),
 			).
 			WithStartupProbe(
 				corev1.Probe().WithTCPSocket(

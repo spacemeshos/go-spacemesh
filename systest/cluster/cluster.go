@@ -263,9 +263,6 @@ type Cluster struct {
 	accounts
 	genesisBalances map[string]uint64
 
-	bootNodesNum int
-	smeshersNum  int
-
 	BootNodes            []*NodeClient
 	SmeshingNodes        []*NodeClient
 	SmeshingServiceNodes []*NodeClient
@@ -301,10 +298,10 @@ func (c *Cluster) GoldenATX() types.ATXID {
 }
 
 func (c *Cluster) nextSmesher() int {
-	if c.smeshersNum == 0 {
+	if len(c.SmeshingNodes) == 0 {
 		return 0
 	}
-	return decodeOrdinal(c.clients[len(c.clients)-1].Name) + 1
+	return decodeOrdinal(c.SmeshingNodes[len(c.SmeshingNodes)-1].Name) + 1
 }
 
 func (c *Cluster) persist(ctx *testcontext.Context) error {
@@ -436,7 +433,6 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	}
 	c.clients = append(c.clients, bootnodes...)
 	c.BootNodes = bootnodes
-	c.bootNodesNum = len(bootnodes)
 
 	smeshers, err := discoverNodes(cctx, smesherApp)
 	if err != nil {
@@ -447,7 +443,6 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	}
 	c.clients = append(c.clients, smeshers...)
 	c.SmeshingNodes = smeshers
-	c.smeshersNum = len(smeshers)
 
 	smeshingServiceNodes, err := discoverNodes(cctx, smeshingServiceApp)
 	if err != nil {
@@ -458,7 +453,6 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 	}
 	c.clients = append(c.clients, smeshingServiceNodes...)
 	c.SmeshingServiceNodes = smeshingServiceNodes
-	c.smeshersNum += len(smeshingServiceNodes)
 
 	nodeServiceNodes, err := discoverNodes(cctx, nodeServiceApp)
 	if err != nil {
@@ -501,7 +495,9 @@ func (c *Cluster) reuse(cctx *testcontext.Context) error {
 		"bootnodes",
 		len(c.BootNodes),
 		"smeshers",
-		c.smeshersNum,
+		len(c.SmeshingNodes),
+		"smeshing services",
+		len(c.SmeshingServiceNodes),
 		"poets",
 		len(c.poets),
 		"bootstrappers",
@@ -599,18 +595,17 @@ func (c *Cluster) AddBootnodes(cctx *testcontext.Context, n int) error {
 	if err := c.persist(cctx); err != nil {
 		return err
 	}
-	clients, err := deployNodes(cctx, bootnodeApp, c.bootNodesNum, c.bootNodesNum+n,
+	clients, err := deployNodes(cctx, bootnodeApp, c.Bootnodes(), c.Bootnodes()+n,
 		WithFlags(maps.Values(c.smesherFlags)...),
 		WithFlags(StartSmeshing(false), Bootnode()),
 	)
 	if err != nil {
 		return err
 	}
-	smeshers := c.clients[c.bootNodesNum:]
+	smeshers := c.clients[c.Bootnodes():]
 	c.clients = nil
 	c.clients = append(c.clients, clients...)
 	c.clients = append(c.clients, smeshers...)
-	c.bootNodesNum += len(clients)
 	c.BootNodes = append(c.BootNodes, clients...)
 
 	return fillNetworkConfig(cctx, clients[0])
@@ -659,7 +654,7 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...Deployme
 		return err
 	}
 	flags := maps.Values(c.smesherFlags)
-	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootNodesNum])
+	endpoints, err := ExtractP2PEndpoints(tctx, c.BootNodes)
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
@@ -670,7 +665,6 @@ func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...Deployme
 		return err
 	}
 	c.clients = append(c.clients, clients...)
-	c.smeshersNum += len(clients)
 	c.SmeshingNodes = append(c.SmeshingNodes, clients...)
 	return nil
 }
@@ -683,7 +677,7 @@ func (c *Cluster) AddRemoteSmeshers(tctx *testcontext.Context, n int, opts ...De
 		return err
 	}
 	flags := maps.Values(c.smesherFlags)
-	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootNodesNum])
+	endpoints, err := ExtractP2PEndpoints(tctx, c.BootNodes)
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
@@ -694,7 +688,6 @@ func (c *Cluster) AddRemoteSmeshers(tctx *testcontext.Context, n int, opts ...De
 		return err
 	}
 	c.clients = append(c.clients, clients...)
-	c.smeshersNum += len(clients)
 	c.SmeshingNodes = append(c.SmeshingNodes, clients...)
 	return nil
 }
@@ -713,7 +706,7 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		return err
 	}
 	flags := maps.Values(c.smesherFlags)
-	endpoints, err := ExtractP2PEndpoints(tctx, c.clients[:c.bootNodesNum])
+	endpoints, err := ExtractP2PEndpoints(tctx, c.BootNodes)
 	if err != nil {
 		return fmt.Errorf("extracting p2p endpoints %w", err)
 	}
@@ -756,7 +749,6 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		return err
 	}
 	c.clients = append(c.clients, clients...)
-	c.smeshersNum += len(clients)
 	c.SmeshingServiceNodes = append(c.SmeshingServiceNodes, clients...)
 	return nil
 }
@@ -822,27 +814,23 @@ func (c *Cluster) DeleteSmesher(cctx *testcontext.Context, node *NodeClient) err
 		return err
 	}
 
-	clients := c.clients
-	c.clients = nil
-	for _, n := range clients {
-		if n.Name == node.Name {
-			continue
-		}
-		c.clients = append(c.clients, n)
-	}
-	c.smeshersNum = len(c.clients)
+	c.clients = slices.DeleteFunc(c.clients, func(n *NodeClient) bool { return n.Name == node.Name })
 	c.SmeshingNodes = slices.DeleteFunc(c.SmeshingNodes, func(n *NodeClient) bool { return n.Name == node.Name })
+	c.SmeshingServiceNodes = slices.DeleteFunc(
+		c.SmeshingServiceNodes,
+		func(n *NodeClient) bool { return n.Name == node.Name },
+	)
 	return nil
 }
 
 // Bootnodes returns number of the bootnodes in the cluster.
 func (c *Cluster) Bootnodes() int {
-	return c.bootNodesNum
+	return len(c.BootNodes)
 }
 
 // Smeshers returns number of the smeshers in the cluster.
 func (c *Cluster) Smeshers() int {
-	return c.smeshersNum
+	return len(c.SmeshingNodes) + len(c.SmeshingServiceNodes)
 }
 
 // Total returns total number of clients.
