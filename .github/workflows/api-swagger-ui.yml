@@ -42,10 +42,11 @@ jobs:
         fetch-depth: 0
         ref: 'refs/tags/${{ needs.check-version.outputs.go-sm-api-version }}'
 
-    - name: Install aws-cli
-      uses: unfor19/install-aws-cli-action@v1
-      with:
-        version: 2.22.33
+    - name: Install aws-cli on linux
+      run:
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
     - name: upload to testnet
       run: >
         aws s3 sync api/release/openapi/swagger/src
