@@ -120,6 +120,9 @@ var (
 	bsSize = parameters.Int(
 		"bs-size", "size of bootstrappers", 1,
 	)
+	nodeSplitSize = parameters.Int(
+		"node-split-size", "size of node split setup", 0,
+	)
 	storage = parameters.String(
 		"storage", "<class>=<size> for the storage", "standard=1Gi",
 	)
@@ -172,6 +175,7 @@ type Context struct {
 	RemoteSize        int
 	PoetSize          int
 	OldSize           int
+	NodeSplitSize     int
 	BootstrapperSize  int
 	Generic           client.Client
 	TestID            string
@@ -365,6 +369,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 		RemoteSize:        clSize / 2, // 50% of smeshers are remote
 		PoetSize:          poetSize.Get(p),
 		OldSize:           clSize / 4, // 25% of smeshers are old (use previous version of go-spacemesh)
+		NodeSplitSize:     nodeSplitSize.Get(p),
 		BootstrapperSize:  bsSize.Get(p),
 		Image:             imageFlag.Get(p),
 		OldImage:          oldImageFlag.Get(p),

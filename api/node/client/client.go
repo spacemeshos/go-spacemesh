@@ -101,6 +101,9 @@ func (s *NodeService) PositioningATX(ctx context.Context, maxPublish types.Epoch
 // Publish implements pubsub.Publisher.
 func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) error {
 	buf := bytes.NewBuffer(blob)
+	// The `hare3.DefaultProtocolName` contains slashes which
+	// makes it unsuitable for a path parameter,
+	// thus we change it to hare3 here and backwards on the server side.
 	if proto == hare3.DefaultProtocolName {
 		proto = "hare3"
 	}
