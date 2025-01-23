@@ -637,6 +637,7 @@ func TestSyncAtxs_SyncV2(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			ts := newSyncerWithoutPeriodicRunsWithConfig(t, cfg)
+			ts.mMSV2.EXPECT().StartAndSync(gomock.Any()).AnyTimes()
 			ts.expectMalDownloadLoop()
 			lyr := startWithSyncedState_SyncV2(t, ts)
 			require.LessOrEqual(t, lyr, tc.current)
