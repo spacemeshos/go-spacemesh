@@ -145,3 +145,7 @@ func (s *StateStorage) AllEligibilities() map[types.NodeID]map[types.LayerID][]t
 	)
 	return eligibilities
 }
+
+func (s *StateStorage) DeleteEventsOlderThan(t time.Time) error {
+	return events.DeleteEventsOlderThan(s.db, t)
+}

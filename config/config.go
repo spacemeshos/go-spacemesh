@@ -156,6 +156,10 @@ type BaseConfig struct {
 	// Address of the node serivce
 	// TODO: add better description.
 	NodeServiceAddress string `mapstructure:"node-service-address"`
+
+	// SmeshingEventsPruneDuration is the time after which smeshing identities events are pruned
+	// Default is 30 days
+	SmeshingEventsPruneDuration time.Duration `mapstructure:"smeshing-events-prune-duration"`
 }
 
 type DatabaseQueryCacheSizes struct {
@@ -251,6 +255,8 @@ func defaultBaseConfig() BaseConfig {
 		PostValidDelay:          12 * time.Hour,
 
 		PprofHTTPServerListener: "localhost:6060",
+
+		SmeshingEventsPruneDuration: 30 * 24 * time.Hour,
 	}
 }
 
