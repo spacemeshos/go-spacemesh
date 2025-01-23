@@ -73,7 +73,7 @@ func (h *MalfeasanceHandler) Commit(
 func identitiesTable() *sqlstore.SyncedTable {
 	return &sqlstore.SyncedTable{
 		TableName: "identities",
-		IDColumn:  "id",
+		IDColumn:  "pubkey",
 	}
 }
 
