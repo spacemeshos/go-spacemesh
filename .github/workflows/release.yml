@@ -119,7 +119,7 @@ jobs:
           sudo installer -pkg AWSCLIV2.pkg -target /
       - name: Install aws-cli on windows
         if: ${{ matrix.os == 'windows-2022' }}
-        run: choco install awscli --version=2.22.35
+        run: choco install awscli --version=2.22.35 --allow-downgrade
       - name: Upload zip to R2
         run: >
           aws s3 sync build-zip
