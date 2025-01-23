@@ -101,6 +101,7 @@ jobs:
           mkdir build-zip
           cp ${{ env.OUTNAME }}.zip build-zip
       - name: Install aws-cli
+        if: ${{ matrix.os != '[self-hosted, macOS, ARM64, go-spacemesh]' }}
         uses: unfor19/install-aws-cli-action@v1
         with:
           version: 2.22.33
