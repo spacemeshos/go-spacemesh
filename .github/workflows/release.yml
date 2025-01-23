@@ -100,6 +100,10 @@ jobs:
         run: |
           mkdir build-zip
           cp ${{ env.OUTNAME }}.zip build-zip
+      - name: Install aws-cli
+        uses: unfor19/install-aws-cli-action@v1
+        with:
+          version: 2.22.33
       - name: Upload zip to R2
         run: >
           aws s3 sync build-zip

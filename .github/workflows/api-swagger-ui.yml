@@ -42,6 +42,10 @@ jobs:
         fetch-depth: 0
         ref: 'refs/tags/${{ needs.check-version.outputs.go-sm-api-version }}'
 
+    - name: Install aws-cli
+      uses: unfor19/install-aws-cli-action@v1
+      with:
+        version: 2.22.33
     - name: upload to testnet
       run: >
         aws s3 sync api/release/openapi/swagger/src
