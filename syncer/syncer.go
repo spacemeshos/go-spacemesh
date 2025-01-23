@@ -294,8 +294,10 @@ func NewSyncer(
 		s.ensureDispatcher(host)
 		var err error
 		s.msv2, err = sync2.NewMalfeasanceSyncer(
-			s.logger, s.dispatcher, "malsync", s.cfg.ReconcSync.MalSyncCfg, cdb.Database,
-			fetcher, peerCache, s.cfg.ReconcSync.EnableActiveSync)
+			s.logger.Named("malsync"),
+			s.dispatcher, "malsync", s.cfg.ReconcSync.MalSyncCfg, cdb.Database,
+			fetcher, peerCache,
+			s.cfg.ReconcSync.EnableActiveSync && s.cfg.ReconcSync.EnableMalSync)
 		if err != nil {
 			return nil, fmt.Errorf("creating malfeasance syncer: %w", err)
 		}
