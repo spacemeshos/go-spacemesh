@@ -3,7 +3,7 @@ package identity
 import (
 	"time"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"

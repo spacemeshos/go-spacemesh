@@ -17,7 +17,7 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	pbV2 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+	pbV2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
@@ -198,8 +198,19 @@ func marshalProto(tb testing.TB, msg proto.Message) []byte {
 	return buf
 }
 
-func callEndpoint(tb testing.TB, url string, payload []byte) ([]byte, int) {
+func callEndpointPost(tb testing.TB, url string, payload []byte) ([]byte, int) {
 	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
+	require.NoError(tb, err)
+	require.Equal(tb, "application/json", resp.Header.Get("Content-Type"))
+	buf, err := io.ReadAll(resp.Body)
+	require.NoError(tb, err)
+	require.NoError(tb, resp.Body.Close())
+
+	return buf, resp.StatusCode
+}
+
+func callEndpointGet(tb testing.TB, url string) ([]byte, int) {
+	resp, err := http.Get(url)
 	require.NoError(tb, err)
 	require.Equal(tb, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := io.ReadAll(resp.Body)
@@ -324,7 +335,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	)
 	endpoint := fmt.Sprintf("http://%s/v1/node/echo", app.jsonAPIServer.BoundAddress)
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(t, endpoint, payload)
+		respBody, respStatus = callEndpointPost(t, endpoint, payload)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
@@ -357,7 +368,7 @@ func TestProxyingJsonService(t *testing.T) {
 
 	// Start client proxying to the server
 	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
-	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Alpha1}
+	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Beta1}
 	clientApp := New(WithConfig(&cfg), WithLog(logger.Named("client")))
 	clientApp.idStates = identity.NewIdentityStateStorage(db, logger.Named("idStates").Zap())
 
@@ -372,7 +383,7 @@ func TestProxyingJsonService(t *testing.T) {
 	endpoint := fmt.Sprintf("http://%s/v1/node/echo", clientApp.apiProxy.BoundAddress)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(t, endpoint, payload)
+		respBody, respStatus = callEndpointPost(t, endpoint, payload)
 		return respStatus == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
 	var msg pb.EchoResponse
@@ -381,13 +392,13 @@ func TestProxyingJsonService(t *testing.T) {
 
 	// Make a request to a local SmeshingIdentities service
 	endpoint = fmt.Sprintf(
-		"http://%s/spacemesh.v2alpha1.SmeshingIdentitiesService/States",
+		"http://%s/spacemesh.v2beta1.SmeshingIdentitiesService/States?limit=1",
 		clientApp.apiProxy.BoundAddress,
 	)
 
 	nodeID := types.RandomNodeID()
 	clientApp.idStates.Set(nodeID, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
-	respBody, status := callEndpoint(t, endpoint, []byte(`{"limit": 1}`))
+	respBody, status := callEndpointGet(t, endpoint)
 	require.Equal(t, http.StatusOK, status)
 	var resp pbV2.IdentityStatesResponse
 	require.NoError(t, protojson.Unmarshal(respBody, &resp))
