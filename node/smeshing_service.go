@@ -193,7 +193,6 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		app.db,
 		app.addLogger(PoetDbLogger, lg).Zap(),
 		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
-		activation.WithRemotePoetStorer(nodeServiceClient),
 	)
 	if err != nil {
 		return fmt.Errorf("creating poet db: %w", err)

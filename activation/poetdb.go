@@ -23,8 +23,7 @@ import (
 
 // PoetDbOptions are options for PoetDb.
 type PoetDbOptions struct {
-	cacheSize    int
-	remoteStorer PoetDbStorer
+	cacheSize int
 }
 
 type PoetDbOption func(*PoetDbOptions)
@@ -36,19 +35,12 @@ func WithCacheSize(size int) PoetDbOption {
 	}
 }
 
-func WithRemotePoetStorer(storer PoetDbStorer) PoetDbOption {
-	return func(opts *PoetDbOptions) {
-		opts.remoteStorer = storer
-	}
-}
-
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
 	sqlDB               sql.StateDatabase
 	poetProofsDbRequest singleflight.Group
 	poetProofsLru       *lru.Cache[types.PoetProofRef, *types.PoetProofMessage]
 	logger              *zap.Logger
-	remoteStorer        PoetDbStorer
 }
 
 // NewPoetDb returns a new PoET handler.
@@ -74,7 +66,6 @@ func NewPoetDb(db sql.StateDatabase, log *zap.Logger, opts ...PoetDbOption) (*Po
 		sqlDB:         db,
 		poetProofsLru: poetProofsLru,
 		logger:        log,
-		remoteStorer:  options.remoteStorer,
 	}, nil
 }
 
@@ -98,23 +89,9 @@ func (db *PoetDb) ValidateAndStore(ctx context.Context, proofMessage *types.Poet
 		return nil
 	}
 
-	if err := db.Validate(
-		proofMessage.Statement[:],
-		proofMessage.PoetProof,
-		proofMessage.PoetServiceID,
-		proofMessage.RoundID,
-		proofMessage.Signature,
-	); err != nil {
+	if err := db.Validate(proofMessage.Statement[:], proofMessage.PoetProof); err != nil {
 		return err
 	}
-
-	if db.remoteStorer != nil {
-		err := db.remoteStorer.StorePoetProof(ctx, proofMessage)
-		if err != nil {
-			db.logger.Warn("failed to store the poet proof in remote store", zap.Error(err))
-		}
-	}
-
 	return db.StoreProof(ctx, ref, proofMessage)
 }
 
@@ -139,19 +116,13 @@ func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, expHash types.Hash32,
 	return db.ValidateAndStore(ctx, &proofMessage)
 }
 
-// Validate validates a new PoET proof.
-func (db *PoetDb) Validate(
-	root []byte,
-	proof types.PoetProof,
-	poetID []byte,
-	roundID string,
-	signature types.EdSignature,
-) error {
-	shortID := poetID[:min(5, len(poetID))]
-	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %w", shortID, roundID, err)
+// Validate validates a PoET proof.
+func (db *PoetDb) Validate(membershipRoot []byte, proof types.PoetProof) error {
+	labelHashFunc := hash.GenLabelHashFunc(membershipRoot)
+	merkleHashFunc := hash.GenMerkleHashFunc(membershipRoot)
+	if err := verifier.Validate(proof.MerkleProof, labelHashFunc, merkleHashFunc, proof.LeafCount, shared.T); err != nil {
+		return fmt.Errorf("validate PoET: %w", err)
 	}
-	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 	return nil
 }
 
@@ -250,14 +221,4 @@ func calcRoot(leaves []types.Hash32) ([]byte, error) {
 		}
 	}
 	return tree.Root(), nil
-}
-
-func validatePoet(membershipRoot []byte, merkleProof shared.MerkleProof, leafCount uint64) error {
-	labelHashFunc := hash.GenLabelHashFunc(membershipRoot)
-	merkleHashFunc := hash.GenMerkleHashFunc(membershipRoot)
-	if err := verifier.Validate(merkleProof, labelHashFunc, merkleHashFunc, leafCount, shared.T); err != nil {
-		return fmt.Errorf("validate PoET: %w", err)
-	}
-
-	return nil
 }

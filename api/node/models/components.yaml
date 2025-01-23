@@ -29,6 +29,43 @@ components:
         - SmesherID
         - ID
         - Weight
+
+    MerkleProof:
+      type: object
+      properties:
+        root:
+          type: string
+          format: byte
+        provenLeaves:
+          type: array
+          items:
+            type: string
+            format: byte
+        proofNodes:
+          type: array
+          items:
+            type: string
+            format: byte
+      required:
+        - root
+        - provenLeaves
+        - proofNodes
+
+    PoetProof:
+      type: object
+      properties:
+        proof:
+          $ref: "#/components/schemas/MerkleProof"
+        leafs:
+          type: integer
+          format: uint64
+        statement:
+          $ref: "#/components/schemas/Hash32"
+      required:
+        - proof
+        - leafs
+        - statement
+
     NodeID:
       type: string
       format: hex

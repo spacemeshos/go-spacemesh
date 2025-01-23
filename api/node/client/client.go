@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	externalRef0 "github.com/spacemeshos/go-spacemesh/api/node/models"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -26,10 +25,10 @@ type NodeService struct {
 }
 
 var (
-	_ activation.AtxService   = (*NodeService)(nil)
-	_ activation.PoetDbStorer = (*NodeService)(nil)
-	_ pubsub.Publisher        = (*NodeService)(nil)
-	_ hare3.NodeService       = (*NodeService)(nil)
+	_ activation.Publisher  = (*NodeService)(nil)
+	_ activation.AtxService = (*NodeService)(nil)
+	_ pubsub.Publisher      = (*NodeService)(nil)
+	_ hare3.NodeService     = (*NodeService)(nil)
 )
 
 type Config struct {
@@ -98,6 +97,29 @@ func (s *NodeService) PositioningATX(ctx context.Context, maxPublish types.Epoch
 	return models.ParseATXID(resp.JSON200.ID)
 }
 
+func (s *NodeService) PublishATX(ctx context.Context, blob []byte, poet *types.PoetProofMessage) error {
+	body := PostActivationPublishJSONRequestBody{
+		AtxBlob: blob,
+		PoetProof: &externalRef0.PoetProof{
+			Leafs: poet.LeafCount,
+			Proof: externalRef0.MerkleProof{
+				ProofNodes:   poet.ProofNodes,
+				ProvenLeaves: poet.ProvenLeaves,
+				Root:         poet.Root,
+			},
+			Statement: hex.EncodeToString(poet.Statement.Bytes()),
+		},
+	}
+	resp, err := s.client.PostActivationPublishWithResponse(ctx, body)
+	if err != nil {
+		return fmt.Errorf("failed request to publish ATX blob and poet: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("failed to publish ATX and poet: %w (%s: %s)", err, resp.Status(), resp.Body)
+	}
+	return nil
+}
+
 // Publish implements pubsub.Publisher.
 func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) error {
 	buf := bytes.NewBuffer(blob)
@@ -109,20 +131,6 @@ func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) er
 	}
 	protocol := PostPublishProtocolParamsProtocol(proto)
 	resp, err := s.client.PostPublishProtocolWithBody(ctx, protocol, "application/octet-stream", buf)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-	return nil
-}
-
-// StorePoetProof implements activation.PoetDbStorer.
-func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProofMessage) error {
-	blob := codec.MustEncode(proof)
-	buf := bytes.NewBuffer(blob)
-	resp, err := s.client.PostPoetWithBody(ctx, "application/octet-stream", buf)
 	if err != nil {
 		return err
 	}

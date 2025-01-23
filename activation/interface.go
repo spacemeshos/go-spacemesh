@@ -143,6 +143,10 @@ type AtxService interface {
 	PositioningATX(ctx context.Context, maxPublish types.EpochID) (types.ATXID, error)
 }
 
+type Publisher interface {
+	PublishATX(ctx context.Context, blob []byte, poetProof *types.PoetProofMessage) error
+}
+
 // PostSetupProvider defines the functionality required for Post setup.
 // This interface is used by the atx builder and currently implemented by the PostSetupManager.
 // Eventually most of the functionality will be moved to the PoSTClient.

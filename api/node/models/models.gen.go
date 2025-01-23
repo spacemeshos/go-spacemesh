@@ -61,6 +61,13 @@ type Hash32 = string
 // LayerID defines model for LayerID.
 type LayerID = uint32
 
+// MerkleProof defines model for MerkleProof.
+type MerkleProof struct {
+	ProofNodes   [][]byte `json:"proofNodes"`
+	ProvenLeaves [][]byte `json:"provenLeaves"`
+	Root         []byte   `json:"root"`
+}
+
 // NodeID defines model for NodeID.
 type NodeID = string
 
@@ -70,6 +77,13 @@ type PartialProposal struct {
 	MeshHash Hash32   `json:"MeshHash"`
 	TxIDs    []Hash32 `json:"TxIDs"`
 	VrfNonce uint64   `json:"VrfNonce"`
+}
+
+// PoetProof defines model for PoetProof.
+type PoetProof struct {
+	Leafs     uint64      `json:"leafs"`
+	Proof     MerkleProof `json:"proof"`
+	Statement Hash32      `json:"statement"`
 }
 
 // Vote defines model for Vote.

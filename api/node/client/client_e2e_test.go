@@ -16,7 +16,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/node/server"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
-	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	pubsubMocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/poet/shared"
 )
 
 const retries = 3
@@ -25,7 +27,7 @@ type mocks struct {
 	atxService *activation.MockAtxService
 	poetDb     *server.MockpoetDB
 	hare       *server.Mockhare
-	publisher  *pubsub.MockPublisher
+	publisher  *pubsubMocks.MockPublisher
 	proposals  *server.MockproposalBuilder
 }
 
@@ -37,7 +39,7 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 		atxService: activation.NewMockAtxService(ctrl),
 		poetDb:     server.NewMockpoetDB(ctrl),
 		hare:       server.NewMockhare(ctrl),
-		publisher:  pubsub.NewMockPublisher(ctrl),
+		publisher:  pubsubMocks.NewMockPublisher(ctrl),
 		proposals:  server.NewMockproposalBuilder(ctrl),
 	}
 
@@ -150,14 +152,29 @@ func Test_ActivationService_LastATX(t *testing.T) {
 	})
 }
 
-func Test_StoringPoetProof(t *testing.T) {
+func Test_PublishingATX(t *testing.T) {
 	svc, mocks := setupE2E(t)
-
-	proof := types.PoetProofMessage{
-		RoundID: "some round",
+	blob := types.RandomBytes(50)
+	poetProof := types.PoetProofMessage{
+		PoetProof: types.PoetProof{
+			MerkleProof: shared.MerkleProof{
+				Root: types.RandomBytes(32),
+				ProvenLeaves: [][]byte{
+					types.RandomBytes(32),
+					types.RandomBytes(32),
+				},
+				ProofNodes: [][]byte{
+					types.RandomBytes(32),
+					types.RandomBytes(32),
+				},
+			},
+			LeafCount: 1236,
+		},
+		Statement: types.RandomHash(),
 	}
-	mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &proof)
-	svc.StorePoetProof(context.Background(), &proof)
+	mocks.publisher.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, blob)
+	mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &poetProof)
+	svc.PublishATX(context.Background(), blob, &poetProof)
 }
 
 func Test_Hare(t *testing.T) {

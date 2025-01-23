@@ -79,6 +79,35 @@ paths:
         "404":
           description: ATX not found
 
+  /activation/publish:
+    post:
+      summary: Publish an ATX along with its poet merkle proof
+      tags:
+        - "Activation"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                AtxBlob:
+                  type: string
+                  format: byte
+                PoetProof:
+                  $ref: "models/components.yaml#/components/schemas/PoetProof"
+              required:
+                - AtxBlob
+      responses:
+        "200":
+          description: Successfully published the blob
+        "400":
+          description: Invalid data passed
+          content:
+            plain/text:
+              schema:
+                type: string
+
   /publish/{protocol}:
     post:
       summary: Publish a blob in the given p2p protocol
@@ -101,27 +130,7 @@ paths:
       responses:
         "200":
           description: Successfully published the blob
-  /poet:
-    post:
-      summary: Store PoET proof
-      tags:
-        - "Poet"
-      requestBody:
-        required: true
-        content:
-          application/octet-stream:
-            schema:
-              type: string
-              format: binary
-      responses:
-        "200":
-          description: Successfully stored the proof
-        "400":
-          description: Bad request
-          content:
-            plain/text:
-              schema:
-                type: string
+
   /hare/round_template/{layer}/{iter}/{round}:
     get:
       summary: Get a hare message to sign
@@ -129,7 +138,7 @@ paths:
         - "hare"
       parameters:
         - in: path
-          name: layer 
+          name: layer
           required: true
           schema:
             $ref: "models/components.yaml#/components/schemas/LayerID"
@@ -271,7 +280,7 @@ paths:
           name: node
           required: true
           schema:
-              $ref: "models/components.yaml#/components/schemas/NodeID"
+            $ref: "models/components.yaml#/components/schemas/NodeID"
         - in: path
           name: epoch
           required: true
@@ -295,5 +304,4 @@ paths:
                   - slots
                   - nonce
         "500":
-            description: could not calculate eligibility slots
-
+          description: could not calculate eligibility slots

@@ -15,10 +15,10 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/poet/shared"
 )
 
 //go:generate mockgen -typed -package=server -destination=mocks.go -source=server.go
@@ -178,6 +178,45 @@ func (s *Server) GetActivationPositioningAtxPublishEpoch(
 	}, nil
 }
 
+func (s *Server) PostActivationPublish(
+	ctx context.Context,
+	request PostActivationPublishRequestObject,
+) (PostActivationPublishResponseObject, error) {
+	invalidArg := func(err error) (PostActivationPublish400PlaintextResponse, error) {
+		msg := err.Error()
+		return PostActivationPublish400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, nil
+	}
+
+	if p := request.Body.PoetProof; p != nil {
+		stmt, err := models.ParseHash32(p.Statement)
+		if err != nil {
+			return invalidArg(err)
+		}
+		proof := types.PoetProofMessage{
+			PoetProof: types.PoetProof{
+				MerkleProof: shared.MerkleProof{
+					Root:         p.Proof.Root,
+					ProvenLeaves: p.Proof.ProvenLeaves,
+					ProofNodes:   p.Proof.ProofNodes,
+				},
+				LeafCount: p.Leafs,
+			},
+			Statement: stmt,
+		}
+		if err := s.poetDB.ValidateAndStore(ctx, &proof); err != nil {
+			return invalidArg(err)
+		}
+	}
+	if err := s.publisher.Publish(ctx, pubsub.AtxProtocol, request.Body.AtxBlob); err != nil {
+		return invalidArg(err)
+	}
+
+	return PostActivationPublish200Response{}, nil
+}
+
 // PostPublishProtocol implements StrictServerInterface.
 func (s *Server) PostPublishProtocol(
 	ctx context.Context,
@@ -197,32 +236,6 @@ func (s *Server) PostPublishProtocol(
 	}
 	s.publisher.Publish(ctx, protocol, blob)
 	return PostPublishProtocol200Response{}, nil
-}
-
-// PostPoet implements StrictServerInterface.
-func (s *Server) PostPoet(ctx context.Context, request PostPoetRequestObject) (PostPoetResponseObject, error) {
-	var proof types.PoetProofMessage
-	blob, err := io.ReadAll(request.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := codec.Decode(blob, &proof); err != nil {
-		msg := err.Error()
-		return PostPoet400PlaintextResponse{
-			Body:          bytes.NewBuffer([]byte(msg)),
-			ContentLength: int64(len(msg)),
-		}, nil
-	}
-
-	if err := s.poetDB.ValidateAndStore(ctx, &proof); err != nil {
-		msg := err.Error()
-		return PostPoet400PlaintextResponse{
-			Body:          bytes.NewBuffer([]byte(msg)),
-			ContentLength: int64(len(msg)),
-		}, nil
-	}
-	return PostPoet200Response{}, nil
 }
 
 func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,

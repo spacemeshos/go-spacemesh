@@ -4,6 +4,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -30,8 +31,17 @@ const (
 	Tx1 PostPublishProtocolParamsProtocol = "tx1"
 )
 
+// PostActivationPublishJSONBody defines parameters for PostActivationPublish.
+type PostActivationPublishJSONBody struct {
+	AtxBlob   []byte                  `json:"AtxBlob"`
+	PoetProof *externalRef0.PoetProof `json:"PoetProof,omitempty"`
+}
+
 // PostPublishProtocolParamsProtocol defines parameters for PostPublishProtocol.
 type PostPublishProtocolParamsProtocol string
+
+// PostActivationPublishJSONRequestBody defines body for PostActivationPublish for application/json ContentType.
+type PostActivationPublishJSONRequestBody PostActivationPublishJSONBody
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -115,6 +125,11 @@ type ClientInterface interface {
 	// GetActivationPositioningAtxPublishEpoch request
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// PostActivationPublishWithBody request with any body
+	PostActivationPublishWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostActivationPublish(ctx context.Context, body PostActivationPublishJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetEligibilitySlotsNodeEpoch request
 	GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -129,9 +144,6 @@ type ClientInterface interface {
 
 	// GetHareWeightNodeIdLayer request
 	GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// PostPoetWithBody request with any body
-	PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetProposalLayerNode request
 	GetProposalLayerNode(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -166,6 +178,30 @@ func (c *Client) GetActivationLastAtxNodeId(ctx context.Context, nodeId external
 
 func (c *Client) GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivationPositioningAtxPublishEpochRequest(c.Server, publishEpoch)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostActivationPublishWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostActivationPublishRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostActivationPublish(ctx context.Context, body PostActivationPublishJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostActivationPublishRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -226,18 +262,6 @@ func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer externalRef0
 
 func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHareWeightNodeIdLayerRequest(c.Server, nodeId, layer)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) PostPoetWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostPoetRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -370,6 +394,46 @@ func NewGetActivationPositioningAtxPublishEpochRequest(server string, publishEpo
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewPostActivationPublishRequest calls the generic PostActivationPublish builder with application/json body
+func NewPostActivationPublishRequest(server string, body PostActivationPublishJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostActivationPublishRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostActivationPublishRequestWithBody generates requests for PostActivationPublish with any type of body
+func NewPostActivationPublishRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/activation/publish")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -572,35 +636,6 @@ func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.NodeI
 	return req, nil
 }
 
-// NewPostPoetRequestWithBody generates requests for PostPoet with any type of body
-func NewPostPoetRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
-	var err error
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/poet")
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
 // NewGetProposalLayerNodeRequest generates requests for GetProposalLayerNode
 func NewGetProposalLayerNodeRequest(server string, layer externalRef0.LayerID, node externalRef0.NodeID) (*http.Request, error) {
 	var err error
@@ -730,6 +765,11 @@ type ClientWithResponsesInterface interface {
 	// GetActivationPositioningAtxPublishEpochWithResponse request
 	GetActivationPositioningAtxPublishEpochWithResponse(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetActivationPositioningAtxPublishEpochResponse, error)
 
+	// PostActivationPublishWithBodyWithResponse request with any body
+	PostActivationPublishWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostActivationPublishResponse, error)
+
+	PostActivationPublishWithResponse(ctx context.Context, body PostActivationPublishJSONRequestBody, reqEditors ...RequestEditorFn) (*PostActivationPublishResponse, error)
+
 	// GetEligibilitySlotsNodeEpochWithResponse request
 	GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error)
 
@@ -744,9 +784,6 @@ type ClientWithResponsesInterface interface {
 
 	// GetHareWeightNodeIdLayerWithResponse request
 	GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error)
-
-	// PostPoetWithBodyWithResponse request with any body
-	PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error)
 
 	// GetProposalLayerNodeWithResponse request
 	GetProposalLayerNodeWithResponse(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*GetProposalLayerNodeResponse, error)
@@ -817,6 +854,27 @@ func (r GetActivationPositioningAtxPublishEpochResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetActivationPositioningAtxPublishEpochResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type PostActivationPublishResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+}
+
+// Status returns HTTPResponse.Status
+func (r PostActivationPublishResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostActivationPublishResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -942,27 +1000,6 @@ func (r GetHareWeightNodeIdLayerResponse) StatusCode() int {
 	return 0
 }
 
-type PostPoetResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-}
-
-// Status returns HTTPResponse.Status
-func (r PostPoetResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r PostPoetResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
 type GetProposalLayerNodeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -1033,6 +1070,23 @@ func (c *ClientWithResponses) GetActivationPositioningAtxPublishEpochWithRespons
 	return ParseGetActivationPositioningAtxPublishEpochResponse(rsp)
 }
 
+// PostActivationPublishWithBodyWithResponse request with arbitrary body returning *PostActivationPublishResponse
+func (c *ClientWithResponses) PostActivationPublishWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostActivationPublishResponse, error) {
+	rsp, err := c.PostActivationPublishWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostActivationPublishResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostActivationPublishWithResponse(ctx context.Context, body PostActivationPublishJSONRequestBody, reqEditors ...RequestEditorFn) (*PostActivationPublishResponse, error) {
+	rsp, err := c.PostActivationPublish(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostActivationPublishResponse(rsp)
+}
+
 // GetEligibilitySlotsNodeEpochWithResponse request returning *GetEligibilitySlotsNodeEpochResponse
 func (c *ClientWithResponses) GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error) {
 	rsp, err := c.GetEligibilitySlotsNodeEpoch(ctx, node, epoch, reqEditors...)
@@ -1076,15 +1130,6 @@ func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.C
 		return nil, err
 	}
 	return ParseGetHareWeightNodeIdLayerResponse(rsp)
-}
-
-// PostPoetWithBodyWithResponse request with arbitrary body returning *PostPoetResponse
-func (c *ClientWithResponses) PostPoetWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPoetResponse, error) {
-	rsp, err := c.PostPoetWithBody(ctx, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParsePostPoetResponse(rsp)
 }
 
 // GetProposalLayerNodeWithResponse request returning *GetProposalLayerNodeResponse
@@ -1180,6 +1225,22 @@ func ParseGetActivationPositioningAtxPublishEpochResponse(rsp *http.Response) (*
 		}
 		response.JSON200 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParsePostActivationPublishResponse parses an HTTP response from a PostActivationPublishWithResponse call
+func ParsePostActivationPublishResponse(rsp *http.Response) (*PostActivationPublishResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostActivationPublishResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
 	}
 
 	return response, nil
@@ -1319,22 +1380,6 @@ func ParseGetHareWeightNodeIdLayerResponse(rsp *http.Response) (*GetHareWeightNo
 		}
 		response.JSON200 = &dest
 
-	}
-
-	return response, nil
-}
-
-// ParsePostPoetResponse parses an HTTP response from a PostPoetWithResponse call
-func ParsePostPoetResponse(rsp *http.Response) (*PostPoetResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &PostPoetResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
 	}
 
 	return response, nil
