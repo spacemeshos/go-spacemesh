@@ -325,35 +325,35 @@ func (f *Fetch) LegacyMaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.
 
 // MaliciousIDs gets the malicious IDs from the specified peer. Proofs for those IDs can be fetched via the malfeasance
 // proof protocol (see also MalfeasanceProofs).
-// func (f *Fetch) MaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.NodeID, error) {
-// 	var malIDs MaliciousIDs
-// 	if !f.cfg.Streaming {
-// 		data, err := f.meteredRequest(ctx, malProtocol, peer, []byte{})
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		if err := codec.Decode(data, &malIDs); err != nil {
-// 			return nil, err
-// 		}
-// 		f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
-// 		return malIDs.NodeIDs, nil
-// 	}
+func (f *Fetch) MaliciousIDs(ctx context.Context, peer p2p.Peer) ([]types.NodeID, error) {
+	var malIDs MaliciousIDs
+	if !f.cfg.Streaming {
+		data, err := f.meteredRequest(ctx, malProtocol, peer, []byte{})
+		if err != nil {
+			return nil, err
+		}
+		if err := codec.Decode(data, &malIDs); err != nil {
+			return nil, err
+		}
+		f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
+		return malIDs.NodeIDs, nil
+	}
 
-// 	err := f.meteredStreamRequest(ctx, malProtocol, peer, []byte{},
-// 		func(ctx context.Context, s io.ReadWriter) (int, error) {
-// 			total, err := readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
-// 			if ctx.Err() != nil {
-// 				return total, ctx.Err()
-// 			}
-// 			return total, err
-// 		},
-// 	)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
-// 	return malIDs.NodeIDs, nil
-// }
+	err := f.meteredStreamRequest(ctx, malProtocol, peer, []byte{},
+		func(ctx context.Context, s io.ReadWriter) (int, error) {
+			total, err := readIDSlice(s, &malIDs.NodeIDs, maxMaliciousIDs)
+			if ctx.Err() != nil {
+				return total, ctx.Err()
+			}
+			return total, err
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+	f.RegisterPeerHashes(peer, types.NodeIDsToHashes(malIDs.NodeIDs))
+	return malIDs.NodeIDs, nil
+}
 
 // GetLayerData get layer data from peers.
 func (f *Fetch) GetLayerData(ctx context.Context, peer p2p.Peer, lid types.LayerID) ([]byte, error) {

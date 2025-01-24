@@ -356,6 +356,30 @@ func TestP2PPeerMeshHashes(t *testing.T) {
 		})
 }
 
+func TestP2PLegacyMaliciousIDs(t *testing.T) {
+	forStreaming(
+		t, "database closed", false,
+		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
+			var bad []types.NodeID
+			for i := 0; i < 11; i++ {
+				nid := types.NodeID{byte(i + 1)}
+				bad = append(bad, nid)
+				require.NoError(t, identities.SetMalicious(tpf.serverCDB, nid, types.RandomBytes(11), time.Now()))
+			}
+			if errStr != "" {
+				tpf.serverDB.Close()
+			}
+
+			malIDs, err := tpf.clientFetch.LegacyMaliciousIDs(context.Background(), tpf.serverID)
+			if errStr == "" {
+				require.NoError(t, err)
+				require.ElementsMatch(t, bad, malIDs)
+			} else {
+				require.ErrorContains(t, err, errStr)
+			}
+		})
+}
+
 func TestP2PMaliciousIDs(t *testing.T) {
 	forStreaming(
 		t, "database closed", false,
@@ -364,14 +388,13 @@ func TestP2PMaliciousIDs(t *testing.T) {
 			for i := 0; i < 11; i++ {
 				nid := types.NodeID{byte(i + 1)}
 				bad = append(bad, nid)
-				require.NoError(t, identities.SetMalicious(
-					tpf.serverCDB, nid, types.RandomBytes(11), time.Now()))
+				require.NoError(t, malfeasance.AddProof(tpf.serverCDB, nid, nil, types.RandomBytes(11), 1, time.Now()))
 			}
 			if errStr != "" {
 				tpf.serverDB.Close()
 			}
 
-			malIDs, err := tpf.clientFetch.LegacyMaliciousIDs(context.Background(), tpf.serverID)
+			malIDs, err := tpf.clientFetch.MaliciousIDs(context.Background(), tpf.serverID)
 			if errStr == "" {
 				require.NoError(t, err)
 				require.ElementsMatch(t, bad, malIDs)

@@ -29,7 +29,6 @@ import (
 
 type testHandler struct {
 	*handler
-	db sql.StateDatabase
 }
 
 func createTestHandler(tb testing.TB, opts ...sql.Opt) *testHandler {
@@ -37,7 +36,6 @@ func createTestHandler(tb testing.TB, opts ...sql.Opt) *testHandler {
 	db := statesql.InMemoryTest(tb, opts...)
 	return &testHandler{
 		handler: newHandler(db, datastore.NewBlobStore(db, store.New()), lg),
-		db:      db,
 	}
 }
 
@@ -140,13 +138,13 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 
 			th := createTestHandler(t)
 			lid := types.LayerID(111)
-			_, aggHash := createOpinions(t, th.cdb, lid, !tc.missingCert)
+			_, aggHash := createOpinions(t, th.db, lid, !tc.missingCert)
 			if tc.multipleCerts {
 				bid := types.RandomBlockID()
-				require.NoError(t, certificates.Add(th.cdb, lid, &types.Certificate{
+				require.NoError(t, certificates.Add(th.db, lid, &types.Certificate{
 					BlockID: bid,
 				}))
-				require.NoError(t, certificates.SetInvalid(th.cdb, lid, bid))
+				require.NoError(t, certificates.SetInvalid(th.db, lid, bid))
 			}
 
 			req := OpinionRequest{Layer: lid}
@@ -185,7 +183,7 @@ func TestHandleCertReq(t *testing.T) {
 	require.Nil(t, resp)
 
 	cert := &types.Certificate{BlockID: bid}
-	require.NoError(t, certificates.Add(th.cdb, lid, cert))
+	require.NoError(t, certificates.Add(th.db, lid, cert))
 
 	resp, err = th.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), reqData)
 	require.NoError(t, err)
@@ -241,7 +239,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 			}
 			if !tc.hashMissing {
 				for lid := req.From; !lid.After(req.To); lid = lid.Add(1) {
-					require.NoError(t, layers.SetMeshHash(th.cdb, lid, types.RandomHash()))
+					require.NoError(t, layers.SetMeshHash(th.db, lid, types.RandomHash()))
 				}
 			}
 			reqData, err := codec.Encode(req)
@@ -297,7 +295,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			if !tc.missingData {
 				for i := 0; i < 10; i++ {
 					vatx := newAtx(t, epoch)
-					require.NoError(t, atxs.Add(th.cdb, vatx, types.AtxBlob{}))
+					require.NoError(t, atxs.Add(th.db, vatx, types.AtxBlob{}))
 					expected.AtxIDs = append(expected.AtxIDs, vatx.ID())
 				}
 			}
@@ -361,7 +359,7 @@ func TestHandleLegacyMaliciousIDsReq(t *testing.T) {
 			for i := 0; i < tc.numBad; i++ {
 				nodeID := types.NodeID{byte(i + 1)}
 				bad = append(bad, nodeID)
-				require.NoError(t, identities.SetMalicious(th.cdb, nodeID, types.RandomBytes(11), time.Now()))
+				require.NoError(t, identities.SetMalicious(th.db, nodeID, types.RandomBytes(11), time.Now()))
 			}
 
 			out, err := th.handleLegacyMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
@@ -396,7 +394,7 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 			for i := 0; i < tc.numBad; i++ {
 				nodeID := types.NodeID{byte(i + 1)}
 				bad = append(bad, nodeID)
-				require.NoError(t, malfeasance.AddProof(th.cdb, nodeID, nil, types.RandomBytes(11), 1, time.Now()))
+				require.NoError(t, malfeasance.AddProof(th.db, nodeID, nil, types.RandomBytes(11), 1, time.Now()))
 			}
 
 			out, err := th.handleMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})

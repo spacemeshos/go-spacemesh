@@ -28,7 +28,7 @@ import (
 
 type handler struct {
 	logger *zap.Logger
-	cdb    sql.StateDatabase
+	db     sql.StateDatabase
 	bs     *datastore.BlobStore
 }
 
@@ -39,14 +39,14 @@ func newHandler(
 ) *handler {
 	return &handler{
 		logger: lg,
-		cdb:    cdb,
+		db:     cdb,
 		bs:     bs,
 	}
 }
 
 // handleLegacyMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleLegacyMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-	nodeIDs, err := identities.AllMalicious(h.cdb)
+	nodeIDs, err := identities.AllMalicious(h.db)
 	if err != nil {
 		return nil, fmt.Errorf("getting malicious IDs: %w", err)
 	}
@@ -59,7 +59,7 @@ func (h *handler) handleLegacyMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _
 
 // handleMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-	tx, err := h.cdb.TxImmediate(ctx)
+	tx, err := h.db.TxImmediate(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}
@@ -69,7 +69,7 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byt
 		return nil, fmt.Errorf("counting malicious nodes: %w", err)
 	}
 	nodeIDs := make([]types.NodeID, 0, total)
-	err = malfeasance.IterateOps(h.cdb, builder.Operations{},
+	err = malfeasance.IterateOps(h.db, builder.Operations{},
 		func(nodeID types.NodeID, _ []byte, _ int, _ time.Time) bool {
 			nodeIDs = append(nodeIDs, nodeID)
 			return true
@@ -86,7 +86,7 @@ func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byt
 
 func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, _ []byte, s io.ReadWriter) error {
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		nodeIDs, err := identities.AllMalicious(h.cdb)
+		nodeIDs, err := identities.AllMalicious(h.db)
 		if err != nil {
 			return fmt.Errorf("getting malicious IDs: %w", err)
 		}
@@ -101,9 +101,10 @@ func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.P
 }
 
 func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, _ []byte, s io.ReadWriter) error {
-	tx, err := h.cdb.TxImmediate(ctx)
+	tx, err := h.db.TxImmediate(ctx)
 	if err != nil {
-		return fmt.Errorf("starting transaction: %w", err)
+		h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
+		return nil
 	}
 	defer tx.Release()
 	total, err := malfeasance.Count(tx)
@@ -132,7 +133,7 @@ func (h *handler) handleEpochInfoReq(ctx context.Context, _ p2p.Peer, msg []byte
 		return nil, err
 	}
 
-	atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
+	atxids, err := atxs.GetIDsByEpoch(ctx, h.db, epoch)
 	if err != nil {
 		return nil, fmt.Errorf("getting ATX IDs: %w", err)
 	}
@@ -157,7 +158,7 @@ func (h *handler) handleEpochInfoReqStream(ctx context.Context, _ p2p.Peer, msg 
 		return err
 	}
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		atxids, err := atxs.GetIDsByEpoch(ctx, h.cdb, epoch)
+		atxids, err := atxs.GetIDsByEpoch(ctx, h.db, epoch)
 		if err != nil {
 			return fmt.Errorf("getting ATX IDs: %w", err)
 		}
@@ -238,7 +239,7 @@ func (h *handler) handleLayerDataReq(ctx context.Context, _ p2p.Peer, req []byte
 	if err := codec.Decode(req, &lid); err != nil {
 		return nil, err
 	}
-	ld.Ballots, err = ballots.IDsInLayer(h.cdb, lid)
+	ld.Ballots, err = ballots.IDsInLayer(h.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("getting ballots for layer %d: %w", lid, err)
 	}
@@ -267,11 +268,11 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, _ p2p.Peer, data 
 	)
 
 	opnReqV2.Inc()
-	lo.PrevAggHash, err = layers.GetAggregatedHash(h.cdb, lid.Sub(1))
+	lo.PrevAggHash, err = layers.GetAggregatedHash(h.db, lid.Sub(1))
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("getting aggregated hash for layer %d: %w", lid.Sub(1), err)
 	}
-	bid, err := certificates.CertifiedBlock(h.cdb, lid)
+	bid, err := certificates.CertifiedBlock(h.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("getting certified block for layer %d: %w", lid, err)
 	}
@@ -287,7 +288,7 @@ func (h *handler) handleLayerOpinionsReq2(ctx context.Context, _ p2p.Peer, data 
 
 func (h *handler) handleCertReq(ctx context.Context, lid types.LayerID, bid types.BlockID) ([]byte, error) {
 	certReq.Inc()
-	certs, err := certificates.Get(h.cdb, lid)
+	certs, err := certificates.Get(h.db, lid)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return nil, fmt.Errorf("getting certificates for layer %d: %w", lid, err)
 	}
@@ -479,7 +480,7 @@ func (h *handler) handleMeshHashReq(ctx context.Context, _ p2p.Peer, reqData []b
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validating request: %w", err)
 	}
-	hashes, err = layers.GetAggHashes(h.cdb, req.From, req.To, req.Step)
+	hashes, err = layers.GetAggHashes(h.db, req.From, req.To, req.Step)
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +509,7 @@ func (h *handler) handleMeshHashReqStream(ctx context.Context, _ p2p.Peer, reqDa
 			return fmt.Errorf("validating request: %w", err)
 		}
 
-		hashes, err := layers.GetAggHashes(h.cdb, req.From, req.To, req.Step)
+		hashes, err := layers.GetAggHashes(h.db, req.From, req.To, req.Step)
 		if err != nil {
 			return err
 		}
