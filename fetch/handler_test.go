@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -337,6 +338,41 @@ func TestHandleEpochInfoReq(t *testing.T) {
 	}
 }
 
+func TestHandleLegacyMaliciousIDsReq(t *testing.T) {
+	tt := []struct {
+		name   string
+		numBad int
+	}{
+		{
+			name:   "some bad guys",
+			numBad: 11,
+		},
+		{
+			name: "no bad guys",
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			th := createTestHandler(t)
+			var bad []types.NodeID
+			for i := 0; i < tc.numBad; i++ {
+				nodeID := types.NodeID{byte(i + 1)}
+				bad = append(bad, nodeID)
+				require.NoError(t, identities.SetMalicious(th.cdb, nodeID, types.RandomBytes(11), time.Now()))
+			}
+
+			out, err := th.handleLegacyMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
+			require.NoError(t, err)
+			var got MaliciousIDs
+			require.NoError(t, codec.Decode(out, &got))
+			require.ElementsMatch(t, bad, got.NodeIDs)
+		})
+	}
+}
+
 func TestHandleMaliciousIDsReq(t *testing.T) {
 	tt := []struct {
 		name   string
@@ -358,12 +394,12 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 			th := createTestHandler(t)
 			var bad []types.NodeID
 			for i := 0; i < tc.numBad; i++ {
-				nid := types.NodeID{byte(i + 1)}
-				bad = append(bad, nid)
-				require.NoError(t, identities.SetMalicious(th.cdb, nid, types.RandomBytes(11), time.Now()))
+				nodeID := types.NodeID{byte(i + 1)}
+				bad = append(bad, nodeID)
+				require.NoError(t, malfeasance.AddProof(th.cdb, nodeID, nil, types.RandomBytes(11), 1, time.Now()))
 			}
 
-			out, err := th.handleLegacyMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
+			out, err := th.handleMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
 			require.NoError(t, err)
 			var got MaliciousIDs
 			require.NoError(t, codec.Decode(out, &got))
