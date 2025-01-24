@@ -6,6 +6,7 @@
         }
     },
     "api": {
+        "node-service-listener": "0.0.0.0:9099",
         "grpc-public-listener": "0.0.0.0:9092",
         "grpc-private-listener": "0.0.0.0:9093",
         "grpc-post-listener": "0.0.0.0:9094"
@@ -32,16 +33,10 @@
             "smeshing-opts-verifying-min-workers": 1000000
         }
     },
-    "certifier": {
-        "client": {
-            "max-retries": 10
-        }
-    },
     "logging": {
         "log-encoder": "json",
-        "txHandler": "debug",
-        "grpc": "debug",
-        "sync": "debug",
-        "fetcher": "debug"
+        "nodeService": "debug",
+        "sync": "warn",
+        "fetcher": "warn"
     }
 }

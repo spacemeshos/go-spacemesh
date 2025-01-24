@@ -687,6 +687,9 @@ func (h *Hare) RoundTemplate(layer types.LayerID, round IterRound) *Body {
 	if !ok {
 		return nil
 	}
+	if r.message == nil {
+		return nil
+	}
 	return &r.message.Body
 }
 

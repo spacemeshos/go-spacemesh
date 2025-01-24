@@ -49,9 +49,9 @@ func NewRemoteHare(config Config,
 		beacons:   make(map[types.EpochID]types.Beacon),
 		signers:   make(map[string]*signing.EdSigner),
 		oracle: &legacyOracle{
-			log:    zap.NewNop(),
+			log:    log,
 			oracle: oracle,
-			config: DefaultConfig(),
+			config: config,
 		},
 
 		sessions:  make(map[types.LayerID]*protocol),
@@ -252,8 +252,7 @@ func (h *RemoteHare) signPub(ctx context.Context, session *session, message *Mes
 		msg.Eligibility = *vrf
 		msg.Sender = session.signers[i].NodeID()
 		msg.Signature = session.signers[i].Sign(signing.HARE, msg.ToMetadata().ToBytes())
-		h.log.Info("publishing hare message", zap.Uint32("layer", session.lid.Uint32()),
-			zap.Stringer("beacon", session.beacon))
+		h.log.Debug("publishing hare message", zap.Stringer("beacon", session.beacon), zap.Inline(&msg))
 		if err := h.svc.Publish(ctx, h.config.ProtocolName, msg.ToBytes()); err != nil {
 			h.log.Error("failed to publish", zap.Inline(&msg), zap.Error(err))
 		}

@@ -179,7 +179,7 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 
 	keys := make([]ed25519.PrivateKey, cctx.ClusterSize)
 	for i := range keys {
-		keys[i] = cl.accounts.Private(i)
+		keys[i] = cl.Account(i).PrivateKey
 	}
 
 	if err := cl.AddBootnodes(cctx, cctx.BootnodeSize); err != nil {
@@ -324,18 +324,28 @@ func (c *Cluster) persist(ctx *testcontext.Context) error {
 func (c *Cluster) persistConfigs(ctx *testcontext.Context) error {
 	_, err := ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
-		corev1.ConfigMap(spacemeshConfigMapName, ctx.Namespace).WithData(map[string]string{
+		corev1.ConfigMap(nodeConfigMapName, ctx.Namespace).WithData(map[string]string{
 			attachedSmesherConfig: smesherConfig.Get(ctx.Parameters),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
 	if err != nil {
-		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, spacemeshConfigMapName, err)
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, nodeConfigMapName, err)
+	}
+	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
+		ctx,
+		corev1.ConfigMap(nodeServiceConfigMapName, ctx.Namespace).WithData(map[string]string{
+			attachedSmesherConfig: nodeServiceConfig.Get(ctx.Parameters),
+		}),
+		apimetav1.ApplyOptions{FieldManager: "test"},
+	)
+	if err != nil {
+		return fmt.Errorf("apply cfgmap %v/%v: %w", ctx.Namespace, smeshingServiceConfigMapName, err)
 	}
 	_, err = ctx.Client.CoreV1().ConfigMaps(ctx.Namespace).Apply(
 		ctx,
 		corev1.ConfigMap(smeshingServiceConfigMapName, ctx.Namespace).WithData(map[string]string{
-			attachedSmeshingServiceConfig: smeshingServiceConfig.Get(ctx.Parameters),
+			attachedSmesherConfig: smeshingServiceConfig.Get(ctx.Parameters),
 		}),
 		apimetav1.ApplyOptions{FieldManager: "test"},
 	)
@@ -616,6 +626,7 @@ type SmesherDeploymentConfig struct {
 	keys  []ed25519.PrivateKey
 
 	image          string
+	configMap      string
 	noDefaultPoets bool
 }
 
@@ -642,6 +653,12 @@ func WithImage(image string) DeploymentOpt {
 func NoDefaultPoets() DeploymentOpt {
 	return func(cfg *SmesherDeploymentConfig) {
 		cfg.noDefaultPoets = true
+	}
+}
+
+func WithConfigMap(configMap string) DeploymentOpt {
+	return func(cfg *SmesherDeploymentConfig) {
+		cfg.configMap = configMap
 	}
 }
 
@@ -722,6 +739,7 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		WithFlags(flags...),
 		WithFlags(Bootnodes(endpoints...), StartSmeshing(false)),
 		WithSmeshers(keys[:1]),
+		WithConfigMap(nodeServiceConfigMapName),
 	}
 	clients, err := deployNodes(tctx, nodeServiceApp, 0, 1, dopts...)
 	if err != nil {
@@ -743,8 +761,7 @@ func (c *Cluster) AddSplitNodes(tctx *testcontext.Context, n int, opts ...Deploy
 		WithFlags(flags...),
 		WithFlags(StartSmeshing(true)),
 	}
-	clients, err = deploySmeshingServiceNodes(
-		tctx, c.nodeService.Name, keys[1:], dopts...)
+	clients, err = deploySmeshingServiceNodes(tctx, c.nodeService.Name, keys[1:], dopts...)
 	if err != nil {
 		return err
 	}
@@ -857,6 +874,14 @@ func (c *Cluster) Clients() []*NodeClient {
 	return c.clients
 }
 
+func (c *Cluster) NodesConnectedToNetwork() []*NodeClient {
+	var nodes []*NodeClient
+	nodes = append(nodes, c.BootNodes...)
+	nodes = append(nodes, c.SmeshingNodes...)
+	nodes = append(nodes, c.nodeService)
+	return nodes
+}
+
 func (c *Cluster) NodeService() *NodeClient {
 	return c.nodeService
 }
@@ -919,21 +944,13 @@ type accounts struct {
 
 func (a *accounts) Account(i int) Account {
 	return Account{
-		PrivateKey: a.Private(i),
-		Address:    a.Address(i),
+		PrivateKey: a.keys[i].PK,
+		Address:    a.keys[i].Address(),
 	}
 }
 
 func (a *accounts) Accounts() int {
 	return len(a.keys)
-}
-
-func (a *accounts) Private(i int) ed25519.PrivateKey {
-	return a.keys[i].PK
-}
-
-func (a *accounts) Address(i int) types.Address {
-	return a.keys[i].Address()
 }
 
 func (a *accounts) Persist(ctx *testcontext.Context) error {

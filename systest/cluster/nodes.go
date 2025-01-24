@@ -52,6 +52,11 @@ var (
 		"configuration for smesher nodes",
 		fastnet.SmesherConfig,
 	)
+	nodeServiceConfig = parameters.String(
+		"node_service",
+		"configuration for node service",
+		fastnet.NodeServiceConfig,
+	)
 	smeshingServiceConfig = parameters.String(
 		"smeshing_service",
 		"configuration for smeshing service",
@@ -131,15 +136,15 @@ func toResources(value string) (*apiv1.ResourceRequirements, error) {
 const (
 	configDir = "/etc/config/"
 
-	attachedCertifierConfig       = "certifier.yaml"
-	attachedPoetConfig            = "poet.conf"
-	attachedSmesherConfig         = "smesher.json"
-	attachedSmeshingServiceConfig = "smeshing_service.json"
+	attachedCertifierConfig = "certifier.yaml"
+	attachedPoetConfig      = "poet.conf"
+	attachedSmesherConfig   = "smesher.json"
 
 	certifierConfigMapName       = "certifier"
 	poetConfigMapName            = "poet"
-	spacemeshConfigMapName       = "spacemesh"
+	nodeConfigMapName            = "node"
 	smeshingServiceConfigMapName = "smeshing-service"
+	nodeServiceConfigMapName     = "node-service"
 
 	// smeshers are split in 10 approximately equal buckets
 	// to enable running chaos mesh tasks on the different parts of the cluster.
@@ -705,7 +710,8 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
 		cfg     = SmesherDeploymentConfig{
-			image: ctx.Image,
+			image:     ctx.Image,
+			configMap: nodeConfigMapName,
 		}
 	)
 	for _, opt := range opts {
@@ -746,7 +752,7 @@ func deployNodes(ctx *testcontext.Context, kind string, from, to int, opts ...De
 			id := fmt.Sprintf("%s-%d", kind, i)
 			labels := nodeLabels(kind, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, id, key, cfg.image, "local.key", labels, finalFlags); err != nil {
+			if err := deployNode(ctx, id, key, cfg.image, cfg.configMap, "local.key", labels, finalFlags); err != nil {
 				return err
 			}
 			clients <- &NodeClient{
@@ -795,7 +801,7 @@ func deploySmeshingServiceNodes(
 	if cfg.image == "" {
 		return nil, errors.New("go-spacemesh image must be set")
 	}
-	for i, key := range cfg.keys {
+	for i, key := range keys {
 		finalFlags := make([]DeploymentFlag, len(cfg.flags), len(cfg.flags)+ctx.PoetSize)
 		copy(finalFlags, cfg.flags)
 		if !cfg.noDefaultPoets {
@@ -853,7 +859,8 @@ func deployRemoteNodes(
 		eg      errgroup.Group
 		clients = make(chan *NodeClient, to-from)
 		cfg     = SmesherDeploymentConfig{
-			image: ctx.Image,
+			image:     ctx.Image,
+			configMap: nodeConfigMapName,
 		}
 	)
 	for _, opt := range opts {
@@ -891,7 +898,7 @@ func deployRemoteNodes(
 		eg.Go(func() error {
 			labels := nodeLabels(smesherApp, id)
 			labels["bucket"] = strconv.Itoa(i % buckets)
-			if err := deployNode(ctx, id, key, cfg.image, "remote.key", labels, finalFlags); err != nil {
+			if err := deployNode(ctx, id, key, cfg.image, cfg.configMap, "remote.key", labels, finalFlags); err != nil {
 				return err
 			}
 			deployNodeSvc(ctx, id)
@@ -973,11 +980,10 @@ func deploySmeshingServiceNode(
 	cmd := []string{
 		"/bin/go-spacemesh",
 		"smeshing",
-		"-c=" + configDir + attachedSmeshingServiceConfig,
+		"-c=" + configDir + attachedSmesherConfig,
 		"--pprof-server",
 		"--smeshing-opts-datadir=/data/post",
 		"-d=/data",
-		"--log-encoder=json",
 		"--metrics",
 		"--metrics-port=" + strconv.Itoa(prometheusScrapePort),
 		"--node-service-address", fmt.Sprintf("http://%s:9099", node),
@@ -1077,6 +1083,7 @@ func deployNode(
 	id string,
 	key ed25519.PrivateKey,
 	image string,
+	configMap string,
 	keyName string,
 	labels map[string]string,
 	flags []DeploymentFlag,
@@ -1100,7 +1107,7 @@ func deployNode(
 		WithNodeSelector(ctx.NodeSelector).
 		WithVolumes(
 			corev1.Volume().WithName("config").
-				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(spacemeshConfigMapName)),
+				WithConfigMap(corev1.ConfigMapVolumeSource().WithName(configMap)),
 			corev1.Volume().WithName("data").
 				WithEmptyDir(corev1.EmptyDirVolumeSource().WithSizeLimit(resource.MustParse(ctx.Storage.Size))),
 		).
