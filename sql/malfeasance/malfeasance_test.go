@@ -202,6 +202,53 @@ func TestIsMalicious(t *testing.T) {
 	})
 }
 
+func Test_Count(t *testing.T) {
+	db := statesql.InMemoryTest(t)
+
+	count, err := malfeasance.Count(db)
+	require.NoError(t, err)
+	require.Zero(t, count)
+
+	nodeID := types.RandomNodeID()
+	err = malfeasance.AddProof(db, nodeID, nil, types.RandomBytes(100), 1, time.Now())
+	require.NoError(t, err)
+
+	count, err = malfeasance.Count(db)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	nodeID = types.RandomNodeID()
+	marriageATX := types.RandomATXID()
+	id, err := marriage.NewID(db)
+	require.NoError(t, err)
+
+	err = marriage.Add(db, marriage.Info{
+		ID:            id,
+		NodeID:        nodeID,
+		ATX:           marriageATX,
+		MarriageIndex: 0,
+		Target:        nodeID,
+		Signature:     types.RandomEdSignature(),
+	})
+	require.NoError(t, err)
+
+	ids := make([]types.NodeID, 5)
+	ids[0] = nodeID
+	proof := types.RandomBytes(11)
+	err = malfeasance.AddProof(db, ids[0], &id, proof, 1, time.Now())
+	require.NoError(t, err)
+
+	for i := 1; i < len(ids); i++ {
+		ids[i] = types.RandomNodeID()
+		err := malfeasance.SetMalicious(db, ids[i], id, time.Now())
+		require.NoError(t, err)
+	}
+
+	count, err = malfeasance.Count(db)
+	require.NoError(t, err)
+	require.Equal(t, 6, count)
+}
+
 func Test_IterateMaliciousOps(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	tt := []struct {

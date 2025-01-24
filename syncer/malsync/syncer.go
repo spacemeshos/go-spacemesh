@@ -260,7 +260,7 @@ func (s *Syncer) download(parent context.Context, initial bool) error {
 	})
 	eg.Go(func() error {
 		defer cancel()
-		return s.downloadMalfeasanceProofs(ctx, initial, updates)
+		return s.downloadLegacyMalfeasanceProofs(ctx, initial, updates)
 	})
 	if err := eg.Wait(); err != nil {
 		return err
@@ -355,7 +355,7 @@ func (s *Syncer) updateState(ctx context.Context) error {
 	return nil
 }
 
-func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, updates <-chan malUpdate) error {
+func (s *Syncer) downloadLegacyMalfeasanceProofs(ctx context.Context, initial bool, updates <-chan malUpdate) error {
 	var (
 		update            malUpdate
 		sst               = newSyncState(s.cfg.RequestsLimit, initial)
@@ -416,38 +416,36 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		}
 
 		nothingToDownload = len(batch) == 0
-
-		if len(batch) != 0 {
-			s.logger.Debug("retrieving malfeasant identities",
-				log.ZContext(ctx),
-				zap.Int("count", len(batch)),
-			)
-			err := s.fetcher.LegacyMalfeasanceProofs(ctx, batch)
-			if err != nil {
-				if errors.Is(err, context.Canceled) {
-					return ctx.Err()
-				}
-				s.logger.Debug("failed to download malfeasance proofs",
-					log.ZContext(ctx),
-					log.NiceZapError(err),
-				)
-			}
-			batchError := &fetch.BatchError{}
-			if errors.As(err, &batchError) {
-				for hash, err := range batchError.Errors {
-					nodeID := types.NodeID(hash)
-					switch {
-					case !sst.has(nodeID):
-						continue
-					case errors.Is(err, pubsub.ErrValidationReject):
-						sst.rejected(nodeID)
-					default:
-						sst.failed(nodeID)
-					}
-				}
-			}
-		} else {
+		if len(batch) == 0 {
 			s.logger.Debug("no new malfeasant identities", log.ZContext(ctx))
+			continue
+		}
+		s.logger.Debug("retrieving malfeasant identities",
+			log.ZContext(ctx),
+			zap.Int("count", len(batch)),
+		)
+		if err := s.fetcher.LegacyMalfeasanceProofs(ctx, batch); err != nil {
+			if errors.Is(err, context.Canceled) {
+				return ctx.Err()
+			}
+			s.logger.Debug("failed to download malfeasance proofs",
+				log.ZContext(ctx),
+				log.NiceZapError(err),
+			)
+		}
+		batchError := &fetch.BatchError{}
+		if errors.As(err, &batchError) {
+			for hash, err := range batchError.Errors {
+				nodeID := types.NodeID(hash)
+				switch {
+				case !sst.has(nodeID):
+					continue
+				case errors.Is(err, pubsub.ErrValidationReject):
+					sst.rejected(nodeID)
+				default:
+					sst.failed(nodeID)
+				}
+			}
 		}
 	}
 }

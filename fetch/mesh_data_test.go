@@ -374,7 +374,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 	})
 }
 
-func TestFetch_GetMalfeasanceProofs(t *testing.T) {
+func TestFetch_LegacyMalfeasanceProofs(t *testing.T) {
 	nodeIDs := []types.NodeID{{1}, {2}, {3}}
 	f := createFetch(t)
 	f.mLegacyMalH.EXPECT().
@@ -387,6 +387,23 @@ func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	startTestLoop(t, f.Fetch, &eg, stop)
 
 	require.NoError(t, f.LegacyMalfeasanceProofs(context.Background(), nodeIDs))
+	close(stop)
+	require.NoError(t, eg.Wait())
+}
+
+func TestFetch_MalfeasanceProofs(t *testing.T) {
+	nodeIDs := []types.NodeID{{1}, {2}, {3}}
+	f := createFetch(t)
+	f.mMalH.EXPECT().
+		HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		Times(len(nodeIDs))
+
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
+
+	require.NoError(t, f.MalfeasanceProofs(context.Background(), nodeIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }

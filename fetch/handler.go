@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/spacemeshos/go-scale"
 	"go.uber.org/zap"
@@ -18,9 +19,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 )
 
 type handler struct {
@@ -43,31 +46,82 @@ func newHandler(
 
 // handleLegacyMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleLegacyMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-	nodes, err := identities.AllMalicious(h.cdb)
+	nodeIDs, err := identities.AllMalicious(h.cdb)
 	if err != nil {
 		return nil, fmt.Errorf("getting malicious IDs: %w", err)
 	}
-	h.logger.Debug("responded to malicious IDs request", log.ZContext(ctx), zap.Int("num_malicious", len(nodes)))
+	h.logger.Debug("responded to malicious IDs request", log.ZContext(ctx), zap.Int("num_malicious", len(nodeIDs)))
 	malicious := &MaliciousIDs{
-		NodeIDs: nodes,
+		NodeIDs: nodeIDs,
 	}
 	return codec.MustEncode(malicious), nil
 }
 
-func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, msg []byte, s io.ReadWriter) error {
+// handleMaliciousIDsReq returns the IDs of all known malicious nodes.
+func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
+	tx, err := h.cdb.TxImmediate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Release()
+	total, err := malfeasance.Count(tx)
+	if err != nil {
+		return nil, fmt.Errorf("counting malicious nodes: %w", err)
+	}
+	nodeIDs := make([]types.NodeID, 0, total)
+	err = malfeasance.IterateOps(h.cdb, builder.Operations{},
+		func(nodeID types.NodeID, _ []byte, _ int, _ time.Time) bool {
+			nodeIDs = append(nodeIDs, nodeID)
+			return true
+		})
+	if err != nil {
+		return nil, fmt.Errorf("getting malicious IDs: %w", err)
+	}
+	h.logger.Debug("responded to malicious IDs request", log.ZContext(ctx), zap.Int("num_malicious", len(nodeIDs)))
+	malicious := &MaliciousIDs{
+		NodeIDs: nodeIDs,
+	}
+	return codec.MustEncode(malicious), nil
+}
+
+func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, _ []byte, s io.ReadWriter) error {
 	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
 		nodeIDs, err := identities.AllMalicious(h.cdb)
 		if err != nil {
 			return fmt.Errorf("getting malicious IDs: %w", err)
 		}
 		for _, nodeID := range nodeIDs {
-			cbk(len(nodeIDs), nodeID[:])
+			cbk(len(nodeIDs), nodeID.Bytes())
 		}
 		return nil
 	}); err != nil {
 		h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
 	}
+	return nil
+}
 
+func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, _ []byte, s io.ReadWriter) error {
+	tx, err := h.cdb.TxImmediate(ctx)
+	if err != nil {
+		return fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Release()
+	total, err := malfeasance.Count(tx)
+	if err != nil {
+		return fmt.Errorf("counting malicious nodes: %w", err)
+	}
+	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
+		return malfeasance.IterateOps(tx, builder.Operations{},
+			func(nodeID types.NodeID, _ []byte, _ int, _ time.Time) bool {
+				if err := cbk(total, nodeID.Bytes()); err != nil {
+					h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
+					return false
+				}
+				return true
+			})
+	}); err != nil {
+		h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
+	}
 	return nil
 }
 
@@ -140,7 +194,7 @@ func (h *handler) streamIDs(ctx context.Context, s io.ReadWriter, retrieve retri
 				return err
 			}
 		}
-		if _, err := s.Write(id[:]); err != nil {
+		if _, err := s.Write(id); err != nil {
 			return err
 		}
 		return nil

@@ -174,17 +174,17 @@ func (f *Fetch) LegacyMalfeasanceProofs(ctx context.Context, ids []types.NodeID)
 }
 
 // MalfeasanceProofs gets malfeasance proofs (v2) for the specified NodeIDs and validates them.
-// func (f *Fetch) MalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
-// 	if len(ids) == 0 {
-// 		return nil
-// 	}
-// 	f.logger.Debug("requesting malfeasance proofs from peers",
-// 		log.ZContext(ctx),
-// 		zap.Int("num_proofs", len(ids)),
-// 	)
-// 	hashes := types.NodeIDsToHashes(ids)
-// 	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage)
-// }
+func (f *Fetch) MalfeasanceProofs(ctx context.Context, ids []types.NodeID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	f.logger.Debug("requesting malfeasance proofs from peers",
+		log.ZContext(ctx),
+		zap.Int("num_proofs", len(ids)),
+	)
+	hashes := types.NodeIDsToHashes(ids)
+	return f.getHashes(ctx, hashes, datastore.Malfeasance, f.validators.malfeasance.HandleMessage)
+}
 
 // GetBallots gets data for the specified BallotIDs and validates them.
 func (f *Fetch) GetBallots(ctx context.Context, ids []types.BallotID) error {

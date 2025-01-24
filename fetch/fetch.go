@@ -362,7 +362,7 @@ func NewFetch(
 				})
 			f.registerServer(host, meshHashProtocol, h.handleMeshHashReqStream)
 			f.registerServer(host, legacyMalProtocol, h.handleLegacyMaliciousIDsReqStream)
-			// f.registerServer(host, malProtocol, h.handleMaliciousIDsReqStream)
+			f.registerServer(host, malProtocol, h.handleMaliciousIDsReqStream)
 		} else {
 			f.registerServer(host, atxProtocol, server.WrapHandler(h.handleEpochInfoReq))
 			f.registerServer(host, hashProtocol, server.WrapHandler(h.handleHashReq))
@@ -373,7 +373,7 @@ func NewFetch(
 				}))
 			f.registerServer(host, meshHashProtocol, server.WrapHandler(h.handleMeshHashReq))
 			f.registerServer(host, legacyMalProtocol, server.WrapHandler(h.handleLegacyMaliciousIDsReq))
-			// f.registerServer(host, malProtocol, server.WrapHandler(h.handleMaliciousIDsReq))
+			f.registerServer(host, malProtocol, server.WrapHandler(h.handleMaliciousIDsReq))
 		}
 		f.registerServer(host, lyrDataProtocol, server.WrapHandler(h.handleLayerDataReq))
 		f.registerServer(host, OpnProtocol, server.WrapHandler(h.handleLayerOpinionsReq2))
