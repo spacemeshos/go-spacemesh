@@ -58,3 +58,32 @@ func TestInsertEventsAndIterate(t *testing.T) {
 		require.Equal(t, 1, count)
 	}
 }
+
+func TestDeleteEventsOlderThan(t *testing.T) {
+	db := localsql.InMemoryTest(t)
+
+	type event struct {
+		id        types.NodeID
+		timestamp time.Time
+		event     []byte
+	}
+	for i := range 10 {
+		e := event{
+			id:        types.RandomNodeID(),
+			timestamp: time.Unix(int64(i), 0),
+			event:     types.RandomBytes(10),
+		}
+		require.NoError(t, events.InsertEvent(db, e.id, e.timestamp, 0, e.event))
+	}
+	err := events.DeleteEventsOlderThan(db, time.Unix(5, 0))
+	require.NoError(t, err)
+
+	var counter int
+	err = events.IterateAllEvents(db, builder.Operations{}, func(id types.NodeID, time time.Time, e []byte) bool {
+		counter += 1
+		return true
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 5, counter)
+}
