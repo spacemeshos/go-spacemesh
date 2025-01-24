@@ -503,7 +503,12 @@ func currentBalance(ctx context.Context, client *cluster.NodeClient, address typ
 	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
 }
 
-func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account cluster.Account, client *cluster.NodeClient) error {
+func submitSpawn(
+	ctx context.Context,
+	cluster *cluster.Cluster,
+	account cluster.Account,
+	client *cluster.NodeClient,
+) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,
