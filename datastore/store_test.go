@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -22,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -272,7 +274,7 @@ func TestBlobStore_GetTXBlob(t *testing.T) {
 	require.Equal(t, tx.Raw, blob.Bytes)
 }
 
-func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
+func TestBlobStore_GetLegacyMalfeasanceBlob(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	bs := datastore.NewBlobStore(db, store.New())
 
@@ -305,6 +307,37 @@ func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
 	err = bs.LoadBlob(context.Background(), datastore.LegacyMalfeasance, nodeID.Bytes(), &blob)
 	require.NoError(t, err)
 	require.Equal(t, encoded, blob.Bytes)
+}
+
+func TestBlobStore_GetMalfeasanceBlob(t *testing.T) {
+	db := statesql.InMemoryTest(t)
+	bs := datastore.NewBlobStore(db, store.New())
+
+	ctrl := gomock.NewController(t)
+	mMal := datastore.NewMockMalfeasanceProvider(ctrl)
+	bs.SetMalfeasanceProvider(mMal)
+
+	proofBytes := types.RandomBytes(100)
+	nodeID := types.NodeID{1, 2, 3}
+
+	has, err := bs.Has(datastore.Malfeasance, nodeID.Bytes())
+	require.NoError(t, err)
+	require.False(t, has)
+
+	mMal.EXPECT().ProofByID(gomock.Any(), nodeID).Return(nil, sql.ErrNotFound)
+	var blob sql.Blob
+	err = bs.LoadBlob(context.Background(), datastore.Malfeasance, nodeID.Bytes(), &blob)
+	require.ErrorIs(t, err, datastore.ErrNotFound)
+
+	require.NoError(t, malfeasance.AddProof(db, nodeID, nil, proofBytes, 1, time.Now()))
+	has, err = bs.Has(datastore.Malfeasance, nodeID.Bytes())
+	require.NoError(t, err)
+	require.True(t, has)
+
+	mMal.EXPECT().ProofByID(gomock.Any(), nodeID).Return(proofBytes, nil)
+	err = bs.LoadBlob(context.Background(), datastore.Malfeasance, nodeID.Bytes(), &blob)
+	require.NoError(t, err)
+	require.Equal(t, proofBytes, blob.Bytes)
 }
 
 func TestBlobStore_GetActiveSet(t *testing.T) {
