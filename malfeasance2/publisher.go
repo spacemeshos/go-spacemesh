@@ -194,3 +194,59 @@ func (p *Publisher) publish(
 
 	return nil
 }
+
+func (p *Publisher) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error) {
+	tx, err := p.db.TxImmediate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Release()
+	info, err := marriage.FindByNodeID(tx, nodeID)
+	switch {
+	case errors.Is(err, sql.ErrNotFound): // smesher is not married
+		proof, domain, err := malfeasance.NodeIDProof(tx, nodeID)
+		if err != nil {
+			return nil, fmt.Errorf("getting malfeasance proof: %w", err)
+		}
+		atxID, err := atxs.GetFirstIDByNodeID(tx, nodeID)
+		if err != nil {
+			return nil, fmt.Errorf("getting first atx of identity %s: %w", nodeID.ShortString(), err)
+		}
+		malfeasanceProof := &MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{atxID},
+			Domain:  ProofDomain(domain),
+			Proof:   proof,
+		}
+		return codec.MustEncode(malfeasanceProof), nil
+	case err != nil:
+		return nil, fmt.Errorf("getting equivocation set: %w", err)
+	default: // smesher is married
+	}
+
+	set, err := marriage.NodeIDsByID(tx, info.ID)
+	if err != nil {
+		return nil, fmt.Errorf("getting equivocation set: %w", err)
+	}
+
+	refATXs := make(map[types.ATXID]struct{})
+	for _, id := range set {
+		info, err := marriage.FindByNodeID(tx, id)
+		if err != nil {
+			return nil, fmt.Errorf("getting marriage info: %w", err)
+		}
+		refATXs[info.ATX] = struct{}{}
+	}
+
+	proof, domain, err := malfeasance.MarriageProof(tx, info.ID)
+	if err != nil {
+		return nil, fmt.Errorf("getting malfeasance proof: %w", err)
+	}
+	malfeasanceProof := &MalfeasanceProof{
+		Version: 0,
+		RefATXs: maps.Keys(refATXs),
+		Domain:  ProofDomain(domain),
+		Proof:   proof,
+	}
+	return codec.MustEncode(malfeasanceProof), nil
+}
