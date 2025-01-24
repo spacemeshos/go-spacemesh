@@ -36,7 +36,7 @@ var (
 
 type Handler struct {
 	logger   *zap.Logger
-	db       sql.Executor
+	db       sql.StateDatabase
 	self     p2p.Peer
 	nodeIDs  []types.NodeID
 	fetcher  system.Fetcher
@@ -51,7 +51,7 @@ type Handler struct {
 }
 
 func NewHandler(
-	db sql.Executor,
+	db sql.StateDatabase,
 	lg *zap.Logger,
 	self p2p.Peer,
 	nodeIDs []types.NodeID,
@@ -315,33 +315,57 @@ func (h *Handler) fetchReferences(ctx context.Context, peer p2p.Peer, atxIDs []t
 }
 
 func (h *Handler) storeProof(ctx context.Context, nodeIDs []types.NodeID, proof []byte, domain ProofDomain) error {
-	if len(nodeIDs) == 1 {
-		// smesher is not married
-		malicious, err := malfeasance.IsMalicious(h.db, nodeIDs[0])
-		if err != nil {
-			return fmt.Errorf("check if smesher is malicious: %w", err)
-		}
-		if malicious {
-			h.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeIDs[0].ShortString()))
+	return h.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+		if len(nodeIDs) == 1 {
+			// smesher is not married
+			malicious, err := malfeasance.IsMalicious(tx, nodeIDs[0])
+			if err != nil {
+				return fmt.Errorf("check if smesher is malicious: %w", err)
+			}
+			if malicious {
+				h.logger.Debug("smesher is already marked as malicious",
+					zap.String("smesher_id", nodeIDs[0].ShortString()),
+				)
+				return nil
+			}
+			if err := malfeasance.AddProof(tx, nodeIDs[0], nil, proof, int(domain), time.Now()); err != nil {
+				return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0], err)
+			}
 			return nil
 		}
-		if err := malfeasance.AddProof(h.db, nodeIDs[0], nil, proof, int(domain), time.Now()); err != nil {
-			return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0], err)
+
+		mID, err := marriage.FindIDByNodeID(tx, nodeIDs[0])
+		if err != nil {
+			return fmt.Errorf("get marriage ID for %s: %w", nodeIDs[0].ShortString(), err)
+		}
+		malicious, err := malfeasance.IsMalicious(tx, nodeIDs[0])
+		if err != nil {
+			return fmt.Errorf("check if smesher %s is malicious: %w", nodeIDs[0].ShortString(), err)
+		}
+		if !malicious {
+			if err := malfeasance.AddProof(tx, nodeIDs[0], &mID, proof, int(domain), time.Now()); err != nil {
+				return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0].ShortString(), err)
+			}
+		} else {
+			h.logger.Debug("smesher is already marked as malicious",
+				zap.String("smesher_id", nodeIDs[0].ShortString()),
+			)
+		}
+		for _, nodeID := range nodeIDs[1:] {
+			malicious, err := malfeasance.IsMalicious(tx, nodeID)
+			if err != nil {
+				return fmt.Errorf("check if smesher %s is malicious: %w", nodeID.ShortString(), err)
+			}
+			if malicious {
+				h.logger.Debug("smesher is already marked as malicious",
+					zap.String("smesher_id", nodeID.ShortString()),
+				)
+				continue
+			}
+			if err := malfeasance.SetMalicious(tx, nodeID, mID, time.Now()); err != nil {
+				return fmt.Errorf("update malfeasance state for %s: %w", nodeID.ShortString(), err)
+			}
 		}
 		return nil
-	}
-
-	mID, err := marriage.FindIDByNodeID(h.db, nodeIDs[0])
-	if err != nil {
-		return fmt.Errorf("get marriage ID for %s: %w", nodeIDs[0].ShortString(), err)
-	}
-	if err := malfeasance.AddProof(h.db, nodeIDs[0], &mID, proof, int(domain), time.Now()); err != nil {
-		return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0].ShortString(), err)
-	}
-	for _, nodeID := range nodeIDs[1:] {
-		if err := malfeasance.SetMalicious(h.db, nodeID, mID, time.Now()); err != nil {
-			return fmt.Errorf("update malfeasance state for %s: %w", nodeID.ShortString(), err)
-		}
-	}
-	return nil
+	})
 }

@@ -1197,7 +1197,7 @@ func (app *App) initServices(ctx context.Context) error {
 	malHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	malHandler2 := malfeasance2.NewHandler(
-		app.cachedDB,
+		app.db,
 		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
