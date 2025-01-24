@@ -79,3 +79,15 @@ func IterateAllEvents(
 	}
 	return nil
 }
+
+func DeleteEventsOlderThan(db sql.Executor, timestamp time.Time) error {
+	_, err := db.Exec(
+		`DELETE FROM events WHERE timestamp < ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, timestamp.UnixMicro())
+		}, nil)
+	if err != nil {
+		return fmt.Errorf("deleting events older than %s: %w", timestamp, err)
+	}
+	return nil
+}

@@ -621,6 +621,10 @@ func (app *App) initServices(ctx context.Context) error {
 	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
 
 	app.idStates = identity.NewIdentityStateStorage(app.localDB, app.log.Zap())
+	err = app.idStates.DeleteEventsOlderThan(time.Now().Add(-app.Config.SmeshingEventsPruneDuration))
+	if err != nil {
+		return fmt.Errorf("deleting old identity events: %w", err)
+	}
 
 	opts := []activation.PostVerifierOpt{
 		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
