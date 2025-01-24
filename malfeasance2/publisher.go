@@ -21,7 +21,7 @@ import (
 
 type Publisher struct {
 	logger    *zap.Logger
-	db        sql.Executor
+	db        sql.StateDatabase
 	sync      syncer
 	tortoise  tortoise
 	publisher pubsub.Publisher
@@ -29,7 +29,7 @@ type Publisher struct {
 
 func NewPublisher(
 	logger *zap.Logger,
-	db sql.Executor,
+	db sql.StateDatabase,
 	sync syncer,
 	tortoise tortoise,
 	publisher pubsub.Publisher,
@@ -44,77 +44,87 @@ func NewPublisher(
 }
 
 func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error {
-	marriageID, err := marriage.FindIDByNodeID(p.db, nodeID)
-	switch {
-	case errors.Is(err, sql.ErrNotFound): // smesher is not married
-		malicious, err := malfeasance.IsMalicious(p.db, nodeID)
-		if err != nil {
-			return fmt.Errorf("check if smesher is malicious: %w", err)
-		}
-		if malicious {
-			p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
-			return nil
-		}
-		if err := malfeasance.AddProof(p.db, nodeID, nil, proof, int(InvalidActivation), time.Now()); err != nil {
-			return fmt.Errorf("setting malfeasance proof: %w", err)
-		}
-		atxID, err := atxs.GetFirstIDByNodeID(p.db, nodeID)
-		if err != nil {
-			return fmt.Errorf("getting atx id: %w", err)
-		}
-		p.tortoise.OnMalfeasance(nodeID)
-		return p.publish(ctx, []types.NodeID{nodeID}, []types.ATXID{atxID}, proof, InvalidActivation)
-	case err != nil:
-		return fmt.Errorf("getting equivocation set: %w", err)
-	default: // smesher is married
-	}
-
-	// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
-	set, err := marriage.NodeIDsByID(p.db, marriageID)
-	if err != nil {
-		return fmt.Errorf("getting equivocation set: %w", err)
-	}
-
 	publish := false // whether to publish the proof
-	malicious, err := malfeasance.IsMalicious(p.db, nodeID)
-	if err != nil {
-		return fmt.Errorf("check if smesher is malicious: %w", err)
-	}
-	if !malicious {
-		err := malfeasance.AddProof(p.db, nodeID, &marriageID, proof, int(InvalidActivation), time.Now())
-		if err != nil {
-			return fmt.Errorf("setting malfeasance proof: %w", err)
+	var set []types.NodeID
+	var refATXs []types.ATXID
+	err := p.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+		marriageID, err := marriage.FindIDByNodeID(tx, nodeID)
+		switch {
+		case errors.Is(err, sql.ErrNotFound): // smesher is not married
+			malicious, err := malfeasance.IsMalicious(tx, nodeID)
+			if err != nil {
+				return fmt.Errorf("check if smesher is malicious: %w", err)
+			}
+			if malicious {
+				p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
+				return nil
+			}
+			if err := malfeasance.AddProof(tx, nodeID, nil, proof, int(InvalidActivation), time.Now()); err != nil {
+				return fmt.Errorf("setting malfeasance proof: %w", err)
+			}
+			atxID, err := atxs.GetFirstIDByNodeID(tx, nodeID)
+			if err != nil {
+				return fmt.Errorf("getting atx id: %w", err)
+			}
+			publish = true
+			set = []types.NodeID{nodeID}
+			refATXs = []types.ATXID{atxID}
+			return nil
+		case err != nil:
+			return fmt.Errorf("getting equivocation set: %w", err)
+		default: // smesher is married
 		}
-		publish = true
-	} else {
-		p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
-	}
 
-	mATXs := make(map[types.ATXID]struct{})
-	for _, id := range set {
-		info, err := marriage.FindByNodeID(p.db, id)
+		// Combine IDs from the present equivocation set for atx.SmesherID and IDs in atx.Marriages.
+		set, err = marriage.NodeIDsByID(tx, marriageID)
 		if err != nil {
-			return fmt.Errorf("getting marriage info: %w", err)
+			return fmt.Errorf("getting equivocation set: %w", err)
 		}
-		mATXs[info.ATX] = struct{}{}
-		if id == nodeID {
-			// already handled
-			continue
-		}
-		malicious, err := malfeasance.IsMalicious(p.db, id)
+
+		malicious, err := malfeasance.IsMalicious(tx, nodeID)
 		if err != nil {
 			return fmt.Errorf("check if smesher is malicious: %w", err)
 		}
-		if malicious {
-			p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", id.ShortString()))
-			continue
+		if !malicious {
+			err := malfeasance.AddProof(tx, nodeID, &marriageID, proof, int(InvalidActivation), time.Now())
+			if err != nil {
+				return fmt.Errorf("setting malfeasance proof: %w", err)
+			}
+			publish = true
+		} else {
+			p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeID.ShortString()))
 		}
-		publish = true
-		if err := malfeasance.SetMalicious(p.db, id, marriageID, time.Now()); err != nil {
-			return fmt.Errorf("setting malicious: %w", err)
-		}
-	}
 
+		mATXs := make(map[types.ATXID]struct{})
+		for _, id := range set {
+			info, err := marriage.FindByNodeID(tx, id)
+			if err != nil {
+				return fmt.Errorf("getting marriage info: %w", err)
+			}
+			mATXs[info.ATX] = struct{}{}
+			if id == nodeID {
+				// already handled
+				continue
+			}
+			malicious, err := malfeasance.IsMalicious(tx, id)
+			if err != nil {
+				return fmt.Errorf("check if smesher is malicious: %w", err)
+			}
+			if malicious {
+				p.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", id.ShortString()))
+				continue
+			}
+			publish = true
+			if err := malfeasance.SetMalicious(tx, id, marriageID, time.Now()); err != nil {
+				return fmt.Errorf("setting malicious: %w", err)
+			}
+		}
+		refATXs = maps.Keys(mATXs)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
 	if !publish {
 		// all smeshers were already marked as malicious - no gossip to void spamming the network
 		return nil
@@ -122,20 +132,25 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 	for _, nodeID := range set {
 		p.tortoise.OnMalfeasance(nodeID)
 	}
-	return p.publish(ctx, set, maps.Keys(mATXs), proof, ProofDomain(InvalidActivation))
+	return p.publish(ctx, set, refATXs, proof, ProofDomain(InvalidActivation))
 }
 
 func (p *Publisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
-	marriageID, err := marriage.FindIDByNodeID(p.db, nodeID)
+	tx, err := p.db.TxImmediate(ctx)
+	if err != nil {
+		return fmt.Errorf("starting transaction: %w", err)
+	}
+	defer tx.Release()
+	marriageID, err := marriage.FindIDByNodeID(tx, nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound): // smesher is not married
-		proof, domain, err := malfeasance.NodeIDProof(p.db, nodeID)
+		proof, domain, err := malfeasance.NodeIDProof(tx, nodeID)
 		if err != nil {
 			return fmt.Errorf("getting malfeasance proof: %w", err)
 		}
-		atxID, err := atxs.GetFirstIDByNodeID(p.db, nodeID)
+		atxID, err := atxs.GetFirstIDByNodeID(tx, nodeID)
 		if err != nil {
-			return fmt.Errorf("getting atx id: %w", err)
+			return fmt.Errorf("getting first atx of identity %s: %w", nodeID.ShortString(), err)
 		}
 		return p.publish(ctx, []types.NodeID{nodeID}, []types.ATXID{atxID}, proof, ProofDomain(domain))
 	case err != nil:
@@ -143,17 +158,17 @@ func (p *Publisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	default: // smesher is married
 	}
 
-	proof, domain, err := malfeasance.MarriageProof(p.db, marriageID)
+	proof, domain, err := malfeasance.MarriageProof(tx, marriageID)
 	if err != nil {
 		return fmt.Errorf("getting malfeasance proof: %w", err)
 	}
 
-	nodeIDs, err := marriage.NodeIDsByID(p.db, marriageID)
+	nodeIDs, err := marriage.NodeIDsByID(tx, marriageID)
 	if err != nil {
 		return fmt.Errorf("getting equivocation set: %w", err)
 	}
 
-	atxs, err := marriage.MarriageATXs(p.db, marriageID)
+	atxs, err := marriage.MarriageATXs(tx, marriageID)
 	if err != nil {
 		return fmt.Errorf("getting equivocation info: %w", err)
 	}
@@ -191,7 +206,6 @@ func (p *Publisher) publish(
 		p.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
 		return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 	}
-
 	return nil
 }
 
