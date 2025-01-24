@@ -158,6 +158,14 @@ func (atx *ActivationTxV2) ID() types.ATXID {
 	return atx.id
 }
 
+func (atx *ActivationTxV2) PoetProofs() []types.PoetProofRef {
+	var proofs []types.PoetProofRef
+	for _, nipost := range atx.NIPosts {
+		proofs = append(proofs, types.PoetProofRef(nipost.Challenge))
+	}
+	return proofs
+}
+
 func (atx *ActivationTxV2) PublishEpochProof() PublishEpochProof {
 	return atx.merkleProof(PublishEpochIndex)
 }

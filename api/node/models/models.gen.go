@@ -81,8 +81,10 @@ type PartialProposal struct {
 
 // PoetProof defines model for PoetProof.
 type PoetProof struct {
+	Id        []byte      `json:"id"`
 	Leafs     uint64      `json:"leafs"`
 	Proof     MerkleProof `json:"proof"`
+	Round     string      `json:"round"`
 	Statement Hash32      `json:"statement"`
 }
 

@@ -61,7 +61,14 @@ components:
           format: uint64
         statement:
           $ref: "#/components/schemas/Hash32"
+        id:
+          type: string
+          format: byte
+        round:
+          type: string
       required:
+        - id
+        - round
         - proof
         - leafs
         - statement

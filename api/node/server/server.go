@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
+	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/poet/shared"
 )
 
 //go:generate mockgen -typed -package=server -destination=mocks.go -source=server.go
@@ -204,7 +204,9 @@ func (s *Server) PostActivationPublish(
 				},
 				LeafCount: p.Leafs,
 			},
-			Statement: stmt,
+			Statement:     stmt,
+			PoetServiceID: p.Id,
+			RoundID:       p.Round,
 		}
 		if err := s.poetDB.ValidateAndStore(ctx, &proof); err != nil {
 			return invalidArg(err)
@@ -312,9 +314,6 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	if proposal == nil {
 		return GetProposalLayerNode204Response{}, nil
 	}
-	if proposal.Ballot.EpochData.EligibilityCount == 0 {
-		return GetProposalLayerNode204Response{}, nil
-	}
 
 	resp := GetProposalLayerNode200JSONResponse{
 		Ballot: models.Ballot{
@@ -336,6 +335,9 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 		refBallotIDHex := hex.EncodeToString(proposal.RefBallot[:])
 		resp.Ballot.RefBallotID = &refBallotIDHex
 	} else {
+		if proposal.Ballot.EpochData.EligibilityCount == 0 {
+			return GetProposalLayerNode204Response{}, nil
+		}
 		resp.Ballot.EpochData = &models.EpochData{
 			ActiveSetHash:    hex.EncodeToString(proposal.EpochData.ActiveSetHash[:]),
 			Beacon:           hex.EncodeToString(proposal.EpochData.Beacon[:]),

@@ -51,7 +51,7 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 
 	var atx wire.ActivationTxV2
 	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
-		func(_ context.Context, _ string, got []byte) error {
+		func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 			require.NoError(t, codec.Decode(got, &atx))
 
 			atxHandler := newTestHandler(t, tab.goldenATXID, WithAtxVersions(AtxVersions{1: types.AtxV2}))
@@ -96,7 +96,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	tab.mclock.EXPECT().CurrentLayer().Return(layer).Times(4)
 	var atx2 wire.ActivationTxV2
 	publishAtx(t, tab, sig.NodeID(), posEpoch, &layer, layersPerEpoch,
-		func(_ context.Context, _ string, got []byte) error {
+		func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 			return codec.Decode(got, &atx2)
 		})
 	require.Equal(t, atx1.ID(), atx2.PreviousATXs[0])

@@ -230,6 +230,7 @@ type PoetDbStorer interface {
 
 type poetDbAPI interface {
 	Proof(types.PoetProofRef) (*types.PoetProof, *types.Hash32, error)
+	ProofMessage(types.PoetProofRef) (*types.PoetProofMessage, error)
 	ProofForRound(poetID []byte, roundID string) (*types.PoetProof, error)
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }

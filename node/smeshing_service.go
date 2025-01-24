@@ -368,24 +368,17 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		RegossipInterval: app.Config.RegossipAtxInterval,
 	}
 
-	var (
-		atxBuilderLog = app.addLogger(ATXBuilderLogger, lg).Zap()
-		syncer        activation.Syncer
-	)
-	atxService := nodeServiceClient
-	atxPublisher := nodeServiceClient
-	syncer = alwaysSyncedSyncer{}
-
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
 		app.localDB,
-		atxService,
-		atxPublisher,
+		poetDb,
+		nodeServiceClient,
+		nodeServiceClient,
 		app.validator,
 		nipostBuilder,
 		app.clock,
-		syncer,
-		atxBuilderLog,
+		alwaysSyncedSyncer{},
+		app.addLogger(ATXBuilderLogger, lg).Zap(),
 		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?

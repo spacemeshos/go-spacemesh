@@ -100,7 +100,9 @@ func (s *NodeService) PositioningATX(ctx context.Context, maxPublish types.Epoch
 func (s *NodeService) PublishATX(ctx context.Context, blob []byte, poet *types.PoetProofMessage) error {
 	body := PostActivationPublishJSONRequestBody{
 		AtxBlob: blob,
-		PoetProof: &externalRef0.PoetProof{
+	}
+	if poet != nil {
+		body.PoetProof = &externalRef0.PoetProof{
 			Leafs: poet.LeafCount,
 			Proof: externalRef0.MerkleProof{
 				ProofNodes:   poet.ProofNodes,
@@ -108,7 +110,9 @@ func (s *NodeService) PublishATX(ctx context.Context, blob []byte, poet *types.P
 				Root:         poet.Root,
 			},
 			Statement: hex.EncodeToString(poet.Statement.Bytes()),
-		},
+			Id:        poet.PoetServiceID,
+			Round:     poet.RoundID,
+		}
 	}
 	resp, err := s.client.PostActivationPublishWithResponse(ctx, body)
 	if err != nil {

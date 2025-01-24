@@ -1131,8 +1131,9 @@ func (app *App) initServices(ctx context.Context) error {
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
 		app.localDB,
+		poetDb,
 		atxService,
-		app.host,
+		&atxPubliher{app.host},
 		app.validator,
 		nipostBuilder,
 		app.clock,
@@ -2618,4 +2619,12 @@ type beaconGetter struct {
 
 func (b *beaconGetter) Beacon(_ context.Context, e types.EpochID) (types.Beacon, error) {
 	return b.provider.GetBeacon(e)
+}
+
+type atxPubliher struct {
+	publisher pubsub.Publisher
+}
+
+func (a *atxPubliher) PublishATX(ctx context.Context, blob []byte, _ *types.PoetProofMessage) error {
+	return a.publisher.Publish(ctx, pubsub.AtxProtocol, blob)
 }

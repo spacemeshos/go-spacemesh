@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/spacemeshos/poet/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
@@ -18,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubMocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
-	"github.com/spacemeshos/poet/shared"
 )
 
 const retries = 3
@@ -153,28 +153,37 @@ func Test_ActivationService_LastATX(t *testing.T) {
 }
 
 func Test_PublishingATX(t *testing.T) {
-	svc, mocks := setupE2E(t)
 	blob := types.RandomBytes(50)
-	poetProof := types.PoetProofMessage{
-		PoetProof: types.PoetProof{
-			MerkleProof: shared.MerkleProof{
-				Root: types.RandomBytes(32),
-				ProvenLeaves: [][]byte{
-					types.RandomBytes(32),
-					types.RandomBytes(32),
+	t.Run("publish ATX with poet", func(t *testing.T) {
+		poetProof := types.PoetProofMessage{
+			PoetProof: types.PoetProof{
+				MerkleProof: shared.MerkleProof{
+					Root: types.RandomBytes(32),
+					ProvenLeaves: [][]byte{
+						types.RandomBytes(32),
+						types.RandomBytes(32),
+					},
+					ProofNodes: [][]byte{
+						types.RandomBytes(32),
+						types.RandomBytes(32),
+					},
 				},
-				ProofNodes: [][]byte{
-					types.RandomBytes(32),
-					types.RandomBytes(32),
-				},
+				LeafCount: 1236,
 			},
-			LeafCount: 1236,
-		},
-		Statement: types.RandomHash(),
-	}
-	mocks.publisher.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, blob)
-	mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &poetProof)
-	svc.PublishATX(context.Background(), blob, &poetProof)
+			Statement:     types.RandomHash(),
+			PoetServiceID: types.RandomBytes(32),
+			RoundID:       "1",
+		}
+		svc, mocks := setupE2E(t)
+		mocks.publisher.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, blob)
+		mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &poetProof)
+		svc.PublishATX(context.Background(), blob, &poetProof)
+	})
+	t.Run("publish only ATX (poet proof is optional)", func(t *testing.T) {
+		svc, mocks := setupE2E(t)
+		mocks.publisher.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, blob)
+		svc.PublishATX(context.Background(), blob, nil)
+	})
 }
 
 func Test_Hare(t *testing.T) {
@@ -183,22 +192,22 @@ func Test_Hare(t *testing.T) {
 		val := uint64(11)
 		mock.hare.EXPECT().TotalWeight(gomock.Any(), gomock.Any()).Return(val, nil)
 		v, err := svc.TotalWeight(context.Background(), 112)
-		require.Equal(t, v, val)
 		require.NoError(t, err)
+		require.Equal(t, v, val)
 	})
 	t.Run("miner weight", func(t *testing.T) {
 		val := uint64(101)
 		mock.hare.EXPECT().MinerWeight(gomock.Any(), gomock.Any(), gomock.Any()).Return(val, nil)
 		v, err := svc.MinerWeight(context.Background(), 113, types.NodeID{})
-		require.Equal(t, v, val)
 		require.NoError(t, err)
+		require.Equal(t, v, val)
 	})
 	t.Run("beacon", func(t *testing.T) {
 		beacon := types.Beacon{12, 12, 12, 12}
 		mock.hare.EXPECT().Beacon(gomock.Any(), gomock.Any()).Return(beacon, nil)
 		v, err := svc.Beacon(context.Background(), types.EpochID(15))
-		require.Equal(t, v, beacon)
 		require.NoError(t, err)
+		require.Equal(t, v, beacon)
 	})
 	t.Run("hare message", func(t *testing.T) {
 		body := hare3.Body{

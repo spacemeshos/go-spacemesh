@@ -120,10 +120,7 @@ func (db *PoetDb) ValidateAndStoreMsg(ctx context.Context, expHash types.Hash32,
 func (db *PoetDb) Validate(membershipRoot []byte, proof types.PoetProof) error {
 	labelHashFunc := hash.GenLabelHashFunc(membershipRoot)
 	merkleHashFunc := hash.GenMerkleHashFunc(membershipRoot)
-	if err := verifier.Validate(proof.MerkleProof, labelHashFunc, merkleHashFunc, proof.LeafCount, shared.T); err != nil {
-		return fmt.Errorf("validate PoET: %w", err)
-	}
-	return nil
+	return verifier.Validate(proof.MerkleProof, labelHashFunc, merkleHashFunc, proof.LeafCount, shared.T)
 }
 
 // StoreProof saves the poet proof in local db.

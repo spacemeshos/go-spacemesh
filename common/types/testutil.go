@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/rand"
+	"testing"
 )
 
 // RandomBytes generates random data in bytes for testing.
@@ -136,4 +137,8 @@ func RandomVrfSignature() VrfSignature {
 		return VrfSignature{}
 	}
 	return VrfSignature(b)
+}
+
+func RandomPoetProofRef(_ testing.TB) PoetProofRef {
+	return PoetProofRef(RandomHash())
 }

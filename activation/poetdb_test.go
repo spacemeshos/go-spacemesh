@@ -89,13 +89,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	msg.PoetProof.Root = []byte("some other root")
 
 	err = poetDb.Validate(msg.Statement[:], msg.PoetProof)
-	r.EqualError(
-		err,
-		fmt.Sprintf(
-			"failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
-			msg.PoetServiceID[:5],
-		),
-	)
+	r.ErrorContains(err, "merkle proof not valid")
 }
 
 func TestPoetDbInvalidPoetStatement(t *testing.T) {
@@ -106,13 +100,7 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
 	err = poetDb.Validate(msg.Statement[:], msg.PoetProof)
-	r.EqualError(
-		err,
-		fmt.Sprintf(
-			"failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
-			msg.PoetServiceID[:5],
-		),
-	)
+	r.ErrorContains(err, "merkle proof not valid")
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
