@@ -1740,6 +1740,10 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2alpha1.NewAccountService(app.apiDB, app.conState)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2alpha1.SmeshingIdentities:
+		service := v2alpha1.NewSmeshingIdentitiesService(app.idStates, app.poetClients, app.Config.POET)
+		app.grpcServices[svc] = service
+		return service, nil
 	// v2beta1
 	case v2beta1.Activation:
 		service := v2beta1.NewActivationService(app.apiDB, types.ATXID(app.Config.Genesis.GoldenATX()))

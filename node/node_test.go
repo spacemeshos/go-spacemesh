@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	v2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
+
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	pbV2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
@@ -368,7 +370,10 @@ func TestProxyingJsonService(t *testing.T) {
 
 	// Start client proxying to the server
 	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
-	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Beta1}
+	cfg.API.NonProxiedServices = []grpcserver.Service{
+		grpcserver.SmeshingIdentitiesV2Beta1,
+		grpcserver.SmeshingIdentitiesV2Alpha1,
+	}
 	clientApp := New(WithConfig(&cfg), WithLog(logger.Named("client")))
 	clientApp.idStates = identity.NewIdentityStateStorage(db, logger.Named("idStates").Zap())
 
@@ -390,19 +395,33 @@ func TestProxyingJsonService(t *testing.T) {
 	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 
-	// Make a request to a local SmeshingIdentities service
+	// Make a request to a local v2alpha1 SmeshingIdentities service
 	endpoint = fmt.Sprintf(
-		"http://%s/spacemesh.v2beta1.SmeshingIdentitiesService/States?limit=1",
+		"http://%s/spacemesh.v2alpha1.SmeshingIdentitiesService/States",
 		clientApp.apiProxy.BoundAddress,
 	)
 
 	nodeID := types.RandomNodeID()
 	clientApp.idStates.Set(nodeID, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
-	respBody, status := callEndpointGet(t, endpoint)
+	respBody, status := callEndpointPost(t, endpoint, []byte(`{"limit": 1}`))
 	require.Equal(t, http.StatusOK, status)
-	var resp pbV2.IdentityStatesResponse
-	require.NoError(t, protojson.Unmarshal(respBody, &resp))
-	require.Contains(t, resp.Identities, nodeID.String())
+	var respAlpha v2alpha1.IdentityStatesResponse
+	require.NoError(t, protojson.Unmarshal(respBody, &respAlpha))
+	require.Contains(t, respAlpha.Identities, nodeID.String())
+
+	// Make a request to a local v2beta1 SmeshingIdentities service
+	endpoint = fmt.Sprintf(
+		"http://%s/spacemesh.v2beta1.SmeshingIdentitiesService/States?limit=1",
+		clientApp.apiProxy.BoundAddress,
+	)
+
+	nodeID = types.RandomNodeID()
+	clientApp.idStates.Set(nodeID, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
+	respBody, status = callEndpointGet(t, endpoint)
+	require.Equal(t, http.StatusOK, status)
+	var respBeta pbV2.IdentityStatesResponse
+	require.NoError(t, protojson.Unmarshal(respBody, &respBeta))
+	require.Contains(t, respBeta.Identities, nodeID.String())
 }
 
 type noopHook struct{}
