@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"go.uber.org/zap/zaptest"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -1017,13 +1016,12 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			cfg.QueueSize = 1000
 			cfg.GetAtxsConcurrency = getAtxConcurrency
 
-			cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
-			t.Cleanup(func() { require.NoError(t, cdb.Close()) })
+			db := statesql.InMemoryTest(t)
 			client := server.New(wrapHost(mesh.Hosts()[0]), hashProtocol, nil)
 			host, err := p2p.Upgrade(mesh.Hosts()[0])
 			require.NoError(t, err)
 			ps := peers.New()
-			f, err := NewFetch(cdb, store.New(), host,
+			f, err := NewFetch(db, store.New(), host,
 				ps,
 				WithContext(context.Background()),
 				withServers(map[string]requester{hashProtocol: client}),

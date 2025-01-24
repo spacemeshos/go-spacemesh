@@ -28,23 +28,19 @@ import (
 
 type testHandler struct {
 	*handler
-	db  sql.StateDatabase
-	cdb *datastore.CachedDB
+	db sql.StateDatabase
 }
 
 func createTestHandler(tb testing.TB, opts ...sql.Opt) *testHandler {
 	lg := zaptest.NewLogger(tb)
 	db := statesql.InMemoryTest(tb, opts...)
-	cdb := datastore.NewCachedDB(db, lg)
-	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
 	return &testHandler{
-		handler: newHandler(cdb, datastore.NewBlobStore(cdb, store.New()), lg),
+		handler: newHandler(db, datastore.NewBlobStore(db, store.New()), lg),
 		db:      db,
-		cdb:     cdb,
 	}
 }
 
-func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]types.BallotID, []types.BlockID) {
+func createLayer(tb testing.TB, db sql.StateDatabase, lid types.LayerID) ([]types.BallotID, []types.BlockID) {
 	num := 5
 	blts := make([]types.BallotID, 0, num)
 	blks := make([]types.BlockID, 0, num)
@@ -69,7 +65,7 @@ func createLayer(tb testing.TB, db *datastore.CachedDB, lid types.LayerID) ([]ty
 
 func createOpinions(
 	tb testing.TB,
-	db *datastore.CachedDB,
+	db sql.StateDatabase,
 	lid types.LayerID,
 	genCert bool,
 ) (types.BlockID, types.Hash32) {
@@ -104,7 +100,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 
 			lid := types.LayerID(111)
 			th := createTestHandler(t)
-			blts, _ := createLayer(t, th.cdb, lid)
+			blts, _ := createLayer(t, th.db, lid)
 
 			lidBytes, err := codec.Encode(&lid)
 			require.NoError(t, err)

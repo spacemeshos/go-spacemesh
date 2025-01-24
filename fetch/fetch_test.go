@@ -94,10 +94,9 @@ func createFetch(tb testing.TB) *testFetch {
 	}
 
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
-	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
+	db := statesql.InMemoryTest(tb)
 	fetch, err := NewFetch(
-		cdb,
+		db,
 		store.New(),
 		nil,
 		peers.New(),
@@ -143,10 +142,9 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), lg)
-	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
+	db := statesql.InMemoryTest(t)
 	f, err := NewFetch(
-		cdb,
+		db,
 		store.New(),
 		nil,
 		peers.New(),
@@ -418,10 +416,9 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), lg)
-	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
+	db := statesql.InMemoryTest(t)
 	fetcher, err := NewFetch(
-		cdb,
+		db,
 		store.New(),
 		h,
 		peers.New(),

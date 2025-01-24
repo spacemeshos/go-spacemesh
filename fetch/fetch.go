@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -271,7 +272,7 @@ type Fetch struct {
 
 // NewFetch creates a new Fetch struct.
 func NewFetch(
-	cdb *datastore.CachedDB,
+	cdb sql.StateDatabase,
 	proposals *store.Store,
 	host *p2p.Host,
 	peerCache *peers.Peers,

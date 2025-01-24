@@ -749,7 +749,7 @@ func (app *App) initServices(ctx context.Context) error {
 	peerCache := peers.New()
 	flog := app.addLogger(Fetcher, lg).Zap()
 	fetcher, err := fetch.NewFetch(
-		app.cachedDB,
+		app.db,
 		proposalsStore,
 		app.host,
 		peerCache,

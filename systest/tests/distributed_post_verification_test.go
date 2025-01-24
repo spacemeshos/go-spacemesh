@@ -121,7 +121,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		store.WithCapacity(cfg.Tortoise.Zdist+1),
 	)
 
-	fetcher, err := fetch.NewFetch(cdb, proposalsStore, host,
+	fetcher, err := fetch.NewFetch(db, proposalsStore, host,
 		peers.New(),
 		fetch.WithContext(ctx),
 		fetch.WithConfig(cfg.FETCH),

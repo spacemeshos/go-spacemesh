@@ -25,12 +25,12 @@ import (
 
 type handler struct {
 	logger *zap.Logger
-	cdb    *datastore.CachedDB
+	cdb    sql.StateDatabase
 	bs     *datastore.BlobStore
 }
 
 func newHandler(
-	cdb *datastore.CachedDB,
+	cdb sql.StateDatabase,
 	bs *datastore.BlobStore,
 	lg *zap.Logger,
 ) *handler {

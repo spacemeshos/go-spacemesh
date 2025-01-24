@@ -130,7 +130,7 @@ func createP2PFetch(
 	}
 
 	fetcher, err := NewFetch(
-		tpf.serverCDB,
+		tpf.serverDB,
 		tpf.serverPDB,
 		serverHost,
 		peers.New(),
@@ -152,7 +152,7 @@ func createP2PFetch(
 	}, 10*time.Second, 10*time.Millisecond)
 
 	fetcher, err = NewFetch(
-		tpf.clientCDB,
+		clientDB,
 		tpf.clientPDB,
 		clientHost,
 		peers.New(),

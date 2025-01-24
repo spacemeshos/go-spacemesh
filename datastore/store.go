@@ -238,13 +238,13 @@ const (
 )
 
 // NewBlobStore returns a BlobStore.
-func NewBlobStore(db sql.Executor, proposals *store.Store) *BlobStore {
+func NewBlobStore(db sql.StateDatabase, proposals *store.Store) *BlobStore {
 	return &BlobStore{DB: db, proposals: proposals}
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB        sql.Executor
+	DB        sql.StateDatabase
 	proposals *store.Store
 }
 
