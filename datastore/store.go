@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
@@ -113,7 +114,9 @@ func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 	}
 }
 
-// TODO(mafa): this needs to be removed, since it only works with v1 malfeasance proofs.
+// MalfeasanceProof returns the malfeasance proof for the given node ID. This function is thread safe and will return
+// an error if the proof is not found in the ATX DB.
+// Deprecated: use functions in the `sql/identities` and `sql/malfeasance` packages.
 func (db *CachedDB) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to GetMalfeasanceProof")
@@ -137,7 +140,8 @@ func (db *CachedDB) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	return blob.Bytes, err
 }
 
-// TODO(mafa): this needs to be removed, since it only works with v1 malfeasance proofs.
+// CacheMalfeasanceProof caches the malfeasance proof for the given node ID. This function is thread safe.
+// Deprecated: caching is done by the sql database automatically.
 func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof []byte) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to CacheMalfeasanceProof")
@@ -188,10 +192,14 @@ func (db *CachedDB) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
 }
 
 // Previous retrieves the list of previous ATXs for the given ATX ID.
+// Deprecated: replaced by atxs.Previous.
 func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
 	return atxs.Previous(db, id)
 }
 
+// IterateMalfeasanceProofs iterates over all malfeasance proofs in the database and calls the provided callback on
+// each.
+// Deprecated: replaced by identities.IterateOps and malfeasance.IterateOps.
 func (db *CachedDB) IterateMalfeasanceProofs(
 	iter func(types.NodeID, []byte) error,
 ) error {
@@ -206,6 +214,8 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 	return callbackErr
 }
 
+// MaxHeightAtx returns the ATX ID with the maximum height.
+// Deprecated: replaced by atxs.GetIDWithMaxHeight.
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
 	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID, atxs.FilterAll)
 }
@@ -357,7 +367,7 @@ func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 	case LegacyMalfeasance:
 		return identities.IsMalicious(bs.DB, types.BytesToNodeID(key))
 	case Malfeasance:
-		// TODO (mafa): implement malfeasance2
+		return malfeasance.IsMalicious(bs.DB, types.BytesToNodeID(key))
 	case ActiveSet:
 		return activesets.Has(bs.DB, types.BytesToHash(key))
 	}
