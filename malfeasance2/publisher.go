@@ -215,7 +215,7 @@ func (p *Publisher) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte,
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}
 	defer tx.Release()
-	info, err := marriage.FindByNodeID(tx, nodeID)
+	mID, err := marriage.FindIDByNodeID(tx, nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound): // smesher is not married
 		proof, domain, err := malfeasance.NodeIDProof(tx, nodeID)
@@ -238,27 +238,18 @@ func (p *Publisher) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte,
 	default: // smesher is married
 	}
 
-	set, err := marriage.NodeIDsByID(tx, info.ID)
+	atxs, err := marriage.MarriageATXs(tx, mID)
 	if err != nil {
-		return nil, fmt.Errorf("getting equivocation set: %w", err)
+		return nil, fmt.Errorf("getting equivocation info: %w", err)
 	}
 
-	refATXs := make(map[types.ATXID]struct{})
-	for _, id := range set {
-		info, err := marriage.FindByNodeID(tx, id)
-		if err != nil {
-			return nil, fmt.Errorf("getting marriage info: %w", err)
-		}
-		refATXs[info.ATX] = struct{}{}
-	}
-
-	proof, domain, err := malfeasance.MarriageProof(tx, info.ID)
+	proof, domain, err := malfeasance.MarriageProof(tx, mID)
 	if err != nil {
 		return nil, fmt.Errorf("getting malfeasance proof: %w", err)
 	}
 	malfeasanceProof := &MalfeasanceProof{
 		Version: 0,
-		RefATXs: maps.Keys(refATXs),
+		RefATXs: atxs,
 		Domain:  ProofDomain(domain),
 		Proof:   proof,
 	}
