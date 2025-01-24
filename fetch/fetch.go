@@ -412,6 +412,15 @@ type dataValidators struct {
 	malfeasance       SyncValidator
 }
 
+// SetMalfeasanceProvider sets the malfeasance provider dependency.
+//
+// TODO(mafa): this is a hack because of a cyclic dependency between the packages
+//
+//	malfeasance2 -> fetcher -> datastore -> malfeasance2
+func (f *Fetch) SetMalfeasanceProvider(p datastore.MalfeasanceProvider) {
+	f.bs.SetMalfeasanceProvider(p)
+}
+
 // SetValidators sets the handlers to validate various mesh data fetched from peers.
 func (f *Fetch) SetValidators(
 	atx SyncValidator,

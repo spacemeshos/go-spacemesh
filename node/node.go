@@ -852,7 +852,7 @@ func (app *App) initServices(ctx context.Context) error {
 	malfeasanceLogger := app.addLogger(Malfeasance2Logger, lg).Zap()
 	malfeasancePublisher := malfeasance2.NewPublisher(
 		malfeasanceLogger,
-		app.cachedDB,
+		app.db,
 		syncer,
 		trtl,
 		app.host,
@@ -1206,6 +1206,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
 
+	fetcher.SetMalfeasanceProvider(malfeasancePublisher)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg.Zap()),

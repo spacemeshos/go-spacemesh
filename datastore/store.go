@@ -239,13 +239,32 @@ const (
 
 // NewBlobStore returns a BlobStore.
 func NewBlobStore(db sql.StateDatabase, proposals *store.Store) *BlobStore {
-	return &BlobStore{DB: db, proposals: proposals}
+	return &BlobStore{
+		DB:        db,
+		proposals: proposals,
+	}
+}
+
+// SetMalfeasanceProvider sets the malfeasance provider dependency.
+//
+// TODO(mafa): this is a hack because of a cyclic dependency between the packages
+//
+//	malfeasance2 -> fetcher -> datastore -> malfeasance2
+func (bs *BlobStore) SetMalfeasanceProvider(p MalfeasanceProvider) {
+	bs.malfeasance = p
+}
+
+//go:generate mockgen -typed -package=datastore -destination=./mocks.go -source=./store.go
+
+type MalfeasanceProvider interface {
+	ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error)
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB        sql.StateDatabase
-	proposals *store.Store
+	DB          sql.StateDatabase
+	proposals   *store.Store
+	malfeasance MalfeasanceProvider
 }
 
 type (
@@ -263,9 +282,7 @@ var loadBlobDispatch = map[Hint]loadBlobFunc{
 	TXDB:              transactions.LoadBlob,
 	POETDB:            poets.LoadBlob,
 	LegacyMalfeasance: identities.LoadMalfeasanceBlob,
-	// TODO(mafa): implement malfeasance2
-	// Malfeasance:      malfeasance.LoadBlob,
-	ActiveSet: activesets.LoadBlob,
+	ActiveSet:         activesets.LoadBlob,
 }
 
 var blobSizeDispatch = map[Hint]blobSizeFunc{
@@ -275,9 +292,7 @@ var blobSizeDispatch = map[Hint]blobSizeFunc{
 	TXDB:              transactions.GetBlobSizes,
 	POETDB:            poets.GetBlobSizes,
 	LegacyMalfeasance: identities.GetBlobSizes,
-	// TODO(mafa): implement malfeasance2
-	// Malfeasance:       malfeasance.BlobSizes,
-	ActiveSet: activesets.GetBlobSizes,
+	ActiveSet:         activesets.GetBlobSizes,
 }
 
 func (bs *BlobStore) loadProposal(key []byte, blob *sql.Blob) error {
@@ -294,7 +309,7 @@ func (bs *BlobStore) loadProposal(key []byte, blob *sql.Blob) error {
 	}
 }
 
-func (bs *BlobStore) getProposalSizes(keys [][]byte) (sizes []int, err error) {
+func (bs *BlobStore) proposalSizes(keys [][]byte) (sizes []int, err error) {
 	sizes = make([]int, len(keys))
 	for n, k := range keys {
 		id := types.ProposalID(types.BytesToHash(k).ToHash20())
@@ -311,10 +326,45 @@ func (bs *BlobStore) getProposalSizes(keys [][]byte) (sizes []int, err error) {
 	return sizes, err
 }
 
+func (bs *BlobStore) loadMalfeasance(key []byte, blob *sql.Blob) error {
+	id := types.BytesToNodeID(key)
+	b, err := bs.malfeasance.ProofByID(context.Background(), id)
+	switch {
+	case err == nil:
+		blob.Bytes = b
+		return nil
+	case errors.Is(err, sql.ErrNotFound):
+		return ErrNotFound
+	default:
+		return err
+	}
+}
+
+func (bs *BlobStore) malfeasanceSizes(keys [][]byte) (sizes []int, err error) {
+	sizes = make([]int, len(keys))
+	for n, k := range keys {
+		id := types.NodeID(k)
+		b, err := bs.malfeasance.ProofByID(context.Background(), id)
+		switch {
+		case err == nil:
+			sizes[n] = len(b)
+		case errors.Is(err, store.ErrNotFound):
+			sizes[n] = -1
+		default:
+			return nil, err
+		}
+	}
+	return sizes, err
+}
+
 // LoadBlob gets an blob as bytes by an object ID as bytes.
 func (bs *BlobStore) LoadBlob(ctx context.Context, hint Hint, key []byte, blob *sql.Blob) error {
-	if hint == ProposalDB {
+	switch hint {
+	case ProposalDB:
 		return bs.loadProposal(key, blob)
+	case Malfeasance:
+		return bs.loadMalfeasance(key, blob)
+	default:
 	}
 	loader, found := loadBlobDispatch[hint]
 	if !found {
@@ -334,8 +384,12 @@ func (bs *BlobStore) LoadBlob(ctx context.Context, hint Hint, key []byte, blob *
 // GetBlobSizes returns the sizes of the blobs corresponding to the specified ids. For
 // non-existent objects, the corresponding items are set to -1.
 func (bs *BlobStore) GetBlobSizes(hint Hint, ids [][]byte) (sizes []int, err error) {
-	if hint == ProposalDB {
-		return bs.getProposalSizes(ids)
+	switch hint {
+	case ProposalDB:
+		return bs.proposalSizes(ids)
+	case Malfeasance:
+		return bs.malfeasanceSizes(ids)
+	default:
 	}
 	getSizes, found := blobSizeDispatch[hint]
 	if !found {
