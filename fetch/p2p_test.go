@@ -42,7 +42,7 @@ type testP2PFetch struct {
 	tb testing.TB
 	// client proposals
 	clientPDB   *store.Store
-	clientCDB   *datastore.CachedDB
+	clientDB    sql.StateDatabase
 	clientFetch *Fetch
 	serverID    peer.ID
 	serverDB    sql.StateDatabase
@@ -113,15 +113,13 @@ func createP2PFetch(
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
 	}
 	clientDB := statesql.InMemoryTest(tb, sqlOpts...)
-	clientCDB := datastore.NewCachedDB(clientDB, lg)
-	tb.Cleanup(func() { assert.NoError(tb, clientDB.Close()) })
 	serverDB := statesql.InMemoryTest(tb, sqlOpts...)
 	serverCDB := datastore.NewCachedDB(serverDB, lg)
 	tb.Cleanup(func() { assert.NoError(tb, serverDB.Close()) })
 	tpf := &testP2PFetch{
 		tb:           tb,
 		clientPDB:    store.New(store.WithLogger(lg)),
-		clientCDB:    clientCDB,
+		clientDB:     clientDB,
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
 		serverPDB:    store.New(store.WithLogger(lg)),
@@ -152,7 +150,7 @@ func createP2PFetch(
 	}, 10*time.Second, 10*time.Millisecond)
 
 	fetcher, err = NewFetch(
-		clientDB,
+		tpf.clientDB,
 		tpf.clientPDB,
 		clientHost,
 		peers.New(),
