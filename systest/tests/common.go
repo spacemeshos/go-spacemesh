@@ -39,11 +39,13 @@ func sendTransactions(
 	batch, amount int,
 ) error {
 	eg, ctx := errgroup.WithContext(ctx)
+	clients := cl.NodesConnectedToNetwork()
 	for i := range cl.Accounts() {
-		client := cl.Client(i % cl.Total())
-		nonce, err := getNonce(ctx, client, cl.Address(i))
+		client := clients[i%len(clients)]
+		account := cl.Account(i)
+		nonce, err := getNonce(ctx, client, account.Address)
 		if err != nil {
-			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
+			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, account.Address, err)
 		}
 		watchLayers(ctx, eg, client, logger, func(layer *pb.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number >= stop {
@@ -59,10 +61,10 @@ func sendTransactions(
 			if nonce == 0 {
 				logger.Info("address needs to be spawned",
 					zap.String("client", client.Name),
-					zap.Stringer("address", cl.Address(i)),
+					zap.Stringer("address", account.Address),
 				)
-				if err := submitSpawn(ctx, cl, i, client); err != nil {
-					return false, fmt.Errorf("failed to spawn %w", err)
+				if err := submitSpawn(ctx, cl, account, client); err != nil {
+					return false, fmt.Errorf("failed to spawn: %w", err)
 				}
 				nonce++
 				return true, nil
@@ -70,20 +72,20 @@ func sendTransactions(
 			logger.Debug("submitting transactions",
 				zap.Uint32("layer", layer.Layer.Number.Number),
 				zap.String("client", client.Name),
-				zap.Stringer("address", cl.Address(i)),
+				zap.Stringer("address", account.Address),
 				zap.Uint64("nonce", nonce),
 				zap.Int("batch", batch),
 			)
 			for j := range batch {
 				var err error
 				for range 3 { // retry on failure 3 times
-					err = submitSpend(ctx, cl, i, receiver, uint64(amount), nonce+uint64(j), client)
+					err = submitSpend(ctx, cl, account, receiver, uint64(amount), nonce+uint64(j), client)
 					if err == nil {
 						break
 					}
 					logger.Warn("failed to spend",
 						zap.String("client", client.Name),
-						zap.Stringer("address", cl.Address(i)),
+						zap.Stringer("address", account.Address),
 						zap.Uint64("nonce", nonce+uint64(j)),
 						zap.Error(err),
 					)
@@ -501,11 +503,11 @@ func currentBalance(ctx context.Context, client *cluster.NodeClient, address typ
 	return resp.AccountWrapper.StateCurrent.Balance.Value, nil
 }
 
-func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, client *cluster.NodeClient) error {
+func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account cluster.Account, client *cluster.NodeClient) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_, err := submitTransaction(ctx,
-		wallet.SelfSpawn(cluster.Private(account), 0, sdk.WithGenesisID(cluster.GenesisID())),
+		wallet.SelfSpawn(account.PrivateKey, 0, sdk.WithGenesisID(cluster.GenesisID())),
 		client,
 	)
 	return err
@@ -514,14 +516,14 @@ func submitSpawn(ctx context.Context, cluster *cluster.Cluster, account int, cli
 func submitSpend(
 	ctx context.Context,
 	cluster *cluster.Cluster,
-	account int,
+	account cluster.Account,
 	receiver types.Address,
 	amount, nonce uint64,
 	client *cluster.NodeClient,
 ) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	tx := wallet.Spend(cluster.Private(account), receiver, amount, nonce, sdk.WithGenesisID(cluster.GenesisID()))
+	tx := wallet.Spend(account.PrivateKey, receiver, amount, nonce, sdk.WithGenesisID(cluster.GenesisID()))
 	_, err := submitTransaction(ctx, tx, client)
 	return err
 }

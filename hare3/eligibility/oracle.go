@@ -355,7 +355,6 @@ func (o *Oracle) Validate(
 		zap.Int("n", n),
 		zap.Float64("p", p.Float()),
 		zap.Float64("vrf_frac", vrfFrac.Float()),
-		zap.Int("x", x),
 	)
 	return false, nil
 }
@@ -375,7 +374,7 @@ func (o *Oracle) CalcEligibility(
 		return 0, err
 	}
 
-	o.log.Debug("params",
+	o.log.Debug("calculating eligibility",
 		zap.Uint32("layer", layer.Uint32()),
 		zap.Uint32("epoch", layer.GetEpoch().Uint32()),
 		zap.Uint32("round_id", round),

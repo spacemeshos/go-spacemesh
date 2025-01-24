@@ -7,6 +7,9 @@ import (
 //go:embed "smesher.json"
 var SmesherConfig string
 
+//go:embed "node_service.json"
+var NodeServiceConfig string
+
 //go:embed "smeshing_service.json"
 var SmeshingServiceConfig string
 

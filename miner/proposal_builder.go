@@ -499,8 +499,8 @@ func (pb *ProposalBuilder) initSharedData(ctx context.Context, current types.Lay
 	})
 }
 
-func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession, lid types.LayerID) error {
-	if err := pb.initSignerSessionData(&ss.session, lid, ss.signer.NodeID()); err != nil {
+func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession, targetEpoch types.EpochID) error {
+	if err := pb.initSignerSessionData(&ss.session, targetEpoch, ss.signer.NodeID()); err != nil {
 		return fmt.Errorf("init signer session data: %w", err)
 	}
 	if ss.session.eligibilities.proofs == nil {
@@ -527,11 +527,11 @@ func (pb *ProposalBuilder) initSignerData(ctx context.Context, ss *signerSession
 
 func (pb *ProposalBuilder) initSignerSessionData(
 	s *session,
-	lid types.LayerID,
+	targetEpoch types.EpochID,
 	nodeID types.NodeID,
 ) error {
-	if s.epoch != lid.GetEpoch() {
-		*s = session{epoch: lid.GetEpoch()}
+	if s.epoch != targetEpoch {
+		*s = session{epoch: targetEpoch}
 	}
 	if s.atx == types.EmptyATXID {
 		id, atx := pb.atxsdata.GetByEpochAndNodeID(s.epoch, nodeID)
@@ -560,7 +560,7 @@ func (pb *ProposalBuilder) initSignerSessionData(
 			s.beacon = pb.shared.beacon
 			s.eligibilities.slots = proposals.MustGetNumEligibleSlots(
 				s.atxWeight,
-				minweight.Select(lid.GetEpoch(), pb.cfg.minActiveSetWeight),
+				minweight.Select(targetEpoch, pb.cfg.minActiveSetWeight),
 				pb.shared.active.weight,
 				pb.cfg.layerSize,
 				pb.cfg.layersPerEpoch,
@@ -580,8 +580,21 @@ func (pb *ProposalBuilder) initSignerSessionData(
 func (pb *ProposalBuilder) CalculateEligibilitySlotsFor(
 	ctx context.Context, node types.NodeID, epoch types.EpochID,
 ) (uint32, types.VRFPostIndex, error) {
+	currentLayer := pb.clock.CurrentLayer()
+	if currentLayer.Before(epoch.FirstLayer()) {
+		pb.logger.Warn(
+			"not calculating eligibilities before the epoch starts",
+			zap.Uint32("current layer", currentLayer.Uint32()),
+			zap.Uint32("target epoch 1st layer", epoch.FirstLayer().Uint32()),
+		)
+		return 0, 0, errors.New("target epoch has not started yet")
+	}
+
+	if err := pb.initSharedData(ctx, currentLayer); err != nil {
+		return 0, 0, err
+	}
 	var ss session
-	if err := pb.initSignerSessionData(&ss, epoch.FirstLayer(), node); err != nil {
+	if err := pb.initSignerSessionData(&ss, epoch, node); err != nil {
 		return 0, 0, err
 	}
 	return ss.eligibilities.slots, ss.nonce, nil
@@ -597,7 +610,7 @@ func (pb *ProposalBuilder) BuildFor(ctx context.Context,
 
 	signer := &signerSession{}
 
-	if err := pb.initSignerSessionData(&signer.session, lid, nodeID); err != nil {
+	if err := pb.initSignerSessionData(&signer.session, lid.GetEpoch(), nodeID); err != nil {
 		if errors.Is(err, errAtxNotAvailable) {
 			pb.logger.Debug("smesher doesn't have atx that targets this epoch",
 				log.ZContext(ctx),
@@ -722,7 +735,7 @@ func (pb *ProposalBuilder) build(ctx context.Context, lid types.LayerID) error {
 
 			start := time.Now()
 			ss.latency.start = buildStartTime
-			if err := pb.initSignerData(ctx, ss, lid); err != nil {
+			if err := pb.initSignerData(ctx, ss, lid.GetEpoch()); err != nil {
 				if errors.Is(err, errAtxNotAvailable) {
 					ss.log.Debug("smesher doesn't have atx that targets this epoch",
 						log.ZContext(ctx),
