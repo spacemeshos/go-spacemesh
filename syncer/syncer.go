@@ -788,10 +788,17 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	}
 }
 
-func (s *Syncer) syncMalfeasance(ctx context.Context, epoch types.EpochID) error {
+func (s *Syncer) syncMalfeasance(parent context.Context, epoch types.EpochID) error {
 	epochStart := s.ticker.LayerToTime(epoch.FirstLayer())
 	epochEnd := s.ticker.LayerToTime(epoch.Add(1).FirstLayer())
-	if err := s.malsyncer.EnsureInSync(ctx, epochStart, epochEnd); err != nil {
+	eg, ctx := errgroup.WithContext(parent)
+	eg.Go(func() error {
+		return s.malsyncer.EnsureLegacyInSync(ctx, epochStart, epochEnd)
+	})
+	eg.Go(func() error {
+		return s.malsyncer.EnsureInSync(ctx, epochStart, epochEnd)
+	})
+	if err := eg.Wait(); err != nil {
 		return fmt.Errorf("syncing malfeasance proof: %w", err)
 	}
 	return nil

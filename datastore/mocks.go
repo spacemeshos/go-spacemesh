@@ -17,32 +17,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockmalfeasanceProvider is a mock of malfeasanceProvider interface.
-type MockmalfeasanceProvider struct {
+// MockMalfeasanceProvider is a mock of MalfeasanceProvider interface.
+type MockMalfeasanceProvider struct {
 	ctrl     *gomock.Controller
-	recorder *MockmalfeasanceProviderMockRecorder
+	recorder *MockMalfeasanceProviderMockRecorder
 	isgomock struct{}
 }
 
-// MockmalfeasanceProviderMockRecorder is the mock recorder for MockmalfeasanceProvider.
-type MockmalfeasanceProviderMockRecorder struct {
-	mock *MockmalfeasanceProvider
+// MockMalfeasanceProviderMockRecorder is the mock recorder for MockMalfeasanceProvider.
+type MockMalfeasanceProviderMockRecorder struct {
+	mock *MockMalfeasanceProvider
 }
 
-// NewMockmalfeasanceProvider creates a new mock instance.
-func NewMockmalfeasanceProvider(ctrl *gomock.Controller) *MockmalfeasanceProvider {
-	mock := &MockmalfeasanceProvider{ctrl: ctrl}
-	mock.recorder = &MockmalfeasanceProviderMockRecorder{mock}
+// NewMockMalfeasanceProvider creates a new mock instance.
+func NewMockMalfeasanceProvider(ctrl *gomock.Controller) *MockMalfeasanceProvider {
+	mock := &MockMalfeasanceProvider{ctrl: ctrl}
+	mock.recorder = &MockMalfeasanceProviderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmalfeasanceProvider) EXPECT() *MockmalfeasanceProviderMockRecorder {
+func (m *MockMalfeasanceProvider) EXPECT() *MockMalfeasanceProviderMockRecorder {
 	return m.recorder
 }
 
 // ProofByID mocks base method.
-func (m *MockmalfeasanceProvider) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error) {
+func (m *MockMalfeasanceProvider) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ProofByID", ctx, nodeID)
 	ret0, _ := ret[0].([]byte)
@@ -51,31 +51,31 @@ func (m *MockmalfeasanceProvider) ProofByID(ctx context.Context, nodeID types.No
 }
 
 // ProofByID indicates an expected call of ProofByID.
-func (mr *MockmalfeasanceProviderMockRecorder) ProofByID(ctx, nodeID any) *MockmalfeasanceProviderProofByIDCall {
+func (mr *MockMalfeasanceProviderMockRecorder) ProofByID(ctx, nodeID any) *MockMalfeasanceProviderProofByIDCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProofByID", reflect.TypeOf((*MockmalfeasanceProvider)(nil).ProofByID), ctx, nodeID)
-	return &MockmalfeasanceProviderProofByIDCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProofByID", reflect.TypeOf((*MockMalfeasanceProvider)(nil).ProofByID), ctx, nodeID)
+	return &MockMalfeasanceProviderProofByIDCall{Call: call}
 }
 
-// MockmalfeasanceProviderProofByIDCall wrap *gomock.Call
-type MockmalfeasanceProviderProofByIDCall struct {
+// MockMalfeasanceProviderProofByIDCall wrap *gomock.Call
+type MockMalfeasanceProviderProofByIDCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockmalfeasanceProviderProofByIDCall) Return(arg0 []byte, arg1 error) *MockmalfeasanceProviderProofByIDCall {
+func (c *MockMalfeasanceProviderProofByIDCall) Return(arg0 []byte, arg1 error) *MockMalfeasanceProviderProofByIDCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalfeasanceProviderProofByIDCall) Do(f func(context.Context, types.NodeID) ([]byte, error)) *MockmalfeasanceProviderProofByIDCall {
+func (c *MockMalfeasanceProviderProofByIDCall) Do(f func(context.Context, types.NodeID) ([]byte, error)) *MockMalfeasanceProviderProofByIDCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalfeasanceProviderProofByIDCall) DoAndReturn(f func(context.Context, types.NodeID) ([]byte, error)) *MockmalfeasanceProviderProofByIDCall {
+func (c *MockMalfeasanceProviderProofByIDCall) DoAndReturn(f func(context.Context, types.NodeID) ([]byte, error)) *MockMalfeasanceProviderProofByIDCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -119,6 +119,83 @@ func (c *MockfetcherLegacyMaliciousIDsCall) DoAndReturn(f func(context.Context, 
 	return c
 }
 
+// MalfeasanceProofs mocks base method.
+func (m *Mockfetcher) MalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MalfeasanceProofs", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// MalfeasanceProofs indicates an expected call of MalfeasanceProofs.
+func (mr *MockfetcherMockRecorder) MalfeasanceProofs(arg0, arg1 any) *MockfetcherMalfeasanceProofsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MalfeasanceProofs", reflect.TypeOf((*Mockfetcher)(nil).MalfeasanceProofs), arg0, arg1)
+	return &MockfetcherMalfeasanceProofsCall{Call: call}
+}
+
+// MockfetcherMalfeasanceProofsCall wrap *gomock.Call
+type MockfetcherMalfeasanceProofsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockfetcherMalfeasanceProofsCall) Return(arg0 error) *MockfetcherMalfeasanceProofsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockfetcherMalfeasanceProofsCall) Do(f func(context.Context, []types.NodeID) error) *MockfetcherMalfeasanceProofsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockfetcherMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []types.NodeID) error) *MockfetcherMalfeasanceProofsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MaliciousIDs mocks base method.
+func (m *Mockfetcher) MaliciousIDs(arg0 context.Context, arg1 p2p.Peer) ([]types.NodeID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MaliciousIDs", arg0, arg1)
+	ret0, _ := ret[0].([]types.NodeID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MaliciousIDs indicates an expected call of MaliciousIDs.
+func (mr *MockfetcherMockRecorder) MaliciousIDs(arg0, arg1 any) *MockfetcherMaliciousIDsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MaliciousIDs", reflect.TypeOf((*Mockfetcher)(nil).MaliciousIDs), arg0, arg1)
+	return &MockfetcherMaliciousIDsCall{Call: call}
+}
+
+// MockfetcherMaliciousIDsCall wrap *gomock.Call
+type MockfetcherMaliciousIDsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockfetcherMaliciousIDsCall) Return(arg0 []types.NodeID, arg1 error) *MockfetcherMaliciousIDsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockfetcherMaliciousIDsCall) Do(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherMaliciousIDsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockfetcherMaliciousIDsCall) DoAndReturn(f func(context.Context, p2p.Peer) ([]types.NodeID, error)) *MockfetcherMaliciousIDsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // SelectBestShuffled mocks base method.
 func (m *Mockfetcher) SelectBestShuffled(arg0 int) []p2p.Peer {
 	m.ctrl.T.Helper()

@@ -778,6 +778,44 @@ func (c *MockmalSyncerEnsureInSyncCall) DoAndReturn(f func(context.Context, time
 	return c
 }
 
+// EnsureLegacyInSync mocks base method.
+func (m *MockmalSyncer) EnsureLegacyInSync(parent context.Context, epochStart, epochEnd time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureLegacyInSync", parent, epochStart, epochEnd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnsureLegacyInSync indicates an expected call of EnsureLegacyInSync.
+func (mr *MockmalSyncerMockRecorder) EnsureLegacyInSync(parent, epochStart, epochEnd any) *MockmalSyncerEnsureLegacyInSyncCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureLegacyInSync", reflect.TypeOf((*MockmalSyncer)(nil).EnsureLegacyInSync), parent, epochStart, epochEnd)
+	return &MockmalSyncerEnsureLegacyInSyncCall{Call: call}
+}
+
+// MockmalSyncerEnsureLegacyInSyncCall wrap *gomock.Call
+type MockmalSyncerEnsureLegacyInSyncCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalSyncerEnsureLegacyInSyncCall) Return(arg0 error) *MockmalSyncerEnsureLegacyInSyncCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalSyncerEnsureLegacyInSyncCall) Do(f func(context.Context, time.Time, time.Time) error) *MockmalSyncerEnsureLegacyInSyncCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalSyncerEnsureLegacyInSyncCall) DoAndReturn(f func(context.Context, time.Time, time.Time) error) *MockmalSyncerEnsureLegacyInSyncCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Mockfetcher is a mock of fetcher interface.
 type Mockfetcher struct {
 	ctrl     *gomock.Controller

@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync/mocks"
 )
@@ -175,8 +176,8 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	}
 }
 
-func (tester *tester) expectGetMaliciousIDs() {
-	// "2" comes just from a single peer
+func (tester *tester) expectLegacyMaliciousIDs() {
+	// "2" comes just from a single peer via legacy protocol
 	tester.fetcher.EXPECT().
 		LegacyMaliciousIDs(gomock.Any(), tester.peers[0]).
 		Return(malData("4", "1", "3", "2"), nil)
@@ -187,24 +188,60 @@ func (tester *tester) expectGetMaliciousIDs() {
 	}
 }
 
-func (tester *tester) expectGetProofs(errMap map[types.NodeID]error) {
+func (tester *tester) expectMaliciousIDs() {
+	// "102" comes just from a single peer
 	tester.fetcher.EXPECT().
+		MaliciousIDs(gomock.Any(), tester.peers[0]).
+		Return(malData("104", "101", "103", "102"), nil)
+	for _, p := range tester.peers[1:] {
+		tester.fetcher.EXPECT().
+			MaliciousIDs(gomock.Any(), p).
+			Return(malData("104", "101", "103"), nil)
+	}
+}
+
+func (t *tester) expectLegacyProofs(errMap map[types.NodeID]error) {
+	t.fetcher.EXPECT().
 		LegacyMalfeasanceProofs(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, ids []types.NodeID) error {
 			batchErr := &fetch.BatchError{
 				Errors: make(map[types.Hash32]error),
 			}
 			for _, id := range ids {
-				tester.attempts[id]++
-				require.NotContains(tester.tb, tester.received, id)
+				t.attempts[id]++
+				require.NotContains(t.tb, t.received, id)
 				if err := errMap[id]; err != nil {
 					batchErr.Errors[types.Hash32(id)] = err
 					continue
 				}
-				tester.received[id] = true
+				t.received[id] = true
 				proofData := codec.MustEncode(mproof(id))
-				require.NoError(tester.tb, identities.SetMalicious(
-					tester.db, id, proofData, tester.syncer.clock.Now()))
+				require.NoError(t.tb, identities.SetMalicious(t.db, id, proofData, t.syncer.clock.Now()))
+			}
+			if len(batchErr.Errors) != 0 {
+				return batchErr
+			}
+			return nil
+		}).AnyTimes()
+}
+
+func (t *tester) expectProofs(errMap map[types.NodeID]error) {
+	t.fetcher.EXPECT().
+		MalfeasanceProofs(gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, ids []types.NodeID) error {
+			batchErr := &fetch.BatchError{
+				Errors: make(map[types.Hash32]error),
+			}
+			for _, id := range ids {
+				t.attempts[id]++
+				require.NotContains(t.tb, t.received, id)
+				if err := errMap[id]; err != nil {
+					batchErr.Errors[types.Hash32(id)] = err
+					continue
+				}
+				t.received[id] = true
+				proof := codec.MustEncode(mproof(id))
+				require.NoError(t.tb, malfeasance.AddProof(t.db, id, nil, proof, 1, t.syncer.clock.Now()))
 			}
 			if len(batchErr.Errors) != 0 {
 				return batchErr
@@ -218,14 +255,14 @@ func (tester *tester) expectPeers(peers []p2p.Peer) {
 }
 
 func TestSyncer(t *testing.T) {
-	t.Run("EnsureInSync", func(t *testing.T) {
+	t.Run("EnsureLegacyInSync", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		tester.expectPeers(tester.peers)
-		tester.expectGetMaliciousIDs()
-		tester.expectGetProofs(nil)
+		tester.expectLegacyMaliciousIDs()
+		tester.expectLegacyProofs(nil)
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
-		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
 			nid("1"), nid("2"), nid("3"), nid("4"),
 		}, maps.Keys(tester.received))
@@ -237,10 +274,31 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.Zero(t, tester.peerErrCount.n)
 	})
-	t.Run("EnsureInSync with no malfeasant identities", func(t *testing.T) {
+	t.Run("EnsureInSync", func(t *testing.T) {
+		tester := newTester(t, DefaultConfig())
+		tester.expectPeers(tester.peers)
+		tester.expectMaliciousIDs()
+		tester.expectProofs(nil)
+		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochEnd := epochStart.Add(10 * time.Minute)
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.ElementsMatch(t, []types.NodeID{
+			nid("101"), nid("102"), nid("103"), nid("104"),
+		}, maps.Keys(tester.received))
+		require.Equal(t, map[types.NodeID]int{
+			nid("101"): 1,
+			nid("102"): 1,
+			nid("103"): 1,
+			nid("104"): 1,
+		}, tester.attempts)
+		tester.clock.Advance(1 * time.Minute)
+		// second call does nothing after recent sync
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+	})
+	t.Run("EnsureLegacyInSync with no malfeasant identities", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		tester.expectPeers(tester.peers)
 		for _, p := range tester.peers {
@@ -250,8 +308,20 @@ func TestSyncer(t *testing.T) {
 		}
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
+		require.Zero(t, tester.peerErrCount.n)
+	})
+	t.Run("EnsureInSync with no malfeasant identities", func(t *testing.T) {
+		tester := newTester(t, DefaultConfig())
+		tester.expectPeers(tester.peers)
+		for _, p := range tester.peers {
+			tester.fetcher.EXPECT().
+				MaliciousIDs(gomock.Any(), p).
+				Return(nil, nil)
+		}
+		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochEnd := epochStart.Add(10 * time.Minute)
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.Zero(t, tester.peerErrCount.n)
 	})
 	t.Run("interruptible", func(t *testing.T) {
@@ -264,6 +334,12 @@ func TestSyncer(t *testing.T) {
 			Return(malData("1"), nil).AnyTimes()
 		tester.fetcher.EXPECT().
 			LegacyMalfeasanceProofs(gomock.Any(), gomock.Any()).
+			Return(errors.New("no atxs")).AnyTimes()
+		tester.fetcher.EXPECT().
+			MaliciousIDs(gomock.Any(), gomock.Any()).
+			Return(malData("101"), nil).AnyTimes()
+		tester.fetcher.EXPECT().
+			MalfeasanceProofs(gomock.Any(), gomock.Any()).
 			Return(errors.New("no atxs")).AnyTimes()
 		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
 	})
@@ -280,16 +356,20 @@ func TestSyncer(t *testing.T) {
 			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
 			return nil
 		})
-		tester.clock.BlockUntilContext(context.Background(), 1)
+		tester.clock.BlockUntilContext(context.Background(), 2)
 		tester.clock.Advance(tester.cfg.IDRequestInterval)
 		ch <- nil
-		tester.clock.BlockUntilContext(context.Background(), 1)
+		ch <- nil
+		tester.clock.BlockUntilContext(context.Background(), 2)
 		tester.clock.Advance(tester.cfg.IDRequestInterval)
 
-		tester.expectGetMaliciousIDs()
-		tester.expectGetProofs(nil)
+		tester.expectLegacyMaliciousIDs()
+		tester.expectLegacyProofs(nil)
+		tester.expectMaliciousIDs()
+		tester.expectProofs(nil)
 		ch <- tester.peers
-		tester.clock.BlockUntilContext(context.Background(), 1)
+		ch <- tester.peers
+		tester.clock.BlockUntilContext(context.Background(), 2)
 		cancel()
 		eg.Wait()
 	})
@@ -306,11 +386,11 @@ func TestSyncer(t *testing.T) {
 				LegacyMaliciousIDs(gomock.Any(), p).
 				Return(malData("4", "1", "3", "2"), nil)
 		}
-		tester.expectGetProofs(nil)
+		tester.expectLegacyProofs(nil)
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+			tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
 			nid("1"), nid("2"), nid("3"), nid("4"),
 		}, maps.Keys(tester.received))
@@ -322,7 +402,7 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.Equal(t, 1, tester.peerErrCount.n)
 	})
 	t.Run("skip hashes after max retries", func(t *testing.T) {
@@ -330,14 +410,13 @@ func TestSyncer(t *testing.T) {
 		cfg.RequestsLimit = 3
 		tester := newTester(t, cfg)
 		tester.expectPeers(tester.peers)
-		tester.expectGetMaliciousIDs()
-		tester.expectGetProofs(map[types.NodeID]error{
+		tester.expectLegacyMaliciousIDs()
+		tester.expectLegacyProofs(map[types.NodeID]error{
 			nid("2"): errors.New("fail"),
 		})
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
 			nid("1"), nid("3"), nid("4"),
 		}, maps.Keys(tester.received))
@@ -349,21 +428,20 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 	})
 	t.Run("skip hashes after validation reject", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		tester.expectPeers(tester.peers)
-		tester.expectGetMaliciousIDs()
-		tester.expectGetProofs(map[types.NodeID]error{
+		tester.expectLegacyMaliciousIDs()
+		tester.expectLegacyProofs(map[types.NodeID]error{
 			// note that "2" comes just from a single peer
-			// (see expectGetMaliciousIDs)
+			// (see expectMaliciousIDs)
 			nid("2"): pubsub.ErrValidationReject,
 		})
 		epochStart := tester.clock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
-		require.NoError(t,
-			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
 			nid("1"), nid("3"), nid("4"),
 		}, maps.Keys(tester.received))
@@ -375,6 +453,6 @@ func TestSyncer(t *testing.T) {
 		}, tester.attempts)
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
-		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 	})
 }

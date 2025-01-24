@@ -36,6 +36,7 @@ type atxSyncer interface {
 }
 
 type malSyncer interface {
+	EnsureLegacyInSync(parent context.Context, epochStart, epochEnd time.Time) error
 	EnsureInSync(parent context.Context, epochStart, epochEnd time.Time) error
 	DownloadLoop(parent context.Context) error
 }
