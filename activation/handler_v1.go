@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -230,6 +231,13 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 			zap.Int("index", invalidIdx.Index),
 		)
 		malicious, err := identities.IsMalicious(h.cdb, watx.SmesherID)
+		if err != nil {
+			return nil, fmt.Errorf("check if smesher is malicious: %w", err)
+		}
+		if malicious {
+			return nil, fmt.Errorf("smesher %s is known malfeasant", watx.SmesherID.ShortString())
+		}
+		malicious, err = malfeasance.IsMalicious(h.cdb, watx.SmesherID)
 		if err != nil {
 			return nil, fmt.Errorf("check if smesher is malicious: %w", err)
 		}
@@ -489,6 +497,11 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		if err != nil {
 			return fmt.Errorf("check if node is malicious: %w", err)
 		}
+		malicious2, err := malfeasance.IsMalicious(tx, atx.SmesherID)
+		if err != nil {
+			return fmt.Errorf("check if node is malicious: %w", err)
+		}
+		malicious = malicious || malicious2
 		if !malicious {
 			malicious, err = h.checkMalicious(ctx, tx, watx)
 			if err != nil {

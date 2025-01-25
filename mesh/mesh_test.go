@@ -383,9 +383,6 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, malProof)
 	require.False(t, blts[0].IsMalicious())
-	mal, err := identities.IsMalicious(tm.cdb, sig.NodeID())
-	require.NoError(t, err)
-	require.False(t, mal)
 
 	malicious, err := identities.IsMalicious(tm.cdb, sig.NodeID())
 	require.NoError(t, err)

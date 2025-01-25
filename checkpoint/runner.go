@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 )
 
@@ -68,7 +69,11 @@ func checkpointDB(
 			if err != nil {
 				return nil, fmt.Errorf("atxs snapshot check identity: %w", err)
 			}
-			malicious[catx.SmesherID] = mal
+			mal2, err := malfeasance.IsMalicious(tx, catx.SmesherID)
+			if err != nil {
+				return nil, fmt.Errorf("atxs snapshot check malfeasance: %w", err)
+			}
+			malicious[catx.SmesherID] = mal || mal2
 		}
 		commitmentAtx, err := atxs.CommitmentATX(tx, catx.SmesherID)
 		if err != nil {
