@@ -539,36 +539,37 @@ func (s *Syncer) downloadLegacyMalfeasanceProofs(ctx context.Context, initial bo
 		}
 
 		nothingToDownload = len(batch) == 0
-		if len(batch) != 0 {
-			s.logger.Debug("retrieving legacy malicious identities",
-				log.ZContext(ctx),
-				zap.Int("count", len(batch)),
-			)
-			if err := s.fetcher.LegacyMalfeasanceProofs(ctx, batch); err != nil {
-				if errors.Is(err, context.Canceled) {
-					return ctx.Err()
-				}
-				s.logger.Debug("failed to download malfeasance proofs",
-					log.ZContext(ctx),
-					log.NiceZapError(err),
-				)
-			}
-			batchError := &fetch.BatchError{}
-			if errors.As(err, &batchError) {
-				for hash, err := range batchError.Errors {
-					nodeID := types.NodeID(hash)
-					switch {
-					case !sst.has(nodeID):
-						continue
-					case errors.Is(err, pubsub.ErrValidationReject):
-						sst.rejected(nodeID)
-					default:
-						sst.failed(nodeID)
-					}
-				}
-			}
-		} else {
+		if len(batch) == 0 {
 			s.logger.Debug("no new legacy malicious identities", log.ZContext(ctx))
+			continue
+		}
+
+		s.logger.Debug("retrieving legacy malicious identities",
+			log.ZContext(ctx),
+			zap.Int("count", len(batch)),
+		)
+		batchError := &fetch.BatchError{}
+		err = s.fetcher.LegacyMalfeasanceProofs(ctx, batch)
+		switch {
+		case errors.Is(err, context.Canceled):
+			return ctx.Err()
+		case errors.As(err, &batchError):
+			for hash, err := range batchError.Errors {
+				nodeID := types.NodeID(hash)
+				switch {
+				case !sst.has(nodeID):
+					continue
+				case errors.Is(err, pubsub.ErrValidationReject):
+					sst.rejected(nodeID)
+				default:
+					sst.failed(nodeID)
+				}
+			}
+		case err != nil:
+			s.logger.Debug("failed to download malfeasance proofs",
+				log.ZContext(ctx),
+				log.NiceZapError(err),
+			)
 		}
 	}
 }
@@ -634,36 +635,37 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		}
 
 		nothingToDownload = len(batch) == 0
-		if len(batch) != 0 {
-			s.logger.Debug("retrieving malicious identities",
-				log.ZContext(ctx),
-				zap.Int("count", len(batch)),
-			)
-			if err := s.fetcher.MalfeasanceProofs(ctx, batch); err != nil {
-				if errors.Is(err, context.Canceled) {
-					return ctx.Err()
-				}
-				s.logger.Debug("failed to download malfeasance proofs",
-					log.ZContext(ctx),
-					log.NiceZapError(err),
-				)
-			}
-			batchError := &fetch.BatchError{}
-			if errors.As(err, &batchError) {
-				for hash, err := range batchError.Errors {
-					nodeID := types.NodeID(hash)
-					switch {
-					case !sst.has(nodeID):
-						continue
-					case errors.Is(err, pubsub.ErrValidationReject):
-						sst.rejected(nodeID)
-					default:
-						sst.failed(nodeID)
-					}
-				}
-			}
-		} else {
+		if len(batch) == 0 {
 			s.logger.Debug("no new malicious identities", log.ZContext(ctx))
+			continue
+		}
+
+		s.logger.Debug("retrieving malicious identities",
+			log.ZContext(ctx),
+			zap.Int("count", len(batch)),
+		)
+		batchError := &fetch.BatchError{}
+		err = s.fetcher.MalfeasanceProofs(ctx, batch)
+		switch {
+		case errors.Is(err, context.Canceled):
+			return ctx.Err()
+		case errors.As(err, &batchError):
+			for hash, err := range batchError.Errors {
+				nodeID := types.NodeID(hash)
+				switch {
+				case !sst.has(nodeID):
+					continue
+				case errors.Is(err, pubsub.ErrValidationReject):
+					sst.rejected(nodeID)
+				default:
+					sst.failed(nodeID)
+				}
+			}
+		case err != nil:
+			s.logger.Debug("failed to download malfeasance proofs",
+				log.ZContext(ctx),
+				log.NiceZapError(err),
+			)
 		}
 	}
 }

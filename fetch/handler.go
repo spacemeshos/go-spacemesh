@@ -101,26 +101,23 @@ func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.P
 }
 
 func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, _ []byte, s io.ReadWriter) error {
-	tx, err := h.db.TxImmediate(ctx)
+	err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
+		return h.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+			total, err := malfeasance.Count(tx)
+			if err != nil {
+				return fmt.Errorf("counting malicious nodes: %w", err)
+			}
+			return malfeasance.IterateOps(tx, builder.Operations{},
+				func(nodeID types.NodeID, _ []byte, _ int, _ time.Time) bool {
+					if err := cbk(total, nodeID.Bytes()); err != nil {
+						h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
+						return false
+					}
+					return true
+				})
+		})
+	})
 	if err != nil {
-		h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
-		return nil
-	}
-	defer tx.Release()
-	total, err := malfeasance.Count(tx)
-	if err != nil {
-		return fmt.Errorf("counting malicious nodes: %w", err)
-	}
-	if err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		return malfeasance.IterateOps(tx, builder.Operations{},
-			func(nodeID types.NodeID, _ []byte, _ int, _ time.Time) bool {
-				if err := cbk(total, nodeID.Bytes()); err != nil {
-					h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
-					return false
-				}
-				return true
-			})
-	}); err != nil {
 		h.logger.Debug("failed to stream malicious node IDs", log.ZContext(ctx), zap.Error(err))
 	}
 	return nil

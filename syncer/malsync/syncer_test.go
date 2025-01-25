@@ -405,7 +405,7 @@ func TestSyncer(t *testing.T) {
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.Equal(t, 1, tester.peerErrCount.n)
 	})
-	t.Run("skip hashes after max retries", func(t *testing.T) {
+	t.Run("skip hashes after max retries - legacy", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.RequestsLimit = 3
 		tester := newTester(t, cfg)
@@ -430,7 +430,32 @@ func TestSyncer(t *testing.T) {
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 	})
-	t.Run("skip hashes after validation reject", func(t *testing.T) {
+	t.Run("skip hashes after max retries", func(t *testing.T) {
+		cfg := DefaultConfig()
+		cfg.RequestsLimit = 3
+		tester := newTester(t, cfg)
+		tester.expectPeers(tester.peers)
+		tester.expectMaliciousIDs()
+		tester.expectProofs(map[types.NodeID]error{
+			nid("102"): errors.New("fail"),
+		})
+		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochEnd := epochStart.Add(10 * time.Minute)
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.ElementsMatch(t, []types.NodeID{
+			nid("101"), nid("103"), nid("104"),
+		}, maps.Keys(tester.received))
+		require.Equal(t, map[types.NodeID]int{
+			nid("101"): 1,
+			nid("102"): tester.cfg.RequestsLimit,
+			nid("103"): 1,
+			nid("104"): 1,
+		}, tester.attempts)
+		tester.clock.Advance(1 * time.Minute)
+		// second call does nothing after recent sync
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+	})
+	t.Run("skip hashes after validation reject - legacy", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		tester.expectPeers(tester.peers)
 		tester.expectLegacyMaliciousIDs()
@@ -454,5 +479,30 @@ func TestSyncer(t *testing.T) {
 		tester.clock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
+	})
+	t.Run("skip hashes after validation reject", func(t *testing.T) {
+		tester := newTester(t, DefaultConfig())
+		tester.expectPeers(tester.peers)
+		tester.expectMaliciousIDs()
+		tester.expectProofs(map[types.NodeID]error{
+			// note that "102" comes just from a single peer
+			// (see expectMaliciousIDs)
+			nid("102"): pubsub.ErrValidationReject,
+		})
+		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochEnd := epochStart.Add(10 * time.Minute)
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
+		require.ElementsMatch(t, []types.NodeID{
+			nid("101"), nid("103"), nid("104"),
+		}, maps.Keys(tester.received))
+		require.Equal(t, map[types.NodeID]int{
+			nid("101"): 1,
+			nid("102"): 1,
+			nid("103"): 1,
+			nid("104"): 1,
+		}, tester.attempts)
+		tester.clock.Advance(1 * time.Minute)
+		// second call does nothing after recent sync
+		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 	})
 }
