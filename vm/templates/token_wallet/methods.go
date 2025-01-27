@@ -1,4 +1,4 @@
-package wallet
+package tokenwallet
 
 import (
 	"errors"
@@ -8,26 +8,25 @@ import (
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/templates"
 )
 
-type DeployArgs struct {
-	Code []byte
-}
-type ProxyArgs struct {
-	Destination types.Address
-	Method      *athcon.MethodSelector
-	Args        *[]byte
-	Amount      uint64
+type SpawnArguments struct {
+	Owner          core.PublicKey
+	MintTemplate   types.Address
+	WalletTemplate types.Address
 }
 
-type SpawnArgs struct {
-	Pubkey [32]byte
+type SpendArguments struct {
+	TokenId types.Address
+	To      types.Address
+	Amount  uint64
 }
 
-type SpendArgs struct {
-	To     types.Address
-	Amount uint64
+type ReceiveArguments struct {
+	TokenId types.Address
+	Amount  uint64
 }
 
 func ParseArgs(payload athcon.Payload) (any, error) {
@@ -37,14 +36,10 @@ func ParseArgs(payload athcon.Payload) (any, error) {
 	var txArgs any
 
 	switch *payload.Selector {
-	case templates.DeploySelector:
-		txArgs = new(DeployArgs)
-	case templates.ProxySelector:
-		txArgs = new(ProxyArgs)
 	case templates.SpawnSelector:
-		txArgs = new(SpawnArgs)
+		txArgs = new(SpawnArguments)
 	case templates.SpendSelector:
-		txArgs = new(SpendArgs)
+		txArgs = new(SpendArguments)
 	default:
 		return nil, fmt.Errorf("unknown method selector %q", payload.Selector.String())
 	}

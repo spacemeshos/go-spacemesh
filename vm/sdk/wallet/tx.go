@@ -3,6 +3,7 @@ package wallet
 import (
 	"bytes"
 	"fmt"
+	"log"
 
 	gossamerScale "github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -59,6 +60,17 @@ func Deploy(pk signing.PrivateKey, nonce core.Nonce, blob []byte, opts ...sdk.Op
 	}
 
 	return core.SignedTx(tx, options.GenesisID, pk)
+}
+
+func EncodeSpawnArgs(pubkey ed25519.PublicKey) []byte {
+	args := wallet.SpawnArgs{
+		Pubkey: [32]byte(pubkey),
+	}
+	encoded, err := gossamerScale.Marshal(args)
+	if err != nil {
+		log.Panicf("encoding spawn arguments: %v", err)
+	}
+	return encoded
 }
 
 func SpawnTx(pubkey ed25519.PublicKey, nonce core.Nonce, opts ...sdk.Opt) (*core.Tx, error) {
@@ -170,4 +182,56 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 		Payload: vmlib.EncodeTxSpend(athcon.Address(to), amount),
 	}
 	return core.SignedTx(&tx, options.GenesisID, pk)
+}
+
+func ProxyTx(principal, to types.Address, method *athcon.MethodSelector, args []byte, amount, nonce uint64, opts ...sdk.Opt) (*core.Tx, error) {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+	input := wallet.ProxyArgs{
+		Destination: to,
+		Method:      method,
+		Amount:      amount,
+	}
+	if len(args) > 0 {
+		input.Args = new([]byte)
+		*input.Args = args
+	}
+	inputEncoded, err := gossamerScale.Marshal(input)
+	if err != nil {
+		return nil, fmt.Errorf("encoding proxy method args: %w", err)
+	}
+
+	athPayload := athcon.Payload{
+		Selector: &templates.ProxySelector,
+		Input:    inputEncoded,
+	}
+	payload, err := gossamerScale.Marshal(athPayload)
+	if err != nil {
+		return nil, fmt.Errorf("encoding tx payload: %w", err)
+	}
+
+	return &core.Tx{
+		Version:   uint8(sdk.TxVersion),
+		Principal: principal,
+		Metadata: core.Metadata{
+			Nonce:    nonce,
+			GasPrice: options.GasPrice,
+		},
+		Payload: payload,
+	}, nil
+}
+
+func Proxy(pk signing.PrivateKey, to types.Address, method *athcon.MethodSelector, args []byte, amount, nonce uint64, opts ...sdk.Opt) ([]byte, error) {
+	options := sdk.Defaults()
+	for _, opt := range opts {
+		opt(options)
+	}
+	tx, err := ProxyTx(Address(signing.Public(pk)), to, method, args, amount, nonce, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return core.SignedTx(tx, options.GenesisID, pk)
 }

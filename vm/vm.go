@@ -3,6 +3,7 @@ package vm
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -459,7 +460,7 @@ func (v *VM) execInVm(host *core.Context, payload []byte) error {
 		return errors.New("gas limit exceeds maximum int64 value")
 	}
 	v.logger.Debug("executing", zap.Uint32("layer", host.Layer().Uint32()), zap.Int64("maxgas", maxgas))
-	_, gasLeft, err := vmhost.Execute(
+	output, gasLeft, err := vmhost.Execute(
 		host.Layer(),
 		maxgas,
 		host.Principal(),
@@ -467,6 +468,7 @@ func (v *VM) execInVm(host *core.Context, payload []byte) error {
 		executionPayload,
 		templateAccount.State,
 	)
+	v.logger.Debug("exeucted", zap.Int64("gas left", gasLeft), zap.String("output in hex", hex.EncodeToString(output)), zap.Error(err))
 	host.SpendGas(uint64(maxgas) - uint64(gasLeft))
 	return err
 }
@@ -618,6 +620,7 @@ func parse(
 	if err != nil {
 		return nil, nil, err
 	}
+	logger.Debug("calculated max spend", zap.Uint64("max", maxspend))
 	ctx.Header.MaxSpend = maxspend
 	return &ctx.Header, ctx, nil
 }

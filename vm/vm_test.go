@@ -27,9 +27,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	"github.com/spacemeshos/go-spacemesh/vm/sdk"
+	sdkmint "github.com/spacemeshos/go-spacemesh/vm/sdk/mint"
 	sdkmultisig "github.com/spacemeshos/go-spacemesh/vm/sdk/multisig"
+	sdktokenwallet "github.com/spacemeshos/go-spacemesh/vm/sdk/token_wallet"
 	sdkwallet "github.com/spacemeshos/go-spacemesh/vm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/vm/templates"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/mint"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
+	tokenwallet "github.com/spacemeshos/go-spacemesh/vm/templates/token_wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -46,11 +51,19 @@ func newTester(tb testing.TB) *tester {
 
 type testAccount interface {
 	getAddress() core.Address
+
 	spend(t *tester, to core.Address, amount uint64, nonce core.Nonce, opts ...sdk.Opt) []byte
 	selfSpawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
-
 	spawn(t *tester, nonce core.Nonce, opts ...sdk.Opt) []byte
 	deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte
+	proxy(
+		t *tester,
+		to core.Address,
+		method *athcon.MethodSelector,
+		args []byte,
+		amount, nonce uint64,
+		opts ...sdk.Opt,
+	) []byte
 
 	selfSpawnGas() int
 	spendGas() int
@@ -70,6 +83,19 @@ func (a *singlesigAccount) getAddress() core.Address {
 
 func (a *singlesigAccount) deploy(t *tester, nonce core.Nonce, blob []byte, opts ...sdk.Opt) []byte {
 	tx, err := sdkwallet.Deploy(a.pk, nonce, blob, opts...)
+	require.NoError(t, err)
+	return tx
+}
+
+func (a *singlesigAccount) proxy(
+	t *tester,
+	to core.Address,
+	method *athcon.MethodSelector,
+	args []byte,
+	amount, nonce uint64,
+	opts ...sdk.Opt,
+) []byte {
+	tx, err := sdkwallet.Proxy(a.pk, to, method, args, amount, nonce, opts...)
 	require.NoError(t, err)
 	return tx
 }
@@ -164,6 +190,17 @@ func (a *multisigAccount) deploy(t *tester, nonce core.Nonce, blob []byte, opts 
 	panic("not implemented")
 }
 
+func (a *multisigAccount) proxy(
+	t *tester,
+	to core.Address,
+	method *athcon.MethodSelector,
+	args []byte,
+	amount, nonce uint64,
+	opts ...sdk.Opt,
+) []byte {
+	panic("not implemented")
+}
+
 // verify gas depends on the length of witness data,
 // which depends on the number of required signatures.
 func (a *multisigAccount) verifyGas() int {
@@ -238,7 +275,7 @@ type tester struct {
 	templates []testTemplate
 	accounts  []testAccount
 	nonces    []core.Nonce
-	balances  []uint64
+	balances  map[types.Address]uint64
 }
 
 func (t *tester) persistent() *tester {
@@ -258,7 +295,15 @@ func (t *tester) withGasLimit(limit uint64) *tester {
 func (t *tester) addAccount(account testAccount, balance uint64) {
 	t.accounts = append(t.accounts, account)
 	t.nonces = append(t.nonces, 0)
-	t.balances = append(t.balances, balance)
+	t.addBalance(account.getAddress(), balance)
+}
+
+func (t *tester) addBalance(address types.Address, balance uint64) *tester {
+	if t.balances == nil {
+		t.balances = make(map[types.Address]uint64)
+	}
+	t.balances[address] = balance
+	return t
 }
 
 func (t *tester) addTemplate(address types.Address, code []byte) *tester {
@@ -276,11 +321,16 @@ func (t *tester) addMultiSigWalletTemplate() *tester {
 
 func (t *tester) addSingleSig(n int) *tester {
 	for i := 0; i < n; i++ {
-		pub, pk, err := ed25519.GenerateKey(t.rng)
+		_, pk, err := ed25519.GenerateKey(t.rng)
 		require.NoError(t, err)
-		address := sdkwallet.Address(pub)
-		t.addAccount(&singlesigAccount{pk, address}, 1_000_000_000)
+		t.addSingleSigWithKey(pk, 1_000_000_000)
 	}
+	return t
+}
+
+func (t *tester) addSingleSigWithKey(pk ed25519.PrivateKey, balance uint64) *tester {
+	address := sdkwallet.Address(pk.Public().(ed25519.PublicKey))
+	t.addAccount(&singlesigAccount{pk, address}, balance)
 	return t
 }
 
@@ -322,12 +372,12 @@ func (t *tester) applyGenesisWithBalance() *tester {
 		}
 	}
 	require.NoError(t, t.VM.ApplyGenesis(templates))
-	accounts := make([]core.Account, len(t.accounts))
-	for i := range accounts {
-		accounts[i] = core.Account{
-			Address: t.accounts[i].getAddress(),
-			Balance: t.balances[i],
-		}
+	accounts := make([]core.Account, 0, len(t.accounts))
+	for address, balance := range t.balances {
+		accounts = append(accounts, core.Account{
+			Address: address,
+			Balance: balance,
+		})
 	}
 	require.NoError(t, t.VM.ApplyGenesis(accounts))
 	return t
@@ -353,6 +403,18 @@ func (t *tester) spawnAll() []types.RawTx {
 func (t *tester) selfSpawn(i int, opts ...sdk.Opt) types.RawTx {
 	nonce := t.nextNonce(i)
 	return types.NewRawTx(t.accounts[i].selfSpawn(t, nonce, opts...))
+}
+
+func (t *tester) proxy(
+	i int,
+	to core.Address,
+	method *athcon.MethodSelector,
+	args []byte,
+	amount uint64,
+	opts ...sdk.Opt,
+) types.RawTx {
+	nonce := t.nextNonce(i)
+	return types.NewRawTx(t.accounts[i].proxy(t, to, method, args, amount, nonce, opts...))
 }
 
 // func (t *tester) spawn(i, j int, opts ...sdk.Opt) types.RawTx {
@@ -1433,6 +1495,121 @@ func TestWallets(t *testing.T) {
 				addMultisig(total-funded, 5, 7)
 		})
 	})
+}
+
+func TestTokenMint(t *testing.T) {
+	tt := newTester(t)
+	maxSupply := uint64(1_000_000)
+	tokenPrice := uint64(1000)
+	mintPub, mintPriv, err := ed25519.GenerateKey(tt.rng)
+	require.NoError(t, err)
+
+	mintAddress := sdkmint.Address(maxSupply, tokenPrice, core.PublicKey(mintPub))
+	tokenID := mintAddress
+
+	// Alice's token wallet
+	alicePub, alicePriv, err := ed25519.GenerateKey(tt.rng)
+	require.NoError(t, err)
+	aliceWalletAddress := sdktokenwallet.Address(mint.TemplateAddress, tokenwallet.TemplateAddress, core.PublicKey(alicePub))
+
+	// Bob's token wallet
+	bobPub, bobPriv, err := ed25519.GenerateKey(tt.rng)
+	require.NoError(t, err)
+	bobWalletAddress := sdktokenwallet.Address(mint.TemplateAddress, tokenwallet.TemplateAddress, core.PublicKey(bobPub))
+
+	tt.
+		addWalletTemplate().
+		addTemplate(mint.TemplateAddress, mint.PROGRAM).
+		addTemplate(tokenwallet.TemplateAddress, tokenwallet.PROGRAM).
+		addSingleSig(1).
+		addBalance(mintAddress, 100_000).          // for self-SPAWN
+		addBalance(aliceWalletAddress, 1_000_000). // for self-SPAWN and spending
+		addBalance(bobWalletAddress, 1_000_000).   // for self-SPAWN and spending
+		applyGenesisWithBalance()
+
+	layer := types.GetEffectiveGenesis()
+
+	makeRaw := func(makeTx func() ([]byte, error)) types.Transaction {
+		raw, err := makeTx()
+		require.NoError(t, err)
+		return types.Transaction{RawTx: types.NewRawTx(raw)}
+	}
+	// 1. Spawn needed accounts:
+	// - The wallet which will buy tokoens account which will PROXY the next call
+	// - The mint
+	// - Alice's token wallet
+	// - Bob's token wallet
+	_, _, err = tt.Apply(layer, []types.Transaction{
+		{RawTx: tt.selfSpawn(0)},
+		makeRaw(func() ([]byte, error) { return sdkmint.Spawn(mintPriv, maxSupply, tokenPrice, 0) }),
+		makeRaw(func() ([]byte, error) {
+			return sdktokenwallet.Spawn(alicePriv, mint.TemplateAddress, tokenwallet.TemplateAddress, 0)
+		}),
+		makeRaw(func() ([]byte, error) {
+			return sdktokenwallet.Spawn(bobPriv, mint.TemplateAddress, tokenwallet.TemplateAddress, 0)
+		}),
+	}, nil)
+	require.NoError(t, err)
+
+	// check mint supply before buying
+	mintAccount, err := accounts.Latest(tt.db, mintAddress)
+	require.NoError(t, err)
+	require.Zero(t, sdkmint.DistributedTokens(&mintAccount))
+
+	// 3. Buy tokens for 5000 Smidge using a PROXY call.
+	//    The principal pays for the call and for the tokens.
+	proxyTx := tt.proxy(
+		0,
+		mintAddress,
+		&templates.BuySelector,
+		sdkmint.EncodeBuyArgs(aliceWalletAddress),
+		5000,
+	)
+	_, _, err = tt.Apply(layer+1, []types.Transaction{{RawTx: proxyTx}}, nil)
+	require.NoError(t, err)
+
+	// 4. Mint balance and the number of distributed tokens should have increased.
+	mintAccountAfter, err := accounts.Latest(tt.db, mintAddress)
+	require.NoError(t, err)
+	require.Equal(t, uint64(5000), mintAccountAfter.Balance-mintAccount.Balance)
+	require.EqualValues(t, 5, sdkmint.DistributedTokens(&mintAccountAfter))
+
+	// 5. Alice wallet should have the bought tokens.
+	aliceWallet, err := accounts.Latest(tt.db, aliceWalletAddress)
+	require.NoError(t, err)
+	require.EqualValues(t, 5, sdktokenwallet.Balance(&aliceWallet, mintAddress))
+
+	// 6. Alice sends 2 tokens to Bob.
+	_, _, err = tt.Apply(layer+2, []types.Transaction{
+		makeRaw(func() ([]byte, error) {
+			return sdktokenwallet.Spend(alicePriv, tokenID, aliceWalletAddress, bobWalletAddress, 2, 1)
+		}),
+	}, nil)
+	require.NoError(t, err)
+
+	aliceWallet, err = accounts.Latest(tt.db, aliceWalletAddress)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, sdktokenwallet.Balance(&aliceWallet, mintAddress))
+
+	bobWallet, err := accounts.Latest(tt.db, bobWalletAddress)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, sdktokenwallet.Balance(&bobWallet, mintAddress))
+
+	// 7. Cannot overspend. The balances mustn't change.
+	_, _, err = tt.Apply(layer+3, []types.Transaction{
+		makeRaw(func() ([]byte, error) {
+			return sdktokenwallet.Spend(alicePriv, tokenID, aliceWalletAddress, bobWalletAddress, 4, 2)
+		}),
+	}, nil)
+	require.NoError(t, err)
+
+	aliceWallet, err = accounts.Latest(tt.db, aliceWalletAddress)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, sdktokenwallet.Balance(&aliceWallet, mintAddress))
+
+	bobWallet, err = accounts.Latest(tt.db, bobWalletAddress)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, sdktokenwallet.Balance(&bobWallet, mintAddress))
 }
 
 func TestSingleSigWalletDeploy(t *testing.T) {

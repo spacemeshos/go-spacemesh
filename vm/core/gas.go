@@ -43,5 +43,5 @@ func TxDataGas(size int) uint64 {
 }
 
 func MaxGas(inputSize int) uint64 {
-	return 4_000 + uint64(inputSize)*100
+	return 20_000 + uint64(inputSize)*100
 }

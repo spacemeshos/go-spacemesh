@@ -1,3 +1,5 @@
 tortoise/data/*.json filter=lfs diff=lfs merge=lfs -text
 vm/templates/wallet/elf/wallet filter=lfs diff=lfs merge=lfs -text
 vm/templates/multisig/elf/multisig filter=lfs diff=lfs merge=lfs -text
+vm/templates/token_wallet/elf/wallet filter=lfs diff=lfs merge=lfs -text
+vm/templates/mint/elf/mint filter=lfs diff=lfs merge=lfs -text
