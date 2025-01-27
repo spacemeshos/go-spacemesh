@@ -20,10 +20,10 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
@@ -33,8 +33,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
-	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/systest/cluster"
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
@@ -52,22 +52,64 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// Prepare cluster
 	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
-	ctx.ClusterSize = 3
+	ctx.ClusterSize = 5
 	cl := cluster.New(ctx, cluster.WithKeys(10))
 	require.NoError(t, cl.AddBootnodes(ctx, 1))
 	require.NoError(t, cl.AddBootstrappers(ctx))
 	require.NoError(t, cl.AddPoets(ctx))
 	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
 
-	// Prepare config
+	t.Run("distributed post v1", func(t *testing.T) {
+		// Prepare config
+		cfg := getConfig(t, cl, ctx)
+
+		cfg.DataDirParent = testDir
+		cfg.SMESHING.Opts.DataDir = filepath.Join(testDir, "post-data")
+		cfg.P2P.DataDir = filepath.Join(testDir, "p2p-dir")
+		require.NoError(t, os.Mkdir(cfg.P2P.DataDir, os.ModePerm))
+
+		signer, err := signing.NewEdSigner(signing.WithPrefix(cl.GenesisID().Bytes()))
+		require.NoError(t, err)
+
+		ctrl := gomock.NewController(t)
+		db := statesql.InMemoryTest(t)
+		cdb := datastore.NewCachedDB(db, zap.NewNop())
+		t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
+
+		host := setupHost(t, logger, cl, cfg)
+		clock := setupClock(t, logger, cl, cfg)
+		setupFetcher(t, cl, ctx, logger, cfg, db, clock, host)
+
+		syncer := activation.NewMocksyncer(ctrl)
+		syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+			ch := make(chan struct{})
+			close(ch)
+			return ch
+		}).AnyTimes()
+
+		initPost(t, cl, ctx, logger, cfg, signer, cdb, syncer)
+
+		verifyingOpts := activation.DefaultPostVerifyingOpts()
+		verifyingOpts.Workers = 1
+		verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
+		require.NoError(t, err)
+
+		localDb := localsql.InMemoryTest(t)
+		atx := createInitialAtxV1(t, ctx, logger, cl, cfg, signer, db, localDb, clock, verifier)
+
+		publishCtx, stopPublishing := context.WithCancel(ctx.Context)
+		defer stopPublishing()
+		publishATX(t, cl, ctx, logger, host, publishCtx, atx)
+
+		verifyMalfeasanceProof(t, cl, ctx, logger, stopPublishing, signer, atx, verifier)
+	})
+}
+
+func getConfig(t testing.TB, cl *cluster.Cluster, ctx *testcontext.Context) *config.Config {
 	cfg, err := cl.NodeConfig(ctx)
 	require.NoError(t, err)
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
-	cfg.DataDirParent = testDir
-	cfg.SMESHING.Opts.DataDir = filepath.Join(testDir, "post-data")
-	cfg.P2P.DataDir = filepath.Join(testDir, "p2p-dir")
-	require.NoError(t, os.Mkdir(cfg.P2P.DataDir, os.ModePerm))
 
 	cfg.POET.RequestTimeout = time.Minute
 	cfg.POET.MaxRequestRetries = 10
@@ -81,14 +123,14 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, err)
 	cfg.P2P.Bootnodes = endpoints
 	cfg.P2P.PrivateNetwork = true
+
 	cfg.Bootstrap.URL = cluster.BootstrapperGlobalEndpoint(ctx.Namespace, 0)
 	cfg.P2P.MinPeers = 2
 	ctx.Log.Debugw("Prepared config", "cfg", cfg)
+	return cfg
+}
 
-	goldenATXID := cl.GoldenATX()
-	signer, err := signing.NewEdSigner(signing.WithPrefix(cl.GenesisID().Bytes()))
-	require.NoError(t, err)
-
+func setupHost(t testing.TB, logger *zap.Logger, cl *cluster.Cluster, cfg *config.Config) *p2p.Host {
 	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
 	host, err := p2p.New(
 		logger.Named("p2p"),
@@ -101,11 +143,10 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error { return nil })
 	require.NoError(t, host.Start())
 	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
+	return host
+}
 
-	db := statesql.InMemoryTest(t)
-	cdb := datastore.NewCachedDB(db, zap.NewNop())
-	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
-
+func setupClock(t testing.TB, logger *zap.Logger, cl *cluster.Cluster, cfg *config.Config) *timesync.NodeClock {
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
@@ -114,7 +155,19 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	)
 	require.NoError(t, err)
 	t.Cleanup(clock.Close)
+	return clock
+}
 
+func setupFetcher(
+	tb testing.TB,
+	cl *cluster.Cluster,
+	ctx *testcontext.Context,
+	logger *zap.Logger,
+	cfg *config.Config,
+	db sql.StateDatabase,
+	clock *timesync.NodeClock,
+	host *p2p.Host,
+) *fetch.Fetch {
 	proposalsStore := store.New(
 		store.WithEvictedLayer(clock.CurrentLayer()),
 		store.WithLogger(logger.Named("proposals-store")),
@@ -127,7 +180,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		fetch.WithConfig(cfg.FETCH),
 		fetch.WithLogger(logger.Named("fetcher")),
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
@@ -142,18 +195,22 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
 	)
 
-	require.NoError(t, fetcher.Start())
-	t.Cleanup(fetcher.Stop)
+	require.NoError(tb, fetcher.Start())
+	tb.Cleanup(fetcher.Stop)
+	return fetcher
+}
 
-	ctrl := gomock.NewController(t)
-	syncer := activation.NewMocksyncer(ctrl)
-	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
-		ch := make(chan struct{})
-		close(ch)
-		return ch
-	}).AnyTimes()
-
-	// 1. Initialize
+func initPost(
+	tb testing.TB,
+	cl *cluster.Cluster,
+	ctx *testcontext.Context,
+	logger *zap.Logger,
+	cfg *config.Config,
+	signer *signing.EdSigner,
+	cdb *datastore.CachedDB,
+	syncer *activation.Mocksyncer,
+) {
+	ctrl := gomock.NewController(tb)
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
@@ -163,7 +220,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		syncer,
 		activation.NewMocknipostValidator(ctrl),
 	)
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	builder := activation.NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(signer)
@@ -174,169 +231,38 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		postSetupMgr,
 		builder,
 	)
-	require.NoError(t, postSupervisor.Start(cfg.POSTService, cfg.SMESHING.Opts, signer))
-	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
+	require.NoError(tb, postSupervisor.Start(cfg.POSTService, cfg.SMESHING.Opts, signer))
+	tb.Cleanup(func() { assert.NoError(tb, postSupervisor.Stop(false)) })
+}
 
-	// 2. create ATX with invalid POST labels
-	grpcPostService := grpcserver.NewPostService(
-		logger.Named("grpc-post-service"),
-		grpcserver.PostServiceQueryInterval(500*time.Millisecond),
-	)
-	grpcPostService.AllowConnections(true)
-
-	grpcPrivateServer, err := grpcserver.NewWithServices(
-		cfg.API.PostListener,
-		logger.Named("grpc-server"),
-		cfg.API,
-		[]grpcserver.ServiceAPI{grpcPostService},
-	)
-	require.NoError(t, err)
-	require.NoError(t, grpcPrivateServer.Start())
-	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
-
-	localDb := localsql.InMemoryTest(t)
-	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
-	certifier := activation.NewCertifier(localDb, logger, certClient)
-	poetDb, err := activation.NewPoetDb(db, zap.NewNop())
-	require.NoError(t, err)
-	poetService, err := activation.NewPoetService(
-		poetDb,
-		types.PoetServer{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
-		cfg.POET,
-		logger,
-		1,
-		activation.WithCertifier(certifier),
-	)
-	require.NoError(t, err)
-
-	verifyingOpts := activation.DefaultPostVerifyingOpts()
-	verifyingOpts.Workers = 1
-	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
-	require.NoError(t, err)
-
-	validator := activation.NewValidator(
-		db,
-		poetDb,
-		cfg.POST,
-		cfg.SMESHING.Opts.Scrypt,
-		verifier,
-	)
-
-	nipostBuilder, err := activation.NewNIPostBuilder(
-		localDb,
-		grpcPostService,
-		logger.Named("nipostBuilder"),
-		cfg.POET,
-		clock,
-		validator,
-		activation.WithPoetServices(poetService),
-	)
-	require.NoError(t, err)
-
-	// 2.1. Create initial POST
-	var challenge *wire.NIPostChallengeV1
-	for {
-		client, err := grpcPostService.Client(signer.NodeID())
-		if err != nil {
-			ctx.Log.Info("waiting for poet service to connect")
-			time.Sleep(time.Second)
-			continue
-		}
-		ctx.Log.Info("poet service to connected")
-		post, postInfo, err := client.Proof(ctx, shared.ZeroChallenge)
-		require.NoError(t, err)
-
-		err = nipost.AddPost(localDb, signer.NodeID(), nipost.Post{
-			Nonce:         post.Nonce,
-			Indices:       post.Indices,
-			Pow:           post.Pow,
-			Challenge:     shared.ZeroChallenge,
-			NumUnits:      postInfo.NumUnits,
-			CommitmentATX: postInfo.CommitmentATX,
-			VRFNonce:      *postInfo.Nonce,
-		})
-		require.NoError(t, err)
-
-		challenge = &wire.NIPostChallengeV1{
-			PrevATXID:        types.EmptyATXID,
-			PublishEpoch:     1,
-			PositioningATXID: goldenATXID,
-			CommitmentATXID:  &postInfo.CommitmentATX,
-			InitialPost: &wire.PostV1{
-				Nonce:   post.Nonce,
-				Indices: post.Indices,
-				Pow:     post.Pow,
-			},
-		}
-		break
-	}
-	nipostChallenge := &types.NIPostChallenge{
-		PublishEpoch:   challenge.PublishEpoch,
-		PrevATXID:      types.EmptyATXID,
-		PositioningATX: challenge.PositioningATXID,
-		CommitmentATX:  challenge.CommitmentATXID,
-		InitialPost: &types.Post{
-			Nonce:   challenge.InitialPost.Nonce,
-			Indices: challenge.InitialPost.Indices,
-			Pow:     challenge.InitialPost.Pow,
-		},
-	}
-	err = nipost.AddChallenge(localDb, signer.NodeID(), nipostChallenge)
-	require.NoError(t, err)
-
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.Hash(), nipostChallenge)
-	require.NoError(t, err)
-
-	// 2.2 Create ATX with invalid POST
-	for i := range nipost.Post.Indices {
-		nipost.Post.Indices[i] += 1
-	}
-
-	// Sanity check that the POST is invalid
-	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
-		NodeId:          signer.NodeID().Bytes(),
-		CommitmentAtxId: challenge.CommitmentATXID.Bytes(),
-		NumUnits:        nipost.NumUnits,
-		Challenge:       nipost.PostMetadata.Challenge,
-		LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
-	})
-	var invalidIdxError *verifying.ErrInvalidIndex
-	require.ErrorAs(t, err, &invalidIdxError)
-
-	nodeID := signer.NodeID()
-	atx := wire.ActivationTxV1{
-		InnerActivationTxV1: wire.InnerActivationTxV1{
-			NIPostChallengeV1: *challenge,
-			Coinbase:          types.Address{1, 2, 3, 4},
-			NumUnits:          nipost.NumUnits,
-			NIPost:            wire.NiPostToWireV1(nipost.NIPost),
-			NodeID:            &nodeID,
-			VRFNonce:          (*uint64)(&nipost.VRFNonce),
-		},
-	}
-	atx.Sign(signer)
-
+func publishATX(
+	tb testing.TB,
+	cl *cluster.Cluster,
+	ctx *testcontext.Context,
+	logger *zap.Logger,
+	host *p2p.Host,
+	publishCtx context.Context,
+	atx wire.ActivationTxV1,
+) {
 	// 3. Wait for publish epoch
-	require.NoError(t, cl.WaitAll(ctx))
+	require.NoError(tb, cl.WaitAll(ctx))
 	epoch := atx.PublishEpoch
 	logger.Sugar().Infow("waiting for publish epoch", "epoch", epoch, "layer", epoch.FirstLayer())
-	err = layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {
+	err := layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {
 		logger.Info("new layer", zap.Uint32("layer", resp.Layer.Number.Number))
 		return resp.Layer.Number.Number < epoch.FirstLayer().Uint32(), nil
 	})
-	require.NoError(t, err)
+	require.NoError(tb, err)
 
 	// 4. Publish ATX
-	publishCtx, stopPublishing := context.WithCancel(ctx.Context)
-	defer stopPublishing()
 	var eg errgroup.Group
-	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+	tb.Cleanup(func() { assert.NoError(tb, eg.Wait()) })
 	eg.Go(func() error {
 		for {
 			logger.Info("publishing ATX", zap.Object("atx", &atx))
 			buf := codec.MustEncode(&atx)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
-			require.NoError(t, err)
+			require.NoError(tb, err)
 
 			select {
 			case <-publishCtx.Done():
@@ -345,28 +271,38 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			}
 		}
 	})
+}
 
-	// 5. Wait for POST malfeasance proof
+func verifyMalfeasanceProof(
+	tb testing.TB,
+	cl *cluster.Cluster,
+	ctx *testcontext.Context,
+	logger *zap.Logger,
+	stopPublishing context.CancelFunc,
+	signer *signing.EdSigner,
+	atx wire.ActivationTxV1,
+	verifier activation.PostVerifier,
+) {
 	receivedProof := false
 	timeout := time.Minute * 2
 	logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
 	awaitCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	err = malfeasanceStream(awaitCtx, cl.Client(0), logger, func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
+	err := malfeasanceStream(awaitCtx, cl.Client(0), logger, func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
 		stopPublishing()
 		logger.Info("malfeasance proof received")
-		require.Equal(t, malf.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
-		require.Equal(t, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malf.GetProof().GetKind())
+		require.Equal(tb, malf.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
+		require.Equal(tb, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malf.GetProof().GetKind())
 
 		var proof mwire.MalfeasanceProof
-		require.NoError(t, codec.Decode(malf.Proof.Proof, &proof))
-		require.Equal(t, mwire.InvalidPostIndex, proof.Proof.Type)
+		require.NoError(tb, codec.Decode(malf.Proof.Proof, &proof))
+		require.Equal(tb, mwire.InvalidPostIndex, proof.Proof.Type)
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Info("malfeasance post proof", zap.Object("proof", invalidPostProof))
 		invalidAtx := invalidPostProof.Atx
-		require.Equal(t, atx.PublishEpoch, invalidAtx.PublishEpoch)
-		require.Equal(t, atx.SmesherID, invalidAtx.SmesherID)
-		require.Equal(t, atx.ID(), invalidAtx.ID())
+		require.Equal(tb, atx.PublishEpoch, invalidAtx.PublishEpoch)
+		require.Equal(tb, atx.SmesherID, invalidAtx.SmesherID)
+		require.Equal(tb, atx.ID(), invalidAtx.ID())
 
 		meta := &shared.ProofMetadata{
 			NodeId:          invalidAtx.NodeID.Bytes(),
@@ -377,10 +313,10 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		}
 		err := verifier.Verify(awaitCtx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
 		var invalidIdxError *verifying.ErrInvalidIndex
-		require.ErrorAs(t, err, &invalidIdxError)
+		require.ErrorAs(tb, err, &invalidIdxError)
 		receivedProof = true
 		return false, nil
 	})
-	require.NoError(t, err)
-	require.True(t, receivedProof, "malfeasance proof not received")
+	require.NoError(tb, err)
+	require.True(tb, receivedProof, "malfeasance proof not received")
 }
