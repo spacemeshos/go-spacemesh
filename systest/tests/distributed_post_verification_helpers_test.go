@@ -1,14 +1,18 @@
 package tests
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
@@ -23,7 +27,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-func createInitialAtxV1(t testing.TB,
+type builtAtx interface {
+	ID() types.ATXID
+
+	scale.Encodable
+	zapcore.ObjectMarshaler
+}
+
+func createInitialAtx(t testing.TB,
 	ctx *testcontext.Context,
 	logger *zap.Logger,
 	cl *cluster.Cluster,
@@ -33,7 +44,8 @@ func createInitialAtxV1(t testing.TB,
 	localDb sql.LocalDatabase,
 	clock *timesync.NodeClock,
 	verifier activation.PostVerifier,
-) wire.ActivationTxV1 {
+	publishEpoch types.EpochID,
+) (builtAtx, types.EpochID) {
 	// 2. create ATX with invalid POST labels
 	grpcPostService := grpcserver.NewPostService(
 		logger.Named("grpc-post-service"),
@@ -85,57 +97,69 @@ func createInitialAtxV1(t testing.TB,
 	)
 	require.NoError(t, err)
 
-	var challenge *wire.NIPostChallengeV1
+	var client activation.PostClient
 	for {
-		client, err := grpcPostService.Client(signer.NodeID())
-		if err != nil {
-			ctx.Log.Info("waiting for poet service to connect")
-			time.Sleep(time.Second)
-			continue
+		client, err = grpcPostService.Client(signer.NodeID())
+		if err == nil {
+			break
 		}
-		ctx.Log.Info("poet service to connected")
-		post, postInfo, err := client.Proof(ctx, shared.ZeroChallenge)
-		require.NoError(t, err)
-
-		err = nipost.AddPost(localDb, signer.NodeID(), nipost.Post{
-			Nonce:         post.Nonce,
-			Indices:       post.Indices,
-			Pow:           post.Pow,
-			Challenge:     shared.ZeroChallenge,
-			NumUnits:      postInfo.NumUnits,
-			CommitmentATX: postInfo.CommitmentATX,
-			VRFNonce:      *postInfo.Nonce,
-		})
-		require.NoError(t, err)
-
-		challenge = &wire.NIPostChallengeV1{
-			PrevATXID:        types.EmptyATXID,
-			PublishEpoch:     1,
-			PositioningATXID: cl.GoldenATX(),
-			CommitmentATXID:  &postInfo.CommitmentATX,
-			InitialPost: &wire.PostV1{
-				Nonce:   post.Nonce,
-				Indices: post.Indices,
-				Pow:     post.Pow,
-			},
-		}
-		break
+		ctx.Log.Info("waiting for poet service to connect")
+		time.Sleep(time.Second)
 	}
+	ctx.Log.Info("poet service to connected")
+	initialPost, initialPostInfo, err := client.Proof(ctx, shared.ZeroChallenge)
+	require.NoError(t, err)
+
+	err = nipost.AddPost(localDb, signer.NodeID(), nipost.Post{
+		Nonce:         initialPost.Nonce,
+		Indices:       initialPost.Indices,
+		Pow:           initialPost.Pow,
+		Challenge:     shared.ZeroChallenge,
+		NumUnits:      initialPostInfo.NumUnits,
+		CommitmentATX: initialPostInfo.CommitmentATX,
+		VRFNonce:      *initialPostInfo.Nonce,
+	})
+	require.NoError(t, err)
+
+	registerEpoch := publishEpoch - 1
+	ctx.Log.Info("waiting for epoch to register at poet",
+		zap.Uint32("register_epoch", uint32(registerEpoch)),
+		zap.Uint32("publish_epoch", uint32(publishEpoch)),
+	)
+	select {
+	case <-ctx.Done():
+		ctx.Log.Info("context canceled")
+		return nil, 0
+	case <-clock.AwaitLayer(registerEpoch.FirstLayer()):
+	}
+
+	registerEpoch = clock.CurrentLayer().GetEpoch()
+	publishEpoch = registerEpoch + 1
 	nipostChallenge := &types.NIPostChallenge{
-		PublishEpoch:   challenge.PublishEpoch,
+		PublishEpoch:   publishEpoch,
 		PrevATXID:      types.EmptyATXID,
-		PositioningATX: challenge.PositioningATXID,
-		CommitmentATX:  challenge.CommitmentATXID,
+		PositioningATX: cl.GoldenATX(),
+		CommitmentATX:  &initialPostInfo.CommitmentATX,
 		InitialPost: &types.Post{
-			Nonce:   challenge.InitialPost.Nonce,
-			Indices: challenge.InitialPost.Indices,
-			Pow:     challenge.InitialPost.Pow,
+			Nonce:   initialPost.Nonce,
+			Indices: initialPost.Indices,
+			Pow:     initialPost.Pow,
 		},
 	}
 	err = nipost.AddChallenge(localDb, signer.NodeID(), nipostChallenge)
 	require.NoError(t, err)
 
-	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challenge.Hash(), nipostChallenge)
+	version := version(cfg, nipostChallenge.PublishEpoch)
+	var challengeHash types.Hash32
+	switch version {
+	case types.AtxV1:
+		challengeHash = wire.NIPostChallengeToWireV1(nipostChallenge).Hash()
+	case types.AtxV2:
+		challengeHash = wire.NIPostChallengeToWireV2(nipostChallenge).Hash()
+	default:
+		require.Fail(t, fmt.Sprintf("unsupported ATX version: %v", version))
+	}
+	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challengeHash, nipostChallenge)
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST
@@ -146,7 +170,7 @@ func createInitialAtxV1(t testing.TB,
 	// Sanity check that the POST is invalid
 	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
 		NodeId:          signer.NodeID().Bytes(),
-		CommitmentAtxId: challenge.CommitmentATXID.Bytes(),
+		CommitmentAtxId: nipostChallenge.CommitmentATX.Bytes(),
 		NumUnits:        nipost.NumUnits,
 		Challenge:       nipost.PostMetadata.Challenge,
 		LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
@@ -154,17 +178,60 @@ func createInitialAtxV1(t testing.TB,
 	var invalidIdxError *verifying.ErrInvalidIndex
 	require.ErrorAs(t, err, &invalidIdxError)
 
-	nodeID := signer.NodeID()
-	atx := wire.ActivationTxV1{
-		InnerActivationTxV1: wire.InnerActivationTxV1{
-			NIPostChallengeV1: *challenge,
-			Coinbase:          types.Address{1, 2, 3, 4},
-			NumUnits:          nipost.NumUnits,
-			NIPost:            wire.NiPostToWireV1(nipost.NIPost),
-			NodeID:            &nodeID,
-			VRFNonce:          (*uint64)(&nipost.VRFNonce),
-		},
+	switch version {
+	case types.AtxV1:
+		atx := &wire.ActivationTxV1{
+			InnerActivationTxV1: wire.InnerActivationTxV1{
+				NIPostChallengeV1: *wire.NIPostChallengeToWireV1(nipostChallenge),
+				Coinbase:          types.Address{1, 2, 3, 4},
+				NumUnits:          nipost.NumUnits,
+				NIPost:            wire.NiPostToWireV1(nipost.NIPost),
+				VRFNonce:          (*uint64)(&nipost.VRFNonce),
+			},
+		}
+		atx.Sign(signer)
+		return atx, atx.PublishEpoch
+	case types.AtxV2:
+		atx := &wire.ActivationTxV2{
+			PublishEpoch:   nipostChallenge.PublishEpoch,
+			PositioningATX: nipostChallenge.PositioningATX,
+			Coinbase:       types.Address{1, 2, 3, 4},
+			VRFNonce:       (uint64)(nipost.VRFNonce),
+			NIPosts: []wire.NIPostV2{
+				{
+					Membership: wire.MerkleProofV2{
+						Nodes: nipost.NIPost.Membership.Nodes,
+					},
+					Challenge: types.Hash32(nipost.PostMetadata.Challenge),
+					Posts: []wire.SubPostV2{
+						{
+							Post:                *wire.PostToWireV1(nipost.Post),
+							NumUnits:            nipost.NumUnits,
+							MembershipLeafIndex: nipost.NIPost.Membership.LeafIndex,
+						},
+					},
+				},
+			},
+			Initial: &wire.InitialAtxPartsV2{
+				Post:          *wire.PostToWireV1(nipostChallenge.InitialPost),
+				CommitmentATX: *nipostChallenge.CommitmentATX,
+			},
+		}
+		atx.Sign(signer)
+		return atx, atx.PublishEpoch
+	default:
+		require.Fail(t, fmt.Sprintf("unsupported ATX version: %v", version))
+		return nil, 0
 	}
-	atx.Sign(signer)
-	return atx
+}
+
+func version(cfg *config.Config, publish types.EpochID) types.AtxVersion {
+	epochs := append([]types.EpochID{0}, maps.Keys(cfg.AtxVersions)...)
+	version := types.AtxV1
+	for _, epoch := range epochs {
+		if publish >= epoch {
+			version = cfg.AtxVersions[epoch]
+		}
+	}
+	return version
 }

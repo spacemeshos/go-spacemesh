@@ -234,7 +234,8 @@ func (nb *NIPostBuilder) BuildNIPost(
 		ctx,
 		signer,
 		poetProofDeadline,
-		poetRoundStart, challenge.Bytes(),
+		poetRoundStart,
+		challenge.Bytes(),
 	)
 	regErr := &PoetRegistrationMismatchError{}
 	switch {

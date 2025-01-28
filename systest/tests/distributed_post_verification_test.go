@@ -19,7 +19,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -42,7 +41,6 @@ import (
 )
 
 // TestPostMalfeasanceProof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
-// TODO(mafa): update test to publish the ATX after v2 ATXs are live and then check for malfeasance.
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 	testDir := t.TempDir()
@@ -60,6 +58,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
 
 	t.Run("distributed post v1", func(t *testing.T) {
+		t.Parallel()
 		// Prepare config
 		cfg := getConfig(t, cl, ctx)
 
@@ -95,13 +94,90 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		require.NoError(t, err)
 
 		localDb := localsql.InMemoryTest(t)
-		atx := createInitialAtxV1(t, ctx, logger, cl, cfg, signer, db, localDb, clock, verifier)
+		atx, publishEpoch := createInitialAtx(
+			t,
+			ctx,
+			logger,
+			cl,
+			cfg,
+			signer,
+			db,
+			localDb,
+			clock,
+			verifier,
+			types.EpochID(1),
+		)
 
 		publishCtx, stopPublishing := context.WithCancel(ctx.Context)
 		defer stopPublishing()
-		publishATX(t, cl, ctx, logger, host, publishCtx, atx)
+		publishATX(t, cl, ctx, logger, host, publishCtx, publishEpoch, atx)
 
-		verifyMalfeasanceProof(t, cl, ctx, logger, stopPublishing, signer, atx, verifier)
+		verifyMalfeasanceProof(t, cl, ctx, logger, stopPublishing, signer, publishEpoch, atx, verifier)
+	})
+
+	t.Run("distributed post v2", func(t *testing.T) {
+		t.Parallel()
+		t.Skip("malfeasance stream needs to be updated first")
+		// Prepare config
+		cfg := getConfig(t, cl, ctx)
+
+		cfg.DataDirParent = testDir
+		cfg.SMESHING.Opts.DataDir = filepath.Join(testDir, "post-data")
+		cfg.P2P.DataDir = filepath.Join(testDir, "p2p-dir")
+		require.NoError(t, os.Mkdir(cfg.P2P.DataDir, os.ModePerm))
+
+		signer, err := signing.NewEdSigner(signing.WithPrefix(cl.GenesisID().Bytes()))
+		require.NoError(t, err)
+
+		ctrl := gomock.NewController(t)
+		db := statesql.InMemoryTest(t)
+		cdb := datastore.NewCachedDB(db, zap.NewNop())
+		t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
+
+		host := setupHost(t, logger, cl, cfg)
+		clock := setupClock(t, logger, cl, cfg)
+		setupFetcher(t, cl, ctx, logger, cfg, db, clock, host)
+
+		syncer := activation.NewMocksyncer(ctrl)
+		syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
+			ch := make(chan struct{})
+			close(ch)
+			return ch
+		}).AnyTimes()
+
+		initPost(t, cl, ctx, logger, cfg, signer, cdb, syncer)
+
+		verifyingOpts := activation.DefaultPostVerifyingOpts()
+		verifyingOpts.Workers = 1
+		verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
+		require.NoError(t, err)
+
+		localDb := localsql.InMemoryTest(t)
+		var publishEpoch types.EpochID
+		for k, v := range cfg.AtxVersions {
+			if v == 2 {
+				publishEpoch = types.EpochID(k)
+			}
+		}
+		atx, publishEpoch := createInitialAtx(
+			t,
+			ctx,
+			logger,
+			cl,
+			cfg,
+			signer,
+			db,
+			localDb,
+			clock,
+			verifier,
+			publishEpoch,
+		)
+
+		publishCtx, stopPublishing := context.WithCancel(ctx.Context)
+		defer stopPublishing()
+		publishATX(t, cl, ctx, logger, host, publishCtx, publishEpoch, atx)
+
+		verifyMalfeasanceProof(t, cl, ctx, logger, stopPublishing, signer, publishEpoch, atx, verifier)
 	})
 }
 
@@ -242,15 +318,15 @@ func publishATX(
 	logger *zap.Logger,
 	host *p2p.Host,
 	publishCtx context.Context,
-	atx wire.ActivationTxV1,
+	publishEpoch types.EpochID,
+	atx builtAtx,
 ) {
 	// 3. Wait for publish epoch
 	require.NoError(tb, cl.WaitAll(ctx))
-	epoch := atx.PublishEpoch
-	logger.Sugar().Infow("waiting for publish epoch", "epoch", epoch, "layer", epoch.FirstLayer())
+	logger.Sugar().Infow("waiting for publish epoch", "epoch", publishEpoch, "layer", publishEpoch.FirstLayer())
 	err := layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {
 		logger.Info("new layer", zap.Uint32("layer", resp.Layer.Number.Number))
-		return resp.Layer.Number.Number < epoch.FirstLayer().Uint32(), nil
+		return resp.Layer.Number.Number < publishEpoch.FirstLayer().Uint32(), nil
 	})
 	require.NoError(tb, err)
 
@@ -259,8 +335,8 @@ func publishATX(
 	tb.Cleanup(func() { assert.NoError(tb, eg.Wait()) })
 	eg.Go(func() error {
 		for {
-			logger.Info("publishing ATX", zap.Object("atx", &atx))
-			buf := codec.MustEncode(&atx)
+			logger.Info("publishing ATX", zap.Object("atx", atx))
+			buf := codec.MustEncode(atx)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(tb, err)
 
@@ -280,7 +356,8 @@ func verifyMalfeasanceProof(
 	logger *zap.Logger,
 	stopPublishing context.CancelFunc,
 	signer *signing.EdSigner,
-	atx wire.ActivationTxV1,
+	publishEpoch types.EpochID,
+	atx builtAtx,
 	verifier activation.PostVerifier,
 ) {
 	receivedProof := false
@@ -300,8 +377,8 @@ func verifyMalfeasanceProof(
 		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
 		logger.Info("malfeasance post proof", zap.Object("proof", invalidPostProof))
 		invalidAtx := invalidPostProof.Atx
-		require.Equal(tb, atx.PublishEpoch, invalidAtx.PublishEpoch)
-		require.Equal(tb, atx.SmesherID, invalidAtx.SmesherID)
+		require.Equal(tb, publishEpoch, invalidAtx.PublishEpoch)
+		require.Equal(tb, signer.NodeID(), invalidAtx.SmesherID)
 		require.Equal(tb, atx.ID(), invalidAtx.ID())
 
 		meta := &shared.ProofMetadata{
