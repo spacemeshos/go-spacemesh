@@ -198,7 +198,13 @@ func (h *hostContext) Call(
 	gas int64,
 	depth int,
 ) (output []byte, gasLeft int64, err error) {
-	h.logger.Debug("CALL", zap.Stringer("recipient", types.Address(recipient)), zap.Stringer("sender", types.Address(sender)), zap.Int64("gas", gas), zap.Int("depth", depth))
+	h.logger.Debug(
+		"CALL",
+		zap.Stringer("recipient", types.Address(recipient)),
+		zap.Stringer("sender", types.Address(sender)),
+		zap.Int64("gas", gas),
+		zap.Int("depth", depth),
+	)
 	// check call depth
 	if depth > 10 {
 		h.logger.Debug("call depth exceeded")

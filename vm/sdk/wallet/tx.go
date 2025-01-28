@@ -184,7 +184,13 @@ func Spend(pk signing.PrivateKey, to types.Address, amount uint64, nonce types.N
 	return core.SignedTx(&tx, options.GenesisID, pk)
 }
 
-func ProxyTx(principal, to types.Address, method *athcon.MethodSelector, args []byte, amount, nonce uint64, opts ...sdk.Opt) (*core.Tx, error) {
+func ProxyTx(
+	principal, to types.Address,
+	method *athcon.MethodSelector,
+	args []byte,
+	amount, nonce uint64,
+	opts ...sdk.Opt,
+) (*core.Tx, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
@@ -223,7 +229,14 @@ func ProxyTx(principal, to types.Address, method *athcon.MethodSelector, args []
 	}, nil
 }
 
-func Proxy(pk signing.PrivateKey, to types.Address, method *athcon.MethodSelector, args []byte, amount, nonce uint64, opts ...sdk.Opt) ([]byte, error) {
+func Proxy(
+	pk signing.PrivateKey,
+	to types.Address,
+	method *athcon.MethodSelector,
+	args []byte,
+	amount, nonce uint64,
+	opts ...sdk.Opt,
+) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)

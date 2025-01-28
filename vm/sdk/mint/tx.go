@@ -1,7 +1,6 @@
 package mint
 
 import (
-
 	// FIXME: use go-scale when we add a tag to encode uint8 non-compact.
 	"github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -116,6 +115,11 @@ func Spend(principal, to types.Address, amount uint64, nonce types.Nonce, opts .
 	return codec.Encode(SpendTx(principal, to, amount, nonce, opts...))
 }
 
-func BuyTx(principal, mint, recipient types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) (*core.Tx, error) {
+func BuyTx(
+	principal, mint, recipient types.Address,
+	amount uint64,
+	nonce types.Nonce,
+	opts ...sdk.Opt,
+) (*core.Tx, error) {
 	return wallet.ProxyTx(principal, mint, &templates.BuySelector, EncodeBuyArgs(recipient), amount, nonce, opts...)
 }

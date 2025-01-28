@@ -1510,12 +1510,12 @@ func TestTokenMint(t *testing.T) {
 	// Alice's token wallet
 	alicePub, alicePriv, err := ed25519.GenerateKey(tt.rng)
 	require.NoError(t, err)
-	aliceWalletAddress := sdktokenwallet.Address(mint.TemplateAddress, tokenwallet.TemplateAddress, core.PublicKey(alicePub))
+	aliceWalletAddress := sdktokenwallet.Address(mint.TemplateAddress, core.PublicKey(alicePub))
 
 	// Bob's token wallet
 	bobPub, bobPriv, err := ed25519.GenerateKey(tt.rng)
 	require.NoError(t, err)
-	bobWalletAddress := sdktokenwallet.Address(mint.TemplateAddress, tokenwallet.TemplateAddress, core.PublicKey(bobPub))
+	bobWalletAddress := sdktokenwallet.Address(mint.TemplateAddress, core.PublicKey(bobPub))
 
 	tt.
 		addWalletTemplate().

@@ -33,7 +33,8 @@ func maxSpend(host core.Host, account *types.Account, payload []byte, logger *za
 
 	// Check the method selector
 	// We define MaxSpend for any method other than spend to be zero for now.
-	if unmarshaled.Selector == nil || !(*unmarshaled.Selector == templates.SpendSelector || *unmarshaled.Selector == templates.ProxySelector) {
+	if unmarshaled.Selector == nil ||
+		!(*unmarshaled.Selector == templates.SpendSelector || *unmarshaled.Selector == templates.ProxySelector) {
 		return 0, nil
 	}
 

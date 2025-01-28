@@ -1,7 +1,6 @@
 package tokenwallet
 
 import (
-
 	// FIXME: use go-scale when we add a tag to encode uint8 non-compact.
 	"github.com/ChainSafe/gossamer/pkg/scale"
 	athcon "github.com/athenavm/athena/ffi/athcon/bindings/go"
@@ -101,7 +100,13 @@ func SendTokenTx(tokenID, principal, to types.Address, amount uint64, nonce type
 }
 
 // SendToken creates a signed transaction to send tokens.
-func SendToken(pk ed25519.PrivateKey, tokenID, principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
+func SendToken(
+	pk ed25519.PrivateKey,
+	tokenID, principal, to types.Address,
+	amount uint64,
+	nonce types.Nonce,
+	opts ...sdk.Opt,
+) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
