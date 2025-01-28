@@ -135,20 +135,22 @@ func testPostMalfeasance(
 	signer, err := signing.NewEdSigner(signing.WithPrefix(cl.GenesisID().Bytes()))
 	require.NoError(t, err)
 
-	ctrl := gomock.NewController(t)
+	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
+	host, err := p2p.New(
+		logger.Named("p2p"),
+		cfg.P2P,
+		[]byte(prologue),
+		handshake.NetworkCookie(prologue),
+	)
+	require.NoError(t, err)
+	logger.Info("p2p host created", zap.Stringer("id", host.ID()))
+	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error { return nil })
+	require.NoError(t, host.Start())
+	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
+
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, zap.NewNop())
 	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
-
-	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
-	host, err := p2p.New(logger.Named("p2p"), cfg.P2P, []byte(prologue), handshake.NetworkCookie(prologue))
-	require.NoError(t, err)
-	logger.Info("p2p host created", zap.Stringer("id", host.ID()))
-	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error {
-		return nil
-	})
-	require.NoError(t, host.Start())
-	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
 
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
@@ -164,16 +166,14 @@ func testPostMalfeasance(
 		store.WithLogger(logger.Named("proposals-store")),
 		store.WithCapacity(cfg.Tortoise.Zdist+1),
 	)
-	fetcher, err := fetch.NewFetch(
-		db,
-		proposalsStore,
-		host,
+	fetcher, err := fetch.NewFetch(db, proposalsStore, host,
 		peers.New(),
 		fetch.WithContext(ctx),
 		fetch.WithConfig(cfg.FETCH),
 		fetch.WithLogger(logger.Named("fetcher")),
 	)
 	require.NoError(t, err)
+
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
@@ -186,9 +186,11 @@ func testPostMalfeasance(
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
 		fetch.ValidatorFunc(func(context.Context, types.Hash32, peer.ID, []byte) error { return nil }),
 	)
+
 	require.NoError(t, fetcher.Start())
 	t.Cleanup(fetcher.Stop)
 
+	ctrl := gomock.NewController(t)
 	syncer := activation.NewMocksyncer(ctrl)
 	syncer.EXPECT().RegisterForATXSynced().DoAndReturn(func() <-chan struct{} {
 		ch := make(chan struct{})
@@ -196,7 +198,7 @@ func testPostMalfeasance(
 		return ch
 	}).AnyTimes()
 
-	mocknipostValidator := activation.NewMocknipostValidator(ctrl)
+	// 1. Initialize
 	postSetupMgr, err := activation.NewPostSetupManager(
 		cfg.POST,
 		logger.Named("post"),
@@ -204,9 +206,10 @@ func testPostMalfeasance(
 		atxsdata.New(),
 		cl.GoldenATX(),
 		syncer,
-		mocknipostValidator,
+		activation.NewMocknipostValidator(ctrl),
 	)
 	require.NoError(t, err)
+
 	builder := activation.NewMockatxBuilder(ctrl)
 	builder.EXPECT().Register(signer)
 	postSupervisor := activation.NewPostSupervisor(
@@ -219,32 +222,28 @@ func testPostMalfeasance(
 	require.NoError(t, postSupervisor.Start(cfg.POSTService, cfg.SMESHING.Opts, signer))
 	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
 
-	verifyingOpts := activation.DefaultPostVerifyingOpts()
-	verifyingOpts.Workers = 1
-	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
-	require.NoError(t, err)
-
-	localDb := localsql.InMemoryTest(t)
-
+	// 2. create ATX with invalid POST labels
 	grpcPostService := grpcserver.NewPostService(
 		logger.Named("grpc-post-service"),
 		grpcserver.PostServiceQueryInterval(500*time.Millisecond),
 	)
 	grpcPostService.AllowConnections(true)
+
 	grpcPrivateServer, err := grpcserver.NewWithServices(
 		cfg.API.PostListener,
 		logger.Named("grpc-server"),
-		cfg.API, []grpcserver.ServiceAPI{grpcPostService},
+		cfg.API,
+		[]grpcserver.ServiceAPI{grpcPostService},
 	)
 	require.NoError(t, err)
 	require.NoError(t, grpcPrivateServer.Start())
 	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
 
+	localDb := localsql.InMemoryTest(t)
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
 	certifier := activation.NewCertifier(localDb, logger, certClient)
 	poetDb, err := activation.NewPoetDb(db, zap.NewNop())
 	require.NoError(t, err)
-
 	poetService, err := activation.NewPoetService(
 		poetDb,
 		types.PoetServer{Address: cluster.MakePoetGlobalEndpoint(ctx.Namespace, 0)},
@@ -254,7 +253,20 @@ func testPostMalfeasance(
 		activation.WithCertifier(certifier),
 	)
 	require.NoError(t, err)
-	validator := activation.NewValidator(db, poetDb, cfg.POST, cfg.SMESHING.Opts.Scrypt, verifier)
+
+	verifyingOpts := activation.DefaultPostVerifyingOpts()
+	verifyingOpts.Workers = 1
+	verifier, err := activation.NewPostVerifier(cfg.POST, logger, activation.WithVerifyingOpts(verifyingOpts))
+	require.NoError(t, err)
+
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg.POST,
+		cfg.SMESHING.Opts.Scrypt,
+		verifier,
+	)
+
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		localDb,
 		grpcPostService,
@@ -265,16 +277,19 @@ func testPostMalfeasance(
 		activation.WithPoetServices(poetService),
 	)
 	require.NoError(t, err)
+
+	// 2.1. Create initial POST
 	var client activation.PostClient
 	for {
 		client, err = grpcPostService.Client(signer.NodeID())
-		if err == nil {
-			break
+		if err != nil {
+			logger.Info("waiting for post service to connect")
+			time.Sleep(time.Second)
+			continue
 		}
-		logger.Info("waiting for poet service to connect")
-		time.Sleep(time.Second)
+		break
 	}
-	logger.Info("poet service to connected")
+	logger.Info("post service connected")
 	initialPost, initialPostInfo, err := client.Proof(ctx, shared.ZeroChallenge)
 	require.NoError(t, err)
 
@@ -329,6 +344,9 @@ func testPostMalfeasance(
 	}
 	nipost, err := nipostBuilder.BuildNIPost(ctx, signer, challengeHash, nipostChallenge)
 	require.NoError(t, err)
+
+	// 2.2 Create ATX with invalid POST
+	logger.Info("invalidating PoST")
 	invalidPost := false
 	for i := range nipost.Post.Indices {
 		for range 256 {
@@ -351,6 +369,7 @@ func testPostMalfeasance(
 		}
 	}
 	require.True(t, invalidPost, "expected invalid POST")
+	logger.Info("PoST invalidated")
 
 	var atx builtAtx
 	switch version {
@@ -399,8 +418,7 @@ func testPostMalfeasance(
 		return
 	}
 
-	publishCtx, stopPublishing := context.WithCancel(ctx.Context)
-	defer stopPublishing()
+	// 3. Wait for publish epoch
 	require.NoError(t, cl.WaitAll(ctx))
 	logger.Info("waiting for publish epoch",
 		zap.Uint32("epoch", publishEpoch.Uint32()),
@@ -412,7 +430,10 @@ func testPostMalfeasance(
 	})
 	require.NoError(t, err)
 
-	var eg errgroup.Group // 4. Publish ATX
+	// 4. Publish ATX
+	publishCtx, stopPublishing := context.WithCancel(ctx.Context)
+	defer stopPublishing()
+	var eg errgroup.Group
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
 	eg.Go(func() error {
 		for {
@@ -420,6 +441,7 @@ func testPostMalfeasance(
 			buf := codec.MustEncode(atx)
 			err = host.Publish(ctx, pubsub.AtxProtocol, buf)
 			require.NoError(t, err)
+
 			select {
 			case <-publishCtx.Done():
 				return nil
@@ -428,6 +450,7 @@ func testPostMalfeasance(
 		}
 	})
 
+	// 5. Wait for POST malfeasance proof
 	receivedProof := false
 	timeout := time.Minute * 2
 	logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
