@@ -56,8 +56,8 @@ POSTRS_PROFILER_URL ?= https://github.com/spacemeshos/post-rs/releases/download/
 POSTRS_SERVICE_ZIP = post-service-$(platform)-v$(POSTRS_SETUP_REV).zip
 POSTRS_SERVICE_URL ?= https://github.com/spacemeshos/post-rs/releases/download/v$(POSTRS_SETUP_REV)/$(POSTRS_SERVICE_ZIP)
 
-ATHENA_SETUP_REV = v0.6.4-alpha.1
-ATHENA_SETUP_RELEASE = v0.6.4-alpha.1
+ATHENA_SETUP_REV = v0.7.0
+ATHENA_SETUP_RELEASE = v0.7.0
 
 ifeq ($(platform), windows)
 	POSTRS_SETUP_LIBS = post.h post.dll
