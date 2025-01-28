@@ -46,7 +46,6 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 
 	ctx := testcontext.New(t)
-	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 
 	// Prepare cluster
 	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
@@ -59,6 +58,9 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	var eg errgroup.Group
 	eg.Go(func() error {
+		logger := ctx.Log.Desugar().Named("malfeasance1-test").
+			WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
+
 		// Prepare config
 		cfg := getConfig(t, cl, ctx)
 		testDir := t.TempDir()
@@ -144,6 +146,9 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	})
 
 	eg.Go(func() error {
+		logger := ctx.Log.Desugar().Named("malfeasance2-test").
+			WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
+
 		// Prepare config
 		cfg := getConfig(t, cl, ctx)
 		testDir := t.TempDir()
@@ -172,6 +177,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			return ch
 		}).AnyTimes()
 
+		cfg.API.PostListener = "0.0.0.0:10094" // avoid port conflict with v1 identity
 		initPost(t, cl, ctx, logger, cfg, signer, cdb, syncer)
 
 		verifyingOpts := activation.DefaultPostVerifyingOpts()
