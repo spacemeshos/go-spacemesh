@@ -44,7 +44,6 @@ import (
 // TestPostMalfeasanceProof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
 func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
-	testDir := t.TempDir()
 
 	ctx := testcontext.New(t)
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
@@ -62,6 +61,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	eg.Go(func() error {
 		// Prepare config
 		cfg := getConfig(t, cl, ctx)
+		testDir := t.TempDir()
 
 		cfg.DataDirParent = testDir
 		cfg.SMESHING.Opts.DataDir = filepath.Join(testDir, "post-data")
@@ -146,6 +146,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	eg.Go(func() error {
 		// Prepare config
 		cfg := getConfig(t, cl, ctx)
+		testDir := t.TempDir()
 
 		cfg.DataDirParent = testDir
 		cfg.SMESHING.Opts.DataDir = filepath.Join(testDir, "post-data")
