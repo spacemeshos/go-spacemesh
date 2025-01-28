@@ -9,8 +9,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
-
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	"go.uber.org/zap"
@@ -20,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
