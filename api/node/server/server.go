@@ -9,6 +9,8 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	"go.uber.org/zap"
@@ -268,6 +270,9 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
 	id := types.BytesToNodeID(hexBuf)
 	weight, err := s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))
 	if err != nil {
+		if errors.Is(err, eligibility.ErrNotActive) {
+			return &GetHareWeightNodeIdLayer200JSONResponse{Weight: 0}, nil
+		}
 		return nil, fmt.Errorf("miner weight: %w", err)
 	}
 	return &GetHareWeightNodeIdLayer200JSONResponse{Weight: weight}, nil
