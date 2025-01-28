@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -66,8 +65,8 @@ func version(cfg *config.Config, publish types.EpochID) types.AtxVersion {
 	return version
 }
 
-// TestPostMalfeasanceV1Proof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
-func TestPostMalfeasanceV1Proof(t *testing.T) {
+// TestPostMalfeasanceProof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
+func TestPostMalfeasanceProof(t *testing.T) {
 	t.Parallel()
 
 	ctx := testcontext.New(t)
@@ -83,36 +82,18 @@ func TestPostMalfeasanceV1Proof(t *testing.T) {
 
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 	cfg := getConfig(t, logger, cl, ctx)
+
+	// Test malfeasance for each ATX version, malfeasance1 in first epoch
 	publishEpoch := types.EpochID(1)
-
 	testPostMalfeasance(t, cfg, cl, logger, ctx, publishEpoch)
-}
 
-// TestPostMalfeasanceV2Proof tests that nodes can detect an invalid PoST and create a malfeasance proof against it.
-func TestPostMalfeasanceV2Proof(t *testing.T) {
-	t.Parallel()
-
-	ctx := testcontext.New(t)
-
-	// Prepare cluster
-	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
-	ctx.ClusterSize = 5
-	cl := cluster.New(ctx, cluster.WithKeys(10))
-	require.NoError(t, cl.AddBootnodes(ctx, 1))
-	require.NoError(t, cl.AddBootstrappers(ctx))
-	require.NoError(t, cl.AddPoets(ctx))
-	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
-
-	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
-	cfg := getConfig(t, logger, cl, ctx)
-
-	var publishEpoch types.EpochID
 	for k, v := range cfg.AtxVersions {
 		if v == 2 {
 			publishEpoch = types.EpochID(k)
 		}
 	}
 
+	// malfeasance2 in first epoch with ATXv2
 	testPostMalfeasance(t, cfg, cl, logger, ctx, publishEpoch)
 }
 
@@ -146,11 +127,11 @@ func testPostMalfeasance(
 	logger.Info("p2p host created", zap.Stringer("id", host.ID()))
 	host.Register(pubsub.AtxProtocol, func(context.Context, peer.ID, []byte) error { return nil })
 	require.NoError(t, host.Start())
-	t.Cleanup(func() { assert.NoError(t, host.Stop()) })
+	defer host.Stop()
 
 	db := statesql.InMemoryTest(t)
 	cdb := datastore.NewCachedDB(db, zap.NewNop())
-	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
+	defer cdb.Close()
 
 	clock, err := timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
@@ -159,7 +140,7 @@ func testPostMalfeasance(
 		timesync.WithLogger(logger.Named("clock")),
 	)
 	require.NoError(t, err)
-	t.Cleanup(clock.Close)
+	defer clock.Close()
 
 	proposalsStore := store.New(
 		store.WithEvictedLayer(clock.CurrentLayer()),
@@ -189,7 +170,7 @@ func testPostMalfeasance(
 	)
 
 	require.NoError(t, fetcher.Start())
-	t.Cleanup(fetcher.Stop)
+	defer fetcher.Stop()
 
 	ctrl := gomock.NewController(t)
 	syncer := activation.NewMocksyncer(ctrl)
@@ -221,7 +202,7 @@ func testPostMalfeasance(
 		builder,
 	)
 	require.NoError(t, postSupervisor.Start(cfg.POSTService, cfg.SMESHING.Opts, signer))
-	t.Cleanup(func() { assert.NoError(t, postSupervisor.Stop(false)) })
+	defer postSupervisor.Stop(false)
 
 	// 2. create ATX with invalid POST labels
 	grpcPostService := grpcserver.NewPostService(
@@ -238,7 +219,7 @@ func testPostMalfeasance(
 	)
 	require.NoError(t, err)
 	require.NoError(t, grpcPrivateServer.Start())
-	t.Cleanup(func() { assert.NoError(t, grpcPrivateServer.Close()) })
+	defer grpcPrivateServer.Close()
 
 	localDb := localsql.InMemoryTest(t)
 	certClient := activation.NewCertifierClient(db, localDb, logger.Named("certifier"))
@@ -435,7 +416,7 @@ func testPostMalfeasance(
 	publishCtx, stopPublishing := context.WithCancel(ctx.Context)
 	defer stopPublishing()
 	var eg errgroup.Group
-	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+	defer eg.Wait()
 	eg.Go(func() error {
 		for {
 			logger.Info("publishing ATX", zap.Object("atx", atx))
