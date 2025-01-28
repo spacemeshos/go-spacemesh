@@ -166,6 +166,7 @@ func testPostMalfeasance(
 		store.WithLogger(logger.Named("proposals-store")),
 		store.WithCapacity(cfg.Tortoise.Zdist+1),
 	)
+
 	fetcher, err := fetch.NewFetch(db, proposalsStore, host,
 		peers.New(),
 		fetch.WithContext(ctx),
