@@ -233,7 +233,7 @@ func malfeasanceStream(
 ) error {
 	retries := 0
 BACKOFF:
-	malapi := pb2.NewMalfeasanceStreamServiceClient(node.PubConn())
+	malapi := pb2.NewMalfeasanceStreamServiceClient(node.PrivConn())
 	proofs, err := malapi.Stream(ctx, &pb2.MalfeasanceStreamRequest{Watch: true})
 	if err != nil {
 		return err
