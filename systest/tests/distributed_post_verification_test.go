@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,8 +11,7 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
+	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	mwire "github.com/spacemeshos/go-spacemesh/malfeasance/wire"
+	"github.com/spacemeshos/go-spacemesh/malfeasance2"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -107,12 +108,38 @@ func TestPostMalfeasanceProof(t *testing.T) {
 			verifier,
 			types.EpochID(1),
 		)
+		ctx.Log.With().Info("created initial ATX",
+			zap.Object("atx", atx),
+			zap.Uint32("pub_epoch", publishEpoch.Uint32()),
+		)
 
 		publishCtx, stopPublishing := context.WithCancel(ctx.Context)
 		defer stopPublishing()
 		publishATX(t, cl, ctx, logger, host, publishCtx, publishEpoch, atx)
+		ctx.Log.With().Info("published initial ATX",
+			zap.Object("atx", atx),
+			zap.Uint32("pub_epoch", publishEpoch.Uint32()),
+		)
 
-		verifyMalfeasanceProof(t, cl, ctx, logger, stopPublishing, signer, publishEpoch, atx, verifier)
+		receivedProof := false
+		timeout := time.Minute * 2
+		logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
+		awaitCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		err = malfeasanceStream(awaitCtx, cl.Client(0), logger, func(proof *pb2.MalfeasanceProof) (bool, error) {
+			if !bytes.Equal(proof.GetSmesher(), signer.NodeID().Bytes()) {
+				return true, nil
+			}
+			stopPublishing()
+			logger.Info("malfeasance proof received")
+			require.Equal(t, 0, proof.Domain)
+			require.Equal(t, mwire.InvalidPostIndex, proof.Type)
+			require.Equal(t, atx.ID(), proof.Properties["atx"])
+			receivedProof = true
+			return false, nil
+		})
+		require.NoError(t, err)
+		require.True(t, receivedProof, "malfeasance proof not received")
 	})
 
 	t.Run("distributed post v2", func(t *testing.T) {
@@ -177,7 +204,25 @@ func TestPostMalfeasanceProof(t *testing.T) {
 		defer stopPublishing()
 		publishATX(t, cl, ctx, logger, host, publishCtx, publishEpoch, atx)
 
-		verifyMalfeasanceProof(t, cl, ctx, logger, stopPublishing, signer, publishEpoch, atx, verifier)
+		receivedProof := false
+		timeout := time.Minute * 2
+		logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
+		awaitCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		err = malfeasanceStream(awaitCtx, cl.Client(0), logger, func(proof *pb2.MalfeasanceProof) (bool, error) {
+			if !bytes.Equal(proof.GetSmesher(), signer.NodeID().Bytes()) {
+				return true, nil
+			}
+			stopPublishing()
+			logger.Info("malfeasance proof received")
+			require.Equal(t, malfeasance2.InvalidActivation, proof.Domain)
+			require.Equal(t, "InvalidPoSTProof", proof.Type)
+			require.Equal(t, atx.ID(), proof.Properties["atx"])
+			receivedProof = true
+			return false, nil
+		})
+		require.NoError(t, err)
+		require.True(t, receivedProof, "malfeasance proof not received")
 	})
 }
 
@@ -347,53 +392,4 @@ func publishATX(
 			}
 		}
 	})
-}
-
-func verifyMalfeasanceProof(
-	tb testing.TB,
-	cl *cluster.Cluster,
-	ctx *testcontext.Context,
-	logger *zap.Logger,
-	stopPublishing context.CancelFunc,
-	signer *signing.EdSigner,
-	publishEpoch types.EpochID,
-	atx builtAtx,
-	verifier activation.PostVerifier,
-) {
-	receivedProof := false
-	timeout := time.Minute * 2
-	logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
-	awaitCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	err := malfeasanceStream(awaitCtx, cl.Client(0), logger, func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
-		stopPublishing()
-		logger.Info("malfeasance proof received")
-		require.Equal(tb, malf.GetProof().GetSmesherId().Id, signer.NodeID().Bytes())
-		require.Equal(tb, pb.MalfeasanceProof_MALFEASANCE_POST_INDEX, malf.GetProof().GetKind())
-
-		var proof mwire.MalfeasanceProof
-		require.NoError(tb, codec.Decode(malf.Proof.Proof, &proof))
-		require.Equal(tb, mwire.InvalidPostIndex, proof.Proof.Type)
-		invalidPostProof := proof.Proof.Data.(*mwire.InvalidPostIndexProof)
-		logger.Info("malfeasance post proof", zap.Object("proof", invalidPostProof))
-		invalidAtx := invalidPostProof.Atx
-		require.Equal(tb, publishEpoch, invalidAtx.PublishEpoch)
-		require.Equal(tb, signer.NodeID(), invalidAtx.SmesherID)
-		require.Equal(tb, atx.ID(), invalidAtx.ID())
-
-		meta := &shared.ProofMetadata{
-			NodeId:          invalidAtx.NodeID.Bytes(),
-			CommitmentAtxId: invalidAtx.CommitmentATXID.Bytes(),
-			NumUnits:        invalidAtx.NumUnits,
-			Challenge:       invalidAtx.NIPost.PostMetadata.Challenge,
-			LabelsPerUnit:   invalidAtx.NIPost.PostMetadata.LabelsPerUnit,
-		}
-		err := verifier.Verify(awaitCtx, (*shared.Proof)(invalidAtx.NIPost.Post), meta)
-		var invalidIdxError *verifying.ErrInvalidIndex
-		require.ErrorAs(tb, err, &invalidIdxError)
-		receivedProof = true
-		return false, nil
-	})
-	require.NoError(tb, err)
-	require.True(tb, receivedProof, "malfeasance proof not received")
 }

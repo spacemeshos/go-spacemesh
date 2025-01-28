@@ -122,7 +122,7 @@ func createInitialAtx(t testing.TB,
 	require.NoError(t, err)
 
 	registerEpoch := publishEpoch - 1
-	ctx.Log.Info("waiting for epoch to register at poet",
+	ctx.Log.With().Info("waiting for epoch to register at poet",
 		zap.Uint32("register_epoch", uint32(registerEpoch)),
 		zap.Uint32("publish_epoch", uint32(publishEpoch)),
 	)
@@ -132,6 +132,7 @@ func createInitialAtx(t testing.TB,
 		return nil, 0
 	case <-clock.AwaitLayer(registerEpoch.FirstLayer()):
 	}
+	ctx.Log.With().Info("reached register epoch", zap.Uint32("register_epoch", uint32(registerEpoch)))
 
 	registerEpoch = clock.CurrentLayer().GetEpoch()
 	publishEpoch = registerEpoch + 1
