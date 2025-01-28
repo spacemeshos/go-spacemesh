@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -164,20 +165,33 @@ func createInitialAtx(t testing.TB,
 	require.NoError(t, err)
 
 	// 2.2 Create ATX with invalid POST
-	for i := range nipost.Post.Indices {
-		nipost.Post.Indices[i] += 1
+	invalidPost := false
+	for i := range nipost.Post.Indices { // we only want some indices to be invalid but not all of them
+		for range 256 { // we manipulate each byte of the index to find one that causes validation to fail
+			nipost.Post.Indices[i] += 1
+
+			// Sanity check that the POST is invalid
+			err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
+				NodeId:          signer.NodeID().Bytes(),
+				CommitmentAtxId: nipostChallenge.CommitmentATX.Bytes(),
+				NumUnits:        nipost.NumUnits,
+				Challenge:       nipost.PostMetadata.Challenge,
+				LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
+			})
+			var invalidIdxError *verifying.ErrInvalidIndex
+			if errors.As(err, &invalidIdxError) {
+				invalidPost = true
+				break
+			}
+			// post still valid try again
+		}
+		if invalidPost {
+			break
+		}
+		// try manipulating another index
 	}
 
-	// Sanity check that the POST is invalid
-	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
-		NodeId:          signer.NodeID().Bytes(),
-		CommitmentAtxId: nipostChallenge.CommitmentATX.Bytes(),
-		NumUnits:        nipost.NumUnits,
-		Challenge:       nipost.PostMetadata.Challenge,
-		LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
-	})
-	var invalidIdxError *verifying.ErrInvalidIndex
-	require.ErrorAs(t, err, &invalidIdxError)
+	require.True(t, invalidPost, "expected invalid POST")
 
 	switch version {
 	case types.AtxV1:
