@@ -30,23 +30,20 @@ func maxSpend(host core.Host, account *types.Account, payload []byte, logger *za
 	if err != nil {
 		return 0, fmt.Errorf("%w: malformed spawn payload", core.ErrMalformed)
 	}
-	logger.Debug("calculating max spend", zap.Any("payload", unmarshaled))
 
 	// Check the method selector
 	// We define MaxSpend for any method other than spend to be zero for now.
 	if unmarshaled.Selector == nil || !(*unmarshaled.Selector == templates.SpendSelector || *unmarshaled.Selector == templates.ProxySelector) {
-		logger.Debug("no need to calculate max spend")
 		return 0, nil
 	}
 
-	// FIXME: special-case Proxying as wallet contract doesn't support calculating max spend for it...
+	// FIXME: special-case proxying as wallet contract doesn't support calculating max spend for it...
 	if *unmarshaled.Selector == templates.ProxySelector {
 		args, err := wallet.ParseArgs(unmarshaled)
 		if err != nil {
 			return 0, fmt.Errorf("parsing wallet arguments for MaxSpend: %w", err)
 		}
 		maxSpend := args.(*wallet.ProxyArgs).Amount
-		logger.Debug("parsed max spend for PROXY", zap.Uint64("max", maxSpend))
 		return maxSpend, nil
 	}
 

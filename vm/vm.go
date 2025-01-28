@@ -468,7 +468,7 @@ func (v *VM) execInVm(host *core.Context, payload []byte) error {
 		executionPayload,
 		templateAccount.State,
 	)
-	v.logger.Debug("exeucted", zap.Int64("gas left", gasLeft), zap.String("output in hex", hex.EncodeToString(output)), zap.Error(err))
+	v.logger.Debug("executed", zap.Int64("gas left", gasLeft), zap.String("output in hex", hex.EncodeToString(output)), zap.Error(err))
 	host.SpendGas(uint64(maxgas) - uint64(gasLeft))
 	return err
 }

@@ -12,6 +12,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/templates"
 )
 
+var BuySelector athcon.MethodSelector
+
+func init() {
+	var err error
+	BuySelector, err = athcon.FromString("athexp_buy")
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
 type SpawnArguments struct {
 	Owner     core.PublicKey
 	MaxSupply uint64
@@ -27,11 +37,6 @@ type SpendArguments struct {
 	Amount uint64
 }
 
-type ReceiveArguments struct {
-	TokenId types.Address
-	Amount  uint64
-}
-
 func ParseArgs(payload athcon.Payload) (any, error) {
 	if payload.Selector == nil {
 		return nil, errors.New("nil method selector")
@@ -39,7 +44,7 @@ func ParseArgs(payload athcon.Payload) (any, error) {
 	var txArgs any
 
 	switch *payload.Selector {
-	case templates.BuySelector:
+	case BuySelector:
 		txArgs = new(BuyArguments)
 	case templates.SpawnSelector:
 		txArgs = new(SpawnArguments)

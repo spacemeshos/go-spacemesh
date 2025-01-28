@@ -12,13 +12,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/vm/templates"
 )
 
+var SendTokenSelector athcon.MethodSelector
+
+func init() {
+	var err error
+	SendTokenSelector, err = athcon.FromString("athexp_send_token")
+	if err != nil {
+		panic(err.Error())
+	}
+}
+
 type SpawnArguments struct {
 	Owner          core.PublicKey
 	MintTemplate   types.Address
 	WalletTemplate types.Address
 }
 
-type SpendArguments struct {
+type SendTokenArguments struct {
 	TokenId types.Address
 	To      types.Address
 	Amount  uint64
@@ -27,6 +37,11 @@ type SpendArguments struct {
 type ReceiveArguments struct {
 	TokenId types.Address
 	Amount  uint64
+}
+
+type SpendArguments struct {
+	To     types.Address
+	Amount uint64
 }
 
 func ParseArgs(payload athcon.Payload) (any, error) {
@@ -38,6 +53,8 @@ func ParseArgs(payload athcon.Payload) (any, error) {
 	switch *payload.Selector {
 	case templates.SpawnSelector:
 		txArgs = new(SpawnArguments)
+	case SendTokenSelector:
+		txArgs = new(SendTokenArguments)
 	case templates.SpendSelector:
 		txArgs = new(SpendArguments)
 	default:

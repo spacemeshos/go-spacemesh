@@ -1542,12 +1542,8 @@ func TestTokenMint(t *testing.T) {
 	_, _, err = tt.Apply(layer, []types.Transaction{
 		{RawTx: tt.selfSpawn(0)},
 		makeRaw(func() ([]byte, error) { return sdkmint.Spawn(mintPriv, maxSupply, tokenPrice, 0) }),
-		makeRaw(func() ([]byte, error) {
-			return sdktokenwallet.Spawn(alicePriv, mint.TemplateAddress, tokenwallet.TemplateAddress, 0)
-		}),
-		makeRaw(func() ([]byte, error) {
-			return sdktokenwallet.Spawn(bobPriv, mint.TemplateAddress, tokenwallet.TemplateAddress, 0)
-		}),
+		makeRaw(func() ([]byte, error) { return sdktokenwallet.Spawn(alicePriv, mint.TemplateAddress, 0) }),
+		makeRaw(func() ([]byte, error) { return sdktokenwallet.Spawn(bobPriv, mint.TemplateAddress, 0) }),
 	}, nil)
 	require.NoError(t, err)
 
@@ -1582,7 +1578,7 @@ func TestTokenMint(t *testing.T) {
 	// 6. Alice sends 2 tokens to Bob.
 	_, _, err = tt.Apply(layer+2, []types.Transaction{
 		makeRaw(func() ([]byte, error) {
-			return sdktokenwallet.Spend(alicePriv, tokenID, aliceWalletAddress, bobWalletAddress, 2, 1)
+			return sdktokenwallet.SendToken(alicePriv, tokenID, aliceWalletAddress, bobWalletAddress, 2, 1)
 		}),
 	}, nil)
 	require.NoError(t, err)
@@ -1598,7 +1594,7 @@ func TestTokenMint(t *testing.T) {
 	// 7. Cannot overspend. The balances mustn't change.
 	_, _, err = tt.Apply(layer+3, []types.Transaction{
 		makeRaw(func() ([]byte, error) {
-			return sdktokenwallet.Spend(alicePriv, tokenID, aliceWalletAddress, bobWalletAddress, 4, 2)
+			return sdktokenwallet.SendToken(alicePriv, tokenID, aliceWalletAddress, bobWalletAddress, 4, 2)
 		}),
 	}, nil)
 	require.NoError(t, err)

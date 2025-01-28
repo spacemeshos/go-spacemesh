@@ -24,8 +24,8 @@ func EncodeSpawnArgs(mintTemplate, walletTemplate types.Address, pubkey core.Pub
 	return scale.MustMarshal(args)
 }
 
-func EncodeSpendArgs(tokenID, to types.Address, amount uint64) []byte {
-	args := tokenwallet.SpendArguments{
+func EncodeSendTokenArgs(tokenID, to types.Address, amount uint64) []byte {
+	args := tokenwallet.SendTokenArguments{
 		TokenId: tokenID,
 		To:      to,
 		Amount:  amount,
@@ -37,7 +37,7 @@ func EncodeSpendArgs(tokenID, to types.Address, amount uint64) []byte {
 // number of signers.
 func SpawnTx(
 	pubkey ed25519.PublicKey,
-	mintTemplate, walletTemplate types.Address,
+	mintTemplate types.Address,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) *core.Tx {
@@ -45,7 +45,7 @@ func SpawnTx(
 	for _, opt := range opts {
 		opt(options)
 	}
-	encodedArgs := EncodeSpawnArgs(mintTemplate, walletTemplate, core.PublicKey(pubkey))
+	encodedArgs := EncodeSpawnArgs(mintTemplate, tokenwallet.TemplateAddress, core.PublicKey(pubkey))
 	payload := athcon.Payload{
 		Selector: &templates.SpawnSelector,
 		Input:    encodedArgs,
@@ -64,7 +64,7 @@ func SpawnTx(
 
 func Spawn(
 	pk signing.PrivateKey,
-	mintTemplate, walletTemplate types.Address,
+	mintTemplate types.Address,
 	nonce core.Nonce,
 	opts ...sdk.Opt,
 ) ([]byte, error) {
@@ -73,20 +73,20 @@ func Spawn(
 		opt(options)
 	}
 
-	tx := SpawnTx(signing.Public(pk), mintTemplate, walletTemplate, nonce, opts...)
+	tx := SpawnTx(signing.Public(pk), mintTemplate, nonce, opts...)
 
 	return core.SignedTx(tx, options.GenesisID, pk)
 }
 
-func SpendTx(tokenID, principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) *core.Tx {
+func SendTokenTx(tokenID, principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) *core.Tx {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
 	payload := athcon.Payload{
-		Selector: &templates.SpendSelector,
-		Input:    EncodeSpendArgs(tokenID, to, amount),
+		Selector: &tokenwallet.SendTokenSelector,
+		Input:    EncodeSendTokenArgs(tokenID, to, amount),
 	}
 
 	return &core.Tx{
@@ -100,13 +100,12 @@ func SpendTx(tokenID, principal, to types.Address, amount uint64, nonce types.No
 	}
 }
 
-// Spend creates a raw SPEND transaction, which needs to be signed by the required
-// number of signers.
-func Spend(pk ed25519.PrivateKey, tokenID, principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
+// SendToken creates a signed transaction to send tokens.
+func SendToken(pk ed25519.PrivateKey, tokenID, principal, to types.Address, amount uint64, nonce types.Nonce, opts ...sdk.Opt) ([]byte, error) {
 	options := sdk.Defaults()
 	for _, opt := range opts {
 		opt(options)
 	}
 
-	return core.SignedTx(SpendTx(tokenID, principal, to, amount, nonce, opts...), options.GenesisID, pk)
+	return core.SignedTx(SendTokenTx(tokenID, principal, to, amount, nonce, opts...), options.GenesisID, pk)
 }
