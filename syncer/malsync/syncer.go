@@ -265,8 +265,8 @@ func (s *Syncer) shouldSync(epochStart, epochEnd time.Time) (bool, error) {
 }
 
 func (s *Syncer) downloadLegacy(parent context.Context, initial bool) error {
-	s.logger.Info("starting malfeasance proof sync", log.ZContext(parent))
-	defer s.logger.Debug("malfeasance proof sync terminated", log.ZContext(parent))
+	s.logger.Info("starting legacy malfeasance proof sync", log.ZContext(parent))
+	defer s.logger.Debug("legacy malfeasance proof sync terminated", log.ZContext(parent))
 	ctx, cancel := context.WithCancel(parent)
 	eg, ctx := errgroup.WithContext(ctx)
 	updates := make(chan malUpdate, s.cfg.MalfeasanceIDPeers)
