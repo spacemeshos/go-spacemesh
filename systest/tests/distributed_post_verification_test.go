@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
-	"github.com/spacemeshos/go-spacemesh/malfeasance2"
+	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -357,6 +358,8 @@ func testPostMalfeasance(
 	logger.Info("PoST invalidated")
 
 	var atx builtAtx
+	var expectedDomain pb2.MalfeasanceProof_MalfeasanceDomain
+	var expectedType string
 	switch version {
 	case types.AtxV1:
 		watx := &wire.ActivationTxV1{
@@ -370,6 +373,8 @@ func testPostMalfeasance(
 		}
 		watx.Sign(signer)
 		atx = watx
+		expectedDomain = pb2.MalfeasanceProof_DOMAIN_UNSPECIFIED
+		expectedType = strconv.FormatUint(uint64(malfeasance.InvalidPostIndex), 10)
 	case types.AtxV2:
 		watx := &wire.ActivationTxV2{
 			PublishEpoch:   nipostChallenge.PublishEpoch,
@@ -398,6 +403,8 @@ func testPostMalfeasance(
 		}
 		watx.Sign(signer)
 		atx = watx
+		expectedDomain = pb2.MalfeasanceProof_DOMAIN_ACTIVATION
+		expectedType = "InvalidPoSTProof"
 	default:
 		require.Fail(t, fmt.Sprintf("unsupported ATX version: %v", version))
 		return
@@ -447,8 +454,8 @@ func testPostMalfeasance(
 		}
 		stopPublishing()
 		logger.Info("malfeasance proof received")
-		require.Equal(t, malfeasance2.InvalidActivation, proof.Domain)
-		require.Equal(t, "InvalidPoSTProof", proof.Type)
+		require.Equal(t, expectedDomain, proof.Domain)
+		require.Equal(t, expectedType, proof.Type)
 		require.Equal(t, atx.ID(), proof.Properties["atx"])
 		receivedProof = true
 		return false, nil
