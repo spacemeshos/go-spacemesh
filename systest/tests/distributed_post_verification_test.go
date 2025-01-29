@@ -427,7 +427,8 @@ func testPostMalfeasance(
 	require.NoError(t, err)
 
 	// 4. Publish ATX
-	publishCtx, stopPublishing := context.WithCancel(ctx.Context)
+	timeout := time.Minute * 2
+	publishCtx, stopPublishing := context.WithTimeout(ctx.Context, timeout)
 	defer stopPublishing()
 	var eg errgroup.Group
 	defer eg.Wait()
@@ -441,18 +442,15 @@ func testPostMalfeasance(
 			select {
 			case <-publishCtx.Done():
 				return nil
-			case <-time.After(10 * time.Second):
+			case <-time.After(10 * time.Second): // retry every 10 seconds until context is done
 			}
 		}
 	})
 
 	// 5. Wait for POST malfeasance proof
 	receivedProof := false
-	timeout := time.Minute * 2
 	logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
-	awaitCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	err = malfeasanceStream(awaitCtx, cl.Client(0), logger, func(proof *pb2.MalfeasanceProof) (bool, error) {
+	err = malfeasanceStream(publishCtx, cl.Client(0), logger, func(proof *pb2.MalfeasanceProof) (bool, error) {
 		if !bytes.Equal(proof.GetSmesher(), signer.NodeID().Bytes()) {
 			return true, nil
 		}
