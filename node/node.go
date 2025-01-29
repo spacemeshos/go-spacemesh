@@ -1654,6 +1654,8 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
 			sig,
+			cmd.Version,
+			cmd.Commit,
 		)
 		app.grpcServices[svc] = service
 		return service, nil

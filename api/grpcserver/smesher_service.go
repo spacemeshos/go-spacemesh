@@ -33,6 +33,9 @@ type SmesherService struct {
 	cmdCfg         *activation.PostSupervisorConfig
 	postOpts       activation.PostSetupOpts
 	sig            *signing.EdSigner
+
+	appVersion string
+	appCommit  string
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -52,6 +55,8 @@ func NewSmesherService(
 	streamInterval time.Duration,
 	postOpts activation.PostSetupOpts,
 	sig *signing.EdSigner,
+	appVersion string,
+	appCommit string,
 ) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
@@ -60,7 +65,23 @@ func NewSmesherService(
 		streamInterval:   streamInterval,
 		postOpts:         postOpts,
 		sig:              sig,
+		appVersion:       appVersion,
+		appCommit:        appCommit,
 	}
+}
+
+// Version returns the version of the node software as a semver string.
+func (s *SmesherService) Version(context.Context, *emptypb.Empty) (*pb.VersionResponse, error) {
+	return &pb.VersionResponse{
+		VersionString: &pb.SimpleString{Value: s.appVersion},
+	}, nil
+}
+
+// Build returns the build of the node software.
+func (s *SmesherService) Build(context.Context, *emptypb.Empty) (*pb.BuildResponse, error) {
+	return &pb.BuildResponse{
+		BuildString: &pb.SimpleString{Value: s.appCommit},
+	}, nil
 }
 
 // SetPostServiceConfig sets the post supervisor config.

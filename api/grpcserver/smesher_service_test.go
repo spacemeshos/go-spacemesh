@@ -32,6 +32,8 @@ func TestPostConfig(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil,
+		"v1.0.0",
+		"test",
 	)
 
 	postConfig := activation.PostConfig{
@@ -68,6 +70,8 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		sig,
+		"v1.0.0",
+		"test",
 	)
 	svc.SetPostServiceConfig(cmdCfg)
 
@@ -115,6 +119,8 @@ func TestStartSmeshing_ErrorOnMissingPostServiceConfig(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		sig,
+		"v1.0.0",
+		"test",
 	)
 
 	providerID := uint32(7)
@@ -154,6 +160,8 @@ func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil, // no nodeID in multi smesher setup
+		"v1.0.0",
+		"test",
 	)
 	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
 
@@ -195,6 +203,8 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil, // no nodeID in multi smesher setup
+		"v1.0.0",
+		"test",
 	)
 
 	providers := []activation.PostSetupProvider{
@@ -244,6 +254,8 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			time.Second,
 			activation.DefaultPostSetupOpts(),
 			nil,
+			"v1.0.0",
+			"test",
 		)
 
 		postSupervisor.EXPECT().Status().Return(&activation.PostSetupStatus{
@@ -270,6 +282,8 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			time.Second,
 			activation.DefaultPostSetupOpts(),
 			nil,
+			"v1.0.0",
+			"test",
 		)
 
 		id := activation.PostProviderID{}
@@ -309,6 +323,8 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			time.Second,
 			activation.DefaultPostSetupOpts(),
 			nil,
+			"v1.0.0",
+			"test",
 		)
 
 		id := activation.PostProviderID{}
@@ -349,6 +365,8 @@ func TestSmesherService_SmesherID(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil,
+		"v1.0.0",
+		"test",
 	)
 
 	resp, err := svc.SmesherID(context.Background(), &emptypb.Empty{})
