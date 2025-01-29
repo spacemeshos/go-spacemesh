@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"testing"
 	"time"
 
@@ -35,7 +34,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
-	"github.com/spacemeshos/go-spacemesh/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -357,9 +355,12 @@ func testPostMalfeasance(
 	require.True(t, invalidPost, "expected invalid POST")
 	logger.Info("PoST invalidated")
 
-	var atx builtAtx
-	var expectedDomain pb2.MalfeasanceProof_MalfeasanceDomain
-	var expectedType string
+	var (
+		atx            builtAtx
+		expectedDomain pb2.MalfeasanceProof_MalfeasanceDomain
+		expectedType   uint32
+	)
+	expectedProperties := make(map[string]string)
 	switch version {
 	case types.AtxV1:
 		watx := &wire.ActivationTxV1{
@@ -374,7 +375,8 @@ func testPostMalfeasance(
 		watx.Sign(signer)
 		atx = watx
 		expectedDomain = pb2.MalfeasanceProof_DOMAIN_UNSPECIFIED
-		expectedType = strconv.FormatUint(uint64(malfeasance.InvalidPostIndex), 10)
+		expectedType = 4
+		expectedProperties["atx"] = atx.ID().String()
 	case types.AtxV2:
 		watx := &wire.ActivationTxV2{
 			PublishEpoch:   nipostChallenge.PublishEpoch,
@@ -404,7 +406,9 @@ func testPostMalfeasance(
 		watx.Sign(signer)
 		atx = watx
 		expectedDomain = pb2.MalfeasanceProof_DOMAIN_ACTIVATION
-		expectedType = "InvalidPoSTProof"
+		expectedType = 0
+		expectedProperties["type"] = "InvalidPoSTProof"
+		expectedProperties["atx"] = atx.ID().String()
 	default:
 		require.Fail(t, fmt.Sprintf("unsupported ATX version: %v", version))
 		return
@@ -456,6 +460,7 @@ func testPostMalfeasance(
 		logger.Info("malfeasance proof received")
 		require.Equal(t, expectedDomain, proof.Domain)
 		require.Equal(t, expectedType, proof.Type)
+		require.Subset(t, proof.Properties, expectedProperties)
 		require.Equal(t, atx.ID(), proof.Properties["atx"])
 		receivedProof = true
 		return false, nil
