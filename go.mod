@@ -2,6 +2,8 @@ module github.com/spacemeshos/go-spacemesh
 
 go 1.23.4
 
+replace github.com/spacemeshos/api/release/go => ../api/release/go
+
 require (
 	cloud.google.com/go/storage v1.47.0
 	github.com/ALTree/bigfloat v0.2.0
@@ -43,7 +45,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/seehuhn/mt19937 v1.0.0
 	github.com/slok/go-http-metrics v0.13.0
-	github.com/spacemeshos/api/release/go v1.57.1-0.20241210094511-56be061f5f86
+	github.com/spacemeshos/api/release/go v1.57.1-0.20250129124411-4a935887cbbd
 	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
 	github.com/spacemeshos/go-scale v1.2.1
