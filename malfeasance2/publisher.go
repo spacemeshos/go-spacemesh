@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -123,8 +124,13 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 		return nil
 	})
 	if err != nil {
+		p.logger.Error("failed to persist malfeasance proof",
+			zap.Error(err),
+			log.ZShortStringer("node_id", nodeID),
+		)
 		return err
 	}
+	p.logger.Debug("persisted malfeasance proof", log.ZShortStringer("node_id", nodeID))
 	if !publish {
 		// all smeshers were already marked as malicious - no gossip to void spamming the network
 		return nil
@@ -206,6 +212,14 @@ func (p *Publisher) publish(
 		p.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
 		return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 	}
+	p.logger.Debug("broadcasted malfeasance proof",
+		zap.Array("smesher_ids", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
+			for _, nodeID := range nodeID {
+				enc.AppendString(nodeID.ShortString())
+			}
+			return nil
+		})),
+	)
 	return nil
 }
 

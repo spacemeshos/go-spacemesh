@@ -80,6 +80,7 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID,
 
 		Proof: codec.MustEncode(proof),
 	}
+	p.logger.Debug("publishing ATX malfeasance proof", log.ZShortStringer("node_id", nodeID))
 	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof))
 }
 
