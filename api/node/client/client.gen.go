@@ -117,10 +117,10 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 	// GetActivationAtxAtxId request
-	GetActivationAtxAtxId(ctx context.Context, atxId externalRef0.ATXID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetActivationAtxAtxId(ctx context.Context, atxId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetActivationLastAtxNodeId request
-	GetActivationLastAtxNodeId(ctx context.Context, nodeId externalRef0.NodeID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetActivationLastAtxNodeId(ctx context.Context, nodeId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetActivationPositioningAtxPublishEpoch request
 	GetActivationPositioningAtxPublishEpoch(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -131,7 +131,7 @@ type ClientInterface interface {
 	PostActivationPublish(ctx context.Context, body PostActivationPublishJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetEligibilitySlotsNodeEpoch request
-	GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.Bytes32, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHareBeaconEpoch request
 	GetHareBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -143,16 +143,16 @@ type ClientInterface interface {
 	GetHareTotalWeightLayer(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHareWeightNodeIdLayer request
-	GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.Bytes32, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetProposalLayerNode request
-	GetProposalLayerNode(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetProposalLayerNode(ctx context.Context, layer externalRef0.LayerID, node externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostPublishProtocolWithBody request with any body
 	PostPublishProtocolWithBody(ctx context.Context, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) GetActivationAtxAtxId(ctx context.Context, atxId externalRef0.ATXID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetActivationAtxAtxId(ctx context.Context, atxId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivationAtxAtxIdRequest(c.Server, atxId)
 	if err != nil {
 		return nil, err
@@ -164,7 +164,7 @@ func (c *Client) GetActivationAtxAtxId(ctx context.Context, atxId externalRef0.A
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetActivationLastAtxNodeId(ctx context.Context, nodeId externalRef0.NodeID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetActivationLastAtxNodeId(ctx context.Context, nodeId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetActivationLastAtxNodeIdRequest(c.Server, nodeId)
 	if err != nil {
 		return nil, err
@@ -212,7 +212,7 @@ func (c *Client) PostActivationPublish(ctx context.Context, body PostActivationP
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.Bytes32, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetEligibilitySlotsNodeEpochRequest(c.Server, node, epoch)
 	if err != nil {
 		return nil, err
@@ -260,7 +260,7 @@ func (c *Client) GetHareTotalWeightLayer(ctx context.Context, layer externalRef0
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRef0.Bytes32, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetHareWeightNodeIdLayerRequest(c.Server, nodeId, layer)
 	if err != nil {
 		return nil, err
@@ -272,7 +272,7 @@ func (c *Client) GetHareWeightNodeIdLayer(ctx context.Context, nodeId externalRe
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetProposalLayerNode(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetProposalLayerNode(ctx context.Context, layer externalRef0.LayerID, node externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetProposalLayerNodeRequest(c.Server, layer, node)
 	if err != nil {
 		return nil, err
@@ -297,7 +297,7 @@ func (c *Client) PostPublishProtocolWithBody(ctx context.Context, protocol PostP
 }
 
 // NewGetActivationAtxAtxIdRequest generates requests for GetActivationAtxAtxId
-func NewGetActivationAtxAtxIdRequest(server string, atxId externalRef0.ATXID) (*http.Request, error) {
+func NewGetActivationAtxAtxIdRequest(server string, atxId externalRef0.Bytes32) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -331,7 +331,7 @@ func NewGetActivationAtxAtxIdRequest(server string, atxId externalRef0.ATXID) (*
 }
 
 // NewGetActivationLastAtxNodeIdRequest generates requests for GetActivationLastAtxNodeId
-func NewGetActivationLastAtxNodeIdRequest(server string, nodeId externalRef0.NodeID) (*http.Request, error) {
+func NewGetActivationLastAtxNodeIdRequest(server string, nodeId externalRef0.Bytes32) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -439,7 +439,7 @@ func NewPostActivationPublishRequestWithBody(server string, contentType string, 
 }
 
 // NewGetEligibilitySlotsNodeEpochRequest generates requests for GetEligibilitySlotsNodeEpoch
-func NewGetEligibilitySlotsNodeEpochRequest(server string, node externalRef0.NodeID, epoch externalRef0.EpochID) (*http.Request, error) {
+func NewGetEligibilitySlotsNodeEpochRequest(server string, node externalRef0.Bytes32, epoch externalRef0.EpochID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -596,7 +596,7 @@ func NewGetHareTotalWeightLayerRequest(server string, layer externalRef0.LayerID
 }
 
 // NewGetHareWeightNodeIdLayerRequest generates requests for GetHareWeightNodeIdLayer
-func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.NodeID, layer externalRef0.LayerID) (*http.Request, error) {
+func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.Bytes32, layer externalRef0.LayerID) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -637,7 +637,7 @@ func NewGetHareWeightNodeIdLayerRequest(server string, nodeId externalRef0.NodeI
 }
 
 // NewGetProposalLayerNodeRequest generates requests for GetProposalLayerNode
-func NewGetProposalLayerNodeRequest(server string, layer externalRef0.LayerID, node externalRef0.NodeID) (*http.Request, error) {
+func NewGetProposalLayerNodeRequest(server string, layer externalRef0.LayerID, node externalRef0.Bytes32) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -757,10 +757,10 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 	// GetActivationAtxAtxIdWithResponse request
-	GetActivationAtxAtxIdWithResponse(ctx context.Context, atxId externalRef0.ATXID, reqEditors ...RequestEditorFn) (*GetActivationAtxAtxIdResponse, error)
+	GetActivationAtxAtxIdWithResponse(ctx context.Context, atxId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*GetActivationAtxAtxIdResponse, error)
 
 	// GetActivationLastAtxNodeIdWithResponse request
-	GetActivationLastAtxNodeIdWithResponse(ctx context.Context, nodeId externalRef0.NodeID, reqEditors ...RequestEditorFn) (*GetActivationLastAtxNodeIdResponse, error)
+	GetActivationLastAtxNodeIdWithResponse(ctx context.Context, nodeId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*GetActivationLastAtxNodeIdResponse, error)
 
 	// GetActivationPositioningAtxPublishEpochWithResponse request
 	GetActivationPositioningAtxPublishEpochWithResponse(ctx context.Context, publishEpoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetActivationPositioningAtxPublishEpochResponse, error)
@@ -771,7 +771,7 @@ type ClientWithResponsesInterface interface {
 	PostActivationPublishWithResponse(ctx context.Context, body PostActivationPublishJSONRequestBody, reqEditors ...RequestEditorFn) (*PostActivationPublishResponse, error)
 
 	// GetEligibilitySlotsNodeEpochWithResponse request
-	GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error)
+	GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.Bytes32, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error)
 
 	// GetHareBeaconEpochWithResponse request
 	GetHareBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetHareBeaconEpochResponse, error)
@@ -783,10 +783,10 @@ type ClientWithResponsesInterface interface {
 	GetHareTotalWeightLayerWithResponse(ctx context.Context, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareTotalWeightLayerResponse, error)
 
 	// GetHareWeightNodeIdLayerWithResponse request
-	GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error)
+	GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.Bytes32, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error)
 
 	// GetProposalLayerNodeWithResponse request
-	GetProposalLayerNodeWithResponse(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*GetProposalLayerNodeResponse, error)
+	GetProposalLayerNodeWithResponse(ctx context.Context, layer externalRef0.LayerID, node externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*GetProposalLayerNodeResponse, error)
 
 	// PostPublishProtocolWithBodyWithResponse request with any body
 	PostPublishProtocolWithBodyWithResponse(ctx context.Context, protocol PostPublishProtocolParamsProtocol, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostPublishProtocolResponse, error)
@@ -840,7 +840,7 @@ type GetActivationPositioningAtxPublishEpochResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
-		ID externalRef0.ATXID `json:"ID"`
+		ID externalRef0.Bytes32 `json:"ID"`
 	}
 }
 
@@ -1044,7 +1044,7 @@ func (r PostPublishProtocolResponse) StatusCode() int {
 }
 
 // GetActivationAtxAtxIdWithResponse request returning *GetActivationAtxAtxIdResponse
-func (c *ClientWithResponses) GetActivationAtxAtxIdWithResponse(ctx context.Context, atxId externalRef0.ATXID, reqEditors ...RequestEditorFn) (*GetActivationAtxAtxIdResponse, error) {
+func (c *ClientWithResponses) GetActivationAtxAtxIdWithResponse(ctx context.Context, atxId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*GetActivationAtxAtxIdResponse, error) {
 	rsp, err := c.GetActivationAtxAtxId(ctx, atxId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1053,7 +1053,7 @@ func (c *ClientWithResponses) GetActivationAtxAtxIdWithResponse(ctx context.Cont
 }
 
 // GetActivationLastAtxNodeIdWithResponse request returning *GetActivationLastAtxNodeIdResponse
-func (c *ClientWithResponses) GetActivationLastAtxNodeIdWithResponse(ctx context.Context, nodeId externalRef0.NodeID, reqEditors ...RequestEditorFn) (*GetActivationLastAtxNodeIdResponse, error) {
+func (c *ClientWithResponses) GetActivationLastAtxNodeIdWithResponse(ctx context.Context, nodeId externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*GetActivationLastAtxNodeIdResponse, error) {
 	rsp, err := c.GetActivationLastAtxNodeId(ctx, nodeId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1088,7 +1088,7 @@ func (c *ClientWithResponses) PostActivationPublishWithResponse(ctx context.Cont
 }
 
 // GetEligibilitySlotsNodeEpochWithResponse request returning *GetEligibilitySlotsNodeEpochResponse
-func (c *ClientWithResponses) GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.NodeID, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error) {
+func (c *ClientWithResponses) GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.Bytes32, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error) {
 	rsp, err := c.GetEligibilitySlotsNodeEpoch(ctx, node, epoch, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1124,7 +1124,7 @@ func (c *ClientWithResponses) GetHareTotalWeightLayerWithResponse(ctx context.Co
 }
 
 // GetHareWeightNodeIdLayerWithResponse request returning *GetHareWeightNodeIdLayerResponse
-func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.NodeID, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error) {
+func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.Context, nodeId externalRef0.Bytes32, layer externalRef0.LayerID, reqEditors ...RequestEditorFn) (*GetHareWeightNodeIdLayerResponse, error) {
 	rsp, err := c.GetHareWeightNodeIdLayer(ctx, nodeId, layer, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1133,7 +1133,7 @@ func (c *ClientWithResponses) GetHareWeightNodeIdLayerWithResponse(ctx context.C
 }
 
 // GetProposalLayerNodeWithResponse request returning *GetProposalLayerNodeResponse
-func (c *ClientWithResponses) GetProposalLayerNodeWithResponse(ctx context.Context, layer externalRef0.LayerID, node externalRef0.NodeID, reqEditors ...RequestEditorFn) (*GetProposalLayerNodeResponse, error) {
+func (c *ClientWithResponses) GetProposalLayerNodeWithResponse(ctx context.Context, layer externalRef0.LayerID, node externalRef0.Bytes32, reqEditors ...RequestEditorFn) (*GetProposalLayerNodeResponse, error) {
 	rsp, err := c.GetProposalLayerNode(ctx, layer, node, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1218,7 +1218,7 @@ func ParseGetActivationPositioningAtxPublishEpochResponse(rsp *http.Response) (*
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			ID externalRef0.ATXID `json:"ID"`
+			ID externalRef0.Bytes32 `json:"ID"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

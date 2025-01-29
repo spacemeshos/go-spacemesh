@@ -1,65 +1,44 @@
 package models
 
 import (
-	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func ParseNodeID(hexID NodeID) (types.NodeID, error) {
-	if len(hexID) != 2*len(types.NodeID{}) {
-		return types.NodeID{}, fmt.Errorf("invalid node ID length: %d", len(hexID))
-	}
-	id, err := hex.DecodeString(hexID)
-	if err != nil {
-		return types.NodeID{}, fmt.Errorf("decoding node ID (%s): %w", hexID, err)
+func ParseNodeID(id Bytes32) (types.NodeID, error) {
+	if len(id) != len(types.NodeID{}) {
+		return types.NodeID{}, fmt.Errorf("invalid node ID length: %d", len(id))
 	}
 	return types.BytesToNodeID(id), nil
 }
 
-func ParseATXID(hexID ATXID) (types.ATXID, error) {
-	if len(hexID) != 2*len(types.ATXID{}) {
-		return types.ATXID{}, fmt.Errorf("invalid atx ID length: %d", len(hexID))
-	}
-	id, err := hex.DecodeString(hexID)
-	if err != nil {
-		return types.ATXID{}, fmt.Errorf("decoding atx ID (%s): %w", hexID, err)
+func ParseATXID(id Bytes32) (types.ATXID, error) {
+	if len(id) != len(types.ATXID{}) {
+		return types.ATXID{}, fmt.Errorf("invalid atx ID length: %d", len(id))
 	}
 	return types.BytesToATXID(id), nil
 }
 
-func ParseHash20(hashHex Hash20) (types.Hash20, error) {
-	if len(hashHex) != 2*len(types.Hash20{}) {
-		return types.Hash20{}, fmt.Errorf("invalid Hash20 ID length: %d", len(hashHex))
+func ParseHash20(h Bytes20) (types.Hash20, error) {
+	if len(h) != len(types.Hash20{}) {
+		return types.Hash20{}, fmt.Errorf("invalid Hash20 ID length: %d", len(h))
 	}
-	id, err := hex.DecodeString(hashHex)
-	if err != nil {
-		return types.Hash20{}, fmt.Errorf("decoding Hash20 ID (%s): %w", hashHex, err)
-	}
-	return types.Hash20(id), nil
+	return types.Hash20(h), nil
 }
 
-func ParseHash32(hashHex Hash32) (types.Hash32, error) {
-	if len(hashHex) != 2*len(types.Hash32{}) {
-		return types.Hash32{}, fmt.Errorf("invalid Hash32 ID length: %d", len(hashHex))
+func ParseHash32(h Bytes20) (types.Hash32, error) {
+	if len(h) != len(types.Hash32{}) {
+		return types.Hash32{}, fmt.Errorf("invalid Hash32 ID length: %d", len(h))
 	}
-	id, err := hex.DecodeString(hashHex)
-	if err != nil {
-		return types.Hash32{}, fmt.Errorf("decoding Hash32 ID (%s): %w", hashHex, err)
-	}
-	return types.Hash32(id), nil
+	return types.Hash32(h), nil
 }
 
-func ParseBeacon(beaconHex Beacon) (types.Beacon, error) {
-	if len(beaconHex) != 2*len(types.Beacon{}) {
-		return types.Beacon{}, fmt.Errorf("beacon length must be 8 (was: %d)", len(beaconHex))
+func ParseBeacon(b Beacon) (types.Beacon, error) {
+	if len(b) != len(types.Beacon{}) {
+		return types.Beacon{}, fmt.Errorf("beacon length must be 8 (was: %d)", len(b))
 	}
-	beacon, err := hex.DecodeString(beaconHex)
-	if err != nil {
-		return types.Beacon{}, fmt.Errorf("decoding beacon: %w", err)
-	}
-	return types.Beacon(beacon), nil
+	return types.Beacon(b), nil
 }
 
 func ParseATX(atx *ActivationTx) (*types.ActivationTx, error) {
@@ -118,7 +97,7 @@ func ParseLayers(lids []LayerID) []types.LayerID {
 	return decoded
 }
 
-func ParseTransactionIDs(ids []Hash32) ([]types.TransactionID, error) {
+func ParseTransactionIDs(ids []Bytes32) ([]types.TransactionID, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}

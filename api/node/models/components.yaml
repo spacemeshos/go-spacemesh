@@ -4,9 +4,9 @@ components:
       type: object
       properties:
         ID:
-          type: string
+          $ref: "#/components/schemas/Bytes32"
         SmesherID:
-          type: string
+          $ref: "#/components/schemas/Bytes32"
         PublishEpoch:
           type: integer
           format: uint32
@@ -60,7 +60,7 @@ components:
           type: integer
           format: uint64
         statement:
-          $ref: "#/components/schemas/Hash32"
+          $ref: "#/components/schemas/Bytes32"
         id:
           type: string
           format: byte
@@ -73,16 +73,6 @@ components:
         - leafs
         - statement
 
-    NodeID:
-      type: string
-      format: hex
-      minLength: 64
-      maxLength: 64
-    ATXID:
-      type: string
-      format: hex
-      minLength: 64
-      maxLength: 64
     EpochID:
       type: integer
       format: uint32
@@ -95,31 +85,31 @@ components:
     HareRound:
       type: integer
       format: uint8
-    Hash20:
+    Bytes20:
       type: string
-      format: hex
-      minLength: 40
-      maxLength: 40
-    Hash32:
+      format: byte
+      minLength: 28
+      maxLength: 28
+    Bytes32:
       type: string
-      format: hex
-      minLength: 64
-      maxLength: 64
+      format: byte
+      minLength: 44
+      maxLength: 44
     Beacon:
       type: string
-      format: hex
-      minItems: 8
-      maxItems: 8
+      format: byte
+      minItems: 12
+      maxItems: 12
     HareRoundTemplate:
       type: object
       properties:
         Proposals:
           type: array
           items:
-            $ref: "#/components/schemas/Hash20"
+            $ref: "#/components/schemas/Bytes20"
           description: Array of 32-byte proposal IDs encoded as hex strings
         Reference:
-          $ref: "#/components/schemas/Hash32"
+          $ref: "#/components/schemas/Bytes32"
           description: Optional 32-byte reference hash
       required:
         - Proposals
@@ -127,7 +117,7 @@ components:
       type: object
       properties:
         ID:
-          $ref: "#/components/schemas/Hash20"
+          $ref: "#/components/schemas/Bytes20"
         LayerID:
           $ref: "#/components/schemas/LayerID"
         Height:
@@ -141,7 +131,7 @@ components:
       type: object
       properties:
         Base:
-          $ref: "#/components/schemas/Hash20"
+          $ref: "#/components/schemas/Bytes20"
         Support:
           type: array
           items:
@@ -163,7 +153,7 @@ components:
       type: object
       properties:
         ActiveSetHash:
-          $ref: "#/components/schemas/Hash32"
+          $ref: "#/components/schemas/Bytes32"
         Beacon:
           $ref: "#/components/schemas/Beacon"
         EligibilityCount:
@@ -177,11 +167,11 @@ components:
       type: object
       properties:
         AtxID:
-          $ref: "#/components/schemas/ATXID"
+          $ref: "#/components/schemas/Bytes32"
         OpinionHash:
-          $ref: "#/components/schemas/Hash32"
+          $ref: "#/components/schemas/Bytes32"
         RefBallotID:
-          $ref: "#/components/schemas/Hash20"
+          $ref: "#/components/schemas/Bytes20"
         EpochData:
           $ref: "#/components/schemas/EpochData"
         Votes:
@@ -200,11 +190,11 @@ components:
           type: integer
           format: uint64
         MeshHash:
-          $ref: "#/components/schemas/Hash32"
+          $ref: "#/components/schemas/Bytes32"
         TxIDs:
           type: array
           items:
-            $ref: "#/components/schemas/Hash32"
+            $ref: "#/components/schemas/Bytes32"
       required:
         - VrfNonce
         - TxIDs

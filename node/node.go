@@ -1133,7 +1133,7 @@ func (app *App) initServices(ctx context.Context) error {
 		app.localDB,
 		poetDb,
 		atxService,
-		&atxPubliher{app.host},
+		&atxPublisher{app.host},
 		app.validator,
 		nipostBuilder,
 		app.clock,
@@ -2621,10 +2621,10 @@ func (b *beaconGetter) Beacon(_ context.Context, e types.EpochID) (types.Beacon,
 	return b.provider.GetBeacon(e)
 }
 
-type atxPubliher struct {
+type atxPublisher struct {
 	publisher pubsub.Publisher
 }
 
-func (a *atxPubliher) PublishATX(ctx context.Context, blob []byte, _ *types.PoetProofMessage) error {
+func (a *atxPublisher) PublishATX(ctx context.Context, blob []byte, _ *types.PoetProofMessage) error {
 	return a.publisher.Publish(ctx, pubsub.AtxProtocol, blob)
 }

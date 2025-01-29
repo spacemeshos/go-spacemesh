@@ -26,7 +26,7 @@ paths:
                 type: object
                 properties:
                   ID:
-                    $ref: "models/components.yaml#/components/schemas/ATXID"
+                    $ref: "models/components.yaml#/components/schemas/Bytes32"
                 required:
                   - ID
 
@@ -40,7 +40,7 @@ paths:
           name: node_id
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/NodeID"
+            $ref: "models/components.yaml#/components/schemas/Bytes32"
       responses:
         "200":
           description: ATX
@@ -68,7 +68,7 @@ paths:
           name: atx_id
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/ATXID"
+            $ref: "models/components.yaml#/components/schemas/Bytes32"
       responses:
         "200":
           description: ATX
@@ -78,6 +78,12 @@ paths:
                 $ref: "models/components.yaml#/components/schemas/ActivationTx"
         "404":
           description: ATX not found
+        "400":
+          description: Invalid data passed
+          content:
+            plain/text:
+              schema:
+                type: string
 
   /activation/publish:
     post:
@@ -197,7 +203,7 @@ paths:
           name: node_id
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/NodeID"
+            $ref: "models/components.yaml#/components/schemas/Bytes32"
         - in: path
           name: layer
           required: true
@@ -218,6 +224,12 @@ paths:
                   - weight
         "204":
           description: did not find a message to retrieve
+        "400":
+          description: Bad request
+          content:
+            plain/text:
+              schema:
+                type: string
   /hare/beacon/{epoch}:
     get:
       summary: Get the beacon value for an epoch
@@ -258,7 +270,7 @@ paths:
           name: node
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/NodeID"
+            $ref: "models/components.yaml#/components/schemas/Bytes32"
       responses:
         "200":
           description: successfully created a partial proposal
@@ -270,6 +282,12 @@ paths:
           description: no eligibilities for this node in this epoch
         "500":
           description: could not generate proposal
+        "400":
+          description: Bad request
+          content:
+            plain/text:
+              schema:
+                type: string
   /eligibility/slots/{node}/{epoch}:
     get:
       summary: Get eligibility slots for a given node id in given epoch
@@ -280,7 +298,7 @@ paths:
           name: node
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/NodeID"
+            $ref: "models/components.yaml#/components/schemas/Bytes32"
         - in: path
           name: epoch
           required: true
@@ -305,3 +323,9 @@ paths:
                   - nonce
         "500":
           description: could not calculate eligibility slots
+        "400":
+          description: Bad request
+          content:
+            plain/text:
+              schema:
+                type: string
