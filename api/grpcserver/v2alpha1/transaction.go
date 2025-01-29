@@ -27,7 +27,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/mint"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/multisig"
+	tokenwallet "github.com/spacemeshos/go-spacemesh/vm/templates/token_wallet"
 	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
@@ -451,6 +453,19 @@ func toTxContents(rawTx []byte, header *types.TxHeader) (
 				},
 			}
 			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DEPLOY
+		case *wallet.ProxyArgs:
+			contents := &spacemeshv2alpha1.TransactionContents_Proxy{
+				Proxy: &spacemeshv2alpha1.ContentsProxy{
+					Destination: args.Destination.String(),
+					Amount:      args.Amount,
+				},
+			}
+			if args.Method != nil {
+				contents.Proxy.Method = args.Method[:]
+			}
+			res.Contents = contents
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_PROXY
+
 		}
 	case multisig.TemplateAddress:
 		txArgs, err := multisig.ParseArgs(payload)
@@ -485,6 +500,54 @@ func toTxContents(rawTx []byte, header *types.TxHeader) (
 				},
 			}
 			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_DEPLOY
+		}
+	case mint.TemplateAddress:
+		txArgs, err := mint.ParseArgs(payload)
+		if err != nil {
+			return nil, txType, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
+		}
+		switch args := txArgs.(type) {
+		case *mint.SpawnArguments:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_MintSpawn{
+				MintSpawn: &spacemeshv2alpha1.ContentsMintSpawn{
+					Pubkey:    args.Owner.String(),
+					MaxSupply: args.MaxSupply,
+					Price:     args.Price,
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_MINT_SPAWN
+		}
+	case tokenwallet.TemplateAddress:
+		txArgs, err := tokenwallet.ParseArgs(payload)
+		if err != nil {
+			return nil, txType, fmt.Errorf("%w: decoding TX args: %w", core.ErrMalformed, err)
+		}
+		switch args := txArgs.(type) {
+		case *tokenwallet.SpawnArguments:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_TokenWalletSpawn{
+				TokenWalletSpawn: &spacemeshv2alpha1.ContentsTokenWalletSpawn{
+					Pubkey:         args.Owner.String(),
+					MintTemplate:   args.MintTemplate.String(),
+					WalletTemplate: args.WalletTemplate.String(),
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_TOKEN_WALLET_SPAWN
+		case *tokenwallet.SendTokenArguments:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_TokenWalletSendToken{
+				TokenWalletSendToken: &spacemeshv2alpha1.ContentsTokenWalletSendToken{
+					Destination: args.To.String(),
+					Amount:      args.Amount,
+					TokenId:     args.TokenId.String(),
+				},
+			}
+			txType = spacemeshv2alpha1.Transaction_TRANSACTION_TYPE_TOKEN_WALLET_SEND_TOKEN
+		case *tokenwallet.SpendArguments:
+			res.Contents = &spacemeshv2alpha1.TransactionContents_Send{
+				Send: &spacemeshv2alpha1.ContentsSend{
+					Destination: args.To.String(),
+					Amount:      args.Amount,
+				},
+			}
 		}
 	}
 

@@ -14,6 +14,7 @@ import (
 type DeployArgs struct {
 	Code []byte
 }
+
 type ProxyArgs struct {
 	Destination types.Address
 	Method      *athcon.MethodSelector
