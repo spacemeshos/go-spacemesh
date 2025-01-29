@@ -461,7 +461,7 @@ func testPostMalfeasance(
 		require.Equal(t, expectedDomain, proof.Domain)
 		require.Equal(t, expectedType, proof.Type)
 		require.Subset(t, proof.Properties, expectedProperties)
-		require.Equal(t, atx.ID(), proof.Properties["atx"])
+		require.Equal(t, atx.ID().ShortString(), proof.Properties["atx"])
 		receivedProof = true
 		return false, nil
 	})
