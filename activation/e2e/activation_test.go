@@ -24,8 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -163,9 +161,9 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	var atxMtx sync.Mutex
 	gotAtxs := make(map[types.NodeID][]wire.ActivationTxV1)
 	endChan := make(chan struct{})
-	mpub := mocks.NewMockPublisher(ctrl)
-	mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, topic string, got []byte) error {
+	mpub := activation.NewMockPublisher(ctrl)
+	mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, got []byte, _ *types.PoetProofMessage) error {
 			atxMtx.Lock()
 			defer atxMtx.Unlock()
 
@@ -201,6 +199,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	tab := activation.NewBuilder(
 		conf,
 		localDB,
+		poetDb,
 		atxService,
 		mpub,
 		validator,

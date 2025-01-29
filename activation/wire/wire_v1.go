@@ -92,6 +92,10 @@ func (atx *ActivationTxV1) ID() types.ATXID {
 	return atx.id
 }
 
+func (atx *ActivationTxV1) PoetProofs() []types.PoetProofRef {
+	return []types.PoetProofRef{types.PoetProofRef(atx.NIPost.PostMetadata.Challenge)}
+}
+
 func (atx *ActivationTxV1) SetID(id types.ATXID) {
 	atx.id = id
 }

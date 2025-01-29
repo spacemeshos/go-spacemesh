@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -11,11 +10,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
+	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -106,11 +105,14 @@ func (s *Server) GetActivationAtxAtxId(
 	ctx context.Context,
 	request GetActivationAtxAtxIdRequestObject,
 ) (GetActivationAtxAtxIdResponseObject, error) {
-	idBytes, err := hex.DecodeString(request.AtxId)
+	id, err := models.ParseATXID(request.AtxId)
 	if err != nil {
-		return nil, err
+		msg := err.Error()
+		return GetActivationAtxAtxId400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, nil
 	}
-	id := types.BytesToATXID(idBytes)
 	atx, err := s.atxService.Atx(ctx, id)
 	switch {
 	case errors.Is(err, activation.ErrNotFound):
@@ -124,7 +126,7 @@ func (s *Server) GetActivationAtxAtxId(
 		NumUnits:     atx.NumUnits,
 		PublishEpoch: atx.PublishEpoch.Uint32(),
 		Sequence:     &atx.Sequence,
-		SmesherID:    hex.EncodeToString(atx.SmesherID.Bytes()),
+		SmesherID:    atx.SmesherID.Bytes(),
 		TickCount:    atx.TickCount,
 		Weight:       atx.Weight,
 	}, nil
@@ -153,11 +155,11 @@ func (s *Server) GetActivationLastAtxNodeId(
 	}
 
 	return GetActivationLastAtxNodeId200JSONResponse{
-		ID:           hex.EncodeToString(atxid.ID().Bytes()),
+		ID:           atxid.ID().Bytes(),
 		NumUnits:     atxid.NumUnits,
 		PublishEpoch: atxid.PublishEpoch.Uint32(),
 		Sequence:     &atxid.Sequence,
-		SmesherID:    hex.EncodeToString(atxid.SmesherID.Bytes()),
+		SmesherID:    atxid.SmesherID.Bytes(),
 		TickCount:    atxid.TickCount,
 		Weight:       atxid.Weight,
 	}, nil
@@ -174,8 +176,49 @@ func (s *Server) GetActivationPositioningAtxPublishEpoch(
 	}
 
 	return GetActivationPositioningAtxPublishEpoch200JSONResponse{
-		ID: hex.EncodeToString(id.Bytes()),
+		ID: id.Bytes(),
 	}, nil
+}
+
+func (s *Server) PostActivationPublish(
+	ctx context.Context,
+	request PostActivationPublishRequestObject,
+) (PostActivationPublishResponseObject, error) {
+	invalidArg := func(err error) (PostActivationPublish400PlaintextResponse, error) {
+		msg := err.Error()
+		return PostActivationPublish400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, nil
+	}
+
+	if p := request.Body.PoetProof; p != nil {
+		stmt, err := models.ParseHash32(p.Statement)
+		if err != nil {
+			return invalidArg(err)
+		}
+		proof := types.PoetProofMessage{
+			PoetProof: types.PoetProof{
+				MerkleProof: shared.MerkleProof{
+					Root:         p.Proof.Root,
+					ProvenLeaves: p.Proof.ProvenLeaves,
+					ProofNodes:   p.Proof.ProofNodes,
+				},
+				LeafCount: p.Leafs,
+			},
+			Statement:     stmt,
+			PoetServiceID: p.Id,
+			RoundID:       p.Round,
+		}
+		if err := s.poetDB.ValidateAndStore(ctx, &proof); err != nil {
+			return invalidArg(err)
+		}
+	}
+	if err := s.publisher.Publish(ctx, pubsub.AtxProtocol, request.Body.AtxBlob); err != nil {
+		return invalidArg(err)
+	}
+
+	return PostActivationPublish200Response{}, nil
 }
 
 // PostPublishProtocol implements StrictServerInterface.
@@ -199,32 +242,6 @@ func (s *Server) PostPublishProtocol(
 	return PostPublishProtocol200Response{}, nil
 }
 
-// PostPoet implements StrictServerInterface.
-func (s *Server) PostPoet(ctx context.Context, request PostPoetRequestObject) (PostPoetResponseObject, error) {
-	var proof types.PoetProofMessage
-	blob, err := io.ReadAll(request.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := codec.Decode(blob, &proof); err != nil {
-		msg := err.Error()
-		return PostPoet400PlaintextResponse{
-			Body:          bytes.NewBuffer([]byte(msg)),
-			ContentLength: int64(len(msg)),
-		}, nil
-	}
-
-	if err := s.poetDB.ValidateAndStore(ctx, &proof); err != nil {
-		msg := err.Error()
-		return PostPoet400PlaintextResponse{
-			Body:          bytes.NewBuffer([]byte(msg)),
-			ContentLength: int64(len(msg)),
-		}, nil
-	}
-	return PostPoet200Response{}, nil
-}
-
 func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
 	request GetHareRoundTemplateLayerIterRoundRequestObject,
 ) (GetHareRoundTemplateLayerIterRoundResponseObject, error) {
@@ -239,11 +256,11 @@ func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
 
 	var resp GetHareRoundTemplateLayerIterRound200JSONResponse
 	for _, p := range body.Value.Proposals {
-		resp.Proposals = append(resp.Proposals, hex.EncodeToString(p[:]))
+		resp.Proposals = append(resp.Proposals, p[:])
 	}
 	if ref := body.Value.Reference; ref != nil {
-		refHex := hex.EncodeToString(ref[:])
-		resp.Reference = &refHex
+		b := ref.Bytes()
+		resp.Reference = &b
 	}
 	return resp, nil
 }
@@ -261,11 +278,14 @@ func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
 func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
 	request GetHareWeightNodeIdLayerRequestObject,
 ) (GetHareWeightNodeIdLayerResponseObject, error) {
-	hexBuf, err := hex.DecodeString(request.NodeId)
+	id, err := models.ParseNodeID(request.NodeId)
 	if err != nil {
-		return nil, fmt.Errorf("decode node id: %w", err)
+		msg := err.Error()
+		return GetHareWeightNodeIdLayer400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, nil
 	}
-	id := types.BytesToNodeID(hexBuf)
 	weight, err := s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))
 	if err != nil {
 		return nil, fmt.Errorf("miner weight: %w", err)
@@ -280,17 +300,20 @@ func (s *Server) GetHareBeaconEpoch(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	return &GetHareBeaconEpoch200JSONResponse{Beacon: hex.EncodeToString(beacon[:])}, nil
+	return &GetHareBeaconEpoch200JSONResponse{Beacon: beacon[:]}, nil
 }
 
 func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (
 	GetProposalLayerNodeResponseObject, error,
 ) {
-	hexBuf, err := hex.DecodeString(request.Node)
+	id, err := models.ParseNodeID(request.Node)
 	if err != nil {
-		return GetProposalLayerNode500Response{}, err
+		msg := err.Error()
+		return GetProposalLayerNode400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, nil
 	}
-	id := types.BytesToNodeID(hexBuf)
 
 	proposal, nonce, err := s.proposals.BuildFor(ctx, types.LayerID(request.Layer), id)
 	if err != nil {
@@ -299,33 +322,33 @@ func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLa
 	if proposal == nil {
 		return GetProposalLayerNode204Response{}, nil
 	}
-	if proposal.Ballot.EpochData.EligibilityCount == 0 {
-		return GetProposalLayerNode204Response{}, nil
-	}
 
 	resp := GetProposalLayerNode200JSONResponse{
 		Ballot: models.Ballot{
-			AtxID:       hex.EncodeToString(proposal.AtxID.Bytes()),
-			OpinionHash: hex.EncodeToString(proposal.OpinionHash.Bytes()),
+			AtxID:       proposal.AtxID.Bytes(),
+			OpinionHash: proposal.OpinionHash.Bytes(),
 			Votes: models.Votes{
 				Abstain: encodeLayerIDs(proposal.Votes.Abstain),
 				Against: encodeVotes(proposal.Votes.Against),
-				Base:    hex.EncodeToString(proposal.Votes.Base[:]),
+				Base:    proposal.Votes.Base[:],
 				Support: encodeVotes(proposal.Votes.Support),
 			},
 		},
 		TxIDs:    encodeSlicesOfBytes(proposal.TxIDs),
 		VrfNonce: uint64(nonce),
-		MeshHash: hex.EncodeToString(proposal.MeshHash.Bytes()),
+		MeshHash: proposal.MeshHash.Bytes(),
 	}
 
 	if proposal.Ballot.RefBallot != types.EmptyBallotID {
-		refBallotIDHex := hex.EncodeToString(proposal.RefBallot[:])
-		resp.Ballot.RefBallotID = &refBallotIDHex
+		id := proposal.Ballot.RefBallot[:]
+		resp.Ballot.RefBallotID = &id
 	} else {
+		if proposal.Ballot.EpochData.EligibilityCount == 0 {
+			return GetProposalLayerNode204Response{}, nil
+		}
 		resp.Ballot.EpochData = &models.EpochData{
-			ActiveSetHash:    hex.EncodeToString(proposal.EpochData.ActiveSetHash[:]),
-			Beacon:           hex.EncodeToString(proposal.EpochData.Beacon[:]),
+			ActiveSetHash:    proposal.EpochData.ActiveSetHash[:],
+			Beacon:           proposal.EpochData.Beacon[:],
 			EligibilityCount: proposal.EpochData.EligibilityCount,
 		}
 	}
@@ -336,10 +359,10 @@ type asBytes interface {
 	Bytes() []byte
 }
 
-func encodeSlicesOfBytes[T asBytes](ids []T) []models.Hash32 {
-	encoded := make([]models.Hash32, 0, len(ids))
+func encodeSlicesOfBytes[T asBytes](ids []T) []models.Bytes32 {
+	encoded := make([]models.Bytes32, 0, len(ids))
 	for _, h := range ids {
-		encoded = append(encoded, hex.EncodeToString(h.Bytes()))
+		encoded = append(encoded, h.Bytes())
 	}
 	return encoded
 }
@@ -357,7 +380,7 @@ func encodeVotes(votes []types.Vote) []models.Vote {
 	for _, vote := range votes {
 		encoded = append(encoded, models.Vote{
 			Height:  vote.Height,
-			ID:      hex.EncodeToString(vote.ID[:]),
+			ID:      vote.ID[:],
 			LayerID: vote.LayerID.Uint32(),
 		})
 	}
@@ -368,11 +391,14 @@ func (s *Server) GetEligibilitySlotsNodeEpoch(
 	ctx context.Context,
 	request GetEligibilitySlotsNodeEpochRequestObject,
 ) (GetEligibilitySlotsNodeEpochResponseObject, error) {
-	hexBuf, err := hex.DecodeString(request.Node)
+	id, err := models.ParseNodeID(request.Node)
 	if err != nil {
-		return GetEligibilitySlotsNodeEpoch200JSONResponse{}, err
+		msg := err.Error()
+		return GetEligibilitySlotsNodeEpoch400PlaintextResponse{
+			Body:          bytes.NewBuffer([]byte(msg)),
+			ContentLength: int64(len(msg)),
+		}, err
 	}
-	id := types.BytesToNodeID(hexBuf)
 	epoch := types.EpochID(request.Epoch)
 
 	slots, nonce, err := s.proposals.CalculateEligibilitySlotsFor(ctx, id, epoch)

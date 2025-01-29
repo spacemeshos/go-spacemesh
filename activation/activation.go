@@ -25,7 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics/public"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/localatxs"
@@ -85,7 +84,8 @@ type Builder struct {
 	atxSvc          AtxService
 
 	localDB           sql.LocalDatabase
-	publisher         pubsub.Publisher
+	poetDB            poetDbAPI
+	publisher         Publisher
 	nipostBuilder     nipostBuilder
 	validator         nipostValidator
 	layerClock        layerClock
@@ -178,8 +178,9 @@ func BuilderAtxVersions(v AtxVersions) BuilderOption {
 func NewBuilder(
 	conf Config,
 	localDB sql.LocalDatabase,
+	poetDB poetDbAPI,
 	atxService AtxService,
-	publisher pubsub.Publisher,
+	publisher Publisher,
 	nipostValidator nipostValidator,
 	nipostBuilder nipostBuilder,
 	layerClock layerClock,
@@ -192,6 +193,7 @@ func NewBuilder(
 		signers:           make(map[types.NodeID]*signing.EdSigner),
 		conf:              conf,
 		localDB:           localDB,
+		poetDB:            poetDB,
 		publisher:         publisher,
 		atxSvc:            atxService,
 		validator:         nipostValidator,
@@ -762,11 +764,16 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 	case <-b.layerClock.AwaitLayer(challenge.PublishEpoch.FirstLayer()):
 	}
 
-	err = localatxs.AddBlob(b.localDB, challenge.PublishEpoch, atx.ID(), sig.NodeID(), codec.MustEncode(atx))
+	poet := atx.PoetProofs()[0] // we don't support ATX merge
+	err = localatxs.AddAtx(b.localDB, challenge.PublishEpoch, atx.ID(), sig.NodeID(), codec.MustEncode(atx), poet)
 	if err != nil {
 		b.logger.Warn("failed to persist built ATX into the local DB - regossiping won't work", zap.Error(err))
 	}
 
+	atxBlob, err := codec.Encode(atx)
+	if err != nil {
+		return fmt.Errorf("failed to serialize ATX: %w", err)
+	}
 	for {
 		b.logger.Info(
 			"broadcasting ATX",
@@ -774,13 +781,16 @@ func (b *Builder) PublishActivationTx(ctx context.Context, sig *signing.EdSigner
 			log.ZShortStringer("smesherID", sig.NodeID()),
 			log.DebugField(b.logger, zap.Object("atx", atx)),
 		)
-		size, err := b.broadcast(ctx, atx)
+		err := b.broadcast(ctx, atxBlob, poet)
 		if err == nil {
 			b.logger.Info("atx published",
 				log.ZShortStringer("atx_id", atx.ID()),
 				zap.Stringer("coinbase", b.Coinbase()),
-				zap.Int("size", size))
+				zap.Int("size", len(atxBlob)),
+			)
 			break
+		} else {
+			b.logger.Error("failed to publish ATX. will retry", zap.Error(err))
 		}
 
 		select {
@@ -820,6 +830,7 @@ func (b *Builder) poetRoundStart(epoch types.EpochID) time.Time {
 
 type builtAtx interface {
 	ID() types.ATXID
+	PoetProofs() []types.PoetProofRef
 
 	scale.Encodable
 	zapcore.ObjectMarshaler
@@ -930,15 +941,15 @@ func (b *Builder) createAtx(
 	}
 }
 
-func (b *Builder) broadcast(ctx context.Context, atx scale.Encodable) (int, error) {
-	buf, err := codec.Encode(atx)
+func (b *Builder) broadcast(ctx context.Context, atx []byte, poet types.PoetProofRef) error {
+	proof, err := b.poetDB.ProofMessage(poet)
 	if err != nil {
-		return 0, fmt.Errorf("failed to serialize ATX: %w", err)
+		b.logger.Warn("couldn't get the poet proof referenced in ATX. Will not publish it with ATX", zap.Error(err))
 	}
-	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, buf); err != nil {
-		return 0, fmt.Errorf("failed to broadcast ATX: %w", err)
+	if err := b.publisher.PublishATX(ctx, atx, proof); err != nil {
+		return fmt.Errorf("failed to broadcast ATX: %w", err)
 	}
-	return len(buf), nil
+	return nil
 }
 
 // find returns atx id with the highest tick height.
@@ -1025,14 +1036,14 @@ func (b *Builder) getPositioningAtx(
 
 func (b *Builder) Regossip(ctx context.Context, nodeID types.NodeID) error {
 	epoch := b.layerClock.CurrentLayer().GetEpoch()
-	id, blob, err := localatxs.AtxBlob(b.localDB, epoch, nodeID)
+	id, blob, poet, err := localatxs.AtxAndPoet(b.localDB, epoch, nodeID)
 	if errors.Is(err, sql.ErrNotFound) {
 		return nil
 	} else if err != nil {
 		return err
 	}
 
-	if err := b.publisher.Publish(ctx, pubsub.AtxProtocol, blob); err != nil {
+	if err := b.broadcast(ctx, blob, poet); err != nil {
 		return fmt.Errorf("republishing ATX %s: %w", id, err)
 	}
 	b.logger.Debug("re-gossipped atx", log.ZShortStringer("smesherID", nodeID), log.ZShortStringer("atx ID", id))

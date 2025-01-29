@@ -3,7 +3,6 @@ package client
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,8 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
-	externalRef0 "github.com/spacemeshos/go-spacemesh/api/node/models"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -26,10 +23,10 @@ type NodeService struct {
 }
 
 var (
-	_ activation.AtxService   = (*NodeService)(nil)
-	_ activation.PoetDbStorer = (*NodeService)(nil)
-	_ pubsub.Publisher        = (*NodeService)(nil)
-	_ hare3.NodeService       = (*NodeService)(nil)
+	_ activation.Publisher  = (*NodeService)(nil)
+	_ activation.AtxService = (*NodeService)(nil)
+	_ pubsub.Publisher      = (*NodeService)(nil)
+	_ hare3.NodeService     = (*NodeService)(nil)
 )
 
 type Config struct {
@@ -57,7 +54,7 @@ func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*Node
 }
 
 func (s *NodeService) Atx(ctx context.Context, id types.ATXID) (*types.ActivationTx, error) {
-	resp, err := s.client.GetActivationAtxAtxIdWithResponse(ctx, hex.EncodeToString(id.Bytes()))
+	resp, err := s.client.GetActivationAtxAtxIdWithResponse(ctx, id.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -72,7 +69,7 @@ func (s *NodeService) Atx(ctx context.Context, id types.ATXID) (*types.Activatio
 }
 
 func (s *NodeService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.ActivationTx, error) {
-	resp, err := s.client.GetActivationLastAtxNodeIdWithResponse(ctx, hex.EncodeToString(nodeID.Bytes()))
+	resp, err := s.client.GetActivationLastAtxNodeIdWithResponse(ctx, nodeID.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +95,33 @@ func (s *NodeService) PositioningATX(ctx context.Context, maxPublish types.Epoch
 	return models.ParseATXID(resp.JSON200.ID)
 }
 
+func (s *NodeService) PublishATX(ctx context.Context, blob []byte, poet *types.PoetProofMessage) error {
+	body := PostActivationPublishJSONRequestBody{
+		AtxBlob: blob,
+	}
+	if poet != nil {
+		body.PoetProof = &models.PoetProof{
+			Leafs: poet.LeafCount,
+			Proof: models.MerkleProof{
+				ProofNodes:   poet.ProofNodes,
+				ProvenLeaves: poet.ProvenLeaves,
+				Root:         poet.Root,
+			},
+			Statement: poet.Statement.Bytes(),
+			Id:        poet.PoetServiceID,
+			Round:     poet.RoundID,
+		}
+	}
+	resp, err := s.client.PostActivationPublishWithResponse(ctx, body)
+	if err != nil {
+		return fmt.Errorf("failed request to publish ATX blob and poet: %w", err)
+	}
+	if resp.StatusCode() != http.StatusOK {
+		return fmt.Errorf("failed to publish ATX and poet: %w (%s: %s)", err, resp.Status(), resp.Body)
+	}
+	return nil
+}
+
 // Publish implements pubsub.Publisher.
 func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) error {
 	buf := bytes.NewBuffer(blob)
@@ -118,29 +142,15 @@ func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) er
 	return nil
 }
 
-// StorePoetProof implements activation.PoetDbStorer.
-func (s *NodeService) StorePoetProof(ctx context.Context, proof *types.PoetProofMessage) error {
-	blob := codec.MustEncode(proof)
-	buf := bytes.NewBuffer(blob)
-	resp, err := s.client.PostPoetWithBody(ctx, "application/octet-stream", buf)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status: %s", resp.Status)
-	}
-	return nil
-}
-
 func (s *NodeService) HareRoundTemplate(
 	ctx context.Context,
 	layer types.LayerID,
 	round hare3.IterRound,
 ) (*hare3.Body, error) {
 	resp, err := s.client.GetHareRoundTemplateLayerIterRoundWithResponse(ctx,
-		externalRef0.LayerID(layer),
-		externalRef0.HareIter(round.Iter),
-		externalRef0.HareRound(round.Round))
+		models.LayerID(layer),
+		models.HareIter(round.Iter),
+		models.HareRound(round.Round))
 	if err != nil {
 		return nil, fmt.Errorf("get hare message: %w", err)
 	}
@@ -150,25 +160,18 @@ func (s *NodeService) HareRoundTemplate(
 			Layer:     layer,
 			IterRound: round,
 		}
-		for _, proposalHex := range resp.JSON200.Proposals {
-			if len(proposalHex) != 40 {
-				return nil, errors.New("invalid proposal ID length")
-			}
-			proposal, err := hex.DecodeString(proposalHex)
+		for _, p := range resp.JSON200.Proposals {
+			proposal, err := models.ParseHash20(p)
 			if err != nil {
 				return nil, fmt.Errorf("decoding proposal ID: %w", err)
 			}
 			body.Value.Proposals = append(body.Value.Proposals, types.ProposalID(proposal))
 		}
 		if refHex := resp.JSON200.Reference; refHex != nil {
-			if len(*refHex) != 64 {
-				return nil, errors.New("invalid reference length")
-			}
-			reference, err := hex.DecodeString(*refHex)
+			refHash, err := models.ParseHash32(*refHex)
 			if err != nil {
-				return nil, fmt.Errorf("decoding proposal ID: %w", err)
+				return nil, err
 			}
-			refHash := types.Hash32(reference)
 			body.Value.Reference = &refHash
 		}
 		return &body, nil
@@ -196,7 +199,7 @@ func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uin
 }
 
 func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
-	resp, err := s.client.GetHareWeightNodeIdLayerWithResponse(ctx, node.String(), layer.Uint32())
+	resp, err := s.client.GetHareWeightNodeIdLayerWithResponse(ctx, node.Bytes(), layer.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
@@ -228,7 +231,7 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
 	*types.Proposal, uint64, error,
 ) {
-	resp, err := s.client.GetProposalLayerNodeWithResponse(ctx, layer.Uint32(), node.String())
+	resp, err := s.client.GetProposalLayerNodeWithResponse(ctx, layer.Uint32(), node.Bytes())
 	if err != nil {
 		return nil, 0, fmt.Errorf("get proposal layer: %w", err)
 	}
@@ -322,7 +325,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 func (s *NodeService) CalculateEligibilitySlotsFor(
 	ctx context.Context, node types.NodeID, epoch types.EpochID,
 ) (uint32, types.VRFPostIndex, error) {
-	resp, err := s.client.GetEligibilitySlotsNodeEpochWithResponse(ctx, node.String(), externalRef0.EpochID(epoch))
+	resp, err := s.client.GetEligibilitySlotsNodeEpochWithResponse(ctx, node.Bytes(), models.EpochID(epoch))
 	if err != nil {
 		return 0, 0, err
 	}

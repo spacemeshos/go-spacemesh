@@ -59,7 +59,7 @@ func newMerkleProof(tb testing.TB, leafs []types.Hash32) (types.MerkleProof, typ
 	}, types.BytesToHash(root)
 }
 
-func newNIPostWithPoet(tb testing.TB, poetRef []byte) *nipost.NIPostState {
+func newNIPostWithPoet(tb testing.TB, poetRef types.PoetProofRef) *nipost.NIPostState {
 	tb.Helper()
 	proof, _ := newMerkleProof(tb, []types.Hash32{
 		types.BytesToHash([]byte("challenge")),
@@ -77,7 +77,7 @@ func newNIPostWithPoet(tb testing.TB, poetRef []byte) *nipost.NIPostState {
 				Pow:     0,
 			},
 			PostMetadata: &types.PostMetadata{
-				Challenge: poetRef,
+				Challenge: poetRef[:],
 			},
 		},
 		NumUnits: 16,
