@@ -75,7 +75,7 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// Prepare cluster
 	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
-	ctx.ClusterSize = 5
+	ctx.ClusterSize = 8
 	cl := cluster.New(ctx, cluster.WithKeys(10))
 	require.NoError(t, cl.AddBootnodes(ctx, 1))
 	require.NoError(t, cl.AddBootstrappers(ctx))

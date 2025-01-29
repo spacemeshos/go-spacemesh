@@ -679,10 +679,15 @@ func (h *HandlerV2) validatePost(
 	if err == nil {
 		return nil
 	}
-	errInvalid := &verifying.ErrInvalidIndex{}
-	if !errors.As(err, &errInvalid) {
+	errInvalidIdx := &verifying.ErrInvalidIndex{}
+	if !errors.As(err, &errInvalidIdx) {
 		return fmt.Errorf("validating post for ID %s: %w", nodeID.ShortString(), err)
 	}
+	h.logger.Debug("ATX with invalid post index",
+		log.ZContext(ctx),
+		zap.Stringer("atx_id", atx.ID()),
+		zap.Int("index", errInvalidIdx.Index),
+	)
 
 	// check if post contains at least one valid label
 	validIdx := 0
@@ -715,7 +720,7 @@ func (h *HandlerV2) validatePost(
 		commitment,
 		nodeID,
 		nipostIndex,
-		uint32(errInvalid.Index),
+		uint32(errInvalidIdx.Index),
 		uint32(validIdx),
 	)
 	if err != nil {
@@ -724,7 +729,7 @@ func (h *HandlerV2) validatePost(
 	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
 		return fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 	}
-	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalid)
+	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalidIdx)
 }
 
 func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {

@@ -223,12 +223,12 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 		watx.NumUnits,
 		PostSubset([]byte(h.local)), // use the local peer ID as seed for random subset
 	)
-	var invalidIdx *verifying.ErrInvalidIndex
-	if errors.As(err, &invalidIdx) {
+	var errInvalidIdx *verifying.ErrInvalidIndex
+	if errors.As(err, &errInvalidIdx) {
 		h.logger.Debug("ATX with invalid post index",
 			log.ZContext(ctx),
 			zap.Stringer("atx_id", watx.ID()),
-			zap.Int("index", invalidIdx.Index),
+			zap.Int("index", errInvalidIdx.Index),
 		)
 		malicious, err := identities.IsMalicious(h.cdb, watx.SmesherID)
 		if err != nil {
@@ -250,7 +250,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 				Type: mwire.InvalidPostIndex,
 				Data: &mwire.InvalidPostIndexProof{
 					Atx:        *watx,
-					InvalidIdx: uint32(invalidIdx.Index),
+					InvalidIdx: uint32(errInvalidIdx.Index),
 				},
 			},
 		}
