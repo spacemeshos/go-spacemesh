@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -55,7 +56,9 @@ type builtAtx interface {
 }
 
 func version(cfg *config.Config, publish types.EpochID) types.AtxVersion {
-	epochs := append([]types.EpochID{0}, maps.Keys(cfg.AtxVersions)...)
+	cfg.AtxVersions[0] = types.AtxV1
+	epochs := maps.Keys(cfg.AtxVersions)
+	slices.Sort(epochs)
 	version := types.AtxV1
 	for _, epoch := range epochs {
 		if publish >= epoch {
