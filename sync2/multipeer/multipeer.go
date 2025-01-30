@@ -349,7 +349,7 @@ func (mpr *MultiPeerReconciler) fullSync(ctx context.Context, syncPeers []p2p.Pe
 			default:
 				// failing to sync against a particular peer is not considered
 				// a fatal sync failure, so we just log the error
-				mpr.logger.Error("error syncing peer", zap.Stringer("peer", p), zap.Error(err))
+				mpr.logger.Debug("error syncing peer", zap.Stringer("peer", p), zap.Error(err))
 			}
 			return nil
 		})
