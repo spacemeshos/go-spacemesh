@@ -1802,6 +1802,10 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2beta1.NewSmeshingIdentitiesService(app.idStates, app.poetClients, app.Config.POET)
 		app.grpcServices[svc] = service
 		return service, nil
+	case v2beta1.Smesher:
+		service := v2beta1.NewSmesherService(cmd.Version, cmd.Commit)
+		app.grpcServices[svc] = service
+		return service, nil
 	}
 	return nil, fmt.Errorf("unknown service %s", svc)
 }
