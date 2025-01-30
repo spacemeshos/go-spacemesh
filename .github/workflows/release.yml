@@ -100,6 +100,28 @@ jobs:
         run: |
           mkdir build-zip
           cp ${{ env.OUTNAME }}.zip build-zip
+      - name: Install aws-cli on linux
+        if: ${{ matrix.os == 'ubuntu-22.04' }}
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+      - name: Install aws-cli on linux-arm
+        if: ${{ matrix.os == 'ubuntu-latest-arm-8-cores' }}
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64-2.2.35.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
+      - name: Install aws-cli on mac
+        if: ${{ matrix.os == 'macos-13' }}
+        run: |
+          curl "https://awscli.amazonaws.com/AWSCLIV2-2.22.35.pkg" -o "AWSCLIV2.pkg"
+          sudo installer -pkg AWSCLIV2.pkg -target /
+      - name: Install aws-cli on windows
+        if: ${{ matrix.os == 'windows-2022' }}
+        run: |
+          choco uninstall awscli
+          choco install awscli --version=2.22.35
       - name: Upload zip to R2
         run: >
           aws s3 sync build-zip
@@ -111,7 +133,7 @@ jobs:
             AWS_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_GO_SM_BUILDS_SECRET_ACCESS_KEY }}
             AWS_REGION: us-east-1
       - name: Install coreutils
-        if: ${{ matrix.os == 'macos-13' || matrix.os == '[self-hosted, macOS, ARM64, go-spacemesh]' }}
+        if: ${{ matrix.os == 'macos-13' }}
         run: brew install coreutils
       - name: Calculate the hashsum of the zip file
         if: ${{ matrix.os != 'windows-2022' }}
@@ -180,6 +202,11 @@ jobs:
         run: |
           mkdir sha256sum
           cp sha256sum.yaml sha256sum
+      - name: Install aws-cli
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.22.35.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install --update
       - name: Upload sha256sums to R2
         run: >
           aws s3 sync sha256sum
