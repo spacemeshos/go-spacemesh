@@ -1,7 +1,6 @@
 package models
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -14,10 +13,10 @@ func Test_parseAtx(t *testing.T) {
 	nodeID := types.NodeID{6, 7, 8, 9, 0}
 
 	validAtx := ActivationTx{
-		ID:           hex.EncodeToString(atxid[:]),
+		ID:           atxid[:],
 		NumUnits:     8,
 		PublishEpoch: 9,
-		SmesherID:    hex.EncodeToString(nodeID[:]),
+		SmesherID:    nodeID[:],
 		TickCount:    5,
 		Weight:       4,
 	}
@@ -57,25 +56,13 @@ func Test_parseAtx(t *testing.T) {
 	})
 	t.Run("invalid nodeID length", func(t *testing.T) {
 		atx := validAtx
-		atx.SmesherID = "CAFE"
-		_, err := ParseATX(&atx)
-		require.Error(t, err)
-	})
-	t.Run("invalid nodeID format", func(t *testing.T) {
-		atx := validAtx
-		atx.SmesherID = "Z234567890123456789012345678901234567890123456789012345678901234"
+		atx.SmesherID = []byte("CAFE")
 		_, err := ParseATX(&atx)
 		require.Error(t, err)
 	})
 	t.Run("invalid atx ID length", func(t *testing.T) {
 		atx := validAtx
-		atx.ID = "CAFE"
-		_, err := ParseATX(&atx)
-		require.Error(t, err)
-	})
-	t.Run("invalid atx ID format", func(t *testing.T) {
-		atx := validAtx
-		atx.ID = "Z234567890123456789012345678901234567890123456789012345678901234"
+		atx.ID = []byte("CAFE")
 		_, err := ParseATX(&atx)
 		require.Error(t, err)
 	})

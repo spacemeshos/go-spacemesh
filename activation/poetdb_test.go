@@ -66,7 +66,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	poetDb, err := NewPoetDb(statesql.InMemoryTest(t), zaptest.NewLogger(t))
 	r.NoError(err)
 
-	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature))
+	r.NoError(poetDb.Validate(msg.Statement[:], msg.PoetProof))
 	ref, err := msg.Ref()
 	r.NoError(err)
 
@@ -88,14 +88,8 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r.NoError(err)
 	msg.PoetProof.Root = []byte("some other root")
 
-	err = poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
-	r.EqualError(
-		err,
-		fmt.Sprintf(
-			"failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
-			msg.PoetServiceID[:5],
-		),
-	)
+	err = poetDb.Validate(msg.Statement[:], msg.PoetProof)
+	r.ErrorContains(err, "merkle proof not valid")
 }
 
 func TestPoetDbInvalidPoetStatement(t *testing.T) {
@@ -105,14 +99,8 @@ func TestPoetDbInvalidPoetStatement(t *testing.T) {
 	r.NoError(err)
 	msg.Statement = types.CalcHash32([]byte("some other statement"))
 
-	err = poetDb.Validate(msg.Statement[:], msg.PoetProof, msg.PoetServiceID, msg.RoundID, types.EmptyEdSignature)
-	r.EqualError(
-		err,
-		fmt.Sprintf(
-			"failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
-			msg.PoetServiceID[:5],
-		),
-	)
+	err = poetDb.Validate(msg.Statement[:], msg.PoetProof)
+	r.ErrorContains(err, "merkle proof not valid")
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {

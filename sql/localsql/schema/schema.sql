@@ -1,12 +1,4 @@
-PRAGMA user_version = 12;
-CREATE TABLE atx_blobs
-(
-    id         CHAR(32) PRIMARY KEY,
-    pubkey     CHAR(32) NOT NULL,
-    epoch      INT NOT NULL,
-    atx        BLOB,
-    version    INTEGER
-);
+PRAGMA user_version = 13;
 CREATE TABLE atx_sync_requests 
 (
     epoch     INT NOT NULL,
@@ -108,7 +100,15 @@ CREATE TABLE proposals
     layer    INTEGER NOT NULL,
     proposal BLOB NOT NULL
 );
-CREATE UNIQUE INDEX atx_blobs_epoch_pubkey ON atx_blobs (epoch, pubkey);
+CREATE TABLE published_atxs
+(
+    id         CHAR(32) PRIMARY KEY,
+    pubkey     CHAR(32) NOT NULL,
+    poetRef    CHAR(32) NOT NULL,
+    epoch      INT NOT NULL,
+    atx        BLOB,
+    version    INTEGER
+);
 CREATE INDEX eligibilities_by_id_layer ON eligibilities (id, layer);
 CREATE INDEX events_by_id_timestamp ON events (id, timestamp);
 CREATE INDEX events_by_kind ON events (kind);

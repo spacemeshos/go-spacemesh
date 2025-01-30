@@ -25,8 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
@@ -55,11 +53,12 @@ type testAtxBuilder struct {
 	*Builder
 	db          sql.Executor
 	localDb     sql.LocalDatabase
+	PoetDb      *PoetDb
 	goldenATXID types.ATXID
 
 	observedLogs *observer.ObservedLogs
 	mctrl        *gomock.Controller
-	mpub         *mocks.MockPublisher
+	mpub         *MockPublisher
 	mnipost      *MocknipostBuilder
 	mpostClient  *MockPostClient
 	mclock       *MocklayerClock
@@ -76,14 +75,18 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 	)))
 
 	ctrl := gomock.NewController(tb)
+	stateDb := statesql.InMemoryTest(tb)
+	poetDb, err := NewPoetDb(stateDb, logger)
+	require.NoError(tb, err)
 	tab := &testAtxBuilder{
-		db:          statesql.InMemoryTest(tb),
+		db:          stateDb,
 		localDb:     localsql.InMemoryTest(tb, sql.WithConnections(numSigners)),
+		PoetDb:      poetDb,
 		goldenATXID: types.ATXID(types.HexToHash32("77777")),
 
 		observedLogs: observedLogs,
 		mctrl:        ctrl,
-		mpub:         mocks.NewMockPublisher(ctrl),
+		mpub:         NewMockPublisher(ctrl),
 		mnipost:      NewMocknipostBuilder(ctrl),
 		mpostClient:  NewMockPostClient(ctrl),
 		mclock:       NewMocklayerClock(ctrl),
@@ -108,6 +111,7 @@ func newTestBuilder(tb testing.TB, numSigners int, opts ...BuilderOption) *testA
 	b := NewBuilder(
 		cfg,
 		tab.localDb,
+		tab.PoetDb,
 		atxService,
 		tab.mpub,
 		tab.mValidator,
@@ -139,7 +143,7 @@ func publishAtxV1(
 	tb.Helper()
 	var watx wire.ActivationTxV1
 	publishAtx(tb, tab, nodeID, posEpoch, currLayer, buildNIPostLayerDuration,
-		func(_ context.Context, _ string, got []byte) error {
+		func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 			return codec.Decode(got, &watx)
 		})
 	require.NoError(tb, atxs.Add(tab.db, toAtx(tb, &watx), watx.Blob()))
@@ -157,7 +161,7 @@ func publishAtx(
 	posEpoch types.EpochID,
 	currLayer *types.LayerID, // pointer to keep current layer consistent across calls
 	buildNIPostLayerDuration uint32,
-	onPublish func(context.Context, string, []byte) error,
+	onPublish func(context.Context, []byte, *types.PoetProofMessage) error,
 ) {
 	tb.Helper()
 
@@ -184,7 +188,7 @@ func publishAtx(
 		func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, _ *types.NIPostChallenge,
 		) (*nipost.NIPostState, error) {
 			*currLayer = currLayer.Add(buildNIPostLayerDuration)
-			return newNIPostWithPoet(tb, types.RandomHash().Bytes()), nil
+			return newNIPostWithPoet(tb, types.RandomPoetProofRef(tb)), nil
 		})
 	ch := make(chan struct{})
 	close(ch)
@@ -197,7 +201,7 @@ func publishAtx(
 			return ch
 		})
 
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(onPublish)
+	tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(onPublish)
 	tab.mnipost.EXPECT().ResetState(nodeID).Return(nil)
 	// create and publish ATX
 	err := tab.PublishActivationTx(context.Background(), tab.signers[nodeID])
@@ -468,7 +472,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 		func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, _ *types.NIPostChallenge,
 		) (*nipost.NIPostState, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
-			return newNIPostWithPoet(t, []byte("66666")), nil
+			return newNIPostWithPoet(t, types.RandomPoetProofRef(t)), nil
 		})
 	done := make(chan struct{})
 	close(done)
@@ -481,9 +485,9 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 			return done
 		})
 	var published []byte
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+	tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		// first publish fails
-		func(_ context.Context, _ string, got []byte) error {
+		func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 			published = got
 			return errors.New("something went wrong")
 		},
@@ -491,9 +495,9 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 
 	// after successful publish, state is cleaned up
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+	tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		// second publish succeeds
-		func(_ context.Context, _ string, got []byte) error {
+		func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 			require.Equal(t, published, got)
 			return nil
 		},
@@ -543,7 +547,7 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 			func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, _ *types.NIPostChallenge,
 			) (*nipost.NIPostState, error) {
 				currLayer = currLayer.Add(1)
-				return newNIPostWithPoet(t, []byte("66666")), nil
+				return newNIPostWithPoet(t, types.RandomPoetProofRef(t)), nil
 			})
 	done := make(chan struct{})
 	close(done)
@@ -568,9 +572,9 @@ func TestBuilder_PublishActivationTx_UsesExistingChallengeOnLatePublish(t *testi
 
 	tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
+	tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		// publish succeeds
-		func(_ context.Context, _ string, got []byte) error {
+		func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 			var atx wire.ActivationTxV1
 			codec.MustDecode(got, &atx)
 			require.Equal(t, wire.NIPostChallengeToWireV1(ch), &atx.NIPostChallengeV1)
@@ -612,7 +616,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 		func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, _ *types.NIPostChallenge,
 		) (*nipost.NIPostState, error) {
 			currLayer = currLayer.Add(layersPerEpoch)
-			return newNIPostWithPoet(t, []byte("66666")), nil
+			return newNIPostWithPoet(t, types.RandomPoetProofRef(t)), nil
 		})
 	done := make(chan struct{})
 	close(done)
@@ -627,8 +631,8 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var built *wire.ActivationTxV1
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, got []byte) error {
+	tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 			built = new(wire.ActivationTxV1)
 			codec.MustDecode(got, built)
 			// advance time to the next epoch to trigger the context timeout
@@ -849,7 +853,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	tab.atxSvc = actSvc
 	sig := maps.Values(tab.signers)[0]
 
-	poetBytes := []byte("poet")
+	poetRef := types.RandomPoetProofRef(t)
 	posAtx := &types.ActivationTx{
 		PublishEpoch: 1,
 		TickCount:    100,
@@ -904,12 +908,12 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 			func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, _ *types.NIPostChallenge,
 			) (*nipost.NIPostState, error) {
 				currentLayer = currentLayer.Add(5)
-				return newNIPostWithPoet(t, poetBytes), nil
+				return newNIPostWithPoet(t, poetRef), nil
 			})
 
 	tab.mpub.EXPECT().
-		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
+		PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, msg []byte, _ *types.PoetProofMessage) error {
 			var atx wire.ActivationTxV1
 			codec.MustDecode(msg, &atx)
 
@@ -921,7 +925,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 			r.Nil(atx.VRFNonce)
 			r.Equal(posAtx.ID(), atx.PositioningATXID)
 			r.Equal(prevAtx.PublishEpoch+1, atx.PublishEpoch)
-			r.Equal(poetBytes, atx.NIPost.PostMetadata.Challenge)
+			r.Equal(poetRef[:], atx.NIPost.PostMetadata.Challenge)
 			return nil
 		})
 
@@ -945,7 +949,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	tab.atxSvc = atxSvc
 	sig := maps.Values(tab.signers)[0]
 
-	poetBytes := []byte("poet")
+	poetRef := types.RandomPoetProofRef(t)
 	currentLayer := postGenesisEpoch.FirstLayer().Add(3)
 	posAtx := &types.ActivationTx{
 		PublishEpoch: 2,
@@ -989,12 +993,12 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 		func(_ context.Context, _ *signing.EdSigner, _ types.Hash32, _ *types.NIPostChallenge,
 		) (*nipost.NIPostState, error) {
 			currentLayer = currentLayer.Add(layersPerEpoch)
-			return newNIPostWithPoet(t, poetBytes), nil
+			return newNIPostWithPoet(t, poetRef), nil
 		})
 
 	tab.mpub.EXPECT().
-		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
-		DoAndReturn(func(ctx context.Context, _ string, msg []byte) error {
+		PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(ctx context.Context, msg []byte, _ *types.PoetProofMessage) error {
 			var atx wire.ActivationTxV1
 			codec.MustDecode(msg, &atx)
 
@@ -1004,7 +1008,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 			r.NotNil(atx.InitialPost)
 			r.Equal(posAtx.ID(), atx.PositioningATXID)
 			r.Equal(posAtx.PublishEpoch+1, atx.PublishEpoch)
-			r.Equal(poetBytes, atx.NIPost.PostMetadata.Challenge)
+			r.Equal(poetRef[:], atx.NIPost.PostMetadata.Challenge)
 
 			return nil
 		})
@@ -1144,7 +1148,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 					return nil, &PoetSvcUnstableError{}
 				}
 				close(builderConfirmation)
-				return newNIPostWithPoet(t, []byte("66666")), nil
+				return newNIPostWithPoet(t, types.RandomPoetProofRef(t)), nil
 			},
 		)
 
@@ -1162,8 +1166,8 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	}, nil).AnyTimes()
 
 	var publishedID types.ATXID
-	tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, s string, b []byte) error {
+	tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, b []byte, _ *types.PoetProofMessage) error {
 			var atx wire.ActivationTxV1
 			codec.MustDecode(b, &atx)
 			publishedID = atx.ID()
@@ -1355,7 +1359,7 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mnipost.EXPECT().ResetState(sig.NodeID()).Return(nil)
 			tab.mnipost.EXPECT().
 				BuildNIPost(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-				Return(&nipost.NIPostState{}, nil)
+				Return(newNIPostWithPoet(t, types.RandomPoetProofRef(t)), nil)
 
 			closed := make(chan struct{})
 			close(closed)
@@ -1363,8 +1367,8 @@ func TestWaitPositioningAtx(t *testing.T) {
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(1).FirstLayer()).Return(closed).AnyTimes()
 			tab.mclock.EXPECT().AwaitLayer(types.EpochID(2).FirstLayer()).Return(closed).AnyTimes()
 
-			tab.mpub.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ string, got []byte) error {
+			tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ context.Context, got []byte, _ *types.PoetProofMessage) error {
 					var atx wire.ActivationTxV1
 					codec.MustDecode(got, &atx)
 					require.Equal(t, tc.targetEpoch, atx.PublishEpoch+1)

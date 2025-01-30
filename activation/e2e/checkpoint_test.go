@@ -22,8 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -133,10 +131,11 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 		logger,
 	)
 
-	mpub := mocks.NewMockPublisher(ctrl)
+	mpub := activation.NewMockPublisher(ctrl)
 	tab := activation.NewBuilder(
 		activation.Config{GoldenATXID: goldenATX},
 		localDB,
+		poetDb,
 		atxService,
 		mpub,
 		validator,
@@ -150,12 +149,12 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	tab.Register(sig)
 
 	var atx0ID types.ATXID
-	mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, p string, msg []byte) error {
+	mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, msg []byte, _ *types.PoetProofMessage) error {
 			var watx wire.ActivationTxV2
 			codec.MustDecode(msg, &watx)
 			atx0ID = watx.ID()
-			peer := peer.ID(p)
+			peer := peer.ID("peer")
 			mFetch.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 			mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 			mBeacon.EXPECT().OnAtx(gomock.Any())
@@ -245,6 +244,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	tab = activation.NewBuilder(
 		activation.Config{GoldenATXID: goldenATX},
 		localDB,
+		poetDb,
 		atxService,
 		mpub,
 		validator,
@@ -258,15 +258,15 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	tab.Register(sig)
 
 	// Publish ATX after recovery
-	mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, p string, msg []byte) error {
+	mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, msg []byte, _ *types.PoetProofMessage) error {
 			var watx wire.ActivationTxV2
 			codec.MustDecode(msg, &watx)
 			require.Nil(t, watx.Initial)
 			require.Len(t, watx.PreviousATXs, 1)
 			assert.Equal(t, atx0ID, watx.PreviousATXs[0])
 
-			peer := peer.ID(p)
+			peer := peer.ID("peer")
 			mFetch.EXPECT().RegisterPeerHashes(peer, gomock.Any())
 			mFetch.EXPECT().GetPoetProof(gomock.Any(), gomock.Any())
 			mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())

@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/localatxs"
@@ -196,13 +195,13 @@ func TestRegossip(t *testing.T) {
 		for _, sig := range tab.signers {
 			smesher = sig.NodeID()
 			blob = types.RandomBytes(20)
-			localatxs.AddBlob(tab.localDb, layer.GetEpoch(), types.RandomATXID(), smesher, blob)
+			localatxs.AddAtx(tab.localDb, layer.GetEpoch(), types.RandomATXID(), smesher, blob, types.PoetProofRef{})
 		}
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)
 		ctx := context.Background()
-		tab.mpub.EXPECT().Publish(ctx, pubsub.AtxProtocol, blob)
+		tab.mpub.EXPECT().PublishATX(ctx, blob, gomock.Any())
 		require.NoError(t, tab.Regossip(ctx, smesher))
 	})
 }
@@ -418,8 +417,8 @@ func Test_Builder_Multi_HappyPath(t *testing.T) {
 		)
 		tab.mclock.EXPECT().CurrentLayer().Return(postGenesisEpoch.Add(1).FirstLayer())
 
-		tab.mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-			func(ctx context.Context, _ string, got []byte) error {
+		tab.mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, got []byte, _ *types.PoetProofMessage) error {
 				atxMtx.Lock()
 				defer atxMtx.Unlock()
 				var atx wire.ActivationTxV1

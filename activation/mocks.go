@@ -1560,6 +1560,68 @@ func (c *MockAtxServicePositioningATXCall) DoAndReturn(f func(context.Context, t
 	return c
 }
 
+// MockPublisher is a mock of Publisher interface.
+type MockPublisher struct {
+	ctrl     *gomock.Controller
+	recorder *MockPublisherMockRecorder
+	isgomock struct{}
+}
+
+// MockPublisherMockRecorder is the mock recorder for MockPublisher.
+type MockPublisherMockRecorder struct {
+	mock *MockPublisher
+}
+
+// NewMockPublisher creates a new mock instance.
+func NewMockPublisher(ctrl *gomock.Controller) *MockPublisher {
+	mock := &MockPublisher{ctrl: ctrl}
+	mock.recorder = &MockPublisherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPublisher) EXPECT() *MockPublisherMockRecorder {
+	return m.recorder
+}
+
+// PublishATX mocks base method.
+func (m *MockPublisher) PublishATX(ctx context.Context, blob []byte, poetProof *types.PoetProofMessage) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublishATX", ctx, blob, poetProof)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PublishATX indicates an expected call of PublishATX.
+func (mr *MockPublisherMockRecorder) PublishATX(ctx, blob, poetProof any) *MockPublisherPublishATXCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublishATX", reflect.TypeOf((*MockPublisher)(nil).PublishATX), ctx, blob, poetProof)
+	return &MockPublisherPublishATXCall{Call: call}
+}
+
+// MockPublisherPublishATXCall wrap *gomock.Call
+type MockPublisherPublishATXCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockPublisherPublishATXCall) Return(arg0 error) *MockPublisherPublishATXCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockPublisherPublishATXCall) Do(f func(context.Context, []byte, *types.PoetProofMessage) error) *MockPublisherPublishATXCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockPublisherPublishATXCall) DoAndReturn(f func(context.Context, []byte, *types.PoetProofMessage) error) *MockPublisherPublishATXCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // MockpostSetupProvider is a mock of postSetupProvider interface.
 type MockpostSetupProvider struct {
 	ctrl     *gomock.Controller
@@ -2568,6 +2630,45 @@ func (c *MockpoetDbAPIProofForRoundCall) Do(f func([]byte, string) (*types.PoetP
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockpoetDbAPIProofForRoundCall) DoAndReturn(f func([]byte, string) (*types.PoetProof, error)) *MockpoetDbAPIProofForRoundCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// ProofMessage mocks base method.
+func (m *MockpoetDbAPI) ProofMessage(arg0 types.PoetProofRef) (*types.PoetProofMessage, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProofMessage", arg0)
+	ret0, _ := ret[0].(*types.PoetProofMessage)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ProofMessage indicates an expected call of ProofMessage.
+func (mr *MockpoetDbAPIMockRecorder) ProofMessage(arg0 any) *MockpoetDbAPIProofMessageCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProofMessage", reflect.TypeOf((*MockpoetDbAPI)(nil).ProofMessage), arg0)
+	return &MockpoetDbAPIProofMessageCall{Call: call}
+}
+
+// MockpoetDbAPIProofMessageCall wrap *gomock.Call
+type MockpoetDbAPIProofMessageCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockpoetDbAPIProofMessageCall) Return(arg0 *types.PoetProofMessage, arg1 error) *MockpoetDbAPIProofMessageCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockpoetDbAPIProofMessageCall) Do(f func(types.PoetProofRef) (*types.PoetProofMessage, error)) *MockpoetDbAPIProofMessageCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockpoetDbAPIProofMessageCall) DoAndReturn(f func(types.PoetProofRef) (*types.PoetProofMessage, error)) *MockpoetDbAPIProofMessageCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

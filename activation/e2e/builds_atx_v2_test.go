@@ -22,8 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -116,7 +114,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 
 	atxVersions := activation.AtxVersions{postGenesisEpoch: types.AtxV2}
 	edVerifier := signing.NewEdVerifier()
-	mpub := mocks.NewMockPublisher(ctrl)
+	mpub := activation.NewMockPublisher(ctrl)
 	mFetch := smocks.NewMockFetcher(ctrl)
 	mMalPublish := activation.NewMockatxMalfeasancePublisher(ctrl)
 	mLegacyPublish := activation.NewMocklegacyMalfeasancePublisher(ctrl)
@@ -143,8 +141,8 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	var previous *types.ActivationTx
 	var publishedAtxs atomic.Uint32
 	gomock.InOrder(
-		mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-			func(ctx context.Context, _ string, msg []byte) error {
+		mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, msg []byte, _ *types.PoetProofMessage) error {
 				var watx wire.ActivationTxV1
 				codec.MustDecode(msg, &watx)
 
@@ -168,8 +166,8 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 				return nil
 			},
 		),
-		mpub.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, gomock.Any()).DoAndReturn(
-			func(ctx context.Context, _ string, msg []byte) error {
+		mpub.EXPECT().PublishATX(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, msg []byte, _ *types.PoetProofMessage) error {
 				var watx wire.ActivationTxV2
 				codec.MustDecode(msg, &watx)
 
@@ -214,6 +212,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 	tab := activation.NewBuilder(
 		conf,
 		localDB,
+		poetDb,
 		atxService,
 		mpub,
 		validator,
