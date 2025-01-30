@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare3"
+	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -288,6 +289,9 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
 	}
 	weight, err := s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))
 	if err != nil {
+		if errors.Is(err, eligibility.ErrNotActive) {
+			return &GetHareWeightNodeIdLayer200JSONResponse{Weight: 0}, nil
+		}
 		return nil, fmt.Errorf("miner weight: %w", err)
 	}
 	return &GetHareWeightNodeIdLayer200JSONResponse{Weight: weight}, nil
