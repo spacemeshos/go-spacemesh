@@ -14,6 +14,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
+const (
+	testVersion = "v0.0.0"
+	testCommit  = "abcdef"
+)
+
 func TestNodeService_Status(t *testing.T) {
 	ctrl, ctx := gomock.WithContext(context.Background(), t)
 	peerCounter := NewMocknodePeerCounter(ctrl)
@@ -28,7 +33,7 @@ func TestNodeService_Status(t *testing.T) {
 	require.NoError(t, err)
 	defer clock.Close()
 
-	svc := NewNodeService(peerCounter, meshAPI, clock, syncer)
+	svc := NewNodeService(peerCounter, meshAPI, clock, syncer, testVersion, testCommit)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
