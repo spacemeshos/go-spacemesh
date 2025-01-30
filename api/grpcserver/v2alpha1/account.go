@@ -2,6 +2,7 @@ package v2alpha1
 
 import (
 	"context"
+	"encoding/hex"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
@@ -73,11 +74,15 @@ func (s *AccountService) List(
 				Counter: account.NextNonce,
 				Balance: account.Balance,
 				Layer:   account.Layer.Uint32(),
+				Storage: make(map[string][]byte, len(account.Storage)),
 			},
 			Projected: &spacemeshv2alpha1.AccountState{
 				Counter: counterProjected,
 				Balance: balanceProjected,
 			},
+		}
+		for _, kv := range account.Storage {
+			item.Current.Storage[hex.EncodeToString(kv.Key[:])] = kv.Value[:]
 		}
 		if account.TemplateAddress != nil {
 			item.Template = account.TemplateAddress.String()
