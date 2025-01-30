@@ -32,12 +32,14 @@ type nodeSyncer interface {
 	IsSynced(context.Context) bool
 }
 
-func NewNodeService(peers nodePeerCounter, msh nodeMeshAPI, clock *timesync.NodeClock, syncer nodeSyncer) *NodeService {
+func NewNodeService(peers nodePeerCounter, msh nodeMeshAPI, clock *timesync.NodeClock, syncer nodeSyncer, version, commit string) *NodeService {
 	return &NodeService{
 		mesh:        msh,
 		clock:       clock,
 		peerCounter: peers,
 		syncer:      syncer,
+		appVersion:  version,
+		appCommit:   commit,
 	}
 }
 
@@ -46,6 +48,8 @@ type NodeService struct {
 	clock       *timesync.NodeClock
 	peerCounter nodePeerCounter
 	syncer      nodeSyncer
+	appVersion  string
+	appCommit   string
 }
 
 func (s *NodeService) RegisterService(server *grpc.Server) {
@@ -79,5 +83,17 @@ func (s *NodeService) Status(ctx context.Context, _ *spacemeshv2beta1.NodeStatus
 		AppliedLayer:   s.mesh.LatestLayerInState().Uint32(), // last layer node has applied to the state
 		ProcessedLayer: s.mesh.ProcessedLayer().Uint32(),     // last layer whose votes have been processed
 		CurrentLayer:   s.clock.CurrentLayer().Uint32(),      // current layer, based on clock time
+	}, nil
+}
+
+func (s *NodeService) Version(ctx context.Context, _ *spacemeshv2beta1.VersionRequest) (*spacemeshv2beta1.VersionResponse, error) {
+	return &spacemeshv2beta1.VersionResponse{
+		Version: s.appVersion,
+	}, nil
+}
+
+func (s *NodeService) Build(ctx context.Context, _ *spacemeshv2beta1.BuildRequest) (*spacemeshv2beta1.BuildResponse, error) {
+	return &spacemeshv2beta1.BuildResponse{
+		Build: s.appCommit,
 	}, nil
 }

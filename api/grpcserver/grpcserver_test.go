@@ -522,6 +522,8 @@ func setupSmesherService(tb testing.TB, sig *signing.EdSigner) (*smesherServiceC
 		10*time.Millisecond,
 		activation.DefaultPostSetupOpts(),
 		sig,
+		"v0.0.0", // Add version
+		"abcdef", // Add commit
 	)
 	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
 	cfg, cleanup := launchServer(tb, svc)
