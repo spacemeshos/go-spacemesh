@@ -1,8 +1,9 @@
 services:
   activation-service-remote-1:
-    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.2
     command:
       [
+        "smeshing",
         "-c",
         "/config.json",
         "--node-service-address",
@@ -28,9 +29,10 @@ services:
       - 19083:19083
 
   activation-service-remote-2:
-    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.2
     command:
       [
+        "smeshing",
         "-c",
         "/config.json",
         "--node-service-address",
