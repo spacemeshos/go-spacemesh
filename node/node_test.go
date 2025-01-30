@@ -430,6 +430,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	app.host = h
 
+	// Set test version values
+	cmd.Version = "v1.2.3"
+	cmd.Commit = "abc123"
+
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 
@@ -471,6 +475,14 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 	c := pb.NewNodeServiceClient(conn)
+
+	// Test Version endpoint
+	t.Run("Version", func(t *testing.T) {
+		resp, err := c.Version(ctx, &pb.VersionRequest{})
+		require.NoError(t, err)
+		require.Equal(t, cmd.Version, resp.Version)
+		require.Equal(t, cmd.Commit, resp.Commit)
+	})
 
 	eg.Go(func() error {
 		streamStatus, err := c.StatusStream(ctx, &pb.StatusStreamRequest{})

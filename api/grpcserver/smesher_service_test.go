@@ -20,6 +20,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+const (
+	testVersion = "v0.0.0"
+	testCommit  = "abcdef"
+)
+
 func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
@@ -32,6 +37,8 @@ func TestPostConfig(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil,
+		testVersion,
+		testCommit,
 	)
 
 	postConfig := activation.PostConfig{
@@ -68,6 +75,8 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		sig,
+		testVersion,
+		testCommit,
 	)
 	svc.SetPostServiceConfig(cmdCfg)
 
@@ -115,6 +124,8 @@ func TestStartSmeshing_ErrorOnMissingPostServiceConfig(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		sig,
+		testVersion,
+		testCommit,
 	)
 
 	providerID := uint32(7)
@@ -154,6 +165,8 @@ func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil, // no nodeID in multi smesher setup
+		testVersion,
+		testCommit,
 	)
 	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
 
@@ -195,6 +208,8 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil, // no nodeID in multi smesher setup
+		testVersion,
+		testCommit,
 	)
 
 	providers := []activation.PostSetupProvider{
@@ -244,6 +259,8 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			time.Second,
 			activation.DefaultPostSetupOpts(),
 			nil,
+			testVersion,
+			testCommit,
 		)
 
 		postSupervisor.EXPECT().Status().Return(&activation.PostSetupStatus{
@@ -270,6 +287,8 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			time.Second,
 			activation.DefaultPostSetupOpts(),
 			nil,
+			testVersion,
+			testCommit,
 		)
 
 		id := activation.PostProviderID{}
@@ -309,6 +328,8 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			time.Second,
 			activation.DefaultPostSetupOpts(),
 			nil,
+			testVersion,
+			testCommit,
 		)
 
 		id := activation.PostProviderID{}
@@ -349,6 +370,8 @@ func TestSmesherService_SmesherID(t *testing.T) {
 		time.Second,
 		activation.DefaultPostSetupOpts(),
 		nil,
+		testVersion,
+		testCommit,
 	)
 
 	resp, err := svc.SmesherID(context.Background(), &emptypb.Empty{})

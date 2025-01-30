@@ -1655,6 +1655,8 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
 			sig,
+			cmd.Version, // Add this
+			cmd.Commit,  // Add this
 		)
 		app.grpcServices[svc] = service
 		return service, nil
@@ -1774,7 +1776,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2beta1.Node:
-		service := v2beta1.NewNodeService(app.host, app.mesh, app.clock, app.syncer)
+		service := v2beta1.NewNodeService(app.host, app.mesh, app.clock, app.syncer, cmd.Version, cmd.Commit)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2beta1.Layer:
