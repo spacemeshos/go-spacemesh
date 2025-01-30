@@ -104,8 +104,7 @@ func testTransactions(
 	}
 
 	diff := batch * amount * int(sendFor-1) * cl.Accounts()
-	for i := 0; i < cl.Total(); i++ {
-		client := cl.Client(i)
+	for _, client := range nodesReceivingTxs {
 		state := pb.NewGlobalStateServiceClient(client.PubConn())
 		response, err := state.Account(
 			tctx,
@@ -119,7 +118,11 @@ func testTransactions(
 			"expected-diff", diff,
 			"diff", after.Value-before.Value,
 		)
-		require.Equal(tb, int(before.Value)+diff,
-			int(response.AccountWrapper.StateCurrent.Balance.Value), "client=%s", client.Name)
+		require.Equal(tb,
+			before.Value+uint64(diff),
+			response.AccountWrapper.StateCurrent.Balance.Value,
+			"client=%s",
+			client.Name,
+		)
 	}
 }
