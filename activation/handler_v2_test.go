@@ -991,6 +991,8 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
+		verifier.EXPECT().IdentityExists(signers[2].NodeID()).Return(true, nil).AnyTimes()
 
 		atxHandler.expectMergedAtxV2(merged, equivocationSet, []uint64{100})
 		atxHandler.mMalPublish.EXPECT().Publish(
@@ -1966,6 +1968,7 @@ func Test_Marriages(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
 
 		atxHandler.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
@@ -2281,6 +2284,7 @@ func TestContextual_PreviousATX(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHdlr.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(signers[1].NodeID()).Return(true, nil).AnyTimes()
 
 		atxHdlr.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
@@ -2436,6 +2440,7 @@ func TestContextual_PreviousATX(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return atxHdlr.edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(true, nil).AnyTimes()
 
 		atxHdlr.mMalPublish.EXPECT().Publish(
 			gomock.Any(),
