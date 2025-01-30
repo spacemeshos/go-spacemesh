@@ -12,6 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/vm/core"
 	vmhost "github.com/spacemeshos/go-spacemesh/vm/host"
+	"github.com/spacemeshos/go-spacemesh/vm/templates"
+	"github.com/spacemeshos/go-spacemesh/vm/templates/wallet"
 )
 
 // maxSpend checks the maximum amount that might be spent during the execution
@@ -31,15 +33,24 @@ func maxSpend(host core.Host, account *types.Account, payload []byte, logger *za
 
 	// Check the method selector
 	// We define MaxSpend for any method other than spend to be zero for now.
-	spendSelector, _ := athcon.FromString("athexp_spend")
-	if unmarshaled.Selector == nil || *unmarshaled.Selector != spendSelector {
+	if unmarshaled.Selector == nil ||
+		!(*unmarshaled.Selector == templates.SpendSelector || *unmarshaled.Selector == templates.ProxySelector) {
 		return 0, nil
 	}
 
+	// FIXME: special-case proxying as wallet contract doesn't support calculating max spend for it...
+	if *unmarshaled.Selector == templates.ProxySelector {
+		args, err := wallet.ParseArgs(unmarshaled)
+		if err != nil {
+			return 0, fmt.Errorf("parsing wallet arguments for MaxSpend: %w", err)
+		}
+		maxSpend := args.(*wallet.ProxyArgs).Amount
+		return maxSpend, nil
+	}
+
 	// construct the payload. this requires some surgery to replace the method maxSpendSelector.
-	maxSpendSelector, _ := athcon.FromString("athexp_max_spend")
 	maxGasPayload := athcon.Payload{
-		Selector: &maxSpendSelector,
+		Selector: &templates.MaxSpendSelector,
 		Input:    unmarshaled.Input,
 	}
 	maxGasPayloadEncoded, err := gossamerScale.Marshal(maxGasPayload)

@@ -110,6 +110,7 @@ func (h *Host) Execute(
 		gas,
 		athcon.Address(recipient),
 		athcon.Address(sender),
+		athcon.Address(dynamicContext.Template),
 		input,
 		0,
 		code,
@@ -197,8 +198,16 @@ func (h *hostContext) Call(
 	gas int64,
 	depth int,
 ) (output []byte, gasLeft int64, err error) {
+	h.logger.Debug(
+		"CALL",
+		zap.Stringer("recipient", types.Address(recipient)),
+		zap.Stringer("sender", types.Address(sender)),
+		zap.Int64("gas", gas),
+		zap.Int("depth", depth),
+	)
 	// check call depth
 	if depth > 10 {
+		h.logger.Debug("call depth exceeded")
 		return nil, 0, athcon.CallDepthExceeded
 	}
 
@@ -207,6 +216,7 @@ func (h *hostContext) Call(
 
 	destinationAccount, err := h.host.Get(types.Address(recipient))
 	if err != nil {
+		h.logger.Debug("failed to load destination account", zap.Error(err))
 		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  fmt.Errorf("loading recipient account: %w", err),
@@ -218,13 +228,14 @@ func (h *hostContext) Call(
 	// attempt to decode the input payload, if there is input
 	if len(input) > 0 {
 		if err = gossamerScale.Unmarshal(input, &payload); err != nil {
-			// read the input payload
+			h.logger.Debug("failed to unmarshal input", zap.Error(err))
 			return nil, 0, athcon.Error{
 				Code: athcon.InternalError.Code,
 				Err:  fmt.Errorf("decoding input payload: %w", err),
 			}
 		}
 	}
+	h.logger.Debug("CALL payload", zap.Any("payload", payload))
 
 	// if no input, this is a simple balance transfer
 	if len(input) == 0 || len(payload.Input) == 0 {
@@ -249,7 +260,8 @@ func (h *hostContext) Call(
 
 	template := destinationAccount.TemplateAddress
 	state := destinationAccount.State
-	if template == nil || len(state) == 0 {
+	if template == nil {
+		h.logger.Debug("missing template", zap.Stringer("template address", template), zap.Binary("state", state))
 		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  errors.New("missing template information"),
@@ -257,8 +269,9 @@ func (h *hostContext) Call(
 	}
 
 	// read template code
-	templateAccount, err := h.host.Get(types.Address(*template))
+	templateAccount, err := h.host.Get(*template)
 	if err != nil || len(templateAccount.State) == 0 {
+		h.logger.Debug("missing template account ")
 		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  fmt.Errorf("loading template account: %w", err),
@@ -270,6 +283,7 @@ func (h *hostContext) Call(
 	// but we do it after all of the above account-related checks, since we have no easy way to
 	// roll this back in case of error.
 	if err = h.host.Transfer(types.Address(recipient), value); err != nil {
+		h.logger.Debug("balance transfer failed", zap.Error(err))
 		return nil, 0, athcon.Error{
 			Code: athcon.InternalError.Code,
 			Err:  fmt.Errorf("balance transfer failed: %w", err),
@@ -283,7 +297,7 @@ func (h *hostContext) Call(
 	// construct and save context
 	oldContext := h.dynamicContext
 	h.dynamicContext = core.DynamicContext{
-		Template: types.Address(sender),
+		Template: *template,
 		Callee:   types.Address(recipient),
 	}
 
@@ -301,6 +315,7 @@ func (h *hostContext) Call(
 		gas,
 		recipient,
 		sender,
+		athcon.Address(oldContext.Template),
 		input,
 		value,
 		templateAccount.State,
@@ -311,6 +326,7 @@ func (h *hostContext) Call(
 		// rollback balance transfer
 		// rollback storage changes
 
+		h.logger.Debug("execution failed", zap.Error(err))
 		return nil, 0, err
 	}
 	return res.Output, res.GasLeft, nil
