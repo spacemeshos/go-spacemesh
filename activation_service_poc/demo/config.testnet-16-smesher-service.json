@@ -2,7 +2,7 @@
     "api": {
         "grpc-public-listener": "0.0.0.0:9092",
         "grpc-private-listener": "0.0.0.0:9093",
-        "grpc-local-services": ["smeshing_identities_v2alpha1"]
+        "grpc-local-services": ["smeshing_identities_v2beta1"]
     },
     "cache": {
         "atx-size": 1000

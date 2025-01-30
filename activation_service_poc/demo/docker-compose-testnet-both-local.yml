@@ -1,8 +1,9 @@
 services:
   activation-service-local-1:
-    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.2
     command:
       [
+        "smeshing",
         "-c",
         "/config.json",
         "--node-service-address",
@@ -28,9 +29,10 @@ services:
       - spacemesh-net-bl
 
   activation-service-local-2:
-    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.2
     command:
       [
+        "smeshing",
         "-c",
         "/config.json",
         "--node-service-address",
@@ -56,7 +58,7 @@ services:
       - spacemesh-net-bl
 
   node-service-local:
-    image: spacemeshos/go-spacemesh:node-split-poc-1.0.0
+    image: spacemeshos/go-spacemesh:node-split-poc-1.0.2
     command: [
         "-c",
         "/config.json",
