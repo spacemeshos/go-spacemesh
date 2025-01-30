@@ -39,6 +39,10 @@ type ProofInvalidPost struct {
 	InvalidPostProof InvalidPostProof
 }
 
+func (p ProofInvalidPost) AllowNoRefATXs() bool {
+	return true
+}
+
 func (p ProofInvalidPost) TypeName() string {
 	return "InvalidPoSTProof"
 }

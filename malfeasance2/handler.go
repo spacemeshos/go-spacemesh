@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -262,24 +261,20 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, proof Malfeasa
 		return nil, fmt.Errorf("%w: %d", ErrUnknownDomain, proof.Domain)
 	}
 
+	if err := h.fetchReferences(ctx, peer, proof.RefATXs); err != nil {
+		return nil, fmt.Errorf("fetch references: %w", err)
+	}
+
 	nodeID, err := handler.Validate(ctx, proof.Proof)
 	if err != nil {
 		h.countInvalidProof(proof)
 		return nil, err
 	}
 
-	if err := h.fetchReferences(ctx, peer, proof.RefATXs); err != nil {
-		return nil, fmt.Errorf("fetch references: %w", err)
-	}
-
 	mID, err := marriage.FindIDByNodeID(h.db, nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		// smesher is not married, check if identity exists in the DB
-		_, err := atxs.GetFirstIDByNodeID(h.db, nodeID)
-		if err != nil {
-			return nil, fmt.Errorf("%w: missing proof for identities existence", ErrMalformedData)
-		}
+		// smesher is not married
 		return []types.NodeID{nodeID}, nil
 	case err != nil:
 		return nil, fmt.Errorf("get marriage ID for %s: %w", nodeID.ShortString(), err)

@@ -125,11 +125,47 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
 
 		// verify the proof
 		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
+	})
+
+	t.Run("identity unknown", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		prevATXID := types.RandomATXID()
+		atx1 := NewTestActivationTxV2(
+			t,
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(5),
+		)
+		atx1.Sign(sig)
+		atx2 := NewTestActivationTxV2(
+			t,
+			WithPreviousATXs(prevATXID),
+			WithPublishEpoch(7),
+		)
+		atx2.Sign(sig)
+
+		proof, err := NewInvalidPrevAtxProofV2(db, atx1, atx2, sig.NodeID())
+		require.NoError(t, err)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(false, nil).AnyTimes()
+
+		// verify the proof
+		id, err := proof.Valid(context.Background(), verifier)
+		require.ErrorIs(t, err, ErrUnknownIdentity)
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("valid merged & solo atx", func(t *testing.T) {
@@ -158,6 +194,7 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
 
 		// verify the proof
 		id, err := proof.Valid(context.Background(), verifier)

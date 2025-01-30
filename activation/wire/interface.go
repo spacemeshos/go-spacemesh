@@ -2,6 +2,7 @@ package wire
 
 import (
 	"context"
+	"errors"
 
 	"github.com/spacemeshos/go-scale"
 
@@ -26,7 +27,12 @@ type MalfeasanceValidator interface {
 
 	// Signature validates the given signature against the given message and public key.
 	Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool
+
+	// IdentityExists returns true if the given identity has published a valid ATX before.
+	IdentityExists(nodeID types.NodeID) (bool, error)
 }
+
+var ErrUnknownIdentity = errors.New("unknown identity")
 
 // Proof is an interface for all types of proofs that can be provided in an ATXProof.
 // Generally the proof should be able to validate itself and be scale encoded.
@@ -34,6 +40,7 @@ type Proof interface {
 	scale.Encodable
 	scale.Decodable
 
+	AllowNoRefATXs() bool
 	Type() ProofType
 	TypeName() string
 	Info() map[string]string

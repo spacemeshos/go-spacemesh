@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -41,11 +42,13 @@ func newTestMalHandler(tb testing.TB) *testMalHandler {
 	)))
 
 	ctrl := gomock.NewController(tb)
+	db := statesql.InMemoryTest(tb)
 	mPublish := NewMockmalfeasancePublisher(ctrl)
 	mValidator := NewMocknipostValidator(ctrl)
 
 	handler := NewMalfeasanceHandlerV2(
 		logger,
+		db,
 		mPublish,
 		edVerifier,
 		mValidator,
@@ -237,8 +240,9 @@ func TestPublish(t *testing.T) {
 		nodeID := types.RandomNodeID()
 		proof := wire.NewMockProof(th.ctrl)
 
+		proof.EXPECT().AllowNoRefATXs().Return(false)
 		proof.EXPECT().Valid(context.Background(), th.MalfeasanceHandlerV2).Return(nodeID, nil)
-		proof.EXPECT().Type().Return(wire.DoubleMarry)
+		proof.EXPECT().Type().Return(wire.DoubleMarry).AnyTimes()
 		proof.EXPECT().EncodeScale(gomock.Any())
 
 		atxProof := &wire.ATXProof{
@@ -247,7 +251,32 @@ func TestPublish(t *testing.T) {
 
 			Proof: []byte{},
 		}
-		th.mPublish.EXPECT().PublishATXProof(context.Background(), nodeID, codec.MustEncode(atxProof)).Return(nil)
+		th.mPublish.EXPECT().PublishATXProof(context.Background(), nodeID, codec.MustEncode(atxProof), false)
+
+		err := th.Publish(context.Background(), nodeID, proof)
+		require.NoError(t, err)
+	})
+
+	t.Run("valid invalid post proof", func(t *testing.T) {
+		t.Parallel()
+
+		th := newTestMalHandler(t)
+
+		nodeID := types.RandomNodeID()
+		proof := wire.NewMockProof(th.ctrl)
+
+		proof.EXPECT().AllowNoRefATXs().Return(true)
+		proof.EXPECT().Valid(context.Background(), th.MalfeasanceHandlerV2).Return(nodeID, nil)
+		proof.EXPECT().Type().Return(wire.InvalidPost).AnyTimes()
+		proof.EXPECT().EncodeScale(gomock.Any())
+
+		atxProof := &wire.ATXProof{
+			Version:   0x01, // for now we only have one version
+			ProofType: wire.InvalidPost,
+
+			Proof: []byte{},
+		}
+		th.mPublish.EXPECT().PublishATXProof(context.Background(), nodeID, codec.MustEncode(atxProof), true)
 
 		err := th.Publish(context.Background(), nodeID, proof)
 		require.NoError(t, err)
@@ -481,4 +510,27 @@ func TestValidate(t *testing.T) {
 		require.ErrorContains(t, err, "validating ATX malfeasance proof:")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
+}
+
+func TestIdentityExists(t *testing.T) {
+	t.Parallel()
+
+	th := newTestMalHandler(t)
+
+	sig, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	yes, err := th.IdentityExists(sig.NodeID())
+	require.NoError(t, err)
+	require.False(t, yes)
+
+	atx := &types.ActivationTx{
+		SmesherID: sig.NodeID(),
+	}
+	atx.SetID(types.RandomATXID())
+	require.NoError(t, atxs.Add(th.db, atx, types.AtxBlob{}))
+
+	yes, err = th.IdentityExists(sig.NodeID())
+	require.NoError(t, err)
+	require.True(t, yes)
 }

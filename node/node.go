@@ -859,6 +859,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	atxMalHandler := activation.NewMalfeasanceHandlerV2(
 		malfeasanceLogger,
+		app.db,
 		malfeasancePublisher,
 		app.edVerifier,
 		validator,

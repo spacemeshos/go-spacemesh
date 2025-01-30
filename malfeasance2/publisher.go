@@ -44,7 +44,7 @@ func NewPublisher(
 	}
 }
 
-func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error {
+func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte, allowNoRefATXs bool) error {
 	publish := false // whether to publish the proof
 	var set []types.NodeID
 	var refATXs []types.ATXID
@@ -64,12 +64,16 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 				return fmt.Errorf("setting malfeasance proof: %w", err)
 			}
 			atxID, err := atxs.GetFirstIDByNodeID(tx, nodeID)
-			if err != nil {
+			switch {
+			case errors.Is(err, sql.ErrNotFound) && allowNoRefATXs:
+				// no ATXs found for this node, but we allow it
+			case err != nil:
 				return fmt.Errorf("getting atx id: %w", err)
+			default: // ATX found
+				refATXs = []types.ATXID{atxID}
 			}
 			publish = true
 			set = []types.NodeID{nodeID}
-			refATXs = []types.ATXID{atxID}
 			return nil
 		case err != nil:
 			return fmt.Errorf("getting equivocation set: %w", err)
@@ -212,7 +216,7 @@ func (p *Publisher) publish(
 		p.logger.Error("failed to broadcast malfeasance proof", zap.Error(err))
 		return fmt.Errorf("broadcast atx malfeasance proof: %w", err)
 	}
-	p.logger.Debug("broadcasted malfeasance proof",
+	p.logger.Debug("broadcast malfeasance proof",
 		zap.Array("smesher_ids", zapcore.ArrayMarshalerFunc(func(enc zapcore.ArrayEncoder) error {
 			for _, nodeID := range nodeID {
 				enc.AppendString(nodeID.ShortString())
