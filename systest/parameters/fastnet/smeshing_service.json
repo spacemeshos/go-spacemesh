@@ -40,6 +40,7 @@
         "log-encoder": "json",
         "atxBuilder": "debug",
         "hare": "debug",
-        "hareOracle": "debug"
+        "hareOracle": "debug",
+        "nodeServiceClient": "debug"
     }
 }

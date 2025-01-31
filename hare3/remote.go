@@ -18,8 +18,11 @@ import (
 
 type NodeService interface {
 	HareRoundTemplate(ctx context.Context, layer types.LayerID, round IterRound) (*Body, error)
-	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 	Publish(ctx context.Context, proto string, blob []byte) error
+}
+
+type beaconService interface {
+	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
 
 type RemoteHare struct {
@@ -27,12 +30,12 @@ type RemoteHare struct {
 	wallClock clockwork.Clock
 	nodeClock nodeClock
 	mu        sync.Mutex
-	beacons   map[types.EpochID]types.Beacon
 	signers   map[string]*signing.EdSigner
 	oracle    *legacyOracle
 	sessions  map[types.LayerID]*protocol
 	eg        errgroup.Group
 	svc       NodeService
+	beaconSvc beaconService
 
 	log *zap.Logger
 }
@@ -40,13 +43,13 @@ type RemoteHare struct {
 func NewRemoteHare(config Config,
 	nodeClock nodeClock,
 	nodeService NodeService,
+	beaconService beaconService,
 	oracle oracle,
 	log *zap.Logger,
 ) *RemoteHare {
 	return &RemoteHare{
 		config:    config,
 		nodeClock: nodeClock,
-		beacons:   make(map[types.EpochID]types.Beacon),
 		signers:   make(map[string]*signing.EdSigner),
 		oracle: &legacyOracle{
 			log:    log,
@@ -57,6 +60,7 @@ func NewRemoteHare(config Config,
 		sessions:  make(map[types.LayerID]*protocol),
 		eg:        errgroup.Group{},
 		svc:       nodeService,
+		beaconSvc: beaconService,
 		log:       log,
 		wallClock: clockwork.NewRealClock(),
 	}
@@ -95,31 +99,12 @@ func (h *RemoteHare) Start(ctx context.Context) {
 	})
 }
 
-func (h *RemoteHare) beacon(ctx context.Context, e types.EpochID) types.Beacon {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	b, ok := h.beacons[e]
-	if !ok {
-		bcn, err := h.svc.Beacon(ctx, e)
-		if err != nil {
-			h.log.Error("error getting beacon", zap.Error(err))
-			return types.EmptyBeacon
-		}
-		h.beacons[e] = bcn
-		return bcn
-	}
-
-	return b
-}
-
 func (h *RemoteHare) onLayer(ctx context.Context, layer types.LayerID) {
 	h.log.Debug("remote hare: on layer", zap.Int("layer", int(layer)))
-	beacon := h.beacon(ctx, layer.GetEpoch())
-	if beacon == types.EmptyBeacon {
-		h.log.Debug("no beacon",
-			zap.Uint32("epoch", layer.GetEpoch().Uint32()),
-			zap.Uint32("lid", layer.Uint32()),
-		)
+
+	beacon, err := h.beaconSvc.Beacon(ctx, layer.GetEpoch())
+	if err != nil {
+		h.log.Error("error getting beacon", zap.Error(err))
 		return
 	}
 

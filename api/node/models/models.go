@@ -36,7 +36,7 @@ func ParseHash32(h Bytes20) (types.Hash32, error) {
 
 func ParseBeacon(b Beacon) (types.Beacon, error) {
 	if len(b) != len(types.Beacon{}) {
-		return types.Beacon{}, fmt.Errorf("beacon length must be 8 (was: %d)", len(b))
+		return types.Beacon{}, fmt.Errorf("beacon length must be 4 (was: %d)", len(b))
 	}
 	return types.Beacon(b), nil
 }
