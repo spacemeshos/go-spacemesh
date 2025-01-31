@@ -86,14 +86,14 @@ func (s *NodeService) Status(ctx context.Context, _ *spacemeshv2beta1.NodeStatus
 	}, nil
 }
 
-func (s *NodeService) Version(ctx context.Context, _ *spacemeshv2beta1.VersionRequest) (*spacemeshv2beta1.VersionResponse, error) {
-	return &spacemeshv2beta1.VersionResponse{
+func (s *NodeService) Version(ctx context.Context, _ *spacemeshv2beta1.NodeVersionRequest) (*spacemeshv2beta1.NodeVersionResponse, error) {
+	return &spacemeshv2beta1.NodeVersionResponse{
 		Version: s.appVersion,
 	}, nil
 }
 
-func (s *NodeService) Build(ctx context.Context, _ *spacemeshv2beta1.BuildRequest) (*spacemeshv2beta1.BuildResponse, error) {
-	return &spacemeshv2beta1.BuildResponse{
+func (s *NodeService) Build(ctx context.Context, _ *spacemeshv2beta1.NodeBuildRequest) (*spacemeshv2beta1.NodeBuildResponse, error) {
+	return &spacemeshv2beta1.NodeBuildResponse{
 		Build: s.appCommit,
 	}, nil
 }
