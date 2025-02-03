@@ -24,13 +24,19 @@ type SmeshingService struct {
 	appCommit  string
 }
 
-func (s *SmeshingService) Version(ctx context.Context, _ *spacemeshv2beta1.SmeshingVersionRequest) (*spacemeshv2beta1.SmeshingVersionResponse, error) {
+func (s *SmeshingService) Version(
+	_ context.Context,
+	_ *spacemeshv2beta1.SmeshingVersionRequest,
+) (*spacemeshv2beta1.SmeshingVersionResponse, error) {
 	return &spacemeshv2beta1.SmeshingVersionResponse{
 		Version: s.appVersion,
 	}, nil
 }
 
-func (s *SmeshingService) Build(ctx context.Context, _ *spacemeshv2beta1.SmeshingBuildRequest) (*spacemeshv2beta1.SmeshingBuildResponse, error) {
+func (s *SmeshingService) Build(
+	_ context.Context,
+	_ *spacemeshv2beta1.SmeshingBuildRequest,
+) (*spacemeshv2beta1.SmeshingBuildResponse, error) {
 	return &spacemeshv2beta1.SmeshingBuildResponse{
 		Build: s.appCommit,
 	}, nil

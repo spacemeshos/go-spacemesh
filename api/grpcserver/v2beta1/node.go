@@ -32,7 +32,14 @@ type nodeSyncer interface {
 	IsSynced(context.Context) bool
 }
 
-func NewNodeService(peers nodePeerCounter, msh nodeMeshAPI, clock *timesync.NodeClock, syncer nodeSyncer, version, commit string) *NodeService {
+func NewNodeService(
+	peers nodePeerCounter,
+	msh nodeMeshAPI,
+	clock *timesync.NodeClock,
+	syncer nodeSyncer,
+	version,
+	commit string,
+) *NodeService {
 	return &NodeService{
 		mesh:        msh,
 		clock:       clock,
@@ -65,9 +72,10 @@ func (s *NodeService) String() string {
 	return "NodeService"
 }
 
-func (s *NodeService) Status(ctx context.Context, _ *spacemeshv2beta1.NodeStatusRequest) (
-	*spacemeshv2beta1.NodeStatusResponse, error,
-) {
+func (s *NodeService) Status(
+	ctx context.Context,
+	_ *spacemeshv2beta1.NodeStatusRequest,
+) (*spacemeshv2beta1.NodeStatusResponse, error) {
 	var status spacemeshv2beta1.NodeStatusResponse_SyncStatus
 
 	if s.syncer.IsSynced(ctx) {
@@ -86,13 +94,19 @@ func (s *NodeService) Status(ctx context.Context, _ *spacemeshv2beta1.NodeStatus
 	}, nil
 }
 
-func (s *NodeService) Version(ctx context.Context, _ *spacemeshv2beta1.NodeVersionRequest) (*spacemeshv2beta1.NodeVersionResponse, error) {
+func (s *NodeService) Version(
+	_ context.Context,
+	_ *spacemeshv2beta1.NodeVersionRequest,
+) (*spacemeshv2beta1.NodeVersionResponse, error) {
 	return &spacemeshv2beta1.NodeVersionResponse{
 		Version: s.appVersion,
 	}, nil
 }
 
-func (s *NodeService) Build(ctx context.Context, _ *spacemeshv2beta1.NodeBuildRequest) (*spacemeshv2beta1.NodeBuildResponse, error) {
+func (s *NodeService) Build(
+	_ context.Context,
+	_ *spacemeshv2beta1.NodeBuildRequest,
+) (*spacemeshv2beta1.NodeBuildResponse, error) {
 	return &spacemeshv2beta1.NodeBuildResponse{
 		Build: s.appCommit,
 	}, nil

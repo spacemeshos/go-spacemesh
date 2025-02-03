@@ -57,4 +57,16 @@ func TestNodeService_Status(t *testing.T) {
 		require.Equal(t, uint32(12), status.ProcessedLayer)
 		require.Equal(t, uint32(0), status.CurrentLayer)
 	})
+
+	t.Run("node version", func(t *testing.T) {
+		version, err := client.Version(context.Background(), &spacemeshv2beta1.NodeVersionRequest{})
+		require.NoError(t, err)
+		require.Equal(t, testVersion, version.Version)
+	})
+
+	t.Run("node build", func(t *testing.T) {
+		build, err := client.Build(context.Background(), &spacemeshv2beta1.NodeBuildRequest{})
+		require.NoError(t, err)
+		require.Equal(t, testCommit, build.Build)
+	})
 }
