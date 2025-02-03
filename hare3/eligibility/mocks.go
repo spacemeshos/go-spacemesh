@@ -14,7 +14,6 @@ import (
 	reflect "reflect"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	signing "github.com/spacemeshos/go-spacemesh/signing"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -240,45 +239,6 @@ func (c *MockRolacleCalcEligibilityCall) Do(f func(context.Context, types.LayerI
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockRolacleCalcEligibilityCall) DoAndReturn(f func(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)) *MockRolacleCalcEligibilityCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Proof mocks base method.
-func (m *MockRolacle) Proof(arg0 context.Context, arg1 *signing.VRFSigner, arg2 types.LayerID, arg3 uint32) (types.VrfSignature, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(types.VrfSignature)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Proof indicates an expected call of Proof.
-func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2, arg3 any) *MockRolacleProofCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2, arg3)
-	return &MockRolacleProofCall{Call: call}
-}
-
-// MockRolacleProofCall wrap *gomock.Call
-type MockRolacleProofCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockRolacleProofCall) Return(arg0 types.VrfSignature, arg1 error) *MockRolacleProofCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockRolacleProofCall) Do(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *MockRolacleProofCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockRolacleProofCall) DoAndReturn(f func(context.Context, *signing.VRFSigner, types.LayerID, uint32) (types.VrfSignature, error)) *MockRolacleProofCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
