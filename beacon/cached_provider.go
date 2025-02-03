@@ -8,10 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type beaconService interface {
-	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
-}
-
 type BeaconCache struct {
 	cache map[types.EpochID]types.Beacon
 	sg    singleflight.Group
