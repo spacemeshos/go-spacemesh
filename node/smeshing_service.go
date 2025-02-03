@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	nodeclient "github.com/spacemeshos/go-spacemesh/api/node/client"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -253,8 +254,9 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		)
 	}
 
+	beaconProvider := beacon.NewBeaconCache(nodeServiceClient)
 	hOracle, err := eligibility.New(
-		nodeServiceClient,
+		beaconProvider,
 		app.db,
 		app.atxsdata,
 		vrfVerifier,
@@ -280,6 +282,7 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		app.Config.HARE3,
 		app.clock,
 		nodeServiceClient,
+		beaconProvider,
 		hOracle,
 		logger,
 	)
@@ -291,7 +294,7 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 	remoteProposalBuilder := miner.NewRemoteBuilder(
 		app.clock,
 		nodeServiceClient,
-		nodeServiceClient,
+		beaconProvider,
 		nodeServiceClient,
 		layerSize,
 		layersPerEpoch,

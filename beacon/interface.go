@@ -43,3 +43,7 @@ type vrfVerifier interface {
 type nonceFetcher interface {
 	VRFNonce(types.NodeID, types.EpochID) (types.VRFPostIndex, error)
 }
+
+type beaconService interface {
+	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
+}
