@@ -33,8 +33,6 @@ type SmesherService struct {
 	cmdCfg         *activation.PostSupervisorConfig
 	postOpts       activation.PostSetupOpts
 	sig            *signing.EdSigner
-	appVersion     string
-	appCommit      string
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -54,8 +52,6 @@ func NewSmesherService(
 	streamInterval time.Duration,
 	postOpts activation.PostSetupOpts,
 	sig *signing.EdSigner,
-	version string,
-	commit string,
 ) *SmesherService {
 	return &SmesherService{
 		smeshingProvider: smeshing,
@@ -64,8 +60,6 @@ func NewSmesherService(
 		streamInterval:   streamInterval,
 		postOpts:         postOpts,
 		sig:              sig,
-		appVersion:       version,
-		appCommit:        commit,
 	}
 }
 
