@@ -1655,8 +1655,6 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 			app.Config.API.SmesherStreamInterval,
 			app.Config.SMESHING.Opts,
 			sig,
-			cmd.Version, // Add this
-			cmd.Commit,  // Add this
 		)
 		app.grpcServices[svc] = service
 		return service, nil
@@ -1803,8 +1801,8 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		service := v2beta1.NewSmeshingIdentitiesService(app.idStates, app.poetClients, app.Config.POET)
 		app.grpcServices[svc] = service
 		return service, nil
-	case v2beta1.Smesher:
-		service := v2beta1.NewSmesherService(cmd.Version, cmd.Commit)
+	case v2beta1.Smeshing:
+		service := v2beta1.NewSmeshingService(cmd.Version, cmd.Commit)
 		app.grpcServices[svc] = service
 		return service, nil
 	}
