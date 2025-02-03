@@ -748,6 +748,9 @@ func (h *HandlerV2) checkMalicious(ctx context.Context, watx *activationTx, repu
 	var malicious bool
 	var proof wire.Proof
 	var nodeID types.NodeID
+	// we have to do malfeasance checks in a transaction to ensure we have the latest state on the marriage set of the
+	// identity we are processing. Otherwise a new ATX could come in that updates the (or merges multiple existing)
+	// marriage sets and this would lead to inconsistent behavior in the malfeasance checks.
 	err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
