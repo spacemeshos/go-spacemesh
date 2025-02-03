@@ -272,13 +272,13 @@ type Fetch struct {
 
 // NewFetch creates a new Fetch struct.
 func NewFetch(
-	cdb sql.StateDatabase,
+	db sql.StateDatabase,
 	proposals *store.Store,
 	host *p2p.Host,
 	peerCache *peers.Peers,
 	opts ...Option,
 ) (*Fetch, error) {
-	bs := datastore.NewBlobStore(cdb, proposals)
+	bs := datastore.NewBlobStore(db, proposals)
 
 	hashPeerCache, err := NewHashPeersCache(cacheSize)
 	if err != nil {
@@ -351,7 +351,7 @@ func NewFetch(
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, f.logger.Named("handler"))
+		h := newHandler(db, bs, f.logger.Named("handler"))
 		if f.cfg.Streaming {
 			f.registerServer(host, atxProtocol, h.handleEpochInfoReqStream)
 			f.registerServer(host, hashProtocol, h.handleHashReqStream)

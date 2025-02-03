@@ -33,13 +33,13 @@ type handler struct {
 }
 
 func newHandler(
-	cdb sql.StateDatabase,
+	db sql.StateDatabase,
 	bs *datastore.BlobStore,
 	lg *zap.Logger,
 ) *handler {
 	return &handler{
 		logger: lg,
-		db:     cdb,
+		db:     db,
 		bs:     bs,
 	}
 }

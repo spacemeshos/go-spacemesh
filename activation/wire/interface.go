@@ -40,7 +40,20 @@ type Proof interface {
 	scale.Encodable
 	scale.Decodable
 
+	// AllowNoRefATXs returns true if the proof type is valid without reference ATXs proofing the existence of the
+	// malicious identity.
+	//
+	// To avoid spamming of malfeasance proofs for identities that do not exist, by default all proofs require reference
+	// ATXs (syntactically valid ATXs published by the malicious identity) to be provided. This way any identity that
+	// the network considers malicious must have been in good standing at some point before the malicious behavior.
+	//
+	// For some malfeasance proofs this requirement is not necessary, for example invalid post proofs. Since those
+	// require the creator of the proof to show that some labels in the post are valid and some invalid. If all are
+	// invalid, the ATX would be considered syntactically invalid by the network anyway and a proof is not needed.
+	// In contrast if we would require a reference ATX we couldn't proof an invalid post in an initial ATX of any new
+	// identity.
 	AllowNoRefATXs() bool
+
 	Type() ProofType
 	TypeName() string
 	Info() map[string]string
