@@ -15,7 +15,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
@@ -35,7 +38,8 @@ import (
 type v2TestHandler struct {
 	*HandlerV2
 
-	tb testing.TB
+	tb           testing.TB
+	observedLogs *observer.ObservedLogs
 	handlerMocks
 }
 
@@ -50,8 +54,13 @@ const (
 )
 
 func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
-	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
+	observer, observedLogs := observer.New(zapcore.WarnLevel)
+	logger := zaptest.NewLogger(tb, zaptest.WrapOptions(zap.WrapCore(
+		func(core zapcore.Core) zapcore.Core {
+			return zapcore.NewTee(core, observer)
+		},
+	)))
+	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), logger)
 	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
 	mocks := newTestHandlerMocks(tb, golden)
 	return &v2TestHandler{
@@ -64,13 +73,14 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			tickSize:        tickSize,
 			goldenATXID:     golden,
 			nipostValidator: mocks.mValidator,
-			logger:          lg,
+			logger:          logger,
 			fetcher:         mocks.mockFetch,
 			beacon:          mocks.mBeacon,
 			tortoise:        mocks.mTortoise,
 			malPublisher:    mocks.mMalPublish,
 		},
 		tb:           tb,
+		observedLogs: observedLogs,
 		handlerMocks: mocks,
 	}
 }
@@ -1940,151 +1950,329 @@ func Test_Marriages(t *testing.T) {
 	})
 	t.Run("can't marry twice (separate marriages)", func(t *testing.T) {
 		t.Parallel()
-		atxHandler := newV2TestHandler(t, golden)
+		t.Run("publish succeeds", func(t *testing.T) {
+			t.Parallel()
+			atxHandler := newV2TestHandler(t, golden)
 
-		otherSig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
-
-		// otherSig2 cannot marry sig, trying to extend its set.
-		otherSig2, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		others2Atx := atxHandler.createAndProcessInitial(otherSig2)
-		atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
-		atx2.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: others2Atx.ID(),
-				Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		atx2.Sign(sig)
-		atxHandler.expectAtxV2(atx2)
-
-		verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
-		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
-				return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
-			}).AnyTimes()
-		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
-
-		atxHandler.mMalPublish.EXPECT().Publish(
-			gomock.Any(),
-			sig.NodeID(),
-			gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
-		).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
-			malProof := proof.(*wire.ProofDoubleMarry)
-			nId, err := malProof.Valid(ctx, verifier)
+			otherSig, err := signing.NewEdSigner()
 			require.NoError(t, err)
-			require.Equal(t, sig.NodeID(), nId)
-			return nil
-		})
-		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
-		require.NoError(t, err)
+			atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
 
-		// The equivocation set of sig and otherSig were merged
-		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
-		require.NoError(t, err)
-		equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
-		require.NoError(t, err)
-		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+			// otherSig2 cannot marry sig, trying to extend its set.
+			otherSig2, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			others2Atx := atxHandler.createAndProcessInitial(otherSig2)
+			atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
+			atx2.Marriages = []wire.MarriageCertificate{
+				{
+					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+				{
+					ReferenceAtx: others2Atx.ID(),
+					Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+			}
+			atx2.Sign(sig)
+			atxHandler.expectAtxV2(atx2)
+
+			verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
+			verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+					return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
+				}).AnyTimes()
+			verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
+
+			atxHandler.mMalPublish.EXPECT().Publish(
+				gomock.Any(),
+				sig.NodeID(),
+				gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
+			).DoAndReturn(func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
+				malProof := proof.(*wire.ProofDoubleMarry)
+				nId, err := malProof.Valid(ctx, verifier)
+				require.NoError(t, err)
+				require.Equal(t, sig.NodeID(), nId)
+				return nil
+			})
+			err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
+			require.NoError(t, err)
+
+			// The equivocation set of sig and otherSig were merged
+			id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+		})
+
+		t.Run("publish fails", func(t *testing.T) {
+			t.Parallel()
+			atxHandler := newV2TestHandler(t, golden)
+
+			otherSig, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
+
+			// otherSig2 cannot marry sig, trying to extend its set.
+			otherSig2, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			others2Atx := atxHandler.createAndProcessInitial(otherSig2)
+			atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
+			atx2.Marriages = []wire.MarriageCertificate{
+				{
+					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+				{
+					ReferenceAtx: others2Atx.ID(),
+					Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+			}
+			atx2.Sign(sig)
+			atxHandler.expectAtxV2(atx2)
+
+			verifier := wire.NewMockMalfeasanceValidator(atxHandler.ctrl)
+			verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+					return atxHandler.edVerifier.Verify(d, nodeID, m, sig)
+				}).AnyTimes()
+			verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
+
+			atxHandler.mMalPublish.EXPECT().Publish(
+				gomock.Any(),
+				sig.NodeID(),
+				gomock.AssignableToTypeOf(&wire.ProofDoubleMarry{}),
+			).Return(errors.New("publish failed"))
+			err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
+			require.NoError(t, err)
+
+			// The equivocation set of sig and otherSig were merged
+			id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+
+			observedLogs := atxHandler.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
+			require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
+			require.Equal(t, zapcore.ErrorLevel, observedLogs.All()[0].Level)
+			require.Equal(t, "failed to publish malfeasance proof", observedLogs.All()[0].Message)
+			require.Equal(t, sig.NodeID().String(), observedLogs.All()[0].ContextMap()["smesher_id"])
+			require.Equal(t, atx2.ID().ShortString(), observedLogs.All()[0].ContextMap()["atx_id"])
+			require.Equal(t, "publish failed", observedLogs.All()[0].ContextMap()["error"])
+		})
 	})
 	t.Run("marring existing malicious equivocation set: mark all malicious and regossip proof", func(t *testing.T) {
 		t.Parallel()
-		atxHandler := newV2TestHandler(t, golden)
+		t.Run("regossip succeeds", func(t *testing.T) {
+			t.Parallel()
+			atxHandler := newV2TestHandler(t, golden)
 
-		otherSig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
-
-		// sig becomes malicious in some way and with it otherSig
-		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.NoError(t, malfeasance.AddProof(atxHandler.cdb, sig.NodeID(), &id, []byte("proof"), 0, time.Now()))
-		require.NoError(t, malfeasance.SetMalicious(atxHandler.cdb, otherSig.NodeID(), id, time.Now()))
-
-		// otherSig2 cannot marry sig, trying to extend its set.
-		otherSig2, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		others2Atx := atxHandler.createAndProcessInitial(otherSig2)
-		atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
-		atx2.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: others2Atx.ID(),
-				Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		atx2.Sign(sig)
-		atxHandler.expectAtxV2(atx2)
-
-		atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID())
-		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
-		require.NoError(t, err)
-
-		// The equivocation set of sig and otherSig were merged
-		id, err = marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
-		require.NoError(t, err)
-		equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
-		require.NoError(t, err)
-		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
-
-		for _, sig := range []*signing.EdSigner{sig, otherSig, otherSig2} {
-			m, err := malfeasance.IsMalicious(atxHandler.cdb, sig.NodeID())
+			otherSig, err := signing.NewEdSigner()
 			require.NoError(t, err)
-			require.True(t, m, "expected %s to be malicious", sig)
-		}
+			atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
+
+			// sig becomes malicious in some way and with it otherSig
+			id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, sig.NodeID(), &id, []byte("proof"), 0, time.Now()))
+			require.NoError(t, malfeasance.SetMalicious(atxHandler.cdb, otherSig.NodeID(), id, time.Now()))
+
+			// otherSig2 cannot marry sig, trying to extend its set.
+			otherSig2, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			others2Atx := atxHandler.createAndProcessInitial(otherSig2)
+			atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
+			atx2.Marriages = []wire.MarriageCertificate{
+				{
+					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+				{
+					ReferenceAtx: others2Atx.ID(),
+					Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+			}
+			atx2.Sign(sig)
+			atxHandler.expectAtxV2(atx2)
+
+			atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID())
+			err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
+			require.NoError(t, err)
+
+			// The equivocation set of sig and otherSig were merged
+			id, err = marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+
+			for _, sig := range []*signing.EdSigner{sig, otherSig, otherSig2} {
+				m, err := malfeasance.IsMalicious(atxHandler.cdb, sig.NodeID())
+				require.NoError(t, err)
+				require.True(t, m, "expected %s to be malicious", sig)
+			}
+		})
+
+		t.Run("regossip fails", func(t *testing.T) {
+			t.Parallel()
+			atxHandler := newV2TestHandler(t, golden)
+
+			otherSig, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
+
+			// sig becomes malicious in some way and with it otherSig
+			id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			require.NoError(t, malfeasance.AddProof(atxHandler.cdb, sig.NodeID(), &id, []byte("proof"), 0, time.Now()))
+			require.NoError(t, malfeasance.SetMalicious(atxHandler.cdb, otherSig.NodeID(), id, time.Now()))
+
+			// otherSig2 cannot marry sig, trying to extend its set.
+			otherSig2, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			others2Atx := atxHandler.createAndProcessInitial(otherSig2)
+			atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
+			atx2.Marriages = []wire.MarriageCertificate{
+				{
+					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+				{
+					ReferenceAtx: others2Atx.ID(),
+					Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+			}
+			atx2.Sign(sig)
+			atxHandler.expectAtxV2(atx2)
+
+			atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID()).Return(errors.New("regossip failed"))
+			err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
+			require.NoError(t, err)
+
+			// The equivocation set of sig and otherSig were merged
+			id, err = marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+
+			for _, sig := range []*signing.EdSigner{sig, otherSig, otherSig2} {
+				m, err := malfeasance.IsMalicious(atxHandler.cdb, sig.NodeID())
+				require.NoError(t, err)
+				require.True(t, m, "expected %s to be malicious", sig)
+			}
+
+			observedLogs := atxHandler.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
+			require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
+			require.Equal(t, zapcore.ErrorLevel, observedLogs.All()[0].Level)
+			require.Equal(t, "failed to regossip malfeasance proof", observedLogs.All()[0].Message)
+			require.Equal(t, sig.NodeID().String(), observedLogs.All()[0].ContextMap()["smesher_id"])
+			require.Equal(t, atx2.ID().ShortString(), observedLogs.All()[0].ContextMap()["atx_id"])
+			require.Equal(t, "regossip failed", observedLogs.All()[0].ContextMap()["error"])
+		})
 	})
 	t.Run("malicious marring existing equivocation set: mark all malicious and regossip proof", func(t *testing.T) {
 		t.Parallel()
-		atxHandler := newV2TestHandler(t, golden)
+		t.Run("regossip succeeds", func(t *testing.T) {
+			t.Parallel()
+			atxHandler := newV2TestHandler(t, golden)
 
-		otherSig, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
-
-		// otherSig2 cannot marry sig, trying to extend its set.
-		otherSig2, err := signing.NewEdSigner()
-		require.NoError(t, err)
-		others2Atx := atxHandler.createAndProcessInitial(otherSig2)
-
-		// otherSig2 becomes malicious in some way
-		err = malfeasance.AddProof(atxHandler.cdb, otherSig2.NodeID(), nil, []byte("proof"), 0, time.Now())
-		require.NoError(t, err)
-
-		atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
-		atx2.Marriages = []wire.MarriageCertificate{
-			{
-				Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-			{
-				ReferenceAtx: others2Atx.ID(),
-				Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
-			},
-		}
-		atx2.Sign(sig)
-		atxHandler.expectAtxV2(atx2)
-
-		atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID())
-		err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
-		require.NoError(t, err)
-
-		// The equivocation set of sig and otherSig were merged
-		id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
-		require.NoError(t, err)
-		equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
-		require.NoError(t, err)
-		require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
-
-		for _, sig := range []*signing.EdSigner{sig, otherSig, otherSig2} {
-			m, err := malfeasance.IsMalicious(atxHandler.cdb, sig.NodeID())
+			otherSig, err := signing.NewEdSigner()
 			require.NoError(t, err)
-			require.True(t, m, "expected %s to be malicious", sig)
-		}
+			atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
+
+			// otherSig2 cannot marry sig, trying to extend its set.
+			otherSig2, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			others2Atx := atxHandler.createAndProcessInitial(otherSig2)
+
+			// otherSig2 becomes malicious in some way
+			err = malfeasance.AddProof(atxHandler.cdb, otherSig2.NodeID(), nil, []byte("proof"), 0, time.Now())
+			require.NoError(t, err)
+
+			atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
+			atx2.Marriages = []wire.MarriageCertificate{
+				{
+					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+				{
+					ReferenceAtx: others2Atx.ID(),
+					Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+			}
+			atx2.Sign(sig)
+			atxHandler.expectAtxV2(atx2)
+
+			atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID())
+			err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
+			require.NoError(t, err)
+
+			// The equivocation set of sig and otherSig were merged
+			id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+
+			for _, sig := range []*signing.EdSigner{sig, otherSig, otherSig2} {
+				m, err := malfeasance.IsMalicious(atxHandler.cdb, sig.NodeID())
+				require.NoError(t, err)
+				require.True(t, m, "expected %s to be malicious", sig)
+			}
+		})
+
+		t.Run("regossip fails", func(t *testing.T) {
+			t.Parallel()
+			atxHandler := newV2TestHandler(t, golden)
+
+			otherSig, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			atx, _ := marryIDs(t, atxHandler, []*signing.EdSigner{sig, otherSig}, golden)
+
+			// otherSig2 cannot marry sig, trying to extend its set.
+			otherSig2, err := signing.NewEdSigner()
+			require.NoError(t, err)
+			others2Atx := atxHandler.createAndProcessInitial(otherSig2)
+
+			// otherSig2 becomes malicious in some way
+			err = malfeasance.AddProof(atxHandler.cdb, otherSig2.NodeID(), nil, []byte("proof"), 0, time.Now())
+			require.NoError(t, err)
+
+			atx2 := newSoloATXv2(t, atx.PublishEpoch+1, atx.ID(), atx.ID())
+			atx2.Marriages = []wire.MarriageCertificate{
+				{
+					Signature: sig.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+				{
+					ReferenceAtx: others2Atx.ID(),
+					Signature:    otherSig2.Sign(signing.MARRIAGE, sig.NodeID().Bytes()),
+				},
+			}
+			atx2.Sign(sig)
+			atxHandler.expectAtxV2(atx2)
+
+			atxHandler.mMalPublish.EXPECT().Regossip(gomock.Any(), sig.NodeID()).Return(errors.New("regossip failed"))
+			err = atxHandler.processATX(context.Background(), "", atx2, time.Now())
+			require.NoError(t, err)
+
+			// The equivocation set of sig and otherSig were merged
+			id, err := marriage.FindIDByNodeID(atxHandler.cdb, sig.NodeID())
+			require.NoError(t, err)
+			equiv, err := marriage.NodeIDsByID(atxHandler.cdb, id)
+			require.NoError(t, err)
+			require.ElementsMatch(t, []types.NodeID{sig.NodeID(), otherSig.NodeID(), otherSig2.NodeID()}, equiv)
+
+			for _, sig := range []*signing.EdSigner{sig, otherSig, otherSig2} {
+				m, err := malfeasance.IsMalicious(atxHandler.cdb, sig.NodeID())
+				require.NoError(t, err)
+				require.True(t, m, "expected %s to be malicious", sig)
+			}
+
+			observedLogs := atxHandler.observedLogs.FilterLevelExact(zapcore.ErrorLevel)
+			require.Equal(t, 1, observedLogs.Len(), "expected 1 log message")
+			require.Equal(t, zapcore.ErrorLevel, observedLogs.All()[0].Level)
+			require.Equal(t, "failed to regossip malfeasance proof", observedLogs.All()[0].Message)
+			require.Equal(t, sig.NodeID().String(), observedLogs.All()[0].ContextMap()["smesher_id"])
+			require.Equal(t, atx2.ID().ShortString(), observedLogs.All()[0].ContextMap()["atx_id"])
+			require.Equal(t, "regossip failed", observedLogs.All()[0].ContextMap()["error"])
+		})
 	})
 	t.Run("malicious marring malicious equivocation set: no proof published", func(t *testing.T) {
 		t.Parallel()

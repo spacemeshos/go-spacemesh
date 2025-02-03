@@ -732,79 +732,32 @@ func (h *HandlerV2) validatePost(
 	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalidIdx)
 }
 
-func (h *HandlerV2) checkMalicious(ctx context.Context, watx *activationTx, republishProof bool) (bool, error) {
-	if republishProof {
-		if err := h.malPublisher.Regossip(ctx, watx.SmesherID); err != nil {
-			h.logger.Error("failed to regossip malfeasance proof",
-				zap.Stringer("atx_id", watx.ID()),
-				zap.Stringer("smesher_id", watx.SmesherID),
-				zap.Error(err),
-			)
-			return true, err
-		}
-		return true, nil
-	}
-
-	var malicious bool
-	var proof wire.Proof
-	var nodeID types.NodeID
-	// we have to do malfeasance checks in a transaction to ensure we have the latest state on the marriage set of the
-	// identity we are processing. Otherwise a new ATX could come in that updates the (or merges multiple existing)
-	// marriage sets and this would lead to inconsistent behavior in the malfeasance checks.
-	err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
-		// malfeasance check happens after storing the ATX because storing updates the marriage set
-		// that is needed for the malfeasance proof
-		//
-		// TODO(mafa): don't store own ATX if it would mark the node as malicious
-		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
-		//    the gossip handler (not sync!)
-		var err error
-		malicious, err = malfeasance.IsMalicious(tx, watx.SmesherID)
-		if err != nil {
-			return fmt.Errorf("checking if node is malicious: %w", err)
-		}
-		if malicious {
-			return nil
-		}
-
-		proof, nodeID, err = h.checkDoubleMarry(ctx, tx, watx)
-		if err != nil {
-			return fmt.Errorf("checking double marry: %w", err)
-		}
-		if proof != nil {
-			return nil
-		}
-
-		proof, nodeID, err = h.checkDoubleMerge(ctx, tx, watx)
-		if err != nil {
-			return fmt.Errorf("checking double merge: %w", err)
-		}
-		if proof != nil {
-			return nil
-		}
-
-		proof, nodeID, err = h.checkPrevAtx(ctx, tx, watx)
-		if err != nil {
-			return fmt.Errorf("checking previous ATX: %w", err)
-		}
-		return nil
-	})
+func (h *HandlerV2) checkMalicious(
+	ctx context.Context,
+	tx sql.Transaction,
+	watx *activationTx,
+) (wire.Proof, types.NodeID, error) {
+	proof, nodeID, err := h.checkDoubleMarry(ctx, tx, watx)
 	if err != nil {
-		return malicious, fmt.Errorf("check malicious: %w", err)
+		return nil, types.EmptyNodeID, fmt.Errorf("checking double marry: %w", err)
 	}
-	if proof == nil {
-		return malicious, nil
+	if proof != nil {
+		return proof, nodeID, nil
 	}
 
-	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
-		h.logger.Error("failed to publish malfeasance proof",
-			zap.Stringer("atx_id", watx.ID()),
-			zap.Stringer("smesher_id", watx.SmesherID),
-			zap.Error(err),
-		)
-		return true, err
+	proof, nodeID, err = h.checkDoubleMerge(ctx, tx, watx)
+	if err != nil {
+		return nil, types.EmptyNodeID, fmt.Errorf("checking double merge: %w", err)
 	}
-	return true, nil
+	if proof != nil {
+		return proof, nodeID, nil
+	}
+
+	proof, nodeID, err = h.checkPrevAtx(ctx, tx, watx)
+	if err != nil {
+		return nil, types.EmptyNodeID, fmt.Errorf("checking previous ATX: %w", err)
+	}
+	return proof, nodeID, nil
 }
 
 func (h *HandlerV2) fetchWireAtx(
@@ -990,6 +943,9 @@ func (h *HandlerV2) checkPrevAtx(
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
 	republishProof := false
+	malicious := false
+	var proof wire.Proof
+	var nodeID types.NodeID
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			newMarriageID, err := marriage.NewID(tx)
@@ -1001,7 +957,6 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				ATX:    atx.ID(),
 				Target: atx.SmesherID,
 			}
-			malicious := false
 			marriageIDs := make(map[marriage.ID]struct{}, 1)
 			marriageIDs[newMarriageID] = struct{}{}
 			for i, m := range watx.marriages {
@@ -1068,18 +1023,44 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				return fmt.Errorf("setting atx units for ID %s: %w", id, err)
 			}
 		}
-		return nil
+
+		if malicious || republishProof {
+			return nil
+		}
+
+		// malfeasance check happens after storing the ATX because storing updates the marriage set
+		// that is needed for the malfeasance proof
+		//
+		// TODO(mafa): don't store own ATX if it would mark the node as malicious
+		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
+		//    the gossip handler (not sync!)
+		proof, nodeID, err = h.checkMalicious(ctx, tx, watx)
+		return err
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
 	}
 
-	malicious, err := h.checkMalicious(ctx, watx, republishProof)
-	if err != nil {
-		return err
+	switch {
+	case republishProof: // marriage set of known malicious smesher has changed, force re-gossip of proof
+		if err := h.malPublisher.Regossip(ctx, watx.SmesherID); err != nil {
+			h.logger.Error("failed to regossip malfeasance proof",
+				zap.Stringer("atx_id", watx.ID()),
+				zap.Stringer("smesher_id", watx.SmesherID),
+				zap.Error(err),
+			)
+		}
+	case proof != nil: // new malfeasance proof for identity created, publish proof (gossip is decided by publisher)
+		if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
+			h.logger.Error("failed to publish malfeasance proof",
+				zap.Stringer("atx_id", watx.ID()),
+				zap.Stringer("smesher_id", watx.SmesherID),
+				zap.Error(err),
+			)
+		}
 	}
 
 	h.beacon.OnAtx(atx)
-	if added := h.atxsdata.AddFromAtx(atx, malicious); added != nil {
+	if added := h.atxsdata.AddFromAtx(atx, malicious || proof != nil); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
