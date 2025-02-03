@@ -48,6 +48,10 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 	publish := false // whether to publish the proof
 	var set []types.NodeID
 	var refATXs []types.ATXID
+
+	// Persisting the proof in the DB has to be done within a transaction to ensure consistency. The ATX handler could
+	// update the (or merge multiple) marriage set in parallel, so we need to make sure data is consistent while we
+	// update the malfeasance table.
 	err := p.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		marriageID, err := marriage.FindIDByNodeID(tx, nodeID)
 		switch {
