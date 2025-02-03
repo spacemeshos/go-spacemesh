@@ -4,19 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/jonboulle/clockwork"
-	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/expr"
 	"github.com/spacemeshos/go-spacemesh/sync2/dbset"
@@ -26,10 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-const (
-	proto = "sync/2"
-)
-
 type ATXHandler struct {
 	logger *zap.Logger
 	f      Fetcher
@@ -37,7 +28,10 @@ type ATXHandler struct {
 	cfg    Config
 }
 
-var _ multipeer.SyncKeyHandler = &ATXHandler{}
+var (
+	_ multipeer.SyncKeyHandler = &ATXHandler{}
+	_ Handler[types.ATXID]     = &ATXHandler{}
+)
 
 func NewATXHandler(
 	logger *zap.Logger,
@@ -56,72 +50,14 @@ func NewATXHandler(
 	}
 }
 
-type commitState struct {
-	state         map[types.ATXID]uint
-	total         int
-	numDownloaded int
-	items         []types.ATXID
+func (h *ATXHandler) Register(peer p2p.Peer, k rangesync.KeyBytes) types.ATXID {
+	id := types.BytesToATXID(k)
+	h.f.RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
+	return id
 }
 
-func (h *ATXHandler) setupState(
-	peer p2p.Peer,
-	base rangesync.OrderedSet,
-	received rangesync.SeqResult,
-) (*commitState, error) {
-	state := make(map[types.ATXID]uint)
-	for k := range received.Seq {
-		found, err := base.Has(k)
-		if err != nil {
-			return nil, fmt.Errorf("check if ATX exists: %w", err)
-		}
-		if found {
-			continue
-		}
-		id := types.BytesToATXID(k)
-		h.f.RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
-		state[id] = 0
-	}
-	if err := received.Error(); err != nil {
-		return nil, fmt.Errorf("get item: %w", err)
-	}
-	return &commitState{
-		state: state,
-		total: len(state),
-		items: make([]types.ATXID, 0, h.cfg.BatchSize),
-	}, nil
-}
-
-func (h *ATXHandler) getAtxs(ctx context.Context, cs *commitState) (bool, error) {
-	cs.items = cs.items[:0] // reuse the slice to reduce allocations
-	for id := range cs.state {
-		cs.items = append(cs.items, id)
-		if uint(len(cs.items)) == h.cfg.BatchSize {
-			break
-		}
-	}
-	someSucceeded := false
-	var mtx sync.Mutex
-	err := h.f.GetAtxs(ctx, cs.items, system.WithATXCallback(func(id types.ATXID, err error) {
-		mtx.Lock()
-		defer mtx.Unlock()
-		switch {
-		case err == nil:
-			cs.numDownloaded++
-			someSucceeded = true
-			delete(cs.state, id)
-		case errors.Is(err, pubsub.ErrValidationReject):
-			h.logger.Debug("failed to download ATX",
-				zap.String("atx", id.ShortString()), zap.Error(err))
-			delete(cs.state, id)
-		case cs.state[id] >= h.cfg.MaxAttempts-1:
-			h.logger.Debug("failed to download ATX: max attempts reached",
-				zap.String("atx", id.ShortString()))
-			delete(cs.state, id)
-		default:
-			cs.state[id]++
-		}
-	}))
-	return someSucceeded, err
+func (h *ATXHandler) Get(ctx context.Context, ids []types.ATXID, callback func(types.ATXID, error)) error {
+	return h.f.GetAtxs(ctx, ids, system.WithATXCallback(callback))
 }
 
 func (h *ATXHandler) Commit(
@@ -132,46 +68,11 @@ func (h *ATXHandler) Commit(
 ) error {
 	h.logger.Debug("begin atx commit")
 	defer h.logger.Debug("end atx commit")
-	cs, err := h.setupState(peer, base, received)
+	cs, err := NewCommitState(h.logger, h, h.clock, peer, base, received, h.cfg)
 	if err != nil {
 		return err
 	}
-	startTime := h.clock.Now()
-	batchAttemptsRemaining := h.cfg.MaxBatchRetries
-	for len(cs.state) > 0 {
-		someSucceeded, err := h.getAtxs(ctx, cs)
-		batchErr := &fetch.BatchError{}
-		switch {
-		case err == nil:
-		case errors.Is(err, context.Canceled):
-			return err
-		case !errors.As(err, &batchErr):
-			h.logger.Debug("failed to download ATXs", zap.Error(err))
-		}
-		if !someSucceeded {
-			if batchAttemptsRemaining == 0 {
-				return errors.New("failed to download ATXs: max batch retries reached")
-			}
-			batchAttemptsRemaining--
-			h.logger.Debug("failed to download any ATXs: will retry batch",
-				zap.Uint("remaining", batchAttemptsRemaining),
-				zap.Duration("delay", h.cfg.FailedBatchDelay))
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-h.clock.After(h.cfg.FailedBatchDelay):
-				continue
-			}
-		}
-
-		batchAttemptsRemaining = h.cfg.MaxBatchRetries
-		elapsed := h.clock.Since(startTime)
-		h.logger.Debug("fetched atxs",
-			zap.Int("total", cs.total),
-			zap.Int("downloaded", cs.numDownloaded),
-			zap.Float64("rate per sec", float64(cs.numDownloaded)/elapsed.Seconds()))
-	}
-	return nil
+	return cs.Commit(ctx)
 }
 
 type MultiEpochATXSyncer struct {
@@ -221,7 +122,7 @@ func (s *MultiEpochATXSyncer) load(newEpoch types.EpochID) error {
 			if epoch == newEpoch {
 				cfg = s.newCfg
 			}
-			hs, err := s.hss.CreateHashSync(name, cfg, epoch)
+			hs, err := s.hss.CreateATXSync(name, cfg, epoch)
 			if err != nil {
 				return fmt.Errorf("create ATX syncer for epoch %d: %w", epoch, err)
 			}
@@ -307,12 +208,6 @@ func NewATXSyncer(
 	return NewP2PHashSync(logger, d, name, curSet, 32, peers, handler, cfg, enableActiveSync)
 }
 
-func NewDispatcher(logger *zap.Logger, host host.Host, opts []server.Opt) *rangesync.Dispatcher {
-	d := rangesync.NewDispatcher(logger)
-	d.SetupServer(host, proto, opts...)
-	return d
-}
-
 type ATXSyncSource struct {
 	logger           *zap.Logger
 	d                *rangesync.Dispatcher
@@ -335,7 +230,7 @@ func NewATXSyncSource(
 	return &ATXSyncSource{logger: logger, d: d, db: db, f: f, peers: peers, enableActiveSync: enableActiveSync}
 }
 
-// CreateHashSync implements HashSyncSource.
-func (as *ATXSyncSource) CreateHashSync(name string, cfg Config, epoch types.EpochID) (HashSync, error) {
+// CreateATXSync implements HashSyncSource.
+func (as *ATXSyncSource) CreateATXSync(name string, cfg Config, epoch types.EpochID) (HashSync, error) {
 	return NewATXSyncer(as.logger.Named(name), as.d, name, cfg, as.db, as.f, as.peers, epoch, as.enableActiveSync)
 }

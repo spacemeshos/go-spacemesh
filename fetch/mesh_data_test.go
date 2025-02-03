@@ -401,6 +401,34 @@ func TestFetch_GetMalfeasanceProofs(t *testing.T) {
 	require.NoError(t, eg.Wait())
 }
 
+func TestFetch_GetMalfeasanceProofsWithCallback(t *testing.T) {
+	nodeIDs := []types.NodeID{{1}, {2}, {3}}
+	f := createFetch(t)
+	f.mMalH.EXPECT().
+		HandleMessage(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		Times(len(nodeIDs))
+
+	stop := make(chan struct{}, 1)
+	var eg errgroup.Group
+	startTestLoop(t, f.Fetch, &eg, stop)
+
+	var mtx sync.Mutex
+	var ids []types.NodeID
+	require.NoError(t, f.GetMalfeasanceProofsWithCallback(
+		context.Background(), nodeIDs,
+		func(nodeID types.NodeID, err error) {
+			mtx.Lock()
+			defer mtx.Unlock()
+			require.NotContains(t, ids, nodeID)
+			ids = append(ids, nodeID)
+			require.NoError(t, err)
+		}))
+	require.ElementsMatch(t, nodeIDs, ids)
+	close(stop)
+	require.NoError(t, eg.Wait())
+}
+
 func TestFetch_GetBlocks(t *testing.T) {
 	blks := []*types.Block{
 		genLayerBlock(types.LayerID(10), types.RandomTXSet(10)),

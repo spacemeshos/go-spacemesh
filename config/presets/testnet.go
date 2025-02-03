@@ -75,6 +75,9 @@ func testnet() config.Config {
 	newAtxSyncCfg.MaxDepth = 21
 	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Minute
 	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncPeerCount = 4
+	malSyncCfg := sync2.DefaultConfig()
+	malSyncCfg.MaxDepth = 16
+	malSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 30 * time.Minute
 
 	return config.Config{
 		Preset: "testnet",
@@ -179,6 +182,7 @@ func testnet() config.Config {
 				Enable:            true,
 				OldAtxSyncCfg:     oldAtxSyncCfg,
 				NewAtxSyncCfg:     newAtxSyncCfg,
+				MalSyncCfg:        malSyncCfg,
 				ParallelLoadLimit: 10,
 				HardTimeout:       time.Minute,
 				ServerConfig: fetch.ServerConfig{

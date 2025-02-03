@@ -8,12 +8,18 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/host"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/fetch/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/sync2/multipeer"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
+)
+
+const (
+	proto = "sync/2"
 )
 
 // Config contains the configuration for the P2PHashSync.
@@ -186,6 +192,10 @@ func (s *P2PHashSync) Start() {
 // StartAndSync starts the multi-peer reconciler if it is not already running, and waits
 // until the local OrderedSet is in sync with the peers.
 func (s *P2PHashSync) StartAndSync(ctx context.Context) error {
+	if !s.enableActiveSync {
+		s.start()
+		return nil
+	}
 	if s.start() {
 		// If the multipeer reconciler is waiting for sync, we kick it to start
 		// the sync so as not to wait for the next scheduled sync interval.
@@ -234,4 +244,12 @@ func (s *P2PHashSync) WaitForSync(ctx context.Context) error {
 // no matter if they were successful or not.
 func (s *P2PHashSync) SyncCycleCount() int {
 	return s.reconciler.SyncCycleCount()
+}
+
+// NewDispatcher creates a new rangesync.Dispatcher for the sync2 protocol with the given
+// host and options.
+func NewDispatcher(logger *zap.Logger, host host.Host, opts []server.Opt) *rangesync.Dispatcher {
+	d := rangesync.NewDispatcher(logger)
+	d.SetupServer(host, proto, opts...)
+	return d
 }

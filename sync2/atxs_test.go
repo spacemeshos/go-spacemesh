@@ -2,32 +2,27 @@ package sync2_test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	gomock "go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
-	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sync2"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync"
 	"github.com/spacemeshos/go-spacemesh/sync2/rangesync/mocks"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-func atxSeqResult(atxs []types.ATXID) rangesync.SeqResult {
+func byteSeqResult[T interface{ Bytes() []byte }](items []T) rangesync.SeqResult {
 	return rangesync.SeqResult{
 		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			for _, atx := range atxs {
-				if !yield(atx.Bytes()) {
+			for _, item := range items {
+				if !yield(item.Bytes()) {
 					return
 				}
 			}
@@ -36,14 +31,7 @@ func atxSeqResult(atxs []types.ATXID) rangesync.SeqResult {
 	}
 }
 
-var testCfg = sync2.Config{
-	BatchSize:        4,
-	MaxAttempts:      3,
-	MaxBatchRetries:  2,
-	FailedBatchDelay: 10 * time.Second,
-}
-
-func TestAtxHandler_Success(t *testing.T) {
+func TestAtxHandler(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	allAtxs := make([]types.ATXID, 10)
 	logger := zaptest.NewLogger(t)
@@ -79,197 +67,9 @@ func TestAtxHandler_Success(t *testing.T) {
 			}
 			return nil
 		}).Times(3)
-	require.NoError(t, h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs)))
+	require.NoError(t, h.Commit(context.Background(), peer, baseSet, byteSeqResult(allAtxs)))
 	require.Empty(t, toFetch)
 	require.Equal(t, []int{4, 4, 2}, batches)
-}
-
-func TestAtxHandler_Retry(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	allAtxs := make([]types.ATXID, 10)
-	logger := zaptest.NewLogger(t)
-	peer := p2p.Peer("foobar")
-	for i := range allAtxs {
-		allAtxs[i] = types.RandomATXID()
-	}
-	f := NewMockFetcher(ctrl)
-	clock := clockwork.NewFakeClock()
-	h := sync2.NewATXHandler(logger, f, testCfg, clock)
-	baseSet := mocks.NewMockOrderedSet(ctrl)
-	for _, id := range allAtxs {
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
-		f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
-	}
-	failCount := 0
-	var fetched []types.ATXID
-	validationFailed := false
-	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
-			errs := make(map[types.Hash32]error)
-			var atxOpts system.GetAtxOpts
-			for _, opt := range opts {
-				opt(&atxOpts)
-			}
-			require.NotNil(t, atxOpts.Callback)
-			for _, id := range atxs {
-				switch {
-				case id == allAtxs[0]:
-					require.False(t, validationFailed, "retried after validation error")
-					errs[id.Hash32()] = pubsub.ErrValidationReject
-					atxOpts.Callback(id, errs[id.Hash32()])
-					validationFailed = true
-				case id == allAtxs[1] && failCount < 2:
-					errs[id.Hash32()] = errors.New("fetch failed")
-					atxOpts.Callback(id, errs[id.Hash32()])
-					failCount++
-				default:
-					fetched = append(fetched, id)
-					atxOpts.Callback(id, nil)
-				}
-			}
-			if len(errs) > 0 {
-				var bErr fetch.BatchError
-				for h, err := range errs {
-					bErr.Add(h, err)
-				}
-				return &bErr
-			}
-			return nil
-		}).AnyTimes()
-
-	// If it so happens that a full batch fails, we need to advance the clock to
-	// trigger the retry.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	var eg errgroup.Group
-	eg.Go(func() error {
-		for {
-			clock.BlockUntilContext(ctx, 1)
-			if ctx.Err() != nil {
-				return nil
-			}
-			clock.Advance(testCfg.FailedBatchDelay)
-		}
-	})
-
-	require.NoError(t, h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs)))
-	require.ElementsMatch(t, allAtxs[1:], fetched)
-	cancel()
-	require.NoError(t, eg.Wait())
-}
-
-func TestAtxHandler_Cancel(t *testing.T) {
-	atxID := types.RandomATXID()
-	ctrl := gomock.NewController(t)
-	logger := zaptest.NewLogger(t)
-	peer := p2p.Peer("foobar")
-	f := NewMockFetcher(ctrl)
-	clock := clockwork.NewFakeClock()
-	h := sync2.NewATXHandler(logger, f, testCfg, clock)
-	baseSet := mocks.NewMockOrderedSet(ctrl)
-	baseSet.EXPECT().Has(rangesync.KeyBytes(atxID.Bytes())).Return(false, nil)
-	f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{atxID.Hash32()})
-	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
-			return context.Canceled
-		})
-	sr := rangesync.SeqResult{
-		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			yield(atxID.Bytes())
-		},
-		Error: rangesync.NoSeqError,
-	}
-	require.ErrorIs(t, h.Commit(context.Background(), peer, baseSet, sr), context.Canceled)
-}
-
-func TestAtxHandler_BatchRetry(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	allAtxs := make([]types.ATXID, 10)
-	logger := zaptest.NewLogger(t)
-	peer := p2p.Peer("foobar")
-	for i := range allAtxs {
-		allAtxs[i] = types.RandomATXID()
-	}
-	clock := clockwork.NewFakeClock()
-	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, testCfg, clock)
-	baseSet := mocks.NewMockOrderedSet(ctrl)
-	for _, id := range allAtxs {
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
-		f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
-	}
-	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
-			return errors.New("fetch failed")
-		})
-	var eg errgroup.Group
-	eg.Go(func() error {
-		return h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs))
-	})
-	// wait for delay after 1st batch failure
-	clock.BlockUntilContext(context.Background(), 1)
-	toFetch := make(map[types.ATXID]bool)
-	for _, id := range allAtxs {
-		toFetch[id] = true
-	}
-	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
-			var atxOpts system.GetAtxOpts
-			for _, opt := range opts {
-				opt(&atxOpts)
-			}
-			require.NotNil(t, atxOpts.Callback)
-			for _, id := range atxs {
-				require.True(t, toFetch[id], "already fetched or bad ID")
-				delete(toFetch, id)
-				atxOpts.Callback(id, nil)
-			}
-			return nil
-		}).Times(3)
-	clock.Advance(testCfg.FailedBatchDelay)
-	require.NoError(t, eg.Wait())
-	require.Empty(t, toFetch)
-}
-
-func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	allAtxs := make([]types.ATXID, 10)
-	logger := zaptest.NewLogger(t)
-	peer := p2p.Peer("foobar")
-	for i := range allAtxs {
-		allAtxs[i] = types.RandomATXID()
-	}
-	clock := clockwork.NewFakeClock()
-	f := NewMockFetcher(ctrl)
-	h := sync2.NewATXHandler(logger, f, testCfg, clock)
-	baseSet := mocks.NewMockOrderedSet(ctrl)
-	for _, id := range allAtxs {
-		baseSet.EXPECT().Has(rangesync.KeyBytes(id.Bytes()))
-		f.EXPECT().RegisterPeerHashes(peer, []types.Hash32{id.Hash32()})
-	}
-	sr := rangesync.SeqResult{
-		Seq: func(yield func(k rangesync.KeyBytes) bool) {
-			for _, atx := range allAtxs {
-				if !yield(atx.Bytes()) {
-					return
-				}
-			}
-		},
-		Error: rangesync.NoSeqError,
-	}
-	f.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, atxs []types.ATXID, opts ...system.GetAtxOpt) error {
-			return errors.New("fetch failed")
-		}).Times(3)
-	var eg errgroup.Group
-	eg.Go(func() error {
-		return h.Commit(context.Background(), peer, baseSet, sr)
-	})
-	for range 2 {
-		clock.BlockUntilContext(context.Background(), 1)
-		clock.Advance(testCfg.FailedBatchDelay)
-	}
-	require.Error(t, eg.Wait())
 }
 
 func TestMultiEpochATXSyncer(t *testing.T) {
@@ -290,7 +90,7 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 
 	var syncActions []string
 	curIdx := 0
-	hss.EXPECT().CreateHashSync(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+	hss.EXPECT().CreateATXSync(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(name string, cfg sync2.Config, epoch types.EpochID) (sync2.HashSync, error) {
 			idx := curIdx
 			curIdx++

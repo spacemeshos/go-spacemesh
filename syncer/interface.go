@@ -48,6 +48,7 @@ type fetcher interface {
 
 	GetAtxs(context.Context, []types.ATXID, ...system.GetAtxOpt) error
 	GetMalfeasanceProofs(context.Context, []types.NodeID) error
+	GetMalfeasanceProofsWithCallback(context.Context, []types.NodeID, func(types.NodeID, error)) error
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)
@@ -75,5 +76,10 @@ type forkFinder interface {
 
 type multiEpochAtxSyncerV2 interface {
 	EnsureSync(ctx context.Context, lastWaitEpoch, newEpoch types.EpochID) (lastSynced types.EpochID, err error)
+	Stop()
+}
+
+type malfeasanceSyncerV2 interface {
+	StartAndSync(ctx context.Context) error
 	Stop()
 }
