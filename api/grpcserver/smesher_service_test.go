@@ -20,11 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-const (
-	testVersion = "v0.0.0"
-	testCommit  = "abcdef"
-)
-
 func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
