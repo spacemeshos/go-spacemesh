@@ -25,6 +25,7 @@ const retries = 3
 
 type mocks struct {
 	atxService *activation.MockAtxService
+	beacons    *server.MockbeaconService
 	poetDb     *server.MockpoetDB
 	hare       *server.Mockhare
 	publisher  *pubsubMocks.MockPublisher
@@ -37,6 +38,7 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 	ctrl := gomock.NewController(t)
 	m := &mocks{
 		atxService: activation.NewMockAtxService(ctrl),
+		beacons:    server.NewMockbeaconService(ctrl),
 		poetDb:     server.NewMockpoetDB(ctrl),
 		hare:       server.NewMockhare(ctrl),
 		publisher:  pubsubMocks.NewMockPublisher(ctrl),
@@ -44,6 +46,7 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 	}
 
 	activationServiceServer := server.NewServer(m.atxService,
+		m.beacons,
 		m.publisher,
 		m.poetDb,
 		m.hare,
@@ -186,6 +189,17 @@ func Test_PublishingATX(t *testing.T) {
 	})
 }
 
+func Test_Beacon(t *testing.T) {
+	svc, mock := setupE2E(t)
+	t.Run("beacon", func(t *testing.T) {
+		beacon := types.Beacon{12, 12, 12, 12}
+		mock.beacons.EXPECT().Beacon(gomock.Any(), types.EpochID(15)).Return(beacon, nil)
+		v, err := svc.Beacon(context.Background(), types.EpochID(15))
+		require.NoError(t, err)
+		require.Equal(t, v, beacon)
+	})
+}
+
 func Test_Hare(t *testing.T) {
 	svc, mock := setupE2E(t)
 	t.Run("total weight", func(t *testing.T) {
@@ -201,13 +215,6 @@ func Test_Hare(t *testing.T) {
 		v, err := svc.MinerWeight(context.Background(), 113, types.NodeID{})
 		require.NoError(t, err)
 		require.Equal(t, v, val)
-	})
-	t.Run("beacon", func(t *testing.T) {
-		beacon := types.Beacon{12, 12, 12, 12}
-		mock.hare.EXPECT().Beacon(gomock.Any(), gomock.Any()).Return(beacon, nil)
-		v, err := svc.Beacon(context.Background(), types.EpochID(15))
-		require.NoError(t, err)
-		require.Equal(t, v, beacon)
 	})
 	t.Run("hare message", func(t *testing.T) {
 		body := hare3.Body{

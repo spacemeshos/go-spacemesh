@@ -80,6 +80,69 @@ func (c *MockpoetDBValidateAndStoreCall) DoAndReturn(f func(context.Context, *ty
 	return c
 }
 
+// MockbeaconService is a mock of beaconService interface.
+type MockbeaconService struct {
+	ctrl     *gomock.Controller
+	recorder *MockbeaconServiceMockRecorder
+	isgomock struct{}
+}
+
+// MockbeaconServiceMockRecorder is the mock recorder for MockbeaconService.
+type MockbeaconServiceMockRecorder struct {
+	mock *MockbeaconService
+}
+
+// NewMockbeaconService creates a new mock instance.
+func NewMockbeaconService(ctrl *gomock.Controller) *MockbeaconService {
+	mock := &MockbeaconService{ctrl: ctrl}
+	mock.recorder = &MockbeaconServiceMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockbeaconService) EXPECT() *MockbeaconServiceMockRecorder {
+	return m.recorder
+}
+
+// Beacon mocks base method.
+func (m *MockbeaconService) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Beacon", ctx, epoch)
+	ret0, _ := ret[0].(types.Beacon)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Beacon indicates an expected call of Beacon.
+func (mr *MockbeaconServiceMockRecorder) Beacon(ctx, epoch any) *MockbeaconServiceBeaconCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Beacon", reflect.TypeOf((*MockbeaconService)(nil).Beacon), ctx, epoch)
+	return &MockbeaconServiceBeaconCall{Call: call}
+}
+
+// MockbeaconServiceBeaconCall wrap *gomock.Call
+type MockbeaconServiceBeaconCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockbeaconServiceBeaconCall) Return(arg0 types.Beacon, arg1 error) *MockbeaconServiceBeaconCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockbeaconServiceBeaconCall) Do(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockbeaconServiceBeaconCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockbeaconServiceBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockbeaconServiceBeaconCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Mockhare is a mock of hare interface.
 type Mockhare struct {
 	ctrl     *gomock.Controller
@@ -102,45 +165,6 @@ func NewMockhare(ctrl *gomock.Controller) *Mockhare {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *Mockhare) EXPECT() *MockhareMockRecorder {
 	return m.recorder
-}
-
-// Beacon mocks base method.
-func (m *Mockhare) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Beacon", ctx, epoch)
-	ret0, _ := ret[0].(types.Beacon)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Beacon indicates an expected call of Beacon.
-func (mr *MockhareMockRecorder) Beacon(ctx, epoch any) *MockhareBeaconCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Beacon", reflect.TypeOf((*Mockhare)(nil).Beacon), ctx, epoch)
-	return &MockhareBeaconCall{Call: call}
-}
-
-// MockhareBeaconCall wrap *gomock.Call
-type MockhareBeaconCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockhareBeaconCall) Return(arg0 types.Beacon, arg1 error) *MockhareBeaconCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockhareBeaconCall) Do(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockhareBeaconCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockhareBeaconCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
 }
 
 // MinerWeight mocks base method.
