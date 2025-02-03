@@ -27,11 +27,14 @@ type poetDB interface {
 	ValidateAndStore(ctx context.Context, proofMessage *types.PoetProofMessage) error
 }
 
+type beaconService interface {
+	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
+}
+
 type hare interface {
 	RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body
 	TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error)
 	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error)
-	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
 
 type proposalBuilder interface {
@@ -42,6 +45,7 @@ type proposalBuilder interface {
 
 type Server struct {
 	atxService activation.AtxService
+	beacons    beaconService
 	publisher  pubsub.Publisher
 	poetDB     poetDB
 	hare       hare
@@ -53,6 +57,7 @@ var _ StrictServerInterface = (*Server)(nil)
 
 func NewServer(
 	atxService activation.AtxService,
+	beacons beaconService,
 	publisher pubsub.Publisher,
 	poetDB poetDB,
 	hare hare,
@@ -61,6 +66,7 @@ func NewServer(
 ) *Server {
 	return &Server{
 		atxService: atxService,
+		beacons:    beacons,
 		publisher:  publisher,
 		poetDB:     poetDB,
 		hare:       hare,
@@ -300,7 +306,7 @@ func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
 func (s *Server) GetHareBeaconEpoch(ctx context.Context,
 	request GetHareBeaconEpochRequestObject,
 ) (GetHareBeaconEpochResponseObject, error) {
-	beacon, err := s.hare.Beacon(ctx, types.EpochID(request.Epoch))
+	beacon, err := s.beacons.Beacon(ctx, types.EpochID(request.Epoch))
 	if err != nil {
 		return nil, err
 	}

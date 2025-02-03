@@ -700,7 +700,3 @@ func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, er
 func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) (uint64, error) {
 	return h.oracle.oracle.MinerWeight(ctx, miner, layer)
 }
-
-func (h *Hare) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
-	return beacons.Get(h.db, epoch)
-}

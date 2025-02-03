@@ -2082,7 +2082,15 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		golden := types.ATXID(app.Config.Genesis.GoldenATX())
 		logger := app.addLogger(NodeServiceLogger, app.log).Zap()
 		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
-		server := nodeserver.NewServer(actSvc, app.host, app.poetDb, app.hare3, app.proposalBuilder, logger)
+		server := nodeserver.NewServer(
+			actSvc,
+			&beaconGetter{app.beaconProtocol},
+			app.host,
+			app.poetDb,
+			app.hare3,
+			app.proposalBuilder,
+			logger,
+		)
 
 		app.nodeServiceServer = &http.Server{
 			Handler: server.IntoHandler(http.NewServeMux()),
