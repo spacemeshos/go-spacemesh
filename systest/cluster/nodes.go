@@ -626,24 +626,16 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 		return nil, err
 	}
 	defer watcher.Stop()
-	for {
-		select {
-		case ev, open := <-watcher.ResultChan():
-			if !open {
-				if watcherCtx.Err() != nil {
-					return nil, fmt.Errorf("watcher terminated while waiting for pod with id %v: %w", id, ctx.Err())
-				}
-				return nil, fmt.Errorf("watcher terminated while waiting for pod with id %v", id)
-			}
-			pod, ok := ev.Object.(*apiv1.Pod)
-			if !ok {
-				continue
-			}
-			if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
-				return pod, nil
-			}
+	for ev := range watcher.ResultChan() {
+		pod, ok := ev.Object.(*apiv1.Pod)
+		if !ok {
+			continue
+		}
+		if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
+			return pod, nil
 		}
 	}
+	return nil, fmt.Errorf("watcher terminated while waiting for pod with id %v: %w", id, ctx.Err())
 }
 
 func nodeLabels(name, id string) map[string]string {
