@@ -250,7 +250,7 @@ func (c *Certifier) certifySingleSigner(
 	bid types.BlockID,
 	beacon types.Beacon,
 ) error {
-	proof := eligibility.GenVRF(context.Background(), s.VRFSigner(), beacon, lid, eligibility.CertifyRound)
+	proof := eligibility.GenVRF(s.VRFSigner(), beacon, lid, eligibility.CertifyRound)
 	eligibilityCount, err := c.oracle.CalcEligibility(
 		ctx,
 		lid,
