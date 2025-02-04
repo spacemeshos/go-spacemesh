@@ -3,9 +3,8 @@ package marriage
 import (
 	"bytes"
 	"fmt"
-	"sort"
-
-	"golang.org/x/exp/maps"
+	"maps"
+	"slices"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -152,9 +151,10 @@ func MarriageATXs(db sql.Executor, id ID) ([]types.ATXID, error) {
 	if rows == 0 {
 		return nil, sql.ErrNotFound
 	}
-	atxIDs := maps.Keys(atxs)
-	sort.Slice(atxIDs, func(i, j int) bool { return bytes.Compare(atxIDs[i].Bytes(), atxIDs[j].Bytes()) < 0 })
-	return atxIDs, nil
+
+	return slices.SortedFunc(maps.Keys(atxs), func(a, b types.ATXID) int {
+		return bytes.Compare(a.Bytes(), b.Bytes())
+	}), nil
 }
 
 func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {

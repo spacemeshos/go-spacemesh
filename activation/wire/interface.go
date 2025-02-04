@@ -40,7 +40,7 @@ type Proof interface {
 	scale.Encodable
 	scale.Decodable
 
-	// AllowNoRefATXs returns true if the proof type is valid without reference ATXs proofing the existence of the
+	// AllowNoRefATXs returns true if the proof type is valid without reference ATXs proving the existence of the
 	// malicious identity.
 	//
 	// To avoid spamming of malfeasance proofs for identities that do not exist, by default all proofs require reference
