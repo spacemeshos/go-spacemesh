@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
+	"github.com/spacemeshos/go-spacemesh/hare4/eligibility"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -49,7 +49,7 @@ func (lg *legacyOracle) active(
 	layer types.LayerID,
 	ir IterRound,
 ) *types.HareEligibility {
-	vrf := eligibility.GenVRF(context.Background(), signer.VRFSigner(), beacon, layer, ir.Absolute())
+	vrf := eligibility.GenVRF(signer.VRFSigner(), beacon, layer, ir.Absolute())
 	committee := int(lg.config.CommitteeFor(layer))
 	if ir.Round == propose {
 		committee = int(lg.config.Leaders)
