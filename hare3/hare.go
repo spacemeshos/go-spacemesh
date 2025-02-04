@@ -693,10 +693,10 @@ func (h *Hare) RoundTemplate(layer types.LayerID, round IterRound) *Body {
 	return &r.message.Body
 }
 
-func (h *Hare) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	return h.oracle.oracle.TotalWeight(ctx, layer)
+func (h *Hare) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+	return h.oracle.oracle.TotalWeight(ctx, epoch)
 }
 
-func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, layer types.LayerID) (uint64, error) {
-	return h.oracle.oracle.MinerWeight(ctx, miner, layer)
+func (h *Hare) MinerWeight(ctx context.Context, miner types.NodeID, epoch types.EpochID) (uint64, error) {
+	return h.oracle.oracle.MinerWeight(ctx, miner, epoch)
 }

@@ -33,8 +33,8 @@ type beaconService interface {
 
 type hare interface {
 	RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body
-	TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error)
-	MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error)
+	TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error)
+	MinerWeight(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint64, error)
 }
 
 type proposalBuilder interface {
@@ -272,35 +272,35 @@ func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
 	return resp, nil
 }
 
-func (s *Server) GetHareTotalWeightLayer(ctx context.Context,
-	req GetHareTotalWeightLayerRequestObject,
-) (GetHareTotalWeightLayerResponseObject, error) {
-	weight, err := s.hare.TotalWeight(ctx, types.LayerID(req.Layer))
+func (s *Server) GetHareTotalWeightEpoch(ctx context.Context,
+	req GetHareTotalWeightEpochRequestObject,
+) (GetHareTotalWeightEpochResponseObject, error) {
+	weight, err := s.hare.TotalWeight(ctx, types.EpochID(req.Epoch))
 	if err != nil {
 		return nil, err
 	}
-	return &GetHareTotalWeightLayer200JSONResponse{Weight: weight}, nil
+	return &GetHareTotalWeightEpoch200JSONResponse{Weight: weight}, nil
 }
 
-func (s *Server) GetHareWeightNodeIdLayer(ctx context.Context,
-	request GetHareWeightNodeIdLayerRequestObject,
-) (GetHareWeightNodeIdLayerResponseObject, error) {
+func (s *Server) GetHareWeightNodeIdEpoch(ctx context.Context,
+	request GetHareWeightNodeIdEpochRequestObject,
+) (GetHareWeightNodeIdEpochResponseObject, error) {
 	id, err := models.ParseNodeID(request.NodeId)
 	if err != nil {
 		msg := err.Error()
-		return GetHareWeightNodeIdLayer400PlaintextResponse{
+		return GetHareWeightNodeIdEpoch400PlaintextResponse{
 			Body:          bytes.NewBuffer([]byte(msg)),
 			ContentLength: int64(len(msg)),
 		}, nil
 	}
-	weight, err := s.hare.MinerWeight(ctx, id, types.LayerID(request.Layer))
+	weight, err := s.hare.MinerWeight(ctx, id, types.EpochID(request.Epoch))
 	if err != nil {
 		if errors.Is(err, eligibility.ErrNotActive) {
-			return &GetHareWeightNodeIdLayer200JSONResponse{Weight: 0}, nil
+			return &GetHareWeightNodeIdEpoch200JSONResponse{Weight: 0}, nil
 		}
 		return nil, fmt.Errorf("miner weight: %w", err)
 	}
-	return &GetHareWeightNodeIdLayer200JSONResponse{Weight: weight}, nil
+	return &GetHareWeightNodeIdEpoch200JSONResponse{Weight: weight}, nil
 }
 
 func (s *Server) GetHareBeaconEpoch(ctx context.Context,

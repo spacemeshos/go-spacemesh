@@ -97,20 +97,20 @@ type Oracle struct {
 	db            sql.Executor
 	vrfVerifier   vrfVerifier
 	cfg           Config
-	minerWeightFn func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
-	totalWeightFn func(ctx context.Context, layer types.LayerID) (uint64, error)
+	minerWeightFn func(context.Context, types.EpochID, types.NodeID) (uint64, error)
+	totalWeightFn func(context.Context, types.EpochID) (uint64, error)
 	log           *zap.Logger
 }
 
 type Opt func(*Oracle)
 
-func WithMinerWeightFunc(f func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)) Opt {
+func WithMinerWeightFunc(f func(context.Context, types.EpochID, types.NodeID) (uint64, error)) Opt {
 	return func(o *Oracle) {
 		o.minerWeightFn = f
 	}
 }
 
-func WithTotalWeightFunc(f func(ctx context.Context, layer types.LayerID) (uint64, error)) Opt {
+func WithTotalWeightFunc(f func(context.Context, types.EpochID) (uint64, error)) Opt {
 	return func(o *Oracle) {
 		o.totalWeightFn = f
 	}
@@ -205,16 +205,16 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	return codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}), nil
 }
 
-func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	actives, err := o.actives(ctx, o.layerToEpoch(layer))
+func (o *Oracle) totalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+	actives, err := o.actives(ctx, epoch)
 	if err != nil {
 		return 0, err
 	}
 	return actives.total, nil
 }
 
-func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
-	actives, err := o.actives(ctx, o.layerToEpoch(layer))
+func (o *Oracle) minerWeight(ctx context.Context, epoch types.EpochID, id types.NodeID) (uint64, error) {
+	actives, err := o.actives(ctx, epoch)
 	if err != nil {
 		return 0, err
 	}
@@ -254,7 +254,7 @@ func (o *Oracle) prepareEligibilityCheck(
 
 	// calc hash & check threshold
 	// this is cheap in case the node is not eligible
-	minerWeight, err := o.minerWeightFn(ctx, layer, id)
+	minerWeight, err := o.minerWeightFn(ctx, o.layerToEpoch(layer), id)
 	if err != nil {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
@@ -272,7 +272,7 @@ func (o *Oracle) prepareEligibilityCheck(
 	}
 
 	// get active set size
-	totalWeight, err := o.totalWeightFn(ctx, layer)
+	totalWeight, err := o.totalWeightFn(ctx, o.layerToEpoch(layer))
 	if err != nil {
 		logger.Error("failed to get total weight", zap.Error(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -554,10 +554,10 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 	o.fallback[epoch] = activeSet
 }
 
-func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	return o.totalWeightFn(ctx, layer)
+func (o *Oracle) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+	return o.totalWeightFn(ctx, epoch)
 }
 
-func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error) {
-	return o.minerWeightFn(ctx, layer, node)
+func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint64, error) {
+	return o.minerWeightFn(ctx, epoch, node)
 }

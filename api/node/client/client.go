@@ -185,8 +185,8 @@ func (s *NodeService) HareRoundTemplate(
 	}
 }
 
-func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	resp, err := s.client.GetHareTotalWeightLayerWithResponse(ctx, layer.Uint32())
+func (s *NodeService) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+	resp, err := s.client.GetHareTotalWeightEpochWithResponse(ctx, epoch.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get total weight: %w", err)
 	}
@@ -198,8 +198,8 @@ func (s *NodeService) TotalWeight(ctx context.Context, layer types.LayerID) (uin
 	}
 }
 
-func (s *NodeService) MinerWeight(ctx context.Context, layer types.LayerID, node types.NodeID) (uint64, error) {
-	resp, err := s.client.GetHareWeightNodeIdLayerWithResponse(ctx, node.Bytes(), layer.Uint32())
+func (s *NodeService) MinerWeight(ctx context.Context, epoch types.EpochID, node types.NodeID) (uint64, error) {
+	resp, err := s.client.GetHareWeightNodeIdEpochWithResponse(ctx, node.Bytes(), epoch.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get miner weight: %w", err)
 	}

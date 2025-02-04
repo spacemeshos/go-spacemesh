@@ -167,17 +167,17 @@ paths:
                 $ref: "models/components.yaml#/components/schemas/HareRoundTemplate"
         "204":
           description: did not find a message to retrieve
-  /hare/total_weight/{layer}:
+  /hare/total_weight/{epoch}:
     get:
-      summary: Get the total weight for layer
+      summary: Get the total weight for epoch
       tags:
         - "hare"
       parameters:
         - in: path
-          name: layer
+          name: epoch
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/LayerID"
+            $ref: "models/components.yaml#/components/schemas/EpochID"
       responses:
         "200":
           description: successfully found the total weight
@@ -193,9 +193,9 @@ paths:
                   - weight
         "204":
           description: did not find a message to retrieve
-  /hare/weight/{node_id}/{layer}:
+  /hare/weight/{node_id}/{epoch}:
     get:
-      summary: Get the miner weight in layer
+      summary: Get the miner weight in epoch
       tags:
         - "hare"
       parameters:
@@ -205,10 +205,10 @@ paths:
           schema:
             $ref: "models/components.yaml#/components/schemas/Bytes32"
         - in: path
-          name: layer
+          name: epoch
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/LayerID"
+            $ref: "models/components.yaml#/components/schemas/EpochID"
       responses:
         "200":
           description: successfully found the miner's weight
