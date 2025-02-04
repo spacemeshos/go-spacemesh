@@ -377,13 +377,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		return app.Start(appCtx)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
 	// If there's an error in the args, it will return immediately.
 	var eg errgroup.Group
 	eg.Go(func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 		str, err := testArgs(ctx, cmdWithRun(run))
 		assert.Empty(t, str)
 		assert.NoError(t, err)
@@ -397,7 +396,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
+
 	c := pb.NewNodeServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
 	eg.Go(func() error {
 		streamStatus, err := c.StatusStream(ctx, &pb.StatusStreamRequest{})
