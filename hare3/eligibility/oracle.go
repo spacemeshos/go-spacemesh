@@ -97,20 +97,20 @@ type Oracle struct {
 	db            sql.Executor
 	vrfVerifier   vrfVerifier
 	cfg           Config
-	minerWeightFn func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)
-	totalWeightFn func(ctx context.Context, layer types.LayerID) (uint64, error)
+	minerWeightFn func(context.Context, types.EpochID, types.NodeID) (uint64, error)
+	totalWeightFn func(context.Context, types.EpochID) (uint64, error)
 	log           *zap.Logger
 }
 
 type Opt func(*Oracle)
 
-func WithMinerWeightFunc(f func(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error)) Opt {
+func WithMinerWeightFunc(f func(context.Context, types.EpochID, types.NodeID) (uint64, error)) Opt {
 	return func(o *Oracle) {
 		o.minerWeightFn = f
 	}
 }
 
-func WithTotalWeightFunc(f func(ctx context.Context, layer types.LayerID) (uint64, error)) Opt {
+func WithTotalWeightFunc(f func(context.Context, types.EpochID) (uint64, error)) Opt {
 	return func(o *Oracle) {
 		o.totalWeightFn = f
 	}
@@ -205,16 +205,16 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	return codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}), nil
 }
 
-func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	actives, err := o.actives(ctx, layer)
+func (o *Oracle) totalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+	actives, err := o.actives(ctx, epoch)
 	if err != nil {
 		return 0, err
 	}
 	return actives.total, nil
 }
 
-func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
-	actives, err := o.actives(ctx, layer)
+func (o *Oracle) minerWeight(ctx context.Context, epoch types.EpochID, id types.NodeID) (uint64, error) {
+	actives, err := o.actives(ctx, epoch)
 	if err != nil {
 		return 0, err
 	}
@@ -254,7 +254,7 @@ func (o *Oracle) prepareEligibilityCheck(
 
 	// calc hash & check threshold
 	// this is cheap in case the node is not eligible
-	minerWeight, err := o.minerWeightFn(ctx, layer, id)
+	minerWeight, err := o.minerWeightFn(ctx, o.layerToEpoch(layer), id)
 	if err != nil {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
@@ -272,7 +272,7 @@ func (o *Oracle) prepareEligibilityCheck(
 	}
 
 	// get active set size
-	totalWeight, err := o.totalWeightFn(ctx, layer)
+	totalWeight, err := o.totalWeightFn(ctx, o.layerToEpoch(layer))
 	if err != nil {
 		logger.Error("failed to get total weight", zap.Error(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -408,22 +408,24 @@ func GenVRF(
 	)
 }
 
-// Returns a map of all active node IDs in the specified layer id.
-func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cachedActiveSet, error) {
-	if !targetLayer.After(types.GetEffectiveGenesis()) {
-		return nil, errEmptyActiveSet
-	}
-	targetEpoch := targetLayer.GetEpoch()
+func (o *Oracle) layerToEpoch(layer types.LayerID) types.EpochID {
+	epoch := layer.GetEpoch()
 	// the first bootstrap data targets first epoch after genesis (epoch 2)
 	// and the epoch where checkpoint recovery happens
-	if targetEpoch > types.GetEffectiveGenesis().Add(1).GetEpoch() &&
-		targetLayer.Difference(targetEpoch.FirstLayer()) < o.cfg.ConfidenceParam {
-		targetEpoch -= 1
+	if epoch > types.GetEffectiveGenesis().Add(1).GetEpoch() &&
+		layer.Difference(epoch.FirstLayer()) < o.cfg.ConfidenceParam {
+		epoch -= 1
+	}
+	return epoch
+}
+
+// Returns a set of all active node IDs in the specified epoch.
+func (o *Oracle) actives(ctx context.Context, targetEpoch types.EpochID) (*cachedActiveSet, error) {
+	if !targetEpoch.FirstLayer().After(types.GetEffectiveGenesis()) {
+		return nil, errEmptyActiveSet
 	}
 	o.log.Debug("hare oracle getting active set",
 		log.ZContext(ctx),
-		zap.Uint32("target_layer", targetLayer.Uint32()),
-		zap.Uint32("target_layer_epoch", targetLayer.GetEpoch().Uint32()),
 		zap.Uint32("target_epoch", targetEpoch.Uint32()),
 	)
 
@@ -455,7 +457,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 }
 
 func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
-	aset, err := o.actives(ctx, targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam))
+	aset, err := o.actives(ctx, targetEpoch)
 	if err != nil {
 		return nil, err
 	}
@@ -552,10 +554,10 @@ func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
 	o.fallback[epoch] = activeSet
 }
 
-func (o *Oracle) TotalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	return o.totalWeightFn(ctx, layer)
+func (o *Oracle) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+	return o.totalWeightFn(ctx, epoch)
 }
 
-func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, layer types.LayerID) (uint64, error) {
-	return o.minerWeightFn(ctx, layer, node)
+func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint64, error) {
+	return o.minerWeightFn(ctx, epoch, node)
 }

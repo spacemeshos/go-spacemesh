@@ -66,12 +66,12 @@ type ServerInterface interface {
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound)
-	// Get the total weight for layer
-	// (GET /hare/total_weight/{layer})
-	GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID)
-	// Get the miner weight in layer
-	// (GET /hare/weight/{node_id}/{layer})
-	GetHareWeightNodeIdLayer(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, layer externalRef0.LayerID)
+	// Get the total weight for epoch
+	// (GET /hare/total_weight/{epoch})
+	GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
+	// Get the miner weight in epoch
+	// (GET /hare/weight/{node_id}/{epoch})
+	GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID)
 	// Get a partial proposal for a given node in a layer
 	// (GET /proposal/{layer}/{node})
 	GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.Bytes32)
@@ -280,22 +280,22 @@ func (siw *ServerInterfaceWrapper) GetHareRoundTemplateLayerIterRound(w http.Res
 	handler.ServeHTTP(w, r)
 }
 
-// GetHareTotalWeightLayer operation middleware
-func (siw *ServerInterfaceWrapper) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request) {
+// GetHareTotalWeightEpoch operation middleware
+func (siw *ServerInterfaceWrapper) GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
-	// ------------- Path parameter "layer" -------------
-	var layer externalRef0.LayerID
+	// ------------- Path parameter "epoch" -------------
+	var epoch externalRef0.EpochID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "layer", r.PathValue("layer"), &layer, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "layer", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHareTotalWeightLayer(w, r, layer)
+		siw.Handler.GetHareTotalWeightEpoch(w, r, epoch)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -305,8 +305,8 @@ func (siw *ServerInterfaceWrapper) GetHareTotalWeightLayer(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
-// GetHareWeightNodeIdLayer operation middleware
-func (siw *ServerInterfaceWrapper) GetHareWeightNodeIdLayer(w http.ResponseWriter, r *http.Request) {
+// GetHareWeightNodeIdEpoch operation middleware
+func (siw *ServerInterfaceWrapper) GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
@@ -319,17 +319,17 @@ func (siw *ServerInterfaceWrapper) GetHareWeightNodeIdLayer(w http.ResponseWrite
 		return
 	}
 
-	// ------------- Path parameter "layer" -------------
-	var layer externalRef0.LayerID
+	// ------------- Path parameter "epoch" -------------
+	var epoch externalRef0.EpochID
 
-	err = runtime.BindStyledParameterWithOptions("simple", "layer", r.PathValue("layer"), &layer, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "layer", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
 		return
 	}
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHareWeightNodeIdLayer(w, r, nodeId, layer)
+		siw.Handler.GetHareWeightNodeIdEpoch(w, r, nodeId, epoch)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -525,8 +525,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/eligibility/slots/{node}/{epoch}", wrapper.GetEligibilitySlotsNodeEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/beacon/{epoch}", wrapper.GetHareBeaconEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/round_template/{layer}/{iter}/{round}", wrapper.GetHareRoundTemplateLayerIterRound)
-	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight/{layer}", wrapper.GetHareTotalWeightLayer)
-	m.HandleFunc("GET "+options.BaseURL+"/hare/weight/{node_id}/{layer}", wrapper.GetHareWeightNodeIdLayer)
+	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight/{epoch}", wrapper.GetHareTotalWeightEpoch)
+	m.HandleFunc("GET "+options.BaseURL+"/hare/weight/{node_id}/{epoch}", wrapper.GetHareWeightNodeIdEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/proposal/{layer}/{node}", wrapper.GetProposalLayerNode)
 	m.HandleFunc("POST "+options.BaseURL+"/publish/{protocol}", wrapper.PostPublishProtocol)
 
@@ -777,67 +777,67 @@ func (response GetHareRoundTemplateLayerIterRound204Response) VisitGetHareRoundT
 	return nil
 }
 
-type GetHareTotalWeightLayerRequestObject struct {
-	Layer externalRef0.LayerID `json:"layer"`
+type GetHareTotalWeightEpochRequestObject struct {
+	Epoch externalRef0.EpochID `json:"epoch"`
 }
 
-type GetHareTotalWeightLayerResponseObject interface {
-	VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error
+type GetHareTotalWeightEpochResponseObject interface {
+	VisitGetHareTotalWeightEpochResponse(w http.ResponseWriter) error
 }
 
-type GetHareTotalWeightLayer200JSONResponse struct {
+type GetHareTotalWeightEpoch200JSONResponse struct {
 	Weight uint64 `json:"weight"`
 }
 
-func (response GetHareTotalWeightLayer200JSONResponse) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
+func (response GetHareTotalWeightEpoch200JSONResponse) VisitGetHareTotalWeightEpochResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetHareTotalWeightLayer204Response struct {
+type GetHareTotalWeightEpoch204Response struct {
 }
 
-func (response GetHareTotalWeightLayer204Response) VisitGetHareTotalWeightLayerResponse(w http.ResponseWriter) error {
+func (response GetHareTotalWeightEpoch204Response) VisitGetHareTotalWeightEpochResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
 }
 
-type GetHareWeightNodeIdLayerRequestObject struct {
+type GetHareWeightNodeIdEpochRequestObject struct {
 	NodeId externalRef0.Bytes32 `json:"node_id"`
-	Layer  externalRef0.LayerID `json:"layer"`
+	Epoch  externalRef0.EpochID `json:"epoch"`
 }
 
-type GetHareWeightNodeIdLayerResponseObject interface {
-	VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error
+type GetHareWeightNodeIdEpochResponseObject interface {
+	VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error
 }
 
-type GetHareWeightNodeIdLayer200JSONResponse struct {
+type GetHareWeightNodeIdEpoch200JSONResponse struct {
 	Weight uint64 `json:"weight"`
 }
 
-func (response GetHareWeightNodeIdLayer200JSONResponse) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
+func (response GetHareWeightNodeIdEpoch200JSONResponse) VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
 
 	return json.NewEncoder(w).Encode(response)
 }
 
-type GetHareWeightNodeIdLayer204Response struct {
+type GetHareWeightNodeIdEpoch204Response struct {
 }
 
-func (response GetHareWeightNodeIdLayer204Response) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
+func (response GetHareWeightNodeIdEpoch204Response) VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
 }
 
-type GetHareWeightNodeIdLayer400PlaintextResponse struct {
+type GetHareWeightNodeIdEpoch400PlaintextResponse struct {
 	Body          io.Reader
 	ContentLength int64
 }
 
-func (response GetHareWeightNodeIdLayer400PlaintextResponse) VisitGetHareWeightNodeIdLayerResponse(w http.ResponseWriter) error {
+func (response GetHareWeightNodeIdEpoch400PlaintextResponse) VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "plain/text")
 	if response.ContentLength != 0 {
 		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
@@ -944,12 +944,12 @@ type StrictServerInterface interface {
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, request GetHareRoundTemplateLayerIterRoundRequestObject) (GetHareRoundTemplateLayerIterRoundResponseObject, error)
-	// Get the total weight for layer
-	// (GET /hare/total_weight/{layer})
-	GetHareTotalWeightLayer(ctx context.Context, request GetHareTotalWeightLayerRequestObject) (GetHareTotalWeightLayerResponseObject, error)
-	// Get the miner weight in layer
-	// (GET /hare/weight/{node_id}/{layer})
-	GetHareWeightNodeIdLayer(ctx context.Context, request GetHareWeightNodeIdLayerRequestObject) (GetHareWeightNodeIdLayerResponseObject, error)
+	// Get the total weight for epoch
+	// (GET /hare/total_weight/{epoch})
+	GetHareTotalWeightEpoch(ctx context.Context, request GetHareTotalWeightEpochRequestObject) (GetHareTotalWeightEpochResponseObject, error)
+	// Get the miner weight in epoch
+	// (GET /hare/weight/{node_id}/{epoch})
+	GetHareWeightNodeIdEpoch(ctx context.Context, request GetHareWeightNodeIdEpochRequestObject) (GetHareWeightNodeIdEpochResponseObject, error)
 	// Get a partial proposal for a given node in a layer
 	// (GET /proposal/{layer}/{node})
 	GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (GetProposalLayerNodeResponseObject, error)
@@ -1177,25 +1177,25 @@ func (sh *strictHandler) GetHareRoundTemplateLayerIterRound(w http.ResponseWrite
 	}
 }
 
-// GetHareTotalWeightLayer operation middleware
-func (sh *strictHandler) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID) {
-	var request GetHareTotalWeightLayerRequestObject
+// GetHareTotalWeightEpoch operation middleware
+func (sh *strictHandler) GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID) {
+	var request GetHareTotalWeightEpochRequestObject
 
-	request.Layer = layer
+	request.Epoch = epoch
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetHareTotalWeightLayer(ctx, request.(GetHareTotalWeightLayerRequestObject))
+		return sh.ssi.GetHareTotalWeightEpoch(ctx, request.(GetHareTotalWeightEpochRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetHareTotalWeightLayer")
+		handler = middleware(handler, "GetHareTotalWeightEpoch")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetHareTotalWeightLayerResponseObject); ok {
-		if err := validResponse.VisitGetHareTotalWeightLayerResponse(w); err != nil {
+	} else if validResponse, ok := response.(GetHareTotalWeightEpochResponseObject); ok {
+		if err := validResponse.VisitGetHareTotalWeightEpochResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1203,26 +1203,26 @@ func (sh *strictHandler) GetHareTotalWeightLayer(w http.ResponseWriter, r *http.
 	}
 }
 
-// GetHareWeightNodeIdLayer operation middleware
-func (sh *strictHandler) GetHareWeightNodeIdLayer(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, layer externalRef0.LayerID) {
-	var request GetHareWeightNodeIdLayerRequestObject
+// GetHareWeightNodeIdEpoch operation middleware
+func (sh *strictHandler) GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID) {
+	var request GetHareWeightNodeIdEpochRequestObject
 
 	request.NodeId = nodeId
-	request.Layer = layer
+	request.Epoch = epoch
 
 	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetHareWeightNodeIdLayer(ctx, request.(GetHareWeightNodeIdLayerRequestObject))
+		return sh.ssi.GetHareWeightNodeIdEpoch(ctx, request.(GetHareWeightNodeIdEpochRequestObject))
 	}
 	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetHareWeightNodeIdLayer")
+		handler = middleware(handler, "GetHareWeightNodeIdEpoch")
 	}
 
 	response, err := handler(r.Context(), w, r, request)
 
 	if err != nil {
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetHareWeightNodeIdLayerResponseObject); ok {
-		if err := validResponse.VisitGetHareWeightNodeIdLayerResponse(w); err != nil {
+	} else if validResponse, ok := response.(GetHareWeightNodeIdEpochResponseObject); ok {
+		if err := validResponse.VisitGetHareWeightNodeIdEpochResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -204,14 +204,14 @@ func Test_Hare(t *testing.T) {
 	svc, mock := setupE2E(t)
 	t.Run("total weight", func(t *testing.T) {
 		val := uint64(11)
-		mock.hare.EXPECT().TotalWeight(gomock.Any(), gomock.Any()).Return(val, nil)
+		mock.hare.EXPECT().TotalWeight(gomock.Any(), types.EpochID(112)).Return(val, nil)
 		v, err := svc.TotalWeight(context.Background(), 112)
 		require.NoError(t, err)
 		require.Equal(t, v, val)
 	})
 	t.Run("miner weight", func(t *testing.T) {
 		val := uint64(101)
-		mock.hare.EXPECT().MinerWeight(gomock.Any(), gomock.Any(), gomock.Any()).Return(val, nil)
+		mock.hare.EXPECT().MinerWeight(gomock.Any(), gomock.Any(), types.EpochID(113)).Return(val, nil)
 		v, err := svc.MinerWeight(context.Background(), 113, types.NodeID{})
 		require.NoError(t, err)
 		require.Equal(t, v, val)
