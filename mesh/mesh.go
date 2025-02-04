@@ -382,6 +382,8 @@ func (msh *Mesh) applyResults(ctx context.Context, results []result.Layer) error
 				}
 			}
 			if err := msh.executor.Execute(ctx, layer.Layer, block); err != nil {
+				// TODO(mafa): sometimes this fails because the block executed references a tx that is not in the DB
+				// maybe in that case the node should try to fetch the missing txs and retry executing the block?
 				return fmt.Errorf("execute block %v/%v: %w", layer.Layer, target, err)
 			}
 		}
