@@ -228,13 +228,13 @@ func (s *TransactionService) EstimateGas(
 	}
 	raw := types.NewRawTx(request.Transaction)
 	req := s.conState.Validation(raw)
-	// TODO: Fill signature if it's not present
 	header, err := req.Parse()
-	if errors.Is(err, core.ErrNotSpawned) {
+	switch {
+	case errors.Is(err, core.ErrNotSpawned):
 		return nil, status.Error(codes.NotFound, "account is not spawned")
-	} else if errors.Is(err, core.ErrMalformed) {
+	case errors.Is(err, core.ErrMalformed):
 		return nil, status.Error(codes.InvalidArgument, err.Error())
-	} else if err != nil {
+	case err != nil:
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &spacemeshv2beta1.EstimateGasResponse{

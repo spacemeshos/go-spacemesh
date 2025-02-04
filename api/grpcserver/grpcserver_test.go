@@ -1567,8 +1567,6 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			// TODO send header after stream has subscribed
-
 			require.NoError(t, events.ReportNewTx(0, globalTx))
 
 			for _, stream := range streams {
@@ -2356,7 +2354,6 @@ func TestTransactionsRewards(t *testing.T) {
 		reward := data.Datum.GetReward()
 		req.Equal(address.String(), reward.Coinbase.Address)
 		req.EqualValues(17, reward.Layer.GetNumber())
-		// TODO check reward.Total and reward.LayerReward
 	})
 	t.Run("Get rewards from GlobalStateStream", func(t *testing.T) {
 		t.Parallel()
@@ -2377,7 +2374,6 @@ func TestTransactionsRewards(t *testing.T) {
 		reward := data.Datum.GetReward()
 		req.Equal(address.String(), reward.Coinbase.Address)
 		req.EqualValues(17, reward.Layer.GetNumber())
-		// TODO check reward.Total and reward.LayerReward
 	})
 }
 

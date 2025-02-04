@@ -514,7 +514,7 @@ func (c *poetService) authorize(
 		logger.Warn("failed to certify", zap.Error(err))
 	}
 	// Fallback to PoW
-	// TODO: remove this fallback once we migrate to certificates fully.
+	// TODO(poszu): remove this fallback once we migrate to certificates fully.
 	logger.Info("falling back to PoW authorization")
 
 	powCtx, cancel := withConditionalTimeout(ctx, c.requestTimeout)

@@ -1032,8 +1032,9 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		// that is needed for the malfeasance proof
 		//
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious
-		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
-		//    the gossip handler (not sync!)
+		// this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
+		// the gossip handler (not sync!)
+		// see https://github.com/spacemeshos/go-spacemesh/issues/6687
 		proof, nodeID, err = h.checkMalicious(ctx, tx, watx)
 		return err
 	}); err != nil {
