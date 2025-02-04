@@ -206,7 +206,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 }
 
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
-	actives, err := o.actives(ctx, layer)
+	actives, err := o.actives(ctx, o.layerToEpoch(layer))
 	if err != nil {
 		return 0, err
 	}
@@ -214,7 +214,7 @@ func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, 
 }
 
 func (o *Oracle) minerWeight(ctx context.Context, layer types.LayerID, id types.NodeID) (uint64, error) {
-	actives, err := o.actives(ctx, layer)
+	actives, err := o.actives(ctx, o.layerToEpoch(layer))
 	if err != nil {
 		return 0, err
 	}
@@ -408,22 +408,24 @@ func GenVRF(
 	)
 }
 
-// Returns a map of all active node IDs in the specified layer id.
-func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cachedActiveSet, error) {
-	if !targetLayer.After(types.GetEffectiveGenesis()) {
-		return nil, errEmptyActiveSet
-	}
-	targetEpoch := targetLayer.GetEpoch()
+func (o *Oracle) layerToEpoch(layer types.LayerID) types.EpochID {
+	epoch := layer.GetEpoch()
 	// the first bootstrap data targets first epoch after genesis (epoch 2)
 	// and the epoch where checkpoint recovery happens
-	if targetEpoch > types.GetEffectiveGenesis().Add(1).GetEpoch() &&
-		targetLayer.Difference(targetEpoch.FirstLayer()) < o.cfg.ConfidenceParam {
-		targetEpoch -= 1
+	if epoch > types.GetEffectiveGenesis().Add(1).GetEpoch() &&
+		layer.Difference(epoch.FirstLayer()) < o.cfg.ConfidenceParam {
+		epoch -= 1
+	}
+	return epoch
+}
+
+// Returns a set of all active node IDs in the specified epoch.
+func (o *Oracle) actives(ctx context.Context, targetEpoch types.EpochID) (*cachedActiveSet, error) {
+	if !targetEpoch.FirstLayer().After(types.GetEffectiveGenesis()) {
+		return nil, errEmptyActiveSet
 	}
 	o.log.Debug("hare oracle getting active set",
 		log.ZContext(ctx),
-		zap.Uint32("target_layer", targetLayer.Uint32()),
-		zap.Uint32("target_layer_epoch", targetLayer.GetEpoch().Uint32()),
 		zap.Uint32("target_epoch", targetEpoch.Uint32()),
 	)
 
@@ -455,7 +457,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (*cache
 }
 
 func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
-	aset, err := o.actives(ctx, targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam))
+	aset, err := o.actives(ctx, targetEpoch)
 	if err != nil {
 		return nil, err
 	}

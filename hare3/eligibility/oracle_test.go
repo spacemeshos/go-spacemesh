@@ -485,7 +485,7 @@ func TestActiveSet(t *testing.T) {
 	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
 	o.createLayerData(targetEpoch.FirstLayer(), numMiners)
 
-	aset, err := o.actives(context.Background(), layer)
+	aset, err := o.actives(context.Background(), o.layerToEpoch(layer))
 	require.NoError(t, err)
 	require.ElementsMatch(
 		t,
@@ -516,11 +516,11 @@ func TestActives(t *testing.T) {
 		o.UpdateActiveSet(types.GetEffectiveGenesis().GetEpoch()+1, bootstrap)
 
 		for lid := types.LayerID(0); lid.Before(first); lid = lid.Add(1) {
-			activeSet, err := o.actives(context.Background(), lid)
+			activeSet, err := o.actives(context.Background(), o.layerToEpoch(lid))
 			require.ErrorIs(t, err, errEmptyActiveSet)
 			require.Nil(t, activeSet)
 		}
-		activeSet, err := o.actives(context.Background(), first)
+		activeSet, err := o.actives(context.Background(), o.layerToEpoch(first))
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -538,7 +538,7 @@ func TestActives(t *testing.T) {
 		o.createLayerData(layer, numMiners)
 
 		start := layer.Add(o.cfg.ConfidenceParam)
-		activeSet, err := o.actives(context.Background(), start)
+		activeSet, err := o.actives(context.Background(), layer.GetEpoch())
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -549,12 +549,12 @@ func TestActives(t *testing.T) {
 		end := (layer.GetEpoch() + 1).FirstLayer().Add(o.cfg.ConfidenceParam)
 
 		for lid := start.Add(1); lid.Before(end); lid = lid.Add(1) {
-			got, err := o.actives(context.Background(), lid)
+			got, err := o.actives(context.Background(), o.layerToEpoch(lid))
 			require.NoError(t, err)
 			// cached
 			require.Equal(t, &activeSet, &got)
 		}
-		got, err := o.actives(context.Background(), end)
+		got, err := o.actives(context.Background(), end.GetEpoch())
 		require.ErrorIs(t, err, errEmptyActiveSet)
 		require.Nil(t, got)
 	})
@@ -571,11 +571,11 @@ func TestActives(t *testing.T) {
 		o.UpdateActiveSet(end.GetEpoch(), fallback)
 
 		for lid := layer; lid.Before(end); lid = lid.Add(1) {
-			got, err := o.actives(context.Background(), lid)
+			got, err := o.actives(context.Background(), o.layerToEpoch(lid))
 			require.ErrorIs(t, err, errEmptyActiveSet)
 			require.Nil(t, got)
 		}
-		activeSet, err := o.actives(context.Background(), end)
+		activeSet, err := o.actives(context.Background(), end.GetEpoch())
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -600,7 +600,7 @@ func TestActives(t *testing.T) {
 		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
 		o.UpdateActiveSet(layer.GetEpoch(), fallback)
 
-		activeSet, err := o.actives(context.Background(), layer)
+		activeSet, err := o.actives(context.Background(), o.layerToEpoch(layer))
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -608,7 +608,7 @@ func TestActives(t *testing.T) {
 			maps.Keys(activeSet.set),
 			"assertion relies on the enumeration of identities",
 		)
-		activeSet2, err := o.actives(context.Background(), layer+1)
+		activeSet2, err := o.actives(context.Background(), o.layerToEpoch(layer+1))
 		require.NoError(t, err)
 		require.Equal(t, activeSet, activeSet2)
 	})
@@ -641,7 +641,7 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(102)
 	runFn := func() {
-		_, err := o.actives(context.Background(), layer)
+		_, err := o.actives(context.Background(), o.layerToEpoch(layer))
 		r.NoError(err)
 		wg.Done()
 	}
