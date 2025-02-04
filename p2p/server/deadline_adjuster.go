@@ -39,7 +39,8 @@ func (err *deadlineAdjusterError) Error() string {
 		err.totalWritten,
 		err.timeout,
 		err.hardTimeout,
-		err.innerErr)
+		err.innerErr,
+	)
 }
 
 type deadlineAdjuster struct {

@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/proposals/store"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 const (
@@ -33,7 +34,8 @@ const (
 	hashProtocol      = "hs/1"
 	activeSetProtocol = "as/1"
 	meshHashProtocol  = "mh/1"
-	malProtocol       = "ml/1"
+	legacyMalProtocol = "ml/1"
+	malProtocol       = "ml/2"
 	OpnProtocol       = "lp/2"
 
 	cacheSize = 1000
@@ -178,9 +180,11 @@ func DefaultConfig() Config {
 			hashProtocol: {Queue: 2000, Requests: 200, Interval: time.Second},
 			// active sets (can get quite large)
 			activeSetProtocol: {Queue: 10, Requests: 1, Interval: time.Second},
-			// serves at most 100 hashes - 3KB
+			// serves at most 100 hashes - 3 KB
 			meshHashProtocol: {Queue: 1000, Requests: 100, Interval: time.Second},
-			// serves all malicious ids (id - 32 byte) - 10KB
+			// serves all legacy malicious ids (á 32 byte, ~2255 as of Jan 2025) - <100 KB
+			legacyMalProtocol: {Queue: 100, Requests: 10, Interval: time.Second},
+			// serves all malicious ids (á 32 byte, 0 as of Jan 2025) - <100 KB
 			malProtocol: {Queue: 100, Requests: 10, Interval: time.Second},
 			// 64 bytes
 			OpnProtocol: {Queue: 10000, Requests: 1000, Interval: time.Second},
@@ -268,13 +272,13 @@ type Fetch struct {
 
 // NewFetch creates a new Fetch struct.
 func NewFetch(
-	cdb *datastore.CachedDB,
+	db sql.StateDatabase,
 	proposals *store.Store,
 	host *p2p.Host,
 	peerCache *peers.Peers,
 	opts ...Option,
 ) (*Fetch, error) {
-	bs := datastore.NewBlobStore(cdb, proposals)
+	bs := datastore.NewBlobStore(db, proposals)
 
 	hashPeerCache, err := NewHashPeersCache(cacheSize)
 	if err != nil {
@@ -347,7 +351,7 @@ func NewFetch(
 
 	f.batchTimeout = time.NewTicker(f.cfg.BatchTimeout)
 	if len(f.servers) == 0 {
-		h := newHandler(cdb, bs, f.logger.Named("handler"))
+		h := newHandler(db, bs, f.logger.Named("handler"))
 		if f.cfg.Streaming {
 			f.registerServer(host, atxProtocol, h.handleEpochInfoReqStream)
 			f.registerServer(host, hashProtocol, h.handleHashReqStream)
@@ -357,6 +361,7 @@ func NewFetch(
 					return h.doHandleHashReqStream(ctx, msg, s, datastore.ActiveSet)
 				})
 			f.registerServer(host, meshHashProtocol, h.handleMeshHashReqStream)
+			f.registerServer(host, legacyMalProtocol, h.handleLegacyMaliciousIDsReqStream)
 			f.registerServer(host, malProtocol, h.handleMaliciousIDsReqStream)
 		} else {
 			f.registerServer(host, atxProtocol, server.WrapHandler(h.handleEpochInfoReq))
@@ -367,6 +372,7 @@ func NewFetch(
 					return h.doHandleHashReq(ctx, data, datastore.ActiveSet)
 				}))
 			f.registerServer(host, meshHashProtocol, server.WrapHandler(h.handleMeshHashReq))
+			f.registerServer(host, legacyMalProtocol, server.WrapHandler(h.handleLegacyMaliciousIDsReq))
 			f.registerServer(host, malProtocol, server.WrapHandler(h.handleMaliciousIDsReq))
 		}
 		f.registerServer(host, lyrDataProtocol, server.WrapHandler(h.handleLayerDataReq))
@@ -394,15 +400,25 @@ func (f *Fetch) registerServer(
 }
 
 type dataValidators struct {
-	atx         SyncValidator
-	poet        SyncValidator
-	ballot      SyncValidator
-	activeset   SyncValidator
-	block       SyncValidator
-	proposal    SyncValidator
-	txBlock     SyncValidator
-	txProposal  SyncValidator
-	malfeasance SyncValidator
+	atx               SyncValidator
+	poet              SyncValidator
+	ballot            SyncValidator
+	activeset         SyncValidator
+	block             SyncValidator
+	proposal          SyncValidator
+	txBlock           SyncValidator
+	txProposal        SyncValidator
+	legacyMalfeasance SyncValidator
+	malfeasance       SyncValidator
+}
+
+// SetMalfeasanceProvider sets the malfeasance provider dependency.
+//
+// TODO(mafa): this is a hack because of a cyclic dependency between the packages
+//
+//	malfeasance2 -> fetcher -> datastore -> malfeasance2
+func (f *Fetch) SetMalfeasanceProvider(p datastore.MalfeasanceProvider) {
+	f.bs.SetMalfeasanceProvider(p)
 }
 
 // SetValidators sets the handlers to validate various mesh data fetched from peers.
@@ -416,17 +432,19 @@ func (f *Fetch) SetValidators(
 	txBlock SyncValidator,
 	txProposal SyncValidator,
 	mal SyncValidator,
+	mal2 SyncValidator,
 ) {
 	f.validators = &dataValidators{
-		atx:         atx,
-		poet:        poet,
-		ballot:      ballot,
-		activeset:   activeset,
-		block:       block,
-		proposal:    prop,
-		txBlock:     txBlock,
-		txProposal:  txProposal,
-		malfeasance: mal,
+		atx:               atx,
+		poet:              poet,
+		ballot:            ballot,
+		activeset:         activeset,
+		block:             block,
+		proposal:          prop,
+		txBlock:           txBlock,
+		txProposal:        txProposal,
+		legacyMalfeasance: mal,
+		malfeasance:       mal2,
 	}
 }
 

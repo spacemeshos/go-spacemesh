@@ -615,30 +615,27 @@ func areContainersReady(pod *apiv1.Pod) bool {
 }
 
 func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
-	watcher, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Watch(ctx, apimetav1.ListOptions{
-		LabelSelector: labelSelector(id),
-	})
+	watcherCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	watcher, err := ctx.Client.CoreV1().
+		Pods(ctx.Namespace).
+		Watch(watcherCtx, apimetav1.ListOptions{
+			LabelSelector: labelSelector(id),
+		})
 	if err != nil {
 		return nil, err
 	}
 	defer watcher.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case ev, open := <-watcher.ResultChan():
-			if !open {
-				return nil, fmt.Errorf("watcher is terminated while waiting for pod with id %v", id)
-			}
-			pod, ok := ev.Object.(*apiv1.Pod)
-			if !ok {
-				continue
-			}
-			if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
-				return pod, nil
-			}
+	for ev := range watcher.ResultChan() {
+		pod, ok := ev.Object.(*apiv1.Pod)
+		if !ok {
+			continue
+		}
+		if pod.Status.Phase == apiv1.PodRunning && areContainersReady(pod) {
+			return pod, nil
 		}
 	}
+	return nil, fmt.Errorf("watcher terminated while waiting for pod with id %v: %w", id, ctx.Err())
 }
 
 func nodeLabels(name, id string) map[string]string {

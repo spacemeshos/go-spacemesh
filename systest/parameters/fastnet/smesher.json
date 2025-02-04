@@ -44,10 +44,15 @@
         }
     },
     "logging": {
-        "log-encoder": "json",
-        "txHandler": "debug",
+        "atxHandler": "debug",
+        "fetcher": "debug",
         "grpc": "debug",
+        "log-encoder": "json",
+        "malfeasance": "debug",
+        "malfeasance2": "debug",
+        "nipostBuilder": "debug",
+        "nipostValidator": "debug",
         "sync": "debug",
-        "fetcher": "debug"
+        "txHandler": "debug"
     }
 }

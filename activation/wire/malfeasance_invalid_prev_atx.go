@@ -32,6 +32,10 @@ type ProofInvalidPrevAtxV2 struct {
 	Proofs [2]InvalidPrevAtxProof
 }
 
+func (p ProofInvalidPrevAtxV2) AllowNoRefATXs() bool {
+	return false
+}
+
 func (p ProofInvalidPrevAtxV2) TypeName() string {
 	return "InvalidPreviousATXProofV2"
 }
@@ -186,6 +190,11 @@ func (p ProofInvalidPrevAtxV2) Valid(_ context.Context, malValidator Malfeasance
 	if err := p.Proofs[1].Valid(p.PrevATXID, p.NodeID, malValidator); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
 	}
+	if ok, err := malValidator.IdentityExists(p.NodeID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("checking identity: %w", err)
+	} else if !ok {
+		return types.EmptyNodeID, ErrUnknownIdentity
+	}
 	return p.NodeID, nil
 }
 
@@ -207,6 +216,10 @@ type ProofInvalidPrevAtxV1 struct {
 
 	Proof InvalidPrevAtxProof
 	ATXv1 ActivationTxV1
+}
+
+func (p ProofInvalidPrevAtxV1) AllowNoRefATXs() bool {
+	return false
 }
 
 func (p ProofInvalidPrevAtxV1) TypeName() string {

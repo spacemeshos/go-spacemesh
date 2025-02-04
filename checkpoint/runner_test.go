@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -35,9 +36,15 @@ type activationTx struct {
 	previous types.ATXID
 }
 
+type malProof struct {
+	proof  []byte
+	domain int
+}
+
 type miner struct {
-	atxs             []activationTx
-	malfeasanceProof []byte
+	atxs              []activationTx
+	malfeasanceProof  []byte
+	malfeasanceProof2 *malProof
 }
 
 var allMiners = []miner{
@@ -76,13 +83,24 @@ var allMiners = []miner{
 		},
 	},
 
-	// smesher 5 is malicious and equivocated in epoch 7
+	// smesher 5 is malicious and equivocated in epoch 6
 	{
 		atxs: []activationTx{
-			{newAtx(types.ATXID{83}, &types.ATXID{27}, 7, 0, 113, []byte("smesher5")), types.EmptyATXID},
-			{newAtx(types.ATXID{97}, &types.ATXID{16}, 7, 0, 113, []byte("smesher5")), types.EmptyATXID},
+			{newAtx(types.ATXID{53}, &types.ATXID{27}, 6, 0, 113, []byte("smesher5")), types.EmptyATXID},
+			{newAtx(types.ATXID{57}, &types.ATXID{16}, 6, 0, 113, []byte("smesher5")), types.EmptyATXID},
 		},
 		malfeasanceProof: []byte("im bad"),
+	},
+	// smesher 6 is malicious and equivocated in epoch 7
+	{
+		atxs: []activationTx{
+			{newAtx(types.ATXID{63}, &types.ATXID{27}, 7, 0, 113, []byte("smesher6")), types.EmptyATXID},
+			{newAtx(types.ATXID{67}, &types.ATXID{16}, 7, 0, 113, []byte("smesher6")), types.EmptyATXID},
+		},
+		malfeasanceProof2: &malProof{
+			proof:  []byte("im bad"),
+			domain: 1,
+		},
 	},
 }
 
@@ -179,6 +197,9 @@ func expectedCheckpoint(tb testing.TB, snapshot types.LayerID, numAtxs int, mine
 		if len(miner.malfeasanceProof) > 0 {
 			continue
 		}
+		if miner.malfeasanceProof2 != nil {
+			continue
+		}
 		atxs := miner.atxs
 		n := len(atxs)
 		if n > numAtxs {
@@ -193,7 +214,6 @@ func expectedCheckpoint(tb testing.TB, snapshot types.LayerID, numAtxs int, mine
 	}
 
 	result.Data.Atxs = atxData
-
 	accounts := make(map[types.Address]*types.Account)
 	for _, account := range allAccounts {
 		if account.Layer <= snapshot {
@@ -275,6 +295,10 @@ func createMesh(tb testing.TB, db sql.StateDatabase, miners []miner, accts []*ty
 		}
 		if proof := miner.malfeasanceProof; len(proof) > 0 {
 			require.NoError(tb, identities.SetMalicious(db, miner.atxs[0].SmesherID, proof, time.Now()))
+		}
+		if proof := miner.malfeasanceProof2; proof != nil {
+			err := malfeasance.AddProof(db, miner.atxs[1].SmesherID, nil, proof.proof, proof.domain, time.Now())
+			require.NoError(tb, err)
 		}
 	}
 

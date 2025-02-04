@@ -679,10 +679,15 @@ func (h *HandlerV2) validatePost(
 	if err == nil {
 		return nil
 	}
-	errInvalid := &verifying.ErrInvalidIndex{}
-	if !errors.As(err, &errInvalid) {
+	errInvalidIdx := &verifying.ErrInvalidIndex{}
+	if !errors.As(err, &errInvalidIdx) {
 		return fmt.Errorf("validating post for ID %s: %w", nodeID.ShortString(), err)
 	}
+	h.logger.Debug("ATX with invalid post index",
+		log.ZContext(ctx),
+		zap.Stringer("atx_id", atx.ID()),
+		zap.Int("index", errInvalidIdx.Index),
+	)
 
 	// check if post contains at least one valid label
 	validIdx := 0
@@ -715,7 +720,7 @@ func (h *HandlerV2) validatePost(
 		commitment,
 		nodeID,
 		nipostIndex,
-		uint32(errInvalid.Index),
+		uint32(errInvalidIdx.Index),
 		uint32(validIdx),
 	)
 	if err != nil {
@@ -724,40 +729,35 @@ func (h *HandlerV2) validatePost(
 	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
 		return fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 	}
-	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalid)
+	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalidIdx)
 }
 
-func (h *HandlerV2) checkMalicious(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
-	malicious, err := malfeasance.IsMalicious(tx, atx.SmesherID)
+func (h *HandlerV2) checkMalicious(
+	ctx context.Context,
+	tx sql.Transaction,
+	watx *activationTx,
+) (wire.Proof, types.NodeID, error) {
+	proof, nodeID, err := h.checkDoubleMarry(ctx, tx, watx)
 	if err != nil {
-		return malicious, fmt.Errorf("checking if node is malicious: %w", err)
+		return nil, types.EmptyNodeID, fmt.Errorf("checking double marry: %w", err)
 	}
-	if malicious {
-		return true, nil
+	if proof != nil {
+		return proof, nodeID, nil
 	}
 
-	malicious, err = h.checkDoubleMarry(ctx, tx, atx)
+	proof, nodeID, err = h.checkDoubleMerge(ctx, tx, watx)
 	if err != nil {
-		return malicious, fmt.Errorf("checking double marry: %w", err)
+		return nil, types.EmptyNodeID, fmt.Errorf("checking double merge: %w", err)
 	}
-	if malicious {
-		return true, nil
+	if proof != nil {
+		return proof, nodeID, nil
 	}
 
-	malicious, err = h.checkDoubleMerge(ctx, tx, atx)
+	proof, nodeID, err = h.checkPrevAtx(ctx, tx, watx)
 	if err != nil {
-		return malicious, fmt.Errorf("checking double merge: %w", err)
+		return nil, types.EmptyNodeID, fmt.Errorf("checking previous ATX: %w", err)
 	}
-	if malicious {
-		return true, nil
-	}
-
-	malicious, err = h.checkPrevAtx(ctx, tx, atx)
-	if err != nil {
-		return malicious, fmt.Errorf("checking previous ATX: %w", err)
-	}
-
-	return malicious, err
+	return proof, nodeID, nil
 }
 
 func (h *HandlerV2) fetchWireAtx(
@@ -778,11 +778,15 @@ func (h *HandlerV2) fetchWireAtx(
 	return atx, nil
 }
 
-func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkDoubleMarry(
+	ctx context.Context,
+	tx sql.Transaction,
+	atx *activationTx,
+) (wire.Proof, types.NodeID, error) {
 	for _, m := range atx.marriages {
 		info, err := marriage.FindByNodeID(tx, m.id)
 		if err != nil {
-			return false, fmt.Errorf("checking if ID is married: %w", err)
+			return nil, types.EmptyNodeID, fmt.Errorf("checking if ID is married: %w", err)
 		}
 		if info.ATX == atx.ID() {
 			continue
@@ -795,28 +799,32 @@ func (h *HandlerV2) checkDoubleMarry(ctx context.Context, tx sql.Transaction, at
 				zap.Stringer("atx_id", info.ATX),
 			)
 		case err != nil:
-			return false, fmt.Errorf("fetching other ATX: %w", err)
+			return nil, types.EmptyNodeID, fmt.Errorf("fetching other ATX: %w", err)
 		}
 
 		proof, err := wire.NewDoubleMarryProof(tx, atx.ActivationTxV2, otherAtx, m.id)
 		if err != nil {
-			return true, fmt.Errorf("creating double marry proof: %w", err)
+			return nil, types.EmptyNodeID, fmt.Errorf("creating double marry proof: %w", err)
 		}
-		return true, h.malPublisher.Publish(ctx, m.id, proof)
+		return proof, m.id, nil
 	}
-	return false, nil
+	return nil, types.EmptyNodeID, nil
 }
 
-func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkDoubleMerge(
+	ctx context.Context,
+	tx sql.Transaction,
+	atx *activationTx,
+) (wire.Proof, types.NodeID, error) {
 	if atx.MarriageATX == nil {
-		return false, nil
+		return nil, types.EmptyNodeID, nil
 	}
 	ids, err := atxs.MergeConflict(tx, *atx.MarriageATX, atx.PublishEpoch)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		return false, nil
+		return nil, types.EmptyNodeID, nil
 	case err != nil:
-		return false, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
+		return nil, types.EmptyNodeID, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
 	}
 	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != atx.ID() })
 	other := ids[otherIndex]
@@ -836,7 +844,7 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 	// see https://github.com/spacemeshos/go-spacemesh/issues/6434
 	otherAtx, err := h.fetchWireAtx(ctx, tx, other)
 	if err != nil {
-		return false, fmt.Errorf("fetching other ATX: %w", err)
+		return nil, types.EmptyNodeID, fmt.Errorf("fetching other ATX: %w", err)
 	}
 
 	// TODO(mafa): checkpoints need to include all marriage ATXs in full to be able to create malfeasance proofs
@@ -845,16 +853,20 @@ func (h *HandlerV2) checkDoubleMerge(ctx context.Context, tx sql.Transaction, at
 	// see https://github.com/spacemeshos/go-spacemesh/issues/6435
 	proof, err := wire.NewDoubleMergeProof(tx, atx.ActivationTxV2, otherAtx)
 	if err != nil {
-		return true, fmt.Errorf("creating double merge proof: %w", err)
+		return nil, types.EmptyNodeID, fmt.Errorf("creating double merge proof: %w", err)
 	}
-	return true, h.malPublisher.Publish(ctx, atx.ActivationTxV2.SmesherID, proof)
+	return proof, atx.ActivationTxV2.SmesherID, nil
 }
 
-func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *activationTx) (bool, error) {
+func (h *HandlerV2) checkPrevAtx(
+	ctx context.Context,
+	tx sql.Transaction,
+	atx *activationTx,
+) (wire.Proof, types.NodeID, error) {
 	for id, data := range atx.ids {
 		expectedPrevID, err := atxs.PrevIDByNodeID(tx, id, atx.PublishEpoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
-			return false, fmt.Errorf("get last atx by node id: %w", err)
+			return nil, types.EmptyNodeID, fmt.Errorf("get last atx by node id: %w", err)
 		}
 		if expectedPrevID == data.previous {
 			continue
@@ -871,7 +883,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 		case errors.Is(err, sql.ErrNotFound):
 			continue
 		case err != nil:
-			return true, fmt.Errorf("checking for previous ATX collision: %w", err)
+			return nil, types.EmptyNodeID, fmt.Errorf("checking for previous ATX collision: %w", err)
 		}
 
 		var wireAtxV1 *wire.ActivationTxV1
@@ -882,7 +894,7 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 			var blob sql.Blob
 			v, err := atxs.LoadBlob(ctx, tx, collision.Bytes(), &blob)
 			if err != nil {
-				return true, fmt.Errorf("get atx blob %s: %w", id.ShortString(), err)
+				return nil, types.EmptyNodeID, fmt.Errorf("get atx blob %s: %w", id.ShortString(), err)
 			}
 			switch v {
 			case types.AtxV1:
@@ -903,9 +915,9 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 				)
 				proof, err := wire.NewInvalidPrevAtxProofV2(tx, atx.ActivationTxV2, wireAtx, id)
 				if err != nil {
-					return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
+					return nil, types.EmptyNodeID, fmt.Errorf("creating invalid previous ATX proof: %w", err)
 				}
-				return true, h.malPublisher.Publish(ctx, id, proof)
+				return proof, id, nil
 			default:
 				h.logger.Fatal("Failed to create invalid previous ATX proof: unknown ATX version",
 					zap.Stringer("atx_id", collision),
@@ -921,16 +933,19 @@ func (h *HandlerV2) checkPrevAtx(ctx context.Context, tx sql.Transaction, atx *a
 		)
 		proof, err := wire.NewInvalidPrevAtxProofV1(tx, atx.ActivationTxV2, wireAtxV1, id)
 		if err != nil {
-			return true, fmt.Errorf("creating invalid previous ATX proof: %w", err)
+			return nil, types.EmptyNodeID, fmt.Errorf("creating invalid previous ATX proof: %w", err)
 		}
-		return true, h.malPublisher.Publish(ctx, id, proof)
+		return proof, id, nil
 	}
-	return false, nil
+	return nil, types.EmptyNodeID, nil
 }
 
 // Store an ATX in the DB.
 func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
 	republishProof := false
+	malicious := false
+	var proof wire.Proof
+	var nodeID types.NodeID
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			newMarriageID, err := marriage.NewID(tx)
@@ -942,7 +957,6 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				ATX:    atx.ID(),
 				Target: atx.SmesherID,
 			}
-			malicious := false
 			marriageIDs := make(map[marriage.ID]struct{}, 1)
 			marriageIDs[newMarriageID] = struct{}{}
 			for i, m := range watx.marriages {
@@ -1009,34 +1023,44 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 				return fmt.Errorf("setting atx units for ID %s: %w", id, err)
 			}
 		}
-		return nil
-	}); err != nil {
-		return fmt.Errorf("store atx: %w", err)
-	}
 
-	malicious := false
-	err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+		if malicious || republishProof {
+			return nil
+		}
+
 		// malfeasance check happens after storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
 		//
 		// TODO(mafa): don't store own ATX if it would mark the node as malicious
 		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
 		//    the gossip handler (not sync!)
-		if republishProof {
-			malicious = true
-			return h.malPublisher.Regossip(ctx, atx.SmesherID)
-		}
-
-		var err error
-		malicious, err = h.checkMalicious(ctx, tx, watx)
+		proof, nodeID, err = h.checkMalicious(ctx, tx, watx)
 		return err
-	})
-	if err != nil {
-		return fmt.Errorf("check malicious: %w", err)
+	}); err != nil {
+		return fmt.Errorf("store atx: %w", err)
+	}
+
+	switch {
+	case republishProof: // marriage set of known malicious smesher has changed, force re-gossip of proof
+		if err := h.malPublisher.Regossip(ctx, watx.SmesherID); err != nil {
+			h.logger.Error("failed to regossip malfeasance proof",
+				zap.Stringer("atx_id", watx.ID()),
+				zap.Stringer("smesher_id", watx.SmesherID),
+				zap.Error(err),
+			)
+		}
+	case proof != nil: // new malfeasance proof for identity created, publish proof (gossip is decided by publisher)
+		if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
+			h.logger.Error("failed to publish malfeasance proof",
+				zap.Stringer("atx_id", watx.ID()),
+				zap.Stringer("smesher_id", watx.SmesherID),
+				zap.Error(err),
+			)
+		}
 	}
 
 	h.beacon.OnAtx(atx)
-	if added := h.atxsdata.AddFromAtx(atx, malicious); added != nil {
+	if added := h.atxsdata.AddFromAtx(atx, malicious || proof != nil); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 

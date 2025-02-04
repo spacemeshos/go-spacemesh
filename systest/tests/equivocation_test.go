@@ -8,6 +8,7 @@ import (
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -125,9 +126,9 @@ func TestEquivocation(t *testing.T) {
 		proofs := make([]types.NodeID, 0, len(malfeasants))
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(malf *pb.MalfeasanceStreamResponse) (bool, error) {
-			malfeasant := malf.GetProof().GetSmesherId().Id
-			proofs = append(proofs, types.NodeID(malfeasant))
+		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(proof *pb2.MalfeasanceProof) (bool, error) {
+			malfeasant := proof.GetSmesher()
+			proofs = append(proofs, types.BytesToNodeID(malfeasant))
 			return len(proofs) < len(malfeasants), nil
 		})
 		assert.ElementsMatchf(t, expected, proofs, "client: %s", cl.Client(i).Name)

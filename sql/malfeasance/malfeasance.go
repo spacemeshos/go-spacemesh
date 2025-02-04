@@ -70,6 +70,21 @@ func IsMalicious(db sql.Executor, nodeID types.NodeID) (bool, error) {
 	return rows > 0, nil
 }
 
+func Count(db sql.Executor) (int, error) {
+	var count int
+	_, err := db.Exec(`
+		SELECT COUNT(*)
+		FROM malfeasance
+	`, nil, func(stmt *sql.Statement) bool {
+		count = stmt.ColumnInt(0)
+		return true
+	})
+	if err != nil {
+		return 0, fmt.Errorf("count identities: %w", err)
+	}
+	return count, nil
+}
+
 func IterateOps(
 	db sql.Executor,
 	operations builder.Operations,

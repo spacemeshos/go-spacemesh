@@ -22,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
@@ -184,7 +185,11 @@ func (c *core) OnMessage(m Messenger, event Message) {
 		if err != nil {
 			c.logger.Fatal("failed is malicious lookup", zap.Error(err))
 		}
-		c.atxdata.AddFromAtx(ev.Atx, malicious)
+		malicious2, err := malfeasance.IsMalicious(c.cdb, ev.Atx.SmesherID)
+		if err != nil {
+			c.logger.Fatal("failed is malicious lookup", zap.Error(err))
+		}
+		c.atxdata.AddFromAtx(ev.Atx, malicious || malicious2)
 	case MessageBeacon:
 		beacons.Add(c.cdb, ev.EpochID+1, ev.Beacon)
 	case MessageCoinflip:

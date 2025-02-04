@@ -496,12 +496,10 @@ func (s *Server) NumAcceptedRequests() int {
 func writeResponse(w io.Writer, resp *Response) error {
 	wr := bufio.NewWriter(w)
 	if _, err := codec.EncodeTo(wr, resp); err != nil {
-		return fmt.Errorf("failed to write response (len %d err len %d): %w",
-			len(resp.Data), len(resp.Error), err)
+		return fmt.Errorf("failed to write response (len %d err len %d): %w", len(resp.Data), len(resp.Error), err)
 	}
 	if err := wr.Flush(); err != nil {
-		return fmt.Errorf("failed to write response (len %d err len %d): %w",
-			len(resp.Data), len(resp.Error), err)
+		return fmt.Errorf("failed to write response (len %d err len %d): %w", len(resp.Data), len(resp.Error), err)
 	}
 	return nil
 }

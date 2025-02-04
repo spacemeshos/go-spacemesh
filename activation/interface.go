@@ -116,7 +116,7 @@ type atxMalfeasancePublisher interface {
 // and mark the associated identity as malfeasant. We do this to prevent spamming the network with proofs for identities
 // where most likely the network already knows they are malicious.
 type malfeasancePublisher interface {
-	PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte) error
+	PublishATXProof(ctx context.Context, nodeID types.NodeID, proof []byte, allowNoRefATXs bool) error
 	Regossip(ctx context.Context, nodeID types.NodeID) error
 }
 

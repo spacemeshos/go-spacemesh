@@ -59,6 +59,10 @@ type ProofDoubleMerge struct {
 	SmesherID2MarryProof MarryProof
 }
 
+func (p ProofDoubleMerge) AllowNoRefATXs() bool {
+	return false
+}
+
 func (p ProofDoubleMerge) TypeName() string {
 	return "DoubleMergeProof"
 }
@@ -145,17 +149,17 @@ func NewDoubleMergeProof(db sql.Executor, atx1, atx2 *ActivationTxV2) (*ProofDou
 	return &proof, nil
 }
 
-func (p *ProofDoubleMerge) Valid(_ context.Context, edVerifier MalfeasanceValidator) (types.NodeID, error) {
+func (p *ProofDoubleMerge) Valid(_ context.Context, malValidator MalfeasanceValidator) (types.NodeID, error) {
 	// 1. The ATXs have different IDs.
 	if p.ATXID1 == p.ATXID2 {
 		return types.EmptyNodeID, errors.New("ATXs have the same ID")
 	}
 
 	// 2. Both ATXs have a valid signature.
-	if !edVerifier.Signature(signing.ATX, p.SmesherID1, p.ATXID1.Bytes(), p.Signature1) {
+	if !malValidator.Signature(signing.ATX, p.SmesherID1, p.ATXID1.Bytes(), p.Signature1) {
 		return types.EmptyNodeID, errors.New("ATX 1 invalid signature")
 	}
-	if !edVerifier.Signature(signing.ATX, p.SmesherID2, p.ATXID2.Bytes(), p.Signature2) {
+	if !malValidator.Signature(signing.ATX, p.SmesherID2, p.ATXID2.Bytes(), p.Signature2) {
 		return types.EmptyNodeID, errors.New("ATX 2 invalid signature")
 	}
 
@@ -171,16 +175,29 @@ func (p *ProofDoubleMerge) Valid(_ context.Context, edVerifier MalfeasanceValida
 	if !p.MarriageATXProof1.Valid(p.ATXID1, p.MarriageATX) {
 		return types.EmptyNodeID, errors.New("ATX 1 invalid marriage ATX proof")
 	}
-	err := p.SmesherID1MarryProof.Valid(edVerifier, p.MarriageATX, p.MarriageATXSmesherID, p.SmesherID1)
+	err := p.SmesherID1MarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, p.SmesherID1)
 	if err != nil {
 		return types.EmptyNodeID, errors.New("ATX 1 invalid marriage ATX proof")
 	}
 	if !p.MarriageATXProof2.Valid(p.ATXID2, p.MarriageATX) {
 		return types.EmptyNodeID, errors.New("ATX 2 invalid marriage ATX proof")
 	}
-	err = p.SmesherID2MarryProof.Valid(edVerifier, p.MarriageATX, p.MarriageATXSmesherID, p.SmesherID2)
+	err = p.SmesherID2MarryProof.Valid(malValidator, p.MarriageATX, p.MarriageATXSmesherID, p.SmesherID2)
 	if err != nil {
 		return types.EmptyNodeID, errors.New("ATX 2 invalid marriage ATX proof")
+	}
+
+	// 6. smeshers have published valid ATXs before
+	if ok, err := malValidator.IdentityExists(p.SmesherID1); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("checking identity: %w", err)
+	} else if !ok {
+		return types.EmptyNodeID, ErrUnknownIdentity
+	}
+
+	if ok, err := malValidator.IdentityExists(p.SmesherID2); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("checking identity: %w", err)
+	} else if !ok {
+		return types.EmptyNodeID, ErrUnknownIdentity
 	}
 
 	return p.SmesherID1, nil
