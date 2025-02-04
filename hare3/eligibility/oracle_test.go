@@ -409,8 +409,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	// round is handpicked for vrf signature to pass
 	const round = 0
 
-	proof, err := o.Proof(context.Background(), signer.VRFSigner(), lid, round)
-	require.NoError(t, err)
+	proof := GenVRF(signer.VRFSigner(), types.Beacon{1, 0, 0, 0}, lid, round)
 
 	res, err := o.CalcEligibility(context.Background(), lid, round, 10, nid, proof)
 	require.NoError(t, err)
@@ -419,49 +418,6 @@ func Test_VrfSignVerify(t *testing.T) {
 	valid, err := o.Validate(context.Background(), lid, round, 10, nid, proof, 1)
 	require.NoError(t, err)
 	require.True(t, valid)
-}
-
-func Test_Proof_BeaconError(t *testing.T) {
-	o := defaultOracle(t)
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	layer := types.LayerID(2)
-	errUnknown := errors.New("unknown")
-	o.mBeacon.EXPECT().Beacon(gomock.Any(), layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
-
-	_, err = o.Proof(context.Background(), signer.VRFSigner(), layer, 3)
-	require.ErrorIs(t, err, errUnknown)
-}
-
-func Test_Proof(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(2)
-	o.mBeacon.EXPECT().Beacon(gomock.Any(), layer.GetEpoch()).Return(types.Beacon{1, 0, 0, 0}, nil)
-
-	signer, err := signing.NewEdSigner()
-	require.NoError(t, err)
-
-	sig, err := o.Proof(context.Background(), signer.VRFSigner(), layer, 3)
-	require.NoError(t, err)
-	require.NotNil(t, sig)
-}
-
-func TestOracle_IsIdentityActive(t *testing.T) {
-	o := defaultOracle(t)
-	layer := types.LayerID(defLayersPerEpoch * 4)
-	numMiners := 2
-	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
-	miners := o.createLayerData(layer.Sub(defLayersPerEpoch), numMiners)
-	for _, nodeID := range miners {
-		v, err := o.IsIdentityActiveOnConsensusView(context.Background(), nodeID, layer)
-		require.NoError(t, err)
-		require.True(t, v)
-	}
-	v, err := o.IsIdentityActiveOnConsensusView(context.Background(), types.NodeID{7, 7, 7}, layer)
-	require.NoError(t, err)
-	require.False(t, v)
 }
 
 func TestBuildVRFMessage_BeaconError(t *testing.T) {
