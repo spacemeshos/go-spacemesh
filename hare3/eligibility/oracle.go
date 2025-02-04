@@ -396,23 +396,8 @@ func (o *Oracle) CalcEligibility(
 	return uint16(n), nil
 }
 
-// Proof returns the role proof for the current Layer & Round.
-func (o *Oracle) Proof(
-	ctx context.Context,
-	signer *signing.VRFSigner,
-	layer types.LayerID,
-	round uint32,
-) (types.VrfSignature, error) {
-	beacon, err := o.beacons.Beacon(ctx, layer.GetEpoch())
-	if err != nil {
-		return types.EmptyVrfSignature, fmt.Errorf("get beacon: %w", err)
-	}
-	return GenVRF(ctx, signer, beacon, layer, round), nil
-}
-
 // GenVRF generates vrf for hare eligibility.
 func GenVRF(
-	ctx context.Context,
 	signer *signing.VRFSigner,
 	beacon types.Beacon,
 	layer types.LayerID,
@@ -551,25 +536,6 @@ func (o *Oracle) activeSetFromRefBallots(ctx context.Context, epoch types.EpochI
 		zap.Stringer("beacon", beacon),
 	)
 	return maps.Keys(activeMap), nil
-}
-
-// IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
-// from the specified layer, false otherwise.
-func (o *Oracle) IsIdentityActiveOnConsensusView(
-	ctx context.Context,
-	edID types.NodeID,
-	layer types.LayerID,
-) (bool, error) {
-	o.log.Debug("hare oracle checking for active identity", log.ZContext(ctx))
-	defer func() {
-		o.log.Debug("hare oracle active identity check complete", log.ZContext(ctx))
-	}()
-	actives, err := o.actives(ctx, layer)
-	if err != nil {
-		return false, err
-	}
-	_, exist := actives.set[edID]
-	return exist, nil
 }
 
 func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
