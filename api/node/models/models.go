@@ -25,6 +25,7 @@ func ParseNodeIDHex(id Bytes32Hex) (types.NodeID, error) {
 	}
 	return types.NodeID(b32), nil
 }
+
 func ParseNodeID(id Bytes32) (types.NodeID, error) {
 	if len(id) != len(types.NodeID{}) {
 		return types.NodeID{}, fmt.Errorf("invalid node ID length: %d", len(id))
