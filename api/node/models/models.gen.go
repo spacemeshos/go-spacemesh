@@ -32,6 +32,9 @@ type Bytes20 = []byte
 // Bytes32 defines model for Bytes32.
 type Bytes32 = []byte
 
+// Bytes32Hex defines model for Bytes32Hex.
+type Bytes32Hex = string
+
 // EpochData defines model for EpochData.
 type EpochData struct {
 	ActiveSetHash    Bytes32 `json:"ActiveSetHash"`

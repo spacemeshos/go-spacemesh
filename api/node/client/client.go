@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -54,7 +55,7 @@ func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*Node
 }
 
 func (s *NodeService) Atx(ctx context.Context, id types.ATXID) (*types.ActivationTx, error) {
-	resp, err := s.client.GetActivationAtxAtxIdWithResponse(ctx, id.Bytes())
+	resp, err := s.client.GetActivationAtxAtxIdWithResponse(ctx, hex.EncodeToString(id.Bytes()))
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +70,7 @@ func (s *NodeService) Atx(ctx context.Context, id types.ATXID) (*types.Activatio
 }
 
 func (s *NodeService) LastATX(ctx context.Context, nodeID types.NodeID) (*types.ActivationTx, error) {
-	resp, err := s.client.GetActivationLastAtxNodeIdWithResponse(ctx, nodeID.Bytes())
+	resp, err := s.client.GetActivationLastAtxNodeIdWithResponse(ctx, hex.EncodeToString(nodeID.Bytes()))
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +200,7 @@ func (s *NodeService) TotalWeight(ctx context.Context, epoch types.EpochID) (uin
 }
 
 func (s *NodeService) MinerWeight(ctx context.Context, epoch types.EpochID, node types.NodeID) (uint64, error) {
-	resp, err := s.client.GetHareWeightNodeIdEpochWithResponse(ctx, node.Bytes(), epoch.Uint32())
+	resp, err := s.client.GetHareWeightNodeIdEpochWithResponse(ctx, hex.EncodeToString(node.Bytes()), epoch.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
@@ -231,7 +232,7 @@ func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Be
 func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node types.NodeID) (
 	*types.Proposal, uint64, error,
 ) {
-	resp, err := s.client.GetProposalLayerNodeWithResponse(ctx, layer.Uint32(), node.Bytes())
+	resp, err := s.client.GetProposalLayerNodeWithResponse(ctx, layer.Uint32(), hex.EncodeToString(node.Bytes()))
 	if err != nil {
 		return nil, 0, fmt.Errorf("get proposal layer: %w", err)
 	}
@@ -325,7 +326,11 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 func (s *NodeService) CalculateEligibilitySlotsFor(
 	ctx context.Context, node types.NodeID, epoch types.EpochID,
 ) (uint32, types.VRFPostIndex, error) {
-	resp, err := s.client.GetEligibilitySlotsNodeEpochWithResponse(ctx, node.Bytes(), models.EpochID(epoch))
+	resp, err := s.client.GetEligibilitySlotsNodeEpochWithResponse(
+		ctx,
+		hex.EncodeToString(node.Bytes()),
+		models.EpochID(epoch),
+	)
 	if err != nil {
 		return 0, 0, err
 	}

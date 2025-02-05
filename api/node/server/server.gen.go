@@ -47,10 +47,10 @@ type PostActivationPublishJSONRequestBody PostActivationPublishJSONBody
 type ServerInterface interface {
 	// Get ATX by ID
 	// (GET /activation/atx/{atx_id})
-	GetActivationAtxAtxId(w http.ResponseWriter, r *http.Request, atxId externalRef0.Bytes32)
+	GetActivationAtxAtxId(w http.ResponseWriter, r *http.Request, atxId externalRef0.Bytes32Hex)
 	// Get last ATX by node ID
 	// (GET /activation/last_atx/{node_id})
-	GetActivationLastAtxNodeId(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32)
+	GetActivationLastAtxNodeId(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32Hex)
 	// Get Positioning ATX ID with given maximum publish epoch
 	// (GET /activation/positioning_atx/{publish_epoch})
 	GetActivationPositioningAtxPublishEpoch(w http.ResponseWriter, r *http.Request, publishEpoch externalRef0.EpochID)
@@ -59,7 +59,7 @@ type ServerInterface interface {
 	PostActivationPublish(w http.ResponseWriter, r *http.Request)
 	// Get eligibility slots for a given node id in given epoch
 	// (GET /eligibility/slots/{node}/{epoch})
-	GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.Bytes32, epoch externalRef0.EpochID)
+	GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.Bytes32Hex, epoch externalRef0.EpochID)
 	// Get the beacon value for an epoch
 	// (GET /hare/beacon/{epoch})
 	GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
@@ -71,10 +71,10 @@ type ServerInterface interface {
 	GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
 	// Get the miner weight in epoch
 	// (GET /hare/weight/{node_id}/{epoch})
-	GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID)
+	GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32Hex, epoch externalRef0.EpochID)
 	// Get a partial proposal for a given node in a layer
 	// (GET /proposal/{layer}/{node})
-	GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.Bytes32)
+	GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.Bytes32Hex)
 	// Publish a blob in the given p2p protocol
 	// (POST /publish/{protocol})
 	PostPublishProtocol(w http.ResponseWriter, r *http.Request, protocol PostPublishProtocolParamsProtocol)
@@ -95,7 +95,7 @@ func (siw *ServerInterfaceWrapper) GetActivationAtxAtxId(w http.ResponseWriter, 
 	var err error
 
 	// ------------- Path parameter "atx_id" -------------
-	var atxId externalRef0.Bytes32
+	var atxId externalRef0.Bytes32Hex
 
 	err = runtime.BindStyledParameterWithOptions("simple", "atx_id", r.PathValue("atx_id"), &atxId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
@@ -120,7 +120,7 @@ func (siw *ServerInterfaceWrapper) GetActivationLastAtxNodeId(w http.ResponseWri
 	var err error
 
 	// ------------- Path parameter "node_id" -------------
-	var nodeId externalRef0.Bytes32
+	var nodeId externalRef0.Bytes32Hex
 
 	err = runtime.BindStyledParameterWithOptions("simple", "node_id", r.PathValue("node_id"), &nodeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
@@ -184,7 +184,7 @@ func (siw *ServerInterfaceWrapper) GetEligibilitySlotsNodeEpoch(w http.ResponseW
 	var err error
 
 	// ------------- Path parameter "node" -------------
-	var node externalRef0.Bytes32
+	var node externalRef0.Bytes32Hex
 
 	err = runtime.BindStyledParameterWithOptions("simple", "node", r.PathValue("node"), &node, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
@@ -311,7 +311,7 @@ func (siw *ServerInterfaceWrapper) GetHareWeightNodeIdEpoch(w http.ResponseWrite
 	var err error
 
 	// ------------- Path parameter "node_id" -------------
-	var nodeId externalRef0.Bytes32
+	var nodeId externalRef0.Bytes32Hex
 
 	err = runtime.BindStyledParameterWithOptions("simple", "node_id", r.PathValue("node_id"), &nodeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
@@ -354,7 +354,7 @@ func (siw *ServerInterfaceWrapper) GetProposalLayerNode(w http.ResponseWriter, r
 	}
 
 	// ------------- Path parameter "node" -------------
-	var node externalRef0.Bytes32
+	var node externalRef0.Bytes32Hex
 
 	err = runtime.BindStyledParameterWithOptions("simple", "node", r.PathValue("node"), &node, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
 	if err != nil {
@@ -534,7 +534,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 }
 
 type GetActivationAtxAtxIdRequestObject struct {
-	AtxId externalRef0.Bytes32 `json:"atx_id"`
+	AtxId externalRef0.Bytes32Hex `json:"atx_id"`
 }
 
 type GetActivationAtxAtxIdResponseObject interface {
@@ -578,7 +578,7 @@ func (response GetActivationAtxAtxId404Response) VisitGetActivationAtxAtxIdRespo
 }
 
 type GetActivationLastAtxNodeIdRequestObject struct {
-	NodeId externalRef0.Bytes32 `json:"node_id"`
+	NodeId externalRef0.Bytes32Hex `json:"node_id"`
 }
 
 type GetActivationLastAtxNodeIdResponseObject interface {
@@ -676,8 +676,8 @@ func (response PostActivationPublish400PlaintextResponse) VisitPostActivationPub
 }
 
 type GetEligibilitySlotsNodeEpochRequestObject struct {
-	Node  externalRef0.Bytes32 `json:"node"`
-	Epoch externalRef0.EpochID `json:"epoch"`
+	Node  externalRef0.Bytes32Hex `json:"node"`
+	Epoch externalRef0.EpochID    `json:"epoch"`
 }
 
 type GetEligibilitySlotsNodeEpochResponseObject interface {
@@ -805,8 +805,8 @@ func (response GetHareTotalWeightEpoch204Response) VisitGetHareTotalWeightEpochR
 }
 
 type GetHareWeightNodeIdEpochRequestObject struct {
-	NodeId externalRef0.Bytes32 `json:"node_id"`
-	Epoch  externalRef0.EpochID `json:"epoch"`
+	NodeId externalRef0.Bytes32Hex `json:"node_id"`
+	Epoch  externalRef0.EpochID    `json:"epoch"`
 }
 
 type GetHareWeightNodeIdEpochResponseObject interface {
@@ -852,8 +852,8 @@ func (response GetHareWeightNodeIdEpoch400PlaintextResponse) VisitGetHareWeightN
 }
 
 type GetProposalLayerNodeRequestObject struct {
-	Layer externalRef0.LayerID `json:"layer"`
-	Node  externalRef0.Bytes32 `json:"node"`
+	Layer externalRef0.LayerID    `json:"layer"`
+	Node  externalRef0.Bytes32Hex `json:"node"`
 }
 
 type GetProposalLayerNodeResponseObject interface {
@@ -988,7 +988,7 @@ type strictHandler struct {
 }
 
 // GetActivationAtxAtxId operation middleware
-func (sh *strictHandler) GetActivationAtxAtxId(w http.ResponseWriter, r *http.Request, atxId externalRef0.Bytes32) {
+func (sh *strictHandler) GetActivationAtxAtxId(w http.ResponseWriter, r *http.Request, atxId externalRef0.Bytes32Hex) {
 	var request GetActivationAtxAtxIdRequestObject
 
 	request.AtxId = atxId
@@ -1014,7 +1014,7 @@ func (sh *strictHandler) GetActivationAtxAtxId(w http.ResponseWriter, r *http.Re
 }
 
 // GetActivationLastAtxNodeId operation middleware
-func (sh *strictHandler) GetActivationLastAtxNodeId(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32) {
+func (sh *strictHandler) GetActivationLastAtxNodeId(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32Hex) {
 	var request GetActivationLastAtxNodeIdRequestObject
 
 	request.NodeId = nodeId
@@ -1097,7 +1097,7 @@ func (sh *strictHandler) PostActivationPublish(w http.ResponseWriter, r *http.Re
 }
 
 // GetEligibilitySlotsNodeEpoch operation middleware
-func (sh *strictHandler) GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.Bytes32, epoch externalRef0.EpochID) {
+func (sh *strictHandler) GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.Bytes32Hex, epoch externalRef0.EpochID) {
 	var request GetEligibilitySlotsNodeEpochRequestObject
 
 	request.Node = node
@@ -1204,7 +1204,7 @@ func (sh *strictHandler) GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.
 }
 
 // GetHareWeightNodeIdEpoch operation middleware
-func (sh *strictHandler) GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID) {
+func (sh *strictHandler) GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32Hex, epoch externalRef0.EpochID) {
 	var request GetHareWeightNodeIdEpochRequestObject
 
 	request.NodeId = nodeId
@@ -1231,7 +1231,7 @@ func (sh *strictHandler) GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http
 }
 
 // GetProposalLayerNode operation middleware
-func (sh *strictHandler) GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.Bytes32) {
+func (sh *strictHandler) GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.Bytes32Hex) {
 	var request GetProposalLayerNodeRequestObject
 
 	request.Layer = layer

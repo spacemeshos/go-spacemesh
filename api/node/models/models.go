@@ -1,16 +1,43 @@
 package models
 
 import (
+	"encoding/hex"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+func ParseBytes32Hex(b Bytes32Hex) ([32]byte, error) {
+	if len(b) != 64 {
+		return [32]byte{}, fmt.Errorf("invalid length: %d (expected 64)", len(b))
+	}
+	hash, err := hex.DecodeString(b)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("decoding hex: %w", err)
+	}
+	return [32]byte(hash), nil
+}
+
+func ParseNodeIDHex(id Bytes32Hex) (types.NodeID, error) {
+	b32, err := ParseBytes32Hex(id)
+	if err != nil {
+		return types.NodeID{}, err
+	}
+	return types.NodeID(b32), nil
+}
 func ParseNodeID(id Bytes32) (types.NodeID, error) {
 	if len(id) != len(types.NodeID{}) {
 		return types.NodeID{}, fmt.Errorf("invalid node ID length: %d", len(id))
 	}
 	return types.BytesToNodeID(id), nil
+}
+
+func ParseATXIDHex(id Bytes32Hex) (types.ATXID, error) {
+	b32, err := ParseBytes32Hex(id)
+	if err != nil {
+		return types.ATXID{}, err
+	}
+	return types.ATXID(b32), nil
 }
 
 func ParseATXID(id Bytes32) (types.ATXID, error) {

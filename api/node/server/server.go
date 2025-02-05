@@ -112,7 +112,7 @@ func (s *Server) GetActivationAtxAtxId(
 	ctx context.Context,
 	request GetActivationAtxAtxIdRequestObject,
 ) (GetActivationAtxAtxIdResponseObject, error) {
-	id, err := models.ParseATXID(request.AtxId)
+	id, err := models.ParseATXIDHex(request.AtxId)
 	if err != nil {
 		msg := err.Error()
 		return GetActivationAtxAtxId400PlaintextResponse{
@@ -129,7 +129,7 @@ func (s *Server) GetActivationAtxAtxId(
 	}
 
 	return GetActivationAtxAtxId200JSONResponse{
-		ID:           request.AtxId,
+		ID:           id.Bytes(),
 		NumUnits:     atx.NumUnits,
 		PublishEpoch: atx.PublishEpoch.Uint32(),
 		Sequence:     &atx.Sequence,
@@ -144,7 +144,7 @@ func (s *Server) GetActivationLastAtxNodeId(
 	ctx context.Context,
 	request GetActivationLastAtxNodeIdRequestObject,
 ) (GetActivationLastAtxNodeIdResponseObject, error) {
-	id, err := models.ParseNodeID(request.NodeId)
+	id, err := models.ParseNodeIDHex(request.NodeId)
 	if err != nil {
 		msg := err.Error()
 		return GetActivationLastAtxNodeId400PlaintextResponse{
@@ -285,7 +285,7 @@ func (s *Server) GetHareTotalWeightEpoch(ctx context.Context,
 func (s *Server) GetHareWeightNodeIdEpoch(ctx context.Context,
 	request GetHareWeightNodeIdEpochRequestObject,
 ) (GetHareWeightNodeIdEpochResponseObject, error) {
-	id, err := models.ParseNodeID(request.NodeId)
+	id, err := models.ParseNodeIDHex(request.NodeId)
 	if err != nil {
 		msg := err.Error()
 		return GetHareWeightNodeIdEpoch400PlaintextResponse{
@@ -316,7 +316,7 @@ func (s *Server) GetHareBeaconEpoch(ctx context.Context,
 func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (
 	GetProposalLayerNodeResponseObject, error,
 ) {
-	id, err := models.ParseNodeID(request.Node)
+	id, err := models.ParseNodeIDHex(request.Node)
 	if err != nil {
 		msg := err.Error()
 		return GetProposalLayerNode400PlaintextResponse{
@@ -401,7 +401,7 @@ func (s *Server) GetEligibilitySlotsNodeEpoch(
 	ctx context.Context,
 	request GetEligibilitySlotsNodeEpochRequestObject,
 ) (GetEligibilitySlotsNodeEpochResponseObject, error) {
-	id, err := models.ParseNodeID(request.Node)
+	id, err := models.ParseNodeIDHex(request.Node)
 	if err != nil {
 		msg := err.Error()
 		return GetEligibilitySlotsNodeEpoch400PlaintextResponse{
