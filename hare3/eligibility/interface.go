@@ -8,11 +8,6 @@ import (
 
 //go:generate mockgen -typed -package=eligibility -destination=./mocks.go -source=./interface.go
 
-type activeSetCache interface {
-	Add(key types.EpochID, value *cachedActiveSet) (evicted bool)
-	Get(key types.EpochID) (value *cachedActiveSet, ok bool)
-}
-
 type vrfVerifier interface {
 	Verify(nodeID types.NodeID, msg []byte, sig types.VrfSignature) bool
 }
@@ -25,4 +20,9 @@ type Rolacle interface {
 
 type BeaconProvider interface {
 	Beacon(context.Context, types.EpochID) (types.Beacon, error)
+}
+
+type weights interface {
+	MinerWeight(ctx context.Context, epoch types.EpochID, node types.NodeID) (uint64, error)
+	TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error)
 }

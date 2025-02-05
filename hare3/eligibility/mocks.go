@@ -17,107 +17,6 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockactiveSetCache is a mock of activeSetCache interface.
-type MockactiveSetCache struct {
-	ctrl     *gomock.Controller
-	recorder *MockactiveSetCacheMockRecorder
-	isgomock struct{}
-}
-
-// MockactiveSetCacheMockRecorder is the mock recorder for MockactiveSetCache.
-type MockactiveSetCacheMockRecorder struct {
-	mock *MockactiveSetCache
-}
-
-// NewMockactiveSetCache creates a new mock instance.
-func NewMockactiveSetCache(ctrl *gomock.Controller) *MockactiveSetCache {
-	mock := &MockactiveSetCache{ctrl: ctrl}
-	mock.recorder = &MockactiveSetCacheMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockactiveSetCache) EXPECT() *MockactiveSetCacheMockRecorder {
-	return m.recorder
-}
-
-// Add mocks base method.
-func (m *MockactiveSetCache) Add(key types.EpochID, value *cachedActiveSet) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Add", key, value)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Add indicates an expected call of Add.
-func (mr *MockactiveSetCacheMockRecorder) Add(key, value any) *MockactiveSetCacheAddCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MockactiveSetCache)(nil).Add), key, value)
-	return &MockactiveSetCacheAddCall{Call: call}
-}
-
-// MockactiveSetCacheAddCall wrap *gomock.Call
-type MockactiveSetCacheAddCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockactiveSetCacheAddCall) Return(evicted bool) *MockactiveSetCacheAddCall {
-	c.Call = c.Call.Return(evicted)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockactiveSetCacheAddCall) Do(f func(types.EpochID, *cachedActiveSet) bool) *MockactiveSetCacheAddCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockactiveSetCacheAddCall) DoAndReturn(f func(types.EpochID, *cachedActiveSet) bool) *MockactiveSetCacheAddCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// Get mocks base method.
-func (m *MockactiveSetCache) Get(key types.EpochID) (*cachedActiveSet, bool) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", key)
-	ret0, _ := ret[0].(*cachedActiveSet)
-	ret1, _ := ret[1].(bool)
-	return ret0, ret1
-}
-
-// Get indicates an expected call of Get.
-func (mr *MockactiveSetCacheMockRecorder) Get(key any) *MockactiveSetCacheGetCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockactiveSetCache)(nil).Get), key)
-	return &MockactiveSetCacheGetCall{Call: call}
-}
-
-// MockactiveSetCacheGetCall wrap *gomock.Call
-type MockactiveSetCacheGetCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockactiveSetCacheGetCall) Return(value *cachedActiveSet, ok bool) *MockactiveSetCacheGetCall {
-	c.Call = c.Call.Return(value, ok)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockactiveSetCacheGetCall) Do(f func(types.EpochID) (*cachedActiveSet, bool)) *MockactiveSetCacheGetCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockactiveSetCacheGetCall) DoAndReturn(f func(types.EpochID) (*cachedActiveSet, bool)) *MockactiveSetCacheGetCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // MockvrfVerifier is a mock of vrfVerifier interface.
 type MockvrfVerifier struct {
 	ctrl     *gomock.Controller
@@ -341,6 +240,108 @@ func (c *MockBeaconProviderBeaconCall) Do(f func(context.Context, types.EpochID)
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockBeaconProviderBeaconCall) DoAndReturn(f func(context.Context, types.EpochID) (types.Beacon, error)) *MockBeaconProviderBeaconCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Mockweights is a mock of weights interface.
+type Mockweights struct {
+	ctrl     *gomock.Controller
+	recorder *MockweightsMockRecorder
+	isgomock struct{}
+}
+
+// MockweightsMockRecorder is the mock recorder for Mockweights.
+type MockweightsMockRecorder struct {
+	mock *Mockweights
+}
+
+// NewMockweights creates a new mock instance.
+func NewMockweights(ctrl *gomock.Controller) *Mockweights {
+	mock := &Mockweights{ctrl: ctrl}
+	mock.recorder = &MockweightsMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockweights) EXPECT() *MockweightsMockRecorder {
+	return m.recorder
+}
+
+// MinerWeight mocks base method.
+func (m *Mockweights) MinerWeight(ctx context.Context, epoch types.EpochID, node types.NodeID) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MinerWeight", ctx, epoch, node)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MinerWeight indicates an expected call of MinerWeight.
+func (mr *MockweightsMockRecorder) MinerWeight(ctx, epoch, node any) *MockweightsMinerWeightCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerWeight", reflect.TypeOf((*Mockweights)(nil).MinerWeight), ctx, epoch, node)
+	return &MockweightsMinerWeightCall{Call: call}
+}
+
+// MockweightsMinerWeightCall wrap *gomock.Call
+type MockweightsMinerWeightCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockweightsMinerWeightCall) Return(arg0 uint64, arg1 error) *MockweightsMinerWeightCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockweightsMinerWeightCall) Do(f func(context.Context, types.EpochID, types.NodeID) (uint64, error)) *MockweightsMinerWeightCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockweightsMinerWeightCall) DoAndReturn(f func(context.Context, types.EpochID, types.NodeID) (uint64, error)) *MockweightsMinerWeightCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// TotalWeight mocks base method.
+func (m *Mockweights) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TotalWeight", ctx, epoch)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TotalWeight indicates an expected call of TotalWeight.
+func (mr *MockweightsMockRecorder) TotalWeight(ctx, epoch any) *MockweightsTotalWeightCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TotalWeight", reflect.TypeOf((*Mockweights)(nil).TotalWeight), ctx, epoch)
+	return &MockweightsTotalWeightCall{Call: call}
+}
+
+// MockweightsTotalWeightCall wrap *gomock.Call
+type MockweightsTotalWeightCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockweightsTotalWeightCall) Return(arg0 uint64, arg1 error) *MockweightsTotalWeightCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockweightsTotalWeightCall) Do(f func(context.Context, types.EpochID) (uint64, error)) *MockweightsTotalWeightCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockweightsTotalWeightCall) DoAndReturn(f func(context.Context, types.EpochID) (uint64, error)) *MockweightsTotalWeightCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

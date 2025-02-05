@@ -255,16 +255,14 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 	}
 
 	beaconProvider := beacon.NewBeaconCache(nodeServiceClient)
+	cachedWeights := eligibility.NewCachedWeights(nodeServiceClient)
 	hOracle, err := eligibility.New(
+		cachedWeights,
 		beaconProvider,
-		app.db,
-		app.atxsdata,
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
 		eligibility.WithConfig(app.Config.HareEligibility),
 		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
-		eligibility.WithTotalWeightFunc(nodeServiceClient.TotalWeight),
-		eligibility.WithMinerWeightFunc(nodeServiceClient.MinerWeight),
 	)
 	if err != nil {
 		return fmt.Errorf("create hare oracle: %w", err)

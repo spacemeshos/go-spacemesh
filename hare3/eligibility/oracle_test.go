@@ -18,6 +18,7 @@ import (
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
 	"golang.org/x/exp/maps"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -46,12 +47,13 @@ func TestMain(m *testing.M) {
 
 type testOracle struct {
 	*Oracle
-	tb        testing.TB
-	db        sql.StateDatabase
-	atxsdata  *atxsdata.Data
-	mBeacon   *MockBeaconProvider
-	mVerifier *MockvrfVerifier
-	mSyncer   *mocks.MockSyncStateProvider
+	tb             testing.TB
+	db             sql.StateDatabase
+	atxsdata       *atxsdata.Data
+	activeSetCache *ActiveSetCache
+	mBeacon        *MockBeaconProvider
+	mVerifier      *MockvrfVerifier
+	mSyncer        *mocks.MockSyncStateProvider
 }
 
 func defaultOracle(tb testing.TB) *testOracle {
@@ -62,27 +64,30 @@ func defaultOracle(tb testing.TB) *testOracle {
 	mBeacon := NewMockBeaconProvider(ctrl)
 	mVerifier := NewMockvrfVerifier(ctrl)
 	mSyncer := mocks.NewMockSyncStateProvider(ctrl)
+	logger := zaptest.NewLogger(tb)
 
+	activeSetCache, err := NewActiveSetCache(mBeacon, db, atxsdata, logger)
+	require.NoError(tb, err)
+	activeSetCache.SetSync(mSyncer)
 	o, err := New(
+		activeSetCache,
 		mBeacon,
-		db,
-		atxsdata,
 		mVerifier,
 		defLayersPerEpoch,
 		WithConfig(Config{ConfidenceParam: confidenceParam}),
-		WithLogger(zaptest.NewLogger(tb)),
+		WithLogger(logger),
 	)
 	require.NoError(tb, err)
 	to := &testOracle{
-		Oracle:    o,
-		tb:        tb,
-		mBeacon:   mBeacon,
-		mVerifier: mVerifier,
-		mSyncer:   mSyncer,
-		db:        db,
-		atxsdata:  atxsdata,
+		Oracle:         o,
+		tb:             tb,
+		mBeacon:        mBeacon,
+		mVerifier:      mVerifier,
+		mSyncer:        mSyncer,
+		db:             db,
+		atxsdata:       atxsdata,
+		activeSetCache: activeSetCache,
 	}
-	to.SetSync(mSyncer)
 	return to
 }
 
@@ -245,7 +250,7 @@ func TestCalcEligibility(t *testing.T) {
 
 		activeSet := types.RandomActiveSet(111)
 		miners := o.createActiveSet(types.EpochID(4).FirstLayer(), activeSet)
-		o.UpdateActiveSet(5, activeSet)
+		o.activeSetCache.UpdateActiveSet(5, activeSet)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), lid.GetEpoch()).Return(types.RandomBeacon(), nil)
 		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
@@ -481,11 +486,10 @@ func TestActiveSet(t *testing.T) {
 	numMiners := 5
 	o := defaultOracle(t)
 	targetEpoch := types.EpochID(5)
-	layer := targetEpoch.FirstLayer().Add(o.cfg.ConfidenceParam)
 	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
 	o.createLayerData(targetEpoch.FirstLayer(), numMiners)
 
-	aset, err := o.actives(context.Background(), o.layerToEpoch(layer))
+	aset, err := o.activeSetCache.actives(context.Background(), targetEpoch)
 	require.NoError(t, err)
 	require.ElementsMatch(
 		t,
@@ -494,7 +498,7 @@ func TestActiveSet(t *testing.T) {
 		"assertion relies on the enumeration of identities",
 	)
 
-	got, err := o.ActiveSet(context.Background(), targetEpoch)
+	got, err := o.activeSetCache.ActiveSet(context.Background(), targetEpoch)
 	require.NoError(t, err)
 	require.Len(t, got, len(aset.set))
 	for _, id := range got {
@@ -513,14 +517,14 @@ func TestActives(t *testing.T) {
 		first := types.GetEffectiveGenesis().Add(1)
 		bootstrap := types.RandomActiveSet(numMiners)
 		o.createActiveSet(types.EpochID(1).FirstLayer(), bootstrap)
-		o.UpdateActiveSet(types.GetEffectiveGenesis().GetEpoch()+1, bootstrap)
+		o.activeSetCache.UpdateActiveSet(types.GetEffectiveGenesis().GetEpoch()+1, bootstrap)
 
 		for lid := types.LayerID(0); lid.Before(first); lid = lid.Add(1) {
-			activeSet, err := o.actives(context.Background(), o.layerToEpoch(lid))
+			activeSet, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(lid))
 			require.ErrorIs(t, err, errEmptyActiveSet)
 			require.Nil(t, activeSet)
 		}
-		activeSet, err := o.actives(context.Background(), o.layerToEpoch(first))
+		activeSet, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(first))
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -538,7 +542,7 @@ func TestActives(t *testing.T) {
 		o.createLayerData(layer, numMiners)
 
 		start := layer.Add(o.cfg.ConfidenceParam)
-		activeSet, err := o.actives(context.Background(), layer.GetEpoch())
+		activeSet, err := o.activeSetCache.actives(context.Background(), layer.GetEpoch())
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -549,12 +553,12 @@ func TestActives(t *testing.T) {
 		end := (layer.GetEpoch() + 1).FirstLayer().Add(o.cfg.ConfidenceParam)
 
 		for lid := start.Add(1); lid.Before(end); lid = lid.Add(1) {
-			got, err := o.actives(context.Background(), o.layerToEpoch(lid))
+			got, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(lid))
 			require.NoError(t, err)
 			// cached
 			require.Equal(t, &activeSet, &got)
 		}
-		got, err := o.actives(context.Background(), end.GetEpoch())
+		got, err := o.activeSetCache.actives(context.Background(), end.GetEpoch())
 		require.ErrorIs(t, err, errEmptyActiveSet)
 		require.Nil(t, got)
 	})
@@ -568,14 +572,14 @@ func TestActives(t *testing.T) {
 		o.createLayerData(layer, numMiners)
 		fallback := types.RandomActiveSet(numMiners + 1)
 		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
-		o.UpdateActiveSet(end.GetEpoch(), fallback)
+		o.activeSetCache.UpdateActiveSet(end.GetEpoch(), fallback)
 
 		for lid := layer; lid.Before(end); lid = lid.Add(1) {
-			got, err := o.actives(context.Background(), o.layerToEpoch(lid))
+			got, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(lid))
 			require.ErrorIs(t, err, errEmptyActiveSet)
 			require.Nil(t, got)
 		}
-		activeSet, err := o.actives(context.Background(), end.GetEpoch())
+		activeSet, err := o.activeSetCache.actives(context.Background(), end.GetEpoch())
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -598,9 +602,9 @@ func TestActives(t *testing.T) {
 		o.createLayerData(layer, numMiners)
 		fallback := types.RandomActiveSet(numMiners + 1)
 		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
-		o.UpdateActiveSet(layer.GetEpoch(), fallback)
+		o.activeSetCache.UpdateActiveSet(layer.GetEpoch(), fallback)
 
-		activeSet, err := o.actives(context.Background(), o.layerToEpoch(layer))
+		activeSet, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -608,53 +612,34 @@ func TestActives(t *testing.T) {
 			maps.Keys(activeSet.set),
 			"assertion relies on the enumeration of identities",
 		)
-		activeSet2, err := o.actives(context.Background(), o.layerToEpoch(layer+1))
+		activeSet2, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer+1))
 		require.NoError(t, err)
 		require.Equal(t, activeSet, activeSet2)
 	})
 }
 
 func TestActives_ConcurrentCalls(t *testing.T) {
-	r := require.New(t)
 	o := defaultOracle(t)
 	layer := types.LayerID(100)
 	o.createLayerData(layer.Sub(defLayersPerEpoch), 5)
 
-	mc := NewMockactiveSetCache(gomock.NewController(t))
-	firstCall := true
-	mc.EXPECT().Get(layer.GetEpoch() - 1).DoAndReturn(
-		func(types.EpochID) (*cachedActiveSet, bool) {
-			if firstCall {
-				firstCall = false
-				return nil, false
-			}
-			aset := cachedActiveSet{set: createIdentities(5)}
-			for _, value := range aset.set {
-				aset.total += value.weight
-			}
-			return &aset, true
-		}).Times(102)
-	mc.EXPECT().Add(layer.GetEpoch()-1, gomock.Any())
-	o.activesCache = mc
-
 	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).Times(102)
-	var wg sync.WaitGroup
-	wg.Add(102)
-	runFn := func() {
-		_, err := o.actives(context.Background(), o.layerToEpoch(layer))
-		r.NoError(err)
-		wg.Done()
-	}
 
 	// outstanding probability for concurrent access to calc active set size
+	var eg errgroup.Group
 	for range 100 {
-		go runFn()
+		eg.Go(func() error {
+			_, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
+			return err
+		})
 	}
 
 	// make sure we wait at least two calls duration
-	runFn()
-	runFn()
-	wg.Wait()
+	_, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
+	require.NoError(t, err)
+	_, err = o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
+	require.NoError(t, err)
+	require.NoError(t, eg.Wait())
 }
 
 func TestMaxSupportedN(t *testing.T) {
@@ -891,7 +876,7 @@ func TestActiveSetMatrix(t *testing.T) {
 				oracle.mBeacon.EXPECT().Beacon(gomock.Any(), target).Return(types.EmptyBeacon, sql.ErrNotFound)
 			}
 			oracle.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
-			rst, err := oracle.ActiveSet(context.Background(), target)
+			rst, err := oracle.activeSetCache.ActiveSet(context.Background(), target)
 
 			switch typed := tc.expect.(type) {
 			case []types.ATXID:
@@ -905,32 +890,6 @@ func TestActiveSetMatrix(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestResetCache(t *testing.T) {
-	oracle := defaultOracle(t)
-
-	prev := oracle.activesCache
-	prev.Add(1, nil)
-
-	oracle.mSyncer.EXPECT().IsSynced(gomock.Any()).Return(false)
-	oracle.resetCacheOnSynced(context.Background())
-	require.Equal(t, prev, oracle.activesCache)
-
-	oracle.mSyncer.EXPECT().IsSynced(gomock.Any()).Return(false)
-	oracle.resetCacheOnSynced(context.Background())
-	require.Equal(t, prev, oracle.activesCache)
-
-	oracle.mSyncer.EXPECT().IsSynced(gomock.Any()).Return(true)
-	oracle.resetCacheOnSynced(context.Background())
-	require.NotEqual(t, prev, oracle.activesCache)
-
-	prev = oracle.activesCache
-	prev.Add(1, nil)
-
-	oracle.mSyncer.EXPECT().IsSynced(gomock.Any()).Return(true)
-	oracle.resetCacheOnSynced(context.Background())
-	require.Equal(t, prev, oracle.activesCache)
 }
 
 func FuzzVrfMessageConsistency(f *testing.F) {
