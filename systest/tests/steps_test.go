@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -100,7 +100,14 @@ func TestStepTransactions(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.SkipClusterLimits())
 	cl, err := cluster.Reuse(tctx, cluster.WithKeys(tctx.ClusterSize))
 	require.NoError(t, err)
-	require.NoError(t, waitGenesis(tctx, cl.Client(0)))
+
+	tctx.Log.Debugw("waiting for genesis", "genesis time", cl.Genesis())
+	select {
+	case <-tctx.Done():
+		require.FailNow(t, "context canceled")
+	case <-time.After(time.Until(cl.Genesis())): // wait for genesis
+	}
+
 	t.Cleanup(cl.CloseClients)
 
 	clients := make([]*txClient, cl.Accounts())
@@ -142,8 +149,7 @@ func TestStepTransactions(t *testing.T) {
 				if err != nil {
 					return err
 				}
-
-				tctx.Log.Debugw("spawned wallet", "address", client.account, "layer", rst.Layer)
+				tctx.Log.Debugw("spawned wallet", "address", client.account, "layer", rst.TxResult.Layer)
 			}
 			tctx.Log.Debugw("submitting transactions",
 				"address", client.account,
@@ -223,9 +229,9 @@ func TestStepVerifyConsistency(t *testing.T) {
 	require.NoError(t, err)
 	cctx.Log.Debugw("using verified layer as a reference",
 		"node", synced[0].Name,
-		"layer", reference.Number.Number,
-		"hash", prettyHex(reference.Hash),
-		"state hash", prettyHex(reference.RootStateHash),
+		"layer", reference.Number,
+		"hash", prettyHex(reference.StateHash),
+		"state hash", prettyHex(reference.CumulativeStateHash),
 	)
 	layers := make([]*pb.Layer, len(synced))
 
@@ -235,22 +241,22 @@ func TestStepVerifyConsistency(t *testing.T) {
 		var eg errgroup.Group
 		for i, node := range synced[1:] {
 			eg.Go(func() error {
-				layer, err := getLayer(cctx, node, reference.Number.Number)
+				layer, err := getLayer(cctx, node, reference.Number)
 				if err != nil {
 					return err
 				}
 				layers[i] = layer
-				if !bytes.Equal(layer.Hash, reference.Hash) {
+				if !bytes.Equal(layer.StateHash, reference.StateHash) {
 					return fmt.Errorf("hash doesn't match reference %s in layer %d: %x != %x",
-						node.Name, reference.Number.Number, layer.Hash, reference.Hash)
+						node.Name, reference.Number, layer.StateHash, reference.StateHash)
 				}
-				if !bytes.Equal(layer.RootStateHash, reference.RootStateHash) {
+				if !bytes.Equal(layer.CumulativeStateHash, reference.CumulativeStateHash) {
 					return fmt.Errorf(
 						"state hash doesn't match reference %s in layer %d: %x != %x",
 						node.Name,
-						reference.Number.Number,
-						layer.RootStateHash,
-						reference.RootStateHash,
+						reference.Number,
+						layer.CumulativeStateHash,
+						reference.CumulativeStateHash,
 					)
 				}
 				return nil
@@ -266,12 +272,12 @@ func TestStepVerifyConsistency(t *testing.T) {
 		if i == 0 {
 			continue
 		}
-		require.NotNil(t, layer, "client %s doesn't have layer %d",
-			synced[i].Name, reference.Number)
-		require.Equal(t, reference.Hash, layer.Hash, "consensus hash on client %s",
-			synced[i].Name)
-		require.Equal(t, reference.RootStateHash, layer.RootStateHash, "state hash on client %s",
-			synced[i].Name)
+		require.NotNil(t, layer, "client %s doesn't have layer %d", synced[i].Name, reference.Number)
+		require.Equal(t, reference.ConsensusHash, layer.ConsensusHash, "consensus hash on client %s", synced[i].Name)
+		require.Equal(t,
+			reference.CumulativeStateHash, layer.CumulativeStateHash,
+			"state hash on client %s", synced[i].Name,
+		)
 	}
 }
 

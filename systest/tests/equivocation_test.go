@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -89,15 +88,15 @@ func TestEquivocation(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
 		results[client.Name] = make(map[int]string)
-		watchLayers(cctx, &eg, client, cctx.Log.Desugar(), func(resp *pb.LayerStreamResponse) (bool, error) {
-			if resp.Layer.Status != pb.Layer_LAYER_STATUS_APPLIED {
+		watchLayers(cctx, &eg, client, cctx.Log.Desugar(), func(resp *pb.Layer) (bool, error) {
+			if resp.Status != pb.Layer_LAYER_STATUS_VERIFIED {
 				return true, nil
 			}
-			if resp.Layer.Number.Number > stopTest {
+			if resp.Number > stopTest {
 				return false, nil
 			}
-			num := int(resp.Layer.Number.Number)
-			consensus := types.BytesToHash(resp.Layer.Hash).ShortString()
+			num := int(resp.Number)
+			consensus := types.BytesToHash(resp.StateHash).ShortString()
 			cctx.Log.Debugw("consensus hash collected",
 				"client", client.Name,
 				"layer", num,
@@ -126,7 +125,7 @@ func TestEquivocation(t *testing.T) {
 		proofs := make([]types.NodeID, 0, len(malfeasants))
 		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 		defer cancel()
-		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(proof *pb2.MalfeasanceProof) (bool, error) {
+		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(proof *pb.MalfeasanceProof) (bool, error) {
 			malfeasant := proof.GetSmesher()
 			proofs = append(proofs, types.BytesToNodeID(malfeasant))
 			return len(proofs) < len(malfeasants), nil

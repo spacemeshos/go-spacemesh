@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -40,13 +40,12 @@ func testTransactions(
 		"expected transactions", expectedCount,
 	)
 	receiver := types.GenerateAddress([]byte{11, 1, 1})
-	state := pb.NewGlobalStateServiceClient(cl.Client(0).PubConn())
-	response, err := state.Account(
-		tctx,
-		&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
-	)
+	state := pb.NewAccountServiceClient(cl.Client(0).PubConn())
+	response, err := state.List(tctx, &pb.AccountRequest{
+		Addresses: []string{receiver.String()},
+	})
 	require.NoError(tb, err)
-	before := response.AccountWrapper.StateCurrent.Balance
+	before := response.Accounts[0].Current.Balance
 
 	layerDuration := testcontext.LayerDuration.Get(tctx.Parameters)
 	layersPerEpoch := uint32(testcontext.LayersPerEpoch.Get(tctx.Parameters))
@@ -63,11 +62,11 @@ func testTransactions(
 		client := cl.Client(i)
 		eg.Go(func() error {
 			err := watchTransactionResults(ctx, client, tctx.Log.Desugar(),
-				func(rst *pb.TransactionResult) (bool, error) {
+				func(rst *pb.TransactionResponse) (bool, error) {
 					txs[i] = append(txs[i], rst.Tx)
 					count := len(txs[i])
 					tctx.Log.Desugar().Debug("received transaction client",
-						zap.Uint32("layer", rst.Layer),
+						zap.Uint32("layer", rst.TxResult.Layer),
 						zap.String("client", client.Name),
 						zap.String("tx", "0x"+hex.EncodeToString(rst.Tx.Id)),
 						zap.Int("count", count),
@@ -99,20 +98,18 @@ func testTransactions(
 	diff := batch * amount * int(sendFor-1) * cl.Accounts()
 	for i := 0; i < cl.Total(); i++ {
 		client := cl.Client(i)
-		state := pb.NewGlobalStateServiceClient(client.PubConn())
-		response, err := state.Account(
-			tctx,
-			&pb.AccountRequest{AccountId: &pb.AccountId{Address: receiver.String()}},
-		)
+		state := pb.NewAccountServiceClient(client.PubConn())
+		response, err := state.List(tctx, &pb.AccountRequest{
+			Addresses: []string{receiver.String()},
+		})
 		require.NoError(tb, err)
-		after := response.AccountWrapper.StateCurrent.Balance
+		after := response.Accounts[0].Current.Balance
 		tctx.Log.Infow("receiver state",
-			"before", before.Value,
-			"after", after.Value,
+			"before", before,
+			"after", after,
 			"expected-diff", diff,
-			"diff", after.Value-before.Value,
+			"diff", after-before,
 		)
-		require.Equal(tb, int(before.Value)+diff,
-			int(response.AccountWrapper.StateCurrent.Balance.Value), "client=%s", client.Name)
+		require.Equal(tb, int(before)+diff, int(after), "client=%s", client.Name)
 	}
 }

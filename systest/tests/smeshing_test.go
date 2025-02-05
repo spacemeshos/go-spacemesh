@@ -12,6 +12,7 @@ import (
 
 	"github.com/oasisprotocol/curve25519-voi/primitives/ed25519"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -211,8 +212,8 @@ func testVesting(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster, 
 		client := cl.Client(i % cl.Total())
 		eg.Go(func() error {
 			var subeg errgroup.Group
-			watchLayers(tctx, &subeg, client, tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
-				return layer.Layer.Number.Number < uint32(acc.start), nil
+			watchLayers(tctx, &subeg, client, tctx.Log.Desugar(), func(layer *pb2.Layer) (bool, error) {
+				return layer.Number < uint32(acc.start), nil
 			})
 			if err := subeg.Wait(); err != nil {
 				return err
