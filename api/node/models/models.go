@@ -11,11 +11,11 @@ func ParseBytes32Hex(b Bytes32Hex) ([32]byte, error) {
 	if len(b) != 64 {
 		return [32]byte{}, fmt.Errorf("invalid length: %d (expected 64)", len(b))
 	}
-	hash, err := hex.DecodeString(b)
+	decoded, err := hex.DecodeString(b)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("decoding hex: %w", err)
 	}
-	return [32]byte(hash), nil
+	return [32]byte(decoded), nil
 }
 
 func ParseNodeIDHex(id Bytes32Hex) (types.NodeID, error) {
