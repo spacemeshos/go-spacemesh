@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
-	types "github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	types "github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 )
 
 func TestServerReadiness(t *testing.T) {
@@ -23,7 +24,6 @@ func TestServerReadiness(t *testing.T) {
 		mocks.NewMockPublisher(ctrl),
 		NewMockpoetDB(ctrl),
 		NewMockhare(ctrl),
-		NewMockweights(ctrl),
 		NewMockproposalBuilder(ctrl),
 		zaptest.NewLogger(t),
 	)
