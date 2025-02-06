@@ -147,7 +147,7 @@ func launchTLSServer(tb testing.TB, certDir string, services ...ServiceAPI) (Con
 	serverCert := filepath.Join(certDir, serverCertName)
 	serverKey := filepath.Join(certDir, serverKeyName)
 
-	cfg := DefaultTestConfig()
+	cfg := DefaultTestConfig(tb)
 	cfg.TLSListener = "127.0.0.1:0"
 	cfg.TLSCACert = caCert
 	cfg.TLSCert = serverCert

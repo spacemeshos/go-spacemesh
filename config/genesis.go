@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
@@ -157,7 +158,7 @@ func DefaultGenesisConfig() GenesisConfig {
 }
 
 // DefaultTestGenesisConfig is the default test configuration for the node.
-func DefaultTestGenesisConfig() GenesisConfig {
+func DefaultTestGenesisConfig(tb testing.TB) GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return GenesisConfig{
 		ExtraData:   "testnet",

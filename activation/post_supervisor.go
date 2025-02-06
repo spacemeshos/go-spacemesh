@@ -13,8 +13,10 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"testing"
 
 	"github.com/spacemeshos/post/initialization"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
@@ -39,11 +41,9 @@ func DefaultPostServiceConfig() PostSupervisorConfig {
 }
 
 // DefaultTestPostServiceConfig returns the default config for post service in tests.
-func DefaultTestPostServiceConfig() PostSupervisorConfig {
+func DefaultTestPostServiceConfig(tb testing.TB) PostSupervisorConfig {
 	path, err := exec.Command("go", "env", "GOMOD").Output()
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(tb, err)
 
 	return PostSupervisorConfig{
 		PostServiceCmd: filepath.Join(filepath.Dir(string(path)), "build", DefaultPostServiceName),

@@ -15,7 +15,7 @@ import (
 func TestNetworkService_Info(t *testing.T) {
 	ctx := context.Background()
 	genesis := time.Unix(genTimeUnix, 0)
-	c := config.DefaultTestConfig()
+	c := config.DefaultTestConfig(t)
 
 	svc := NewNetworkService(genesis, &c)
 	cfg, cleanup := launchServer(t, svc)

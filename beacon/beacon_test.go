@@ -180,7 +180,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
-	cfg := NodeSimUnitTestConfig()
+	cfg := NodeSimUnitTestConfig(t)
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
@@ -246,7 +246,7 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
-	cfg := NodeSimUnitTestConfig()
+	cfg := NodeSimUnitTestConfig(t)
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
@@ -300,7 +300,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
-	cfg := NodeSimUnitTestConfig()
+	cfg := NodeSimUnitTestConfig(t)
 	now := time.Now()
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	for i := 0; i < numNodes; i++ {

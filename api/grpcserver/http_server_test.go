@@ -22,7 +22,7 @@ import (
 )
 
 func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
-	cfg := DefaultTestConfig()
+	cfg := DefaultTestConfig(tb)
 
 	// run on random port
 	jsonService := NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0",

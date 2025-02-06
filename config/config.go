@@ -7,8 +7,10 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"testing"
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -207,15 +209,46 @@ func DefaultConfig() Config {
 }
 
 // DefaultTestConfig returns the default config for tests.
-func DefaultTestConfig() Config {
+func DefaultTestConfig(tb testing.TB) Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
-	conf.Genesis = DefaultTestGenesisConfig()
-	conf.P2P = p2p.DefaultConfig()
-	conf.API = grpcserver.DefaultTestConfig()
-	conf.POSTService = activation.DefaultTestPostServiceConfig()
-	conf.HARE3.PreroundDelay = 1 * time.Second
-	conf.HARE3.RoundDuration = 1 * time.Second
+	conf.DataDirParent = tb.TempDir()
+	conf.FileLock = filepath.Join(conf.DataDirParent, "spacemesh.lock") // allows multiple configs in one test
+	conf.LayerDuration = 2 * time.Second
+
+	conf.Genesis = DefaultTestGenesisConfig(tb)
+
+	conf.POST.MinNumUnits = 2
+	conf.POST.MaxNumUnits = 4
+	conf.POST.LabelsPerUnit = 32
+	conf.POST.K2 = 4
+
+	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	conf.SMESHING.Opts.DataDir = filepath.Join(conf.DataDirParent, "post")
+	conf.SMESHING.Opts.NumUnits = conf.POST.MinNumUnits + 1
+	conf.SMESHING.Opts.Scrypt.N = 2
+	conf.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
+
+	// is set to 0 to make sync start immediately when node starts
+	conf.P2P.MinPeers = 0
+
+	conf.Tortoise.Hdist = 5
+	conf.Tortoise.Zdist = 5
+
+	conf.API = grpcserver.DefaultTestConfig(tb)
+	conf.POSTService = activation.DefaultTestPostServiceConfig(tb)
+	conf.Beacon = beacon.NodeSimUnitTestConfig(tb)
+
+	conf.HARE3.PreroundDelay = 10 * time.Millisecond
+	conf.HARE3.RoundDuration = 20 * time.Millisecond
+	conf.HARE4.PreroundDelay = 10 * time.Millisecond
+	conf.HARE4.RoundDuration = 20 * time.Millisecond
+
+	conf.Sync.Interval = time.Second
+
+	conf.FETCH.RequestTimeout = 10 * time.Second
+	conf.FETCH.RequestHardTimeout = 20 * time.Second
+	conf.FETCH.BatchSize = 5
 	return conf
 }
 
@@ -228,6 +261,7 @@ func defaultBaseConfig() BaseConfig {
 		MetricsPort:                  1010,
 		ProfilerName:                 "go-spacemesh",
 		LayerDuration:                30 * time.Second,
+		LayerAvgSize:                 5,
 		LayersPerEpoch:               3,
 		TxsPerProposal:               100,
 		BlockGasLimit:                math.MaxUint64,
@@ -266,6 +300,7 @@ func defaultTestConfig() BaseConfig {
 	conf.MetricsPort += 10000
 	conf.NetworkHRP = "stest"
 	types.SetNetworkHRP(conf.NetworkHRP)
+	types.SetLayersPerEpoch(conf.LayersPerEpoch)
 	return conf
 }
 
