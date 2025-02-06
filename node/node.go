@@ -2097,7 +2097,8 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		)
 
 		app.nodeServiceServer = &http.Server{
-			Handler: server.IntoHandler(http.NewServeMux()),
+			// The node-service API is ready only when it's in sync.
+			Handler: server.IntoHandler(http.NewServeMux(), app.syncer),
 		}
 		app.eg.Go(func() error { return app.nodeServiceServer.Serve(lis) })
 	}
@@ -2106,6 +2107,11 @@ func (app *App) startAPIServices(ctx context.Context) error {
 }
 
 func (app *App) stopServices(ctx context.Context) {
+	if app.nodeServiceServer != nil {
+		if err := app.nodeServiceServer.Shutdown(ctx); err != nil {
+			app.log.With().Error("error stopping node-service server", log.Err(err))
+		}
+	}
 	if app.jsonAPIServer != nil {
 		if err := app.jsonAPIServer.Shutdown(ctx); err != nil {
 			app.log.With().Error("error stopping json gateway server", log.Err(err))

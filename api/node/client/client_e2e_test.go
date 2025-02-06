@@ -56,8 +56,10 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
 
+	syncer := server.NewMocksyncer(ctrl)
+	syncer.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	server := &http.Server{
-		Handler: activationServiceServer.IntoHandler(http.NewServeMux()),
+		Handler: activationServiceServer.IntoHandler(http.NewServeMux(), syncer),
 	}
 
 	go server.Serve(listener)

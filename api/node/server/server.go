@@ -43,6 +43,10 @@ type proposalBuilder interface {
 		ctx context.Context, node types.NodeID, epoch types.EpochID) (uint32, types.VRFPostIndex, error)
 }
 
+type syncer interface {
+	IsSynced(context.Context) bool
+}
+
 type Server struct {
 	atxService activation.AtxService
 	beacons    beaconService
@@ -75,7 +79,9 @@ func NewServer(
 	}
 }
 
-func (s *Server) IntoHandler(mux *http.ServeMux) http.Handler {
+// Turn the server into a HTTP handler.
+// It will return '503 Unavailable' until the readiness channel is closed.
+func (s *Server) IntoHandler(mux *http.ServeMux, syncer syncer) http.Handler {
 	loggingMid := func(f nethttp.StrictHTTPHandlerFunc, operationID string) nethttp.StrictHTTPHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, req any) (any, error) {
 			uuid := uuid.New()
@@ -96,15 +102,18 @@ func (s *Server) IntoHandler(mux *http.ServeMux) http.Handler {
 			return response, err
 		}
 	}
-	return HandlerFromMux(NewStrictHandler(s, []StrictMiddlewareFunc{loggingMid}), mux)
-}
-
-func (s *Server) Start(address string) error {
-	server := &http.Server{
-		Handler: s.IntoHandler(http.NewServeMux()),
-		Addr:    address,
+	readinessMid := func(f nethttp.StrictHTTPHandlerFunc, _ string) nethttp.StrictHTTPHandlerFunc {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, req any) (any, error) {
+			if syncer.IsSynced(ctx) {
+				return f(ctx, w, r, req)
+			} else {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return nil, errors.New("service not ready: not in sync with the network")
+			}
+		}
 	}
-	return server.ListenAndServe()
+
+	return HandlerFromMux(NewStrictHandler(s, []StrictMiddlewareFunc{readinessMid, loggingMid}), mux)
 }
 
 // GetActivationAtxAtxId implements StrictServerInterface.
