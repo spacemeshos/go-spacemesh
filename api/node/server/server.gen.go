@@ -57,27 +57,27 @@ type ServerInterface interface {
 	// Publish an ATX along with its poet merkle proof
 	// (POST /activation/publish)
 	PostActivationPublish(w http.ResponseWriter, r *http.Request)
+	// Get the beacon value for an epoch
+	// (GET /beacon/{epoch})
+	GetBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
 	// Get eligibility slots for a given node id in given epoch
 	// (GET /eligibility/slots/{node}/{epoch})
 	GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.Bytes32, epoch externalRef0.EpochID)
-	// Get the beacon value for an epoch
-	// (GET /hare/beacon/{epoch})
-	GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, iter externalRef0.HareIter, round externalRef0.HareRound)
-	// Get the total weight for epoch
-	// (GET /hare/total_weight/{epoch})
-	GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
-	// Get the miner weight in epoch
-	// (GET /hare/weight/{node_id}/{epoch})
-	GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID)
 	// Get a partial proposal for a given node in a layer
 	// (GET /proposal/{layer}/{node})
 	GetProposalLayerNode(w http.ResponseWriter, r *http.Request, layer externalRef0.LayerID, node externalRef0.Bytes32)
 	// Publish a blob in the given p2p protocol
 	// (POST /publish/{protocol})
 	PostPublishProtocol(w http.ResponseWriter, r *http.Request, protocol PostPublishProtocolParamsProtocol)
+	// Get the miner weight in epoch
+	// (GET /weights/miner/{node_id}/{epoch})
+	GetWeightsMinerNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID)
+	// Get the total weight for epoch
+	// (GET /weights/total/{epoch})
+	GetWeightsTotalEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -178,6 +178,31 @@ func (siw *ServerInterfaceWrapper) PostActivationPublish(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// GetBeaconEpoch operation middleware
+func (siw *ServerInterfaceWrapper) GetBeaconEpoch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "epoch" -------------
+	var epoch externalRef0.EpochID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBeaconEpoch(w, r, epoch)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetEligibilitySlotsNodeEpoch operation middleware
 func (siw *ServerInterfaceWrapper) GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request) {
 
@@ -203,31 +228,6 @@ func (siw *ServerInterfaceWrapper) GetEligibilitySlotsNodeEpoch(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetEligibilitySlotsNodeEpoch(w, r, node, epoch)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetHareBeaconEpoch operation middleware
-func (siw *ServerInterfaceWrapper) GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "epoch" -------------
-	var epoch externalRef0.EpochID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHareBeaconEpoch(w, r, epoch)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -271,65 +271,6 @@ func (siw *ServerInterfaceWrapper) GetHareRoundTemplateLayerIterRound(w http.Res
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetHareRoundTemplateLayerIterRound(w, r, layer, iter, round)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetHareTotalWeightEpoch operation middleware
-func (siw *ServerInterfaceWrapper) GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "epoch" -------------
-	var epoch externalRef0.EpochID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHareTotalWeightEpoch(w, r, epoch)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetHareWeightNodeIdEpoch operation middleware
-func (siw *ServerInterfaceWrapper) GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "node_id" -------------
-	var nodeId externalRef0.Bytes32
-
-	err = runtime.BindStyledParameterWithOptions("simple", "node_id", r.PathValue("node_id"), &nodeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "node_id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "epoch" -------------
-	var epoch externalRef0.EpochID
-
-	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetHareWeightNodeIdEpoch(w, r, nodeId, epoch)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -389,6 +330,65 @@ func (siw *ServerInterfaceWrapper) PostPublishProtocol(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PostPublishProtocol(w, r, protocol)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWeightsMinerNodeIdEpoch operation middleware
+func (siw *ServerInterfaceWrapper) GetWeightsMinerNodeIdEpoch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "node_id" -------------
+	var nodeId externalRef0.Bytes32
+
+	err = runtime.BindStyledParameterWithOptions("simple", "node_id", r.PathValue("node_id"), &nodeId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "node_id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "epoch" -------------
+	var epoch externalRef0.EpochID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWeightsMinerNodeIdEpoch(w, r, nodeId, epoch)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWeightsTotalEpoch operation middleware
+func (siw *ServerInterfaceWrapper) GetWeightsTotalEpoch(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "epoch" -------------
+	var epoch externalRef0.EpochID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "epoch", r.PathValue("epoch"), &epoch, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "epoch", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWeightsTotalEpoch(w, r, epoch)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -522,13 +522,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/activation/last_atx/{node_id}", wrapper.GetActivationLastAtxNodeId)
 	m.HandleFunc("GET "+options.BaseURL+"/activation/positioning_atx/{publish_epoch}", wrapper.GetActivationPositioningAtxPublishEpoch)
 	m.HandleFunc("POST "+options.BaseURL+"/activation/publish", wrapper.PostActivationPublish)
+	m.HandleFunc("GET "+options.BaseURL+"/beacon/{epoch}", wrapper.GetBeaconEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/eligibility/slots/{node}/{epoch}", wrapper.GetEligibilitySlotsNodeEpoch)
-	m.HandleFunc("GET "+options.BaseURL+"/hare/beacon/{epoch}", wrapper.GetHareBeaconEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/round_template/{layer}/{iter}/{round}", wrapper.GetHareRoundTemplateLayerIterRound)
-	m.HandleFunc("GET "+options.BaseURL+"/hare/total_weight/{epoch}", wrapper.GetHareTotalWeightEpoch)
-	m.HandleFunc("GET "+options.BaseURL+"/hare/weight/{node_id}/{epoch}", wrapper.GetHareWeightNodeIdEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/proposal/{layer}/{node}", wrapper.GetProposalLayerNode)
 	m.HandleFunc("POST "+options.BaseURL+"/publish/{protocol}", wrapper.PostPublishProtocol)
+	m.HandleFunc("GET "+options.BaseURL+"/weights/miner/{node_id}/{epoch}", wrapper.GetWeightsMinerNodeIdEpoch)
+	m.HandleFunc("GET "+options.BaseURL+"/weights/total/{epoch}", wrapper.GetWeightsTotalEpoch)
 
 	return m
 }
@@ -675,6 +675,33 @@ func (response PostActivationPublish400PlaintextResponse) VisitPostActivationPub
 	return err
 }
 
+type GetBeaconEpochRequestObject struct {
+	Epoch externalRef0.EpochID `json:"epoch"`
+}
+
+type GetBeaconEpochResponseObject interface {
+	VisitGetBeaconEpochResponse(w http.ResponseWriter) error
+}
+
+type GetBeaconEpoch200JSONResponse struct {
+	Beacon externalRef0.Beacon `json:"beacon"`
+}
+
+func (response GetBeaconEpoch200JSONResponse) VisitGetBeaconEpochResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetBeaconEpoch204Response struct {
+}
+
+func (response GetBeaconEpoch204Response) VisitGetBeaconEpochResponse(w http.ResponseWriter) error {
+	w.WriteHeader(204)
+	return nil
+}
+
 type GetEligibilitySlotsNodeEpochRequestObject struct {
 	Node  externalRef0.Bytes32 `json:"node"`
 	Epoch externalRef0.EpochID `json:"epoch"`
@@ -723,33 +750,6 @@ func (response GetEligibilitySlotsNodeEpoch500Response) VisitGetEligibilitySlots
 	return nil
 }
 
-type GetHareBeaconEpochRequestObject struct {
-	Epoch externalRef0.EpochID `json:"epoch"`
-}
-
-type GetHareBeaconEpochResponseObject interface {
-	VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error
-}
-
-type GetHareBeaconEpoch200JSONResponse struct {
-	Beacon externalRef0.Beacon `json:"beacon"`
-}
-
-func (response GetHareBeaconEpoch200JSONResponse) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetHareBeaconEpoch204Response struct {
-}
-
-func (response GetHareBeaconEpoch204Response) VisitGetHareBeaconEpochResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
 type GetHareRoundTemplateLayerIterRoundRequestObject struct {
 	Layer externalRef0.LayerID   `json:"layer"`
 	Iter  externalRef0.HareIter  `json:"iter"`
@@ -775,80 +775,6 @@ type GetHareRoundTemplateLayerIterRound204Response struct {
 func (response GetHareRoundTemplateLayerIterRound204Response) VisitGetHareRoundTemplateLayerIterRoundResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
 	return nil
-}
-
-type GetHareTotalWeightEpochRequestObject struct {
-	Epoch externalRef0.EpochID `json:"epoch"`
-}
-
-type GetHareTotalWeightEpochResponseObject interface {
-	VisitGetHareTotalWeightEpochResponse(w http.ResponseWriter) error
-}
-
-type GetHareTotalWeightEpoch200JSONResponse struct {
-	Weight uint64 `json:"weight"`
-}
-
-func (response GetHareTotalWeightEpoch200JSONResponse) VisitGetHareTotalWeightEpochResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetHareTotalWeightEpoch204Response struct {
-}
-
-func (response GetHareTotalWeightEpoch204Response) VisitGetHareTotalWeightEpochResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type GetHareWeightNodeIdEpochRequestObject struct {
-	NodeId externalRef0.Bytes32 `json:"node_id"`
-	Epoch  externalRef0.EpochID `json:"epoch"`
-}
-
-type GetHareWeightNodeIdEpochResponseObject interface {
-	VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error
-}
-
-type GetHareWeightNodeIdEpoch200JSONResponse struct {
-	Weight uint64 `json:"weight"`
-}
-
-func (response GetHareWeightNodeIdEpoch200JSONResponse) VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(200)
-
-	return json.NewEncoder(w).Encode(response)
-}
-
-type GetHareWeightNodeIdEpoch204Response struct {
-}
-
-func (response GetHareWeightNodeIdEpoch204Response) VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error {
-	w.WriteHeader(204)
-	return nil
-}
-
-type GetHareWeightNodeIdEpoch400PlaintextResponse struct {
-	Body          io.Reader
-	ContentLength int64
-}
-
-func (response GetHareWeightNodeIdEpoch400PlaintextResponse) VisitGetHareWeightNodeIdEpochResponse(w http.ResponseWriter) error {
-	w.Header().Set("Content-Type", "plain/text")
-	if response.ContentLength != 0 {
-		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
-	}
-	w.WriteHeader(400)
-
-	if closer, ok := response.Body.(io.ReadCloser); ok {
-		defer closer.Close()
-	}
-	_, err := io.Copy(w, response.Body)
-	return err
 }
 
 type GetProposalLayerNodeRequestObject struct {
@@ -921,6 +847,64 @@ func (response PostPublishProtocol200Response) VisitPostPublishProtocolResponse(
 	return nil
 }
 
+type GetWeightsMinerNodeIdEpochRequestObject struct {
+	NodeId externalRef0.Bytes32 `json:"node_id"`
+	Epoch  externalRef0.EpochID `json:"epoch"`
+}
+
+type GetWeightsMinerNodeIdEpochResponseObject interface {
+	VisitGetWeightsMinerNodeIdEpochResponse(w http.ResponseWriter) error
+}
+
+type GetWeightsMinerNodeIdEpoch200JSONResponse struct {
+	Weight uint64 `json:"weight"`
+}
+
+func (response GetWeightsMinerNodeIdEpoch200JSONResponse) VisitGetWeightsMinerNodeIdEpochResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetWeightsMinerNodeIdEpoch400PlaintextResponse struct {
+	Body          io.Reader
+	ContentLength int64
+}
+
+func (response GetWeightsMinerNodeIdEpoch400PlaintextResponse) VisitGetWeightsMinerNodeIdEpochResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "plain/text")
+	if response.ContentLength != 0 {
+		w.Header().Set("Content-Length", fmt.Sprint(response.ContentLength))
+	}
+	w.WriteHeader(400)
+
+	if closer, ok := response.Body.(io.ReadCloser); ok {
+		defer closer.Close()
+	}
+	_, err := io.Copy(w, response.Body)
+	return err
+}
+
+type GetWeightsTotalEpochRequestObject struct {
+	Epoch externalRef0.EpochID `json:"epoch"`
+}
+
+type GetWeightsTotalEpochResponseObject interface {
+	VisitGetWeightsTotalEpochResponse(w http.ResponseWriter) error
+}
+
+type GetWeightsTotalEpoch200JSONResponse struct {
+	Weight uint64 `json:"weight"`
+}
+
+func (response GetWeightsTotalEpoch200JSONResponse) VisitGetWeightsTotalEpochResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
 // StrictServerInterface represents all server handlers.
 type StrictServerInterface interface {
 	// Get ATX by ID
@@ -935,27 +919,27 @@ type StrictServerInterface interface {
 	// Publish an ATX along with its poet merkle proof
 	// (POST /activation/publish)
 	PostActivationPublish(ctx context.Context, request PostActivationPublishRequestObject) (PostActivationPublishResponseObject, error)
+	// Get the beacon value for an epoch
+	// (GET /beacon/{epoch})
+	GetBeaconEpoch(ctx context.Context, request GetBeaconEpochRequestObject) (GetBeaconEpochResponseObject, error)
 	// Get eligibility slots for a given node id in given epoch
 	// (GET /eligibility/slots/{node}/{epoch})
 	GetEligibilitySlotsNodeEpoch(ctx context.Context, request GetEligibilitySlotsNodeEpochRequestObject) (GetEligibilitySlotsNodeEpochResponseObject, error)
-	// Get the beacon value for an epoch
-	// (GET /hare/beacon/{epoch})
-	GetHareBeaconEpoch(ctx context.Context, request GetHareBeaconEpochRequestObject) (GetHareBeaconEpochResponseObject, error)
 	// Get a hare message to sign
 	// (GET /hare/round_template/{layer}/{iter}/{round})
 	GetHareRoundTemplateLayerIterRound(ctx context.Context, request GetHareRoundTemplateLayerIterRoundRequestObject) (GetHareRoundTemplateLayerIterRoundResponseObject, error)
-	// Get the total weight for epoch
-	// (GET /hare/total_weight/{epoch})
-	GetHareTotalWeightEpoch(ctx context.Context, request GetHareTotalWeightEpochRequestObject) (GetHareTotalWeightEpochResponseObject, error)
-	// Get the miner weight in epoch
-	// (GET /hare/weight/{node_id}/{epoch})
-	GetHareWeightNodeIdEpoch(ctx context.Context, request GetHareWeightNodeIdEpochRequestObject) (GetHareWeightNodeIdEpochResponseObject, error)
 	// Get a partial proposal for a given node in a layer
 	// (GET /proposal/{layer}/{node})
 	GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (GetProposalLayerNodeResponseObject, error)
 	// Publish a blob in the given p2p protocol
 	// (POST /publish/{protocol})
 	PostPublishProtocol(ctx context.Context, request PostPublishProtocolRequestObject) (PostPublishProtocolResponseObject, error)
+	// Get the miner weight in epoch
+	// (GET /weights/miner/{node_id}/{epoch})
+	GetWeightsMinerNodeIdEpoch(ctx context.Context, request GetWeightsMinerNodeIdEpochRequestObject) (GetWeightsMinerNodeIdEpochResponseObject, error)
+	// Get the total weight for epoch
+	// (GET /weights/total/{epoch})
+	GetWeightsTotalEpoch(ctx context.Context, request GetWeightsTotalEpochRequestObject) (GetWeightsTotalEpochResponseObject, error)
 }
 
 type StrictHandlerFunc = strictnethttp.StrictHTTPHandlerFunc
@@ -1096,6 +1080,32 @@ func (sh *strictHandler) PostActivationPublish(w http.ResponseWriter, r *http.Re
 	}
 }
 
+// GetBeaconEpoch operation middleware
+func (sh *strictHandler) GetBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID) {
+	var request GetBeaconEpochRequestObject
+
+	request.Epoch = epoch
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBeaconEpoch(ctx, request.(GetBeaconEpochRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBeaconEpoch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBeaconEpochResponseObject); ok {
+		if err := validResponse.VisitGetBeaconEpochResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
 // GetEligibilitySlotsNodeEpoch operation middleware
 func (sh *strictHandler) GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.Bytes32, epoch externalRef0.EpochID) {
 	var request GetEligibilitySlotsNodeEpochRequestObject
@@ -1116,32 +1126,6 @@ func (sh *strictHandler) GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetEligibilitySlotsNodeEpochResponseObject); ok {
 		if err := validResponse.VisitGetEligibilitySlotsNodeEpochResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetHareBeaconEpoch operation middleware
-func (sh *strictHandler) GetHareBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID) {
-	var request GetHareBeaconEpochRequestObject
-
-	request.Epoch = epoch
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetHareBeaconEpoch(ctx, request.(GetHareBeaconEpochRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetHareBeaconEpoch")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetHareBeaconEpochResponseObject); ok {
-		if err := validResponse.VisitGetHareBeaconEpochResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1170,59 +1154,6 @@ func (sh *strictHandler) GetHareRoundTemplateLayerIterRound(w http.ResponseWrite
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetHareRoundTemplateLayerIterRoundResponseObject); ok {
 		if err := validResponse.VisitGetHareRoundTemplateLayerIterRoundResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetHareTotalWeightEpoch operation middleware
-func (sh *strictHandler) GetHareTotalWeightEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID) {
-	var request GetHareTotalWeightEpochRequestObject
-
-	request.Epoch = epoch
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetHareTotalWeightEpoch(ctx, request.(GetHareTotalWeightEpochRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetHareTotalWeightEpoch")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetHareTotalWeightEpochResponseObject); ok {
-		if err := validResponse.VisitGetHareTotalWeightEpochResponse(w); err != nil {
-			sh.options.ResponseErrorHandlerFunc(w, r, err)
-		}
-	} else if response != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
-	}
-}
-
-// GetHareWeightNodeIdEpoch operation middleware
-func (sh *strictHandler) GetHareWeightNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID) {
-	var request GetHareWeightNodeIdEpochRequestObject
-
-	request.NodeId = nodeId
-	request.Epoch = epoch
-
-	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
-		return sh.ssi.GetHareWeightNodeIdEpoch(ctx, request.(GetHareWeightNodeIdEpochRequestObject))
-	}
-	for _, middleware := range sh.middlewares {
-		handler = middleware(handler, "GetHareWeightNodeIdEpoch")
-	}
-
-	response, err := handler(r.Context(), w, r, request)
-
-	if err != nil {
-		sh.options.ResponseErrorHandlerFunc(w, r, err)
-	} else if validResponse, ok := response.(GetHareWeightNodeIdEpochResponseObject); ok {
-		if err := validResponse.VisitGetHareWeightNodeIdEpochResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {
@@ -1278,6 +1209,59 @@ func (sh *strictHandler) PostPublishProtocol(w http.ResponseWriter, r *http.Requ
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(PostPublishProtocolResponseObject); ok {
 		if err := validResponse.VisitPostPublishProtocolResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWeightsMinerNodeIdEpoch operation middleware
+func (sh *strictHandler) GetWeightsMinerNodeIdEpoch(w http.ResponseWriter, r *http.Request, nodeId externalRef0.Bytes32, epoch externalRef0.EpochID) {
+	var request GetWeightsMinerNodeIdEpochRequestObject
+
+	request.NodeId = nodeId
+	request.Epoch = epoch
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWeightsMinerNodeIdEpoch(ctx, request.(GetWeightsMinerNodeIdEpochRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWeightsMinerNodeIdEpoch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWeightsMinerNodeIdEpochResponseObject); ok {
+		if err := validResponse.VisitGetWeightsMinerNodeIdEpochResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetWeightsTotalEpoch operation middleware
+func (sh *strictHandler) GetWeightsTotalEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID) {
+	var request GetWeightsTotalEpochRequestObject
+
+	request.Epoch = epoch
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetWeightsTotalEpoch(ctx, request.(GetWeightsTotalEpochRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetWeightsTotalEpoch")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetWeightsTotalEpochResponseObject); ok {
+		if err := validResponse.VisitGetWeightsTotalEpochResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

@@ -2101,6 +2101,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.host,
 			app.poetDb,
 			app.hare3,
+			app.activeSetCache,
 			app.proposalBuilder,
 			logger,
 		)

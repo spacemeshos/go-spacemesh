@@ -28,6 +28,7 @@ type mocks struct {
 	beacons    *server.MockbeaconService
 	poetDb     *server.MockpoetDB
 	hare       *server.Mockhare
+	weights    *server.Mockweights
 	publisher  *pubsubMocks.MockPublisher
 	proposals  *server.MockproposalBuilder
 }
@@ -41,6 +42,7 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 		beacons:    server.NewMockbeaconService(ctrl),
 		poetDb:     server.NewMockpoetDB(ctrl),
 		hare:       server.NewMockhare(ctrl),
+		weights:    server.NewMockweights(ctrl),
 		publisher:  pubsubMocks.NewMockPublisher(ctrl),
 		proposals:  server.NewMockproposalBuilder(ctrl),
 	}
@@ -50,6 +52,7 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 		m.publisher,
 		m.poetDb,
 		m.hare,
+		m.weights,
 		m.proposals,
 		log.Named("server"))
 
@@ -204,15 +207,16 @@ func Test_Hare(t *testing.T) {
 	svc, mock := setupE2E(t)
 	t.Run("total weight", func(t *testing.T) {
 		val := uint64(11)
-		mock.hare.EXPECT().TotalWeight(gomock.Any(), types.EpochID(112)).Return(val, nil)
+		mock.weights.EXPECT().TotalWeight(gomock.Any(), types.EpochID(112)).Return(val, nil)
 		v, err := svc.TotalWeight(context.Background(), 112)
 		require.NoError(t, err)
 		require.Equal(t, v, val)
 	})
 	t.Run("miner weight", func(t *testing.T) {
 		val := uint64(101)
-		mock.hare.EXPECT().MinerWeight(gomock.Any(), gomock.Any(), types.EpochID(113)).Return(val, nil)
-		v, err := svc.MinerWeight(context.Background(), 113, types.NodeID{})
+		nodeID := types.RandomNodeID()
+		mock.weights.EXPECT().MinerWeight(gomock.Any(), types.EpochID(113), nodeID).Return(val, nil)
+		v, err := svc.MinerWeight(context.Background(), 113, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, v, val)
 	})

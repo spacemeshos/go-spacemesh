@@ -39,10 +39,6 @@ func (c *cachedWeights) MinerWeight(ctx context.Context, epoch types.EpochID, no
 			c.mu.Unlock()
 			return w, nil
 		}
-	} else {
-		c.minerWeights[epoch] = make(map[types.NodeID]uint64, 100)
-		// evict old epoch as it's not needed anymore
-		delete(c.minerWeights, epoch-2)
 	}
 	c.mu.Unlock()
 
@@ -58,6 +54,9 @@ func (c *cachedWeights) MinerWeight(ctx context.Context, epoch types.EpochID, no
 	} else {
 		c.minerWeights[epoch] = make(map[types.NodeID]uint64, 100)
 		c.minerWeights[epoch][node] = w
+
+		// evict old epoch as it's not needed anymore
+		delete(c.minerWeights, epoch-2)
 	}
 	return w, nil
 }

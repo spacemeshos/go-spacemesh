@@ -92,8 +92,6 @@ func New(
 		cfg:         DefaultConfig(),
 		log:         zap.NewNop(),
 	}
-	// oracle.minerWeightFn = oracle.minerWeight
-	// oracle.totalWeightFn = oracle.totalWeight
 	for _, opt := range opts {
 		opt(oracle)
 	}
@@ -319,12 +317,4 @@ func (o *Oracle) layerToEpoch(layer types.LayerID) types.EpochID {
 		epoch -= 1
 	}
 	return epoch
-}
-
-func (o *Oracle) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
-	return o.weights.TotalWeight(ctx, epoch)
-}
-
-func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint64, error) {
-	return o.weights.MinerWeight(ctx, epoch, node)
 }

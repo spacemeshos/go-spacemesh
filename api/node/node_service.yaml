@@ -167,11 +167,11 @@ paths:
                 $ref: "models/components.yaml#/components/schemas/HareRoundTemplate"
         "204":
           description: did not find a message to retrieve
-  /hare/total_weight/{epoch}:
+  /weights/total/{epoch}:
     get:
       summary: Get the total weight for epoch
       tags:
-        - "hare"
+        - "weights"
       parameters:
         - in: path
           name: epoch
@@ -191,13 +191,11 @@ paths:
                     format: uint64
                 required:
                   - weight
-        "204":
-          description: did not find a message to retrieve
-  /hare/weight/{node_id}/{epoch}:
+  /weights/miner/{node_id}/{epoch}:
     get:
       summary: Get the miner weight in epoch
       tags:
-        - "hare"
+        - "weights"
       parameters:
         - in: path
           name: node_id
@@ -222,19 +220,17 @@ paths:
                     format: uint64
                 required:
                   - weight
-        "204":
-          description: did not find a message to retrieve
         "400":
           description: Bad request
           content:
             plain/text:
               schema:
                 type: string
-  /hare/beacon/{epoch}:
+  /beacon/{epoch}:
     get:
       summary: Get the beacon value for an epoch
       tags:
-        - "hare"
+        - "beacon"
       parameters:
         - in: path
           name: epoch
