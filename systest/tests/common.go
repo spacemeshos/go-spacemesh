@@ -44,7 +44,7 @@ func sendTransactions(
 		client := cl.Client(i % cl.Total())
 		nonce, err := getNonce(ctx, client, cl.Address(i))
 		if err != nil {
-			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i), err)
+			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i).String(), err)
 		}
 		watchLayers(ctx, eg, client, logger, func(layer *pb2.Layer) (bool, error) {
 			if layer.Number >= stop {
@@ -415,6 +415,7 @@ func nextFirstLayer(current, size uint32) uint32 {
 func getNonce(ctx context.Context, node *cluster.NodeClient, address types.Address) (uint64, error) {
 	resp, err := pb2.NewAccountServiceClient(node.PubConn()).List(ctx, &pb2.AccountRequest{
 		Addresses: []string{address.String()},
+		Limit:     1,
 	})
 	if err != nil {
 		return 0, err
