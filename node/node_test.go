@@ -1328,6 +1328,8 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.POST.LabelsPerUnit = 32
 	cfg.POST.K2 = 4
 
+	cfg.BaseConfig.PoetServers = nil
+
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = false
 	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
