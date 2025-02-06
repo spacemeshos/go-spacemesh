@@ -462,7 +462,10 @@ func NewPoetServiceWithClient(
 		opt(service)
 	}
 
-	err := service.verifyPhaseShiftConfiguration(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	defer cancel()
+
+	err := service.verifyPhaseShiftConfiguration(ctx)
 	switch {
 	case errors.Is(err, errIncompatiblePhaseShift):
 		logger.Fatal("failed to create poet service", zap.String("poet", client.Address()))
