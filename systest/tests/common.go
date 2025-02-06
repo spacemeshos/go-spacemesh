@@ -145,7 +145,7 @@ BACKOFF:
 		Watch: true,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("streaming layers for %s: %w", node.Name, err)
 	}
 	defer stream.CloseSend()
 	for {
@@ -196,7 +196,7 @@ BACKOFF:
 		Watch: true,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("streaming malfeasance for %s: %w", node.Name, err)
 	}
 	defer proofs.CloseSend()
 	for {
@@ -267,7 +267,7 @@ BACKOFF:
 		Watch: true,
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("streaming transactions for %s: %w", node.Name, err)
 	}
 	defer stream.CloseSend()
 	for {
@@ -318,7 +318,7 @@ func watchProposals(
 		client := pb.NewDebugServiceClient(node.PrivConn())
 		stream, err := client.ProposalsStream(ctx, &emptypb.Empty{})
 		if err != nil {
-			return fmt.Errorf("proposal stream for %s: %w", node.Name, err)
+			return fmt.Errorf("streaming proposals for %s: %w", node.Name, err)
 		}
 		defer stream.CloseSend()
 		for {
