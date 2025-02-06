@@ -2,6 +2,21 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.13
+
+### Highlights
+
+With this release the implementation of ATXv2 is complete. We are now actively testing before enabling the feature on
+mainnet.
+
+### Improvements
+
+* [#6652](https://github.com/spacemeshos/go-spacemesh/pull/6652) Finalize implementation of malfeasance v2, new proofs
+  can now be synced between nodes.
+
+* [#6673](https://github.com/spacemeshos/go-spacemesh/pull/6673) Don't log ERROR when sync fails against a peer. Only
+  if sync against multiple peers fail the node will log an error.
+
 ## v1.7.12
 
 Sync v2 is now enabled by default for all nodes. Nodes will sync faster and use less resources. At the moment only ATXs
