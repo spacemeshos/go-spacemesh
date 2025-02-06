@@ -24,7 +24,7 @@ func Has(db sql.Executor, address types.Address) (bool, error) {
 // Latest latest account data for an address.
 func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	var account types.Account
-	_, err := db.Exec(`
+	rows, err := db.Exec(`
 		select balance, next_nonce, layer_updated, template, state from accounts
 		where address = ?1
 		order by layer_updated desc;`,
@@ -46,20 +46,16 @@ func Latest(db sql.Executor, address types.Address) (types.Account, error) {
 	if err != nil {
 		return types.Account{}, fmt.Errorf("failed to load %v: %w", address, err)
 	}
-	// TODO(mafa): returning `sql.ErrNotFound` causes a bunch of tests to fail, some even panic
-	// this needs to be investigated and fixed
-	//
-	// if account.Address != address {
-	// 	return types.Account{}, sql.ErrNotFound
-	// }
-	account.Address = address // without this tests are failing not only assertions but are also panicking
+	if rows == 0 {
+		return types.Account{}, sql.ErrNotFound
+	}
 	return account, nil
 }
 
 // Get account data that was valid at the specified layer.
 func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Account, error) {
 	var account types.Account
-	_, err := db.Exec(`
+	rows, err := db.Exec(`
 		select balance, next_nonce, layer_updated, template, state from accounts
 		where address = ?1 and layer_updated <= ?2
 		order by layer_updated desc;`,
@@ -84,13 +80,9 @@ func Get(db sql.Executor, address types.Address, layer types.LayerID) (types.Acc
 	if err != nil {
 		return types.Account{}, fmt.Errorf("failed to load %v for layer %v: %w", address, layer, err)
 	}
-	// TODO(mafa): returning `sql.ErrNotFound` causes a bunch of tests to fail, some even panic
-	// this needs to be investigated and fixed
-	//
-	// if account.Address != address {
-	// 	return types.Account{}, sql.ErrNotFound
-	// }
-	account.Address = address // without this tests are failing not only assertions but are also panicking
+	if rows == 0 {
+		return types.Account{}, sql.ErrNotFound
+	}
 	return account, nil
 }
 

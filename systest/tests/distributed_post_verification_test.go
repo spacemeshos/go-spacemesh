@@ -118,7 +118,7 @@ func testPostMalfeasance(
 	signer, err := signing.NewEdSigner(signing.WithPrefix(cl.GenesisID().Bytes()))
 	require.NoError(t, err)
 
-	prologue := fmt.Sprintf("%x-%v", cl.GenesisID(), cfg.LayersPerEpoch*2-1)
+	prologue := fmt.Sprintf("%x-%v", cl.GenesisID().Bytes(), cfg.LayersPerEpoch*2-1)
 	host, err := p2p.New(
 		logger.Named("p2p"),
 		cfg.P2P,

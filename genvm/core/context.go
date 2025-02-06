@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/spacemeshos/go-scale"
@@ -235,7 +236,10 @@ func (c *Context) load(address types.Address) (*Account, error) {
 	account, exist := c.changed[address]
 	if !exist {
 		loaded, err := c.Loader.Get(address)
-		if err != nil {
+		switch {
+		case errors.Is(err, ErrNotFound):
+			loaded = types.Account{Address: address}
+		case err != nil:
 			return nil, fmt.Errorf("%w: %w", ErrInternal, err)
 		}
 		account = &loaded

@@ -1,6 +1,8 @@
 package core
 
 import (
+	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
@@ -11,7 +13,11 @@ type DBLoader struct {
 }
 
 func (db DBLoader) Get(address types.Address) (types.Account, error) {
-	return accounts.Latest(db.Executor, address)
+	account, err := accounts.Latest(db.Executor, address)
+	if errors.Is(err, sql.ErrNotFound) {
+		return types.Account{}, ErrNotFound
+	}
+	return account, err
 }
 
 // NewStagedCache returns instance of the staged cache.

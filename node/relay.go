@@ -46,7 +46,7 @@ func runRelay(ctx context.Context, cfg *config.Config) error {
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 	prologue := fmt.Sprintf("%x-%v",
-		cfg.Genesis.GenesisID(),
+		cfg.Genesis.GenesisID().Bytes(),
 		types.GetEffectiveGenesis(),
 	)
 	// Prevent testnet nodes from working on the mainnet, but

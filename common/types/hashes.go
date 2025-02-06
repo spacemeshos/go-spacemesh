@@ -44,12 +44,6 @@ func (h Hash20) ShortString() string {
 	return hex.EncodeToString(h[:5])
 }
 
-// Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
-// without going through the stringer interface used for logging.
-func (h Hash20) Format(s fmt.State, c rune) {
-	fmt.Fprintf(s, "%"+string(c), h[:])
-}
-
 // UnmarshalText parses a hash in hex syntax.
 func (h *Hash20) UnmarshalText(input []byte) error {
 	if err := util.UnmarshalFixedText("Hash", input, h[:]); err != nil {
@@ -161,12 +155,6 @@ func (h Hash32) String() string {
 // ShortString returns the first 5 hex-encoded bytes of the hash, for logging purposes.
 func (h Hash32) ShortString() string {
 	return hex.EncodeToString(h[:5])
-}
-
-// Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
-// without going through the stringer interface used for logging.
-func (h Hash32) Format(s fmt.State, c rune) {
-	fmt.Fprintf(s, "%"+string(c), h[:])
 }
 
 // UnmarshalText parses a hash in hex syntax.

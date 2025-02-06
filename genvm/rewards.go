@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -67,7 +68,10 @@ func (v *VM) addRewards(
 		}
 		result = append(result, reward)
 		account, err := ss.Get(blockReward.Coinbase)
-		if err != nil {
+		switch {
+		case errors.Is(err, core.ErrNotFound):
+			account = types.Account{Address: blockReward.Coinbase}
+		case err != nil:
 			return nil, fmt.Errorf("%w: %w", core.ErrInternal, err)
 		}
 		account.Balance += reward.TotalReward

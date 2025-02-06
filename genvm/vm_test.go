@@ -34,6 +34,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/genvm/templates/wallet"
 	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/accounts"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -1441,9 +1442,13 @@ func runTestCases(t *testing.T, tcs []templateTestCase, genTester func(t *testin
 				}
 				for account, changes := range layer.expected {
 					prev, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid.Sub(1))
-					require.NoError(tt, err)
+					if err != nil {
+						require.ErrorIs(t, err, sql.ErrNotFound)
+					}
 					current, err := accounts.Get(tt.db, tt.accounts[account].getAddress(), lid)
-					require.NoError(tt, err)
+					if err != nil {
+						require.ErrorIs(t, err, sql.ErrNotFound)
+					}
 					tt.Logf("verifying account index=%d in layer index=%d", account, i)
 					changes.verify(tt, &prev, &current)
 				}
@@ -1652,6 +1657,7 @@ func testValidation(t *testing.T, tt *tester, template core.Address) {
 			if tc.err != nil {
 				require.ErrorIs(t, err, tc.err)
 			} else {
+				require.NoError(t, err)
 				require.Equal(t, tc.verified, req.Verify())
 				if tc.verified {
 					require.Equal(t, tc.header, header)
