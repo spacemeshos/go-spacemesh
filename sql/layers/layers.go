@@ -385,6 +385,10 @@ func Get(
 			stmt.ColumnBytes(4, layer.StateHash[:])
 			stmt.ColumnBytes(5, layer.AggregatedHash[:])
 
+			if layer.AppliedBlock.IsEmpty() {
+				return true
+			}
+
 			inner := types.InnerBlock{}
 			_, err := codec.DecodeFrom(stmt.ColumnReader(7), &inner)
 			if err != nil {
