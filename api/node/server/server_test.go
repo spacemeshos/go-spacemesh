@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
@@ -31,30 +32,34 @@ func TestServerReadiness(t *testing.T) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
 
-	readiness := make(chan struct{})
+	syncer := NewMocksyncer(ctrl)
 	server := &http.Server{
-		Handler: srv.IntoHandler(http.NewServeMux(), readiness),
+		Handler: srv.IntoHandler(http.NewServeMux(), syncer),
 	}
 
-	go server.Serve(listener)
-	defer server.Close()
+	var eg errgroup.Group
+	eg.Go(func() error {
+		return server.Serve(listener)
+	})
+	t.Cleanup(func() {
+		server.Close()
+		eg.Wait()
+	})
 
-	// Test that server returns 503 when not ready
 	t.Run("returns 503 when not ready", func(t *testing.T) {
-		resp, err := http.Get("http://" + listener.Addr().String() + "/beacon/1")
+		syncer.EXPECT().IsSynced(gomock.Any()).Return(false)
+		resp, err := http.Get("http://" + listener.Addr().String() + "/hare/beacon/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	})
 
-	// Test that server returns normal response after ready
 	t.Run("succeeds after ready", func(t *testing.T) {
-		close(readiness)
-
+		syncer.EXPECT().IsSynced(gomock.Any()).Return(true)
 		beacons.EXPECT().
 			Beacon(gomock.Any(), gomock.Any()).
 			Return(types.Beacon{1, 2, 3}, nil)
 
-		resp, err := http.Get("http://" + listener.Addr().String() + "/beacon/1")
+		resp, err := http.Get("http://" + listener.Addr().String() + "/hare/beacon/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})

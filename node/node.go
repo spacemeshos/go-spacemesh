@@ -2097,8 +2097,8 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		)
 
 		app.nodeServiceServer = &http.Server{
-			// The node-service becomes ready after the initial ATX sync completes.
-			Handler: server.IntoHandler(http.NewServeMux(), app.syncer.RegisterForATXSynced()),
+			// The node-service API is ready only when it's in sync.
+			Handler: server.IntoHandler(http.NewServeMux(), app.syncer),
 		}
 		app.eg.Go(func() error { return app.nodeServiceServer.Serve(lis) })
 	}
