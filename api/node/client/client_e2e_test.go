@@ -56,8 +56,10 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 	listener, err := net.Listen("tcp", "localhost:0")
 	require.NoError(t, err)
 
+	readiness := make(chan struct{})
+	close(readiness)
 	server := &http.Server{
-		Handler: activationServiceServer.IntoHandler(http.NewServeMux()),
+		Handler: activationServiceServer.IntoHandler(http.NewServeMux(), readiness),
 	}
 
 	go server.Serve(listener)

@@ -75,7 +75,9 @@ func NewServer(
 	}
 }
 
-func (s *Server) IntoHandler(mux *http.ServeMux) http.Handler {
+// Turn the server into a HTTP handler.
+// It will return '503 Unavailable' until the readiness channel is closed.
+func (s *Server) IntoHandler(mux *http.ServeMux, readiness <-chan struct{}) http.Handler {
 	loggingMid := func(f nethttp.StrictHTTPHandlerFunc, operationID string) nethttp.StrictHTTPHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, req any) (any, error) {
 			uuid := uuid.New()
@@ -96,15 +98,20 @@ func (s *Server) IntoHandler(mux *http.ServeMux) http.Handler {
 			return response, err
 		}
 	}
-	return HandlerFromMux(NewStrictHandler(s, []StrictMiddlewareFunc{loggingMid}), mux)
-}
-
-func (s *Server) Start(address string) error {
-	server := &http.Server{
-		Handler: s.IntoHandler(http.NewServeMux()),
-		Addr:    address,
+	readinessMid := func(f nethttp.StrictHTTPHandlerFunc, _ string) nethttp.StrictHTTPHandlerFunc {
+		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, req any) (any, error) {
+			select {
+			case <-readiness:
+				return f(ctx, w, r, req)
+			default:
+				// channel is not closed, service is not ready
+				w.WriteHeader(http.StatusServiceUnavailable)
+				return nil, errors.New("service not ready")
+			}
+		}
 	}
-	return server.ListenAndServe()
+
+	return HandlerFromMux(NewStrictHandler(s, []StrictMiddlewareFunc{readinessMid, loggingMid}), mux)
 }
 
 // GetActivationAtxAtxId implements StrictServerInterface.
