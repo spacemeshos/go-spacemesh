@@ -90,21 +90,23 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 
 		eg.Go(func() error {
 			err := layersStream(ctx, node, tctx.Log.Desugar(),
-				func(state *pb.Layer) (bool, error) {
-					layer := state.Number
-					if layer > stop {
+				func(layer *pb.Layer) (bool, error) {
+					if layer.Number < first {
+						return true, nil
+					}
+					if layer.Number > stop {
 						return false, nil
 					}
 
-					stateHash := types.BytesToHash(state.StateHash)
+					stateHash := types.BytesToHash(layer.StateHash)
 					tctx.Log.Debugw("state hash collected",
 						"client", node.Name,
-						"layer", layer,
+						"layer", layer.Number,
 						"state", stateHash.ShortString(),
 					)
 					select {
 					case stateCh <- &stateUpdate{
-						layer:  layer,
+						layer:  layer.Number,
 						hash:   stateHash,
 						client: node.Name,
 					}: // continue

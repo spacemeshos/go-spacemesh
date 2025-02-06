@@ -89,6 +89,9 @@ func TestEquivocation(t *testing.T) {
 		client := cl.Client(i)
 		results[client.Name] = make(map[int]string)
 		watchLayers(cctx, &eg, client, cctx.Log.Desugar(), func(resp *pb.Layer) (bool, error) {
+			if resp.Number < startTest {
+				return true, nil
+			}
 			if resp.Status != pb.Layer_LAYER_STATUS_VERIFIED {
 				return true, nil
 			}

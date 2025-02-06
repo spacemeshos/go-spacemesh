@@ -74,6 +74,9 @@ func TestPoetsFailures(t *testing.T) {
 
 	watchLayers(ctx, eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb2.Layer) (bool, error) {
 		// Will kill a poet from time to time
+		if layer.Number < first {
+			return true, nil
+		}
 		if layer.Number > last {
 			tctx.Log.Debug("Poet killer is done")
 			return false, nil

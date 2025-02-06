@@ -47,10 +47,13 @@ func sendTransactions(
 			return fmt.Errorf("get nonce failed (%s: %s): %w", client.Name, cl.Address(i).String(), err)
 		}
 		watchLayers(ctx, eg, client, logger, func(layer *pb2.Layer) (bool, error) {
+			if layer.Number < first {
+				return true, nil
+			}
 			if layer.Number >= stop {
 				return false, nil
 			}
-			if layer.Status != pb2.Layer_LAYER_STATUS_APPLIED || layer.Number < first {
+			if layer.Status != pb2.Layer_LAYER_STATUS_APPLIED {
 				return true, nil
 			}
 			// give some time for a previous layer to be applied
@@ -371,14 +374,16 @@ func scheduleChaos(
 ) {
 	var teardown chaos.Teardown
 	watchLayers(ctx, eg, client, logger, func(layer *pb2.Layer) (bool, error) {
-		if layer.Number == from && teardown == nil {
+		switch {
+		case layer.Number < from:
+			return true, nil
+		case layer.Number == from && teardown == nil:
 			var err error
 			teardown, err = action(ctx)
 			if err != nil {
 				return false, err
 			}
-		}
-		if layer.Number == to {
+		case layer.Number >= to:
 			if err := teardown(ctx); err != nil {
 				return false, err
 			}

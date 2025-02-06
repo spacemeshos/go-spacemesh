@@ -148,11 +148,11 @@ func TestFailedNodes(t *testing.T) {
 					"hash",
 					prettyHex(layer.StateHash),
 				)
-				if layer.Number == stopLayer {
-					return false, nil
-				}
 				if layer.Number <= lastLayer {
 					hashes[i][layer.Number] = prettyHex(layer.StateHash)
+				}
+				if layer.Number >= stopLayer {
+					return false, nil
 				}
 			}
 			return true, nil

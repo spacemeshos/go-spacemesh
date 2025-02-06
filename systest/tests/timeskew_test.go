@@ -71,6 +71,9 @@ func TestShortTimeSkew(t *testing.T) {
 
 	var confirmed uint32
 	watchLayers(ctx, eg, client, tctx.Log.Desugar(), func(layer *pb.Layer) (bool, error) {
+		if layer.Number < enableSkew {
+			return true, nil
+		}
 		if layer.Number >= stopTest {
 			return false, nil
 		}
