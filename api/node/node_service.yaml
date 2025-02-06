@@ -40,7 +40,7 @@ paths:
           name: node_id
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/Bytes32"
+            $ref: "models/components.yaml#/components/schemas/Bytes32Hex"
       responses:
         "200":
           description: ATX
@@ -68,7 +68,7 @@ paths:
           name: atx_id
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/Bytes32"
+            $ref: "models/components.yaml#/components/schemas/Bytes32Hex"
       responses:
         "200":
           description: ATX
@@ -201,7 +201,7 @@ paths:
           name: node_id
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/Bytes32"
+            $ref: "models/components.yaml#/components/schemas/Bytes32Hex"
         - in: path
           name: epoch
           required: true
@@ -266,7 +266,7 @@ paths:
           name: node
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/Bytes32"
+            $ref: "models/components.yaml#/components/schemas/Bytes32Hex"
       responses:
         "200":
           description: successfully created a partial proposal
@@ -294,7 +294,7 @@ paths:
           name: node
           required: true
           schema:
-            $ref: "models/components.yaml#/components/schemas/Bytes32"
+            $ref: "models/components.yaml#/components/schemas/Bytes32Hex"
         - in: path
           name: epoch
           required: true

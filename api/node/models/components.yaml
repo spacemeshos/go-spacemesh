@@ -95,6 +95,11 @@ components:
       format: byte
       minLength: 44
       maxLength: 44
+    Bytes32Hex:
+      type: string
+      format: hex
+      minLength: 64
+      maxLength: 64
     Beacon:
       type: string
       format: byte
