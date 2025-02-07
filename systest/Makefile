@@ -10,7 +10,7 @@ poet_image ?= $(org)/poet:v0.10.10
 post_service_image ?= $(org)/post-service:v0.8.4
 post_init_image ?= $(org)/postcli:v0.12.10
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
-old_smesher_image ?= $(org)/go-spacemesh-dev:43f582f # TODO: update this after merging, new version updated config
+old_smesher_image ?= $(org)/go-spacemesh-dev:8d89a07 # TODO: update this after merging, new version updated config
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 
 test_id ?= systest-$(version_info)
