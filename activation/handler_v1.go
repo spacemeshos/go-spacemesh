@@ -7,6 +7,7 @@ import (
 	"math/bits"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
@@ -321,7 +322,12 @@ func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, malic
 }
 
 // checkDoublePublish verifies if a node has already published an ATX in the same epoch.
-func (h *HandlerV1) checkDoublePublish(ctx context.Context, tx sql.Executor, atx *wire.ActivationTxV1, publishing bool) (bool, error) {
+func (h *HandlerV1) checkDoublePublish(
+	ctx context.Context,
+	tx sql.Executor,
+	atx *wire.ActivationTxV1,
+	peer peer.ID,
+) (bool, error) {
 	prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return false, err
@@ -331,7 +337,7 @@ func (h *HandlerV1) checkDoublePublish(ctx context.Context, tx sql.Executor, atx
 		return false, nil
 	}
 
-	if publishing {
+	if peer == h.local {
 		// if we land here we tried to publish 2 ATXs in the same epoch
 		// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
 		return false, fmt.Errorf(
@@ -380,7 +386,12 @@ func (h *HandlerV1) checkDoublePublish(ctx context.Context, tx sql.Executor, atx
 }
 
 // checkWrongPrevAtx verifies if the previous ATX referenced in the ATX is correct.
-func (h *HandlerV1) checkWrongPrevAtx(ctx context.Context, tx sql.Executor, atx *wire.ActivationTxV1, publishing bool) (bool, error) {
+func (h *HandlerV1) checkWrongPrevAtx(
+	ctx context.Context,
+	tx sql.Executor,
+	atx *wire.ActivationTxV1,
+	peer peer.ID,
+) (bool, error) {
 	expectedPrevID, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, atx.PublishEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return false, fmt.Errorf("get last atx by node id: %w", err)
@@ -389,7 +400,7 @@ func (h *HandlerV1) checkWrongPrevAtx(ctx context.Context, tx sql.Executor, atx 
 		return false, nil
 	}
 
-	if publishing {
+	if peer == h.local {
 		// if we land here we tried to publish an ATX with a wrong prevATX
 		h.logger.Warn(
 			"Node produced an ATX with a wrong prevATX. This can happened when the node wasn't synced when "+
@@ -457,15 +468,20 @@ func (h *HandlerV1) checkWrongPrevAtx(ctx context.Context, tx sql.Executor, atx 
 	return true, h.malPublisher.PublishProof(ctx, atx.SmesherID, proof)
 }
 
-func (h *HandlerV1) checkMalicious(ctx context.Context, tx sql.Transaction, watx *wire.ActivationTxV1, publishing bool) (bool, error) {
-	malicious, err := h.checkDoublePublish(ctx, tx, watx, publishing)
+func (h *HandlerV1) checkMalicious(
+	ctx context.Context,
+	tx sql.Transaction,
+	watx *wire.ActivationTxV1,
+	peer peer.ID,
+) (bool, error) {
+	malicious, err := h.checkDoublePublish(ctx, tx, watx, peer)
 	if err != nil {
 		return malicious, fmt.Errorf("check double publish: %w", err)
 	}
 	if malicious {
 		return true, nil
 	}
-	malicious, err = h.checkWrongPrevAtx(ctx, tx, watx, publishing)
+	malicious, err = h.checkWrongPrevAtx(ctx, tx, watx, peer)
 	if err != nil {
 		return malicious, fmt.Errorf("check wrong prev atx: %w", err)
 	}
@@ -473,7 +489,12 @@ func (h *HandlerV1) checkMalicious(ctx context.Context, tx sql.Transaction, watx
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
-func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *wire.ActivationTxV1, publishing bool) error {
+func (h *HandlerV1) storeAtx(
+	ctx context.Context,
+	atx *types.ActivationTx,
+	watx *wire.ActivationTxV1,
+	peer peer.ID,
+) error {
 	var malicious bool
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		var err error
@@ -487,7 +508,7 @@ func (h *HandlerV1) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		}
 		malicious = malicious || malicious2
 		if !malicious {
-			malicious, err = h.checkMalicious(ctx, tx, watx, publishing)
+			malicious, err = h.checkMalicious(ctx, tx, watx, peer)
 			if err != nil {
 				return fmt.Errorf("check malicious: %w", err)
 			}
@@ -560,8 +581,7 @@ func (h *HandlerV1) processATX(
 		return fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
 
-	publishing := h.local == peer
-	if err := h.storeAtx(ctx, atx, watx, publishing); err != nil {
+	if err := h.storeAtx(ctx, atx, watx, peer); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
