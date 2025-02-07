@@ -413,7 +413,7 @@ type App struct {
 	hare4                 *hare4.Hare
 	remoteHare            *hare3.RemoteHare
 	hareResultsChan       chan hare4.ConsensusOutput
-	hOracle               *eligibility.Oracle
+	activeSetCache        *eligibility.ActiveSetCache
 	blockGen              *blocks.Generator
 	certifier             *blocks.Certifier
 	atxBuilder            *activation.Builder
@@ -788,10 +788,20 @@ func (app *App) initServices(ctx context.Context) error {
 		app.addLogger(TxHandlerLogger, lg).Zap(),
 	)
 
-	hOracle, err := eligibility.New(
+	oracleLogger := app.addLogger(HareOracleLogger, lg).Zap()
+	activeSetCache, err := eligibility.NewActiveSetCache(
 		&beaconGetter{beaconProtocol},
 		app.db,
 		app.atxsdata,
+		oracleLogger,
+	)
+	if err != nil {
+		return fmt.Errorf("create active set cache: %w", err)
+	}
+	app.activeSetCache = activeSetCache
+	hOracle, err := eligibility.New(
+		activeSetCache,
+		&beaconGetter{beaconProtocol},
 		vrfVerifier,
 		app.Config.LayersPerEpoch,
 		eligibility.WithConfig(app.Config.HareEligibility),
@@ -902,7 +912,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	beaconProtocol.SetSyncState(newSyncer)
-	hOracle.SetSync(newSyncer)
+	activeSetCache.SetSync(newSyncer)
 
 	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
 	if err != nil {
@@ -1368,7 +1378,6 @@ func (app *App) initServices(ctx context.Context) error {
 	app.poetDb = poetDb
 	app.fetcher = fetcher
 	app.beaconProtocol = beaconProtocol
-	app.hOracle = hOracle
 	app.certifier = certifier
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
@@ -1483,7 +1492,7 @@ func (app *App) listenToUpdates(ctx context.Context) {
 						return nil
 					}
 
-					app.hOracle.UpdateActiveSet(epoch, set)
+					app.activeSetCache.UpdateActiveSet(epoch, set)
 
 					if app.proposalBuilder != nil {
 						app.proposalBuilder.UpdateActiveSet(epoch, set)
@@ -1575,7 +1584,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 
 	switch svc {
 	case grpcserver.Debug:
-		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.hOracle, app.loggers)
+		service := grpcserver.NewDebugService(app.db, app.conState, app.host, app.activeSetCache, app.loggers)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.GlobalState:
@@ -2065,6 +2074,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 			app.host,
 			app.poetDb,
 			app.hare3,
+			app.activeSetCache,
 			app.proposalBuilder,
 			logger,
 		)

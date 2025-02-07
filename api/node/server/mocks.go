@@ -167,45 +167,6 @@ func (m *Mockhare) EXPECT() *MockhareMockRecorder {
 	return m.recorder
 }
 
-// MinerWeight mocks base method.
-func (m *Mockhare) MinerWeight(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "MinerWeight", ctx, node, epoch)
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// MinerWeight indicates an expected call of MinerWeight.
-func (mr *MockhareMockRecorder) MinerWeight(ctx, node, epoch any) *MockhareMinerWeightCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerWeight", reflect.TypeOf((*Mockhare)(nil).MinerWeight), ctx, node, epoch)
-	return &MockhareMinerWeightCall{Call: call}
-}
-
-// MockhareMinerWeightCall wrap *gomock.Call
-type MockhareMinerWeightCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockhareMinerWeightCall) Return(arg0 uint64, arg1 error) *MockhareMinerWeightCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockhareMinerWeightCall) Do(f func(context.Context, types.NodeID, types.EpochID) (uint64, error)) *MockhareMinerWeightCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareMinerWeightCall) DoAndReturn(f func(context.Context, types.NodeID, types.EpochID) (uint64, error)) *MockhareMinerWeightCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // RoundTemplate mocks base method.
 func (m *Mockhare) RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body {
 	m.ctrl.T.Helper()
@@ -244,8 +205,71 @@ func (c *MockhareRoundTemplateCall) DoAndReturn(f func(types.LayerID, hare3.Iter
 	return c
 }
 
+// Mockweights is a mock of weights interface.
+type Mockweights struct {
+	ctrl     *gomock.Controller
+	recorder *MockweightsMockRecorder
+	isgomock struct{}
+}
+
+// MockweightsMockRecorder is the mock recorder for Mockweights.
+type MockweightsMockRecorder struct {
+	mock *Mockweights
+}
+
+// NewMockweights creates a new mock instance.
+func NewMockweights(ctrl *gomock.Controller) *Mockweights {
+	mock := &Mockweights{ctrl: ctrl}
+	mock.recorder = &MockweightsMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockweights) EXPECT() *MockweightsMockRecorder {
+	return m.recorder
+}
+
+// MinerWeight mocks base method.
+func (m *Mockweights) MinerWeight(ctx context.Context, epoch types.EpochID, node types.NodeID) (uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "MinerWeight", ctx, epoch, node)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// MinerWeight indicates an expected call of MinerWeight.
+func (mr *MockweightsMockRecorder) MinerWeight(ctx, epoch, node any) *MockweightsMinerWeightCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MinerWeight", reflect.TypeOf((*Mockweights)(nil).MinerWeight), ctx, epoch, node)
+	return &MockweightsMinerWeightCall{Call: call}
+}
+
+// MockweightsMinerWeightCall wrap *gomock.Call
+type MockweightsMinerWeightCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockweightsMinerWeightCall) Return(arg0 uint64, arg1 error) *MockweightsMinerWeightCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockweightsMinerWeightCall) Do(f func(context.Context, types.EpochID, types.NodeID) (uint64, error)) *MockweightsMinerWeightCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockweightsMinerWeightCall) DoAndReturn(f func(context.Context, types.EpochID, types.NodeID) (uint64, error)) *MockweightsMinerWeightCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // TotalWeight mocks base method.
-func (m *Mockhare) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
+func (m *Mockweights) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "TotalWeight", ctx, epoch)
 	ret0, _ := ret[0].(uint64)
@@ -254,31 +278,31 @@ func (m *Mockhare) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64
 }
 
 // TotalWeight indicates an expected call of TotalWeight.
-func (mr *MockhareMockRecorder) TotalWeight(ctx, epoch any) *MockhareTotalWeightCall {
+func (mr *MockweightsMockRecorder) TotalWeight(ctx, epoch any) *MockweightsTotalWeightCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TotalWeight", reflect.TypeOf((*Mockhare)(nil).TotalWeight), ctx, epoch)
-	return &MockhareTotalWeightCall{Call: call}
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TotalWeight", reflect.TypeOf((*Mockweights)(nil).TotalWeight), ctx, epoch)
+	return &MockweightsTotalWeightCall{Call: call}
 }
 
-// MockhareTotalWeightCall wrap *gomock.Call
-type MockhareTotalWeightCall struct {
+// MockweightsTotalWeightCall wrap *gomock.Call
+type MockweightsTotalWeightCall struct {
 	*gomock.Call
 }
 
 // Return rewrite *gomock.Call.Return
-func (c *MockhareTotalWeightCall) Return(arg0 uint64, arg1 error) *MockhareTotalWeightCall {
+func (c *MockweightsTotalWeightCall) Return(arg0 uint64, arg1 error) *MockweightsTotalWeightCall {
 	c.Call = c.Call.Return(arg0, arg1)
 	return c
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockhareTotalWeightCall) Do(f func(context.Context, types.EpochID) (uint64, error)) *MockhareTotalWeightCall {
+func (c *MockweightsTotalWeightCall) Do(f func(context.Context, types.EpochID) (uint64, error)) *MockweightsTotalWeightCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockhareTotalWeightCall) DoAndReturn(f func(context.Context, types.EpochID) (uint64, error)) *MockhareTotalWeightCall {
+func (c *MockweightsTotalWeightCall) DoAndReturn(f func(context.Context, types.EpochID) (uint64, error)) *MockweightsTotalWeightCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

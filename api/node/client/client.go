@@ -187,7 +187,7 @@ func (s *NodeService) HareRoundTemplate(
 }
 
 func (s *NodeService) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
-	resp, err := s.client.GetHareTotalWeightEpochWithResponse(ctx, epoch.Uint32())
+	resp, err := s.client.GetWeightsTotalEpochWithResponse(ctx, epoch.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get total weight: %w", err)
 	}
@@ -200,7 +200,7 @@ func (s *NodeService) TotalWeight(ctx context.Context, epoch types.EpochID) (uin
 }
 
 func (s *NodeService) MinerWeight(ctx context.Context, epoch types.EpochID, node types.NodeID) (uint64, error) {
-	resp, err := s.client.GetHareWeightNodeIdEpochWithResponse(ctx, hex.EncodeToString(node.Bytes()), epoch.Uint32())
+	resp, err := s.client.GetWeightsMinerNodeIdEpochWithResponse(ctx, hex.EncodeToString(node.Bytes()), epoch.Uint32())
 	if err != nil {
 		return 0, fmt.Errorf("get miner weight: %w", err)
 	}
@@ -213,7 +213,7 @@ func (s *NodeService) MinerWeight(ctx context.Context, epoch types.EpochID, node
 }
 
 func (s *NodeService) Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error) {
-	resp, err := s.client.GetHareBeaconEpochWithResponse(ctx, epoch.Uint32())
+	resp, err := s.client.GetBeaconEpochWithResponse(ctx, epoch.Uint32())
 	if err != nil {
 		return types.Beacon{}, fmt.Errorf("get hare beacon: %w", err)
 	}

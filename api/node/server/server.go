@@ -33,8 +33,11 @@ type beaconService interface {
 
 type hare interface {
 	RoundTemplate(layer types.LayerID, round hare3.IterRound) *hare3.Body
+}
+
+type weights interface {
 	TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error)
-	MinerWeight(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint64, error)
+	MinerWeight(ctx context.Context, epoch types.EpochID, node types.NodeID) (uint64, error)
 }
 
 type proposalBuilder interface {
@@ -53,6 +56,7 @@ type Server struct {
 	publisher  pubsub.Publisher
 	poetDB     poetDB
 	hare       hare
+	weights    weights
 	proposals  proposalBuilder
 	logger     *zap.Logger
 }
@@ -65,6 +69,7 @@ func NewServer(
 	publisher pubsub.Publisher,
 	poetDB poetDB,
 	hare hare,
+	weights weights,
 	proposals proposalBuilder,
 	logger *zap.Logger,
 ) *Server {
@@ -74,6 +79,7 @@ func NewServer(
 		publisher:  publisher,
 		poetDB:     poetDB,
 		hare:       hare,
+		weights:    weights,
 		proposals:  proposals,
 		logger:     logger,
 	}
@@ -281,45 +287,47 @@ func (s *Server) GetHareRoundTemplateLayerIterRound(ctx context.Context,
 	return resp, nil
 }
 
-func (s *Server) GetHareTotalWeightEpoch(ctx context.Context,
-	req GetHareTotalWeightEpochRequestObject,
-) (GetHareTotalWeightEpochResponseObject, error) {
-	weight, err := s.hare.TotalWeight(ctx, types.EpochID(req.Epoch))
+func (s *Server) GetWeightsTotalEpoch(
+	ctx context.Context,
+	req GetWeightsTotalEpochRequestObject,
+) (GetWeightsTotalEpochResponseObject, error) {
+	weight, err := s.weights.TotalWeight(ctx, types.EpochID(req.Epoch))
 	if err != nil {
 		return nil, err
 	}
-	return &GetHareTotalWeightEpoch200JSONResponse{Weight: weight}, nil
+	return &GetWeightsTotalEpoch200JSONResponse{Weight: weight}, nil
 }
 
-func (s *Server) GetHareWeightNodeIdEpoch(ctx context.Context,
-	request GetHareWeightNodeIdEpochRequestObject,
-) (GetHareWeightNodeIdEpochResponseObject, error) {
+func (s *Server) GetWeightsMinerNodeIdEpoch(ctx context.Context,
+	request GetWeightsMinerNodeIdEpochRequestObject,
+) (GetWeightsMinerNodeIdEpochResponseObject, error) {
 	id, err := models.ParseNodeIDHex(request.NodeId)
 	if err != nil {
 		msg := err.Error()
-		return GetHareWeightNodeIdEpoch400PlaintextResponse{
+		return GetWeightsMinerNodeIdEpoch400PlaintextResponse{
 			Body:          bytes.NewBuffer([]byte(msg)),
 			ContentLength: int64(len(msg)),
 		}, nil
 	}
-	weight, err := s.hare.MinerWeight(ctx, id, types.EpochID(request.Epoch))
+	weight, err := s.weights.MinerWeight(ctx, types.EpochID(request.Epoch), id)
 	if err != nil {
 		if errors.Is(err, eligibility.ErrNotActive) {
-			return &GetHareWeightNodeIdEpoch200JSONResponse{Weight: 0}, nil
+			return &GetWeightsMinerNodeIdEpoch200JSONResponse{Weight: 0}, nil
 		}
 		return nil, fmt.Errorf("miner weight: %w", err)
 	}
-	return &GetHareWeightNodeIdEpoch200JSONResponse{Weight: weight}, nil
+	return &GetWeightsMinerNodeIdEpoch200JSONResponse{Weight: weight}, nil
 }
 
-func (s *Server) GetHareBeaconEpoch(ctx context.Context,
-	request GetHareBeaconEpochRequestObject,
-) (GetHareBeaconEpochResponseObject, error) {
+func (s *Server) GetBeaconEpoch(
+	ctx context.Context,
+	request GetBeaconEpochRequestObject,
+) (GetBeaconEpochResponseObject, error) {
 	beacon, err := s.beacons.Beacon(ctx, types.EpochID(request.Epoch))
 	if err != nil {
 		return nil, err
 	}
-	return &GetHareBeaconEpoch200JSONResponse{Beacon: beacon[:]}, nil
+	return &GetBeaconEpoch200JSONResponse{Beacon: beacon[:]}, nil
 }
 
 func (s *Server) GetProposalLayerNode(ctx context.Context, request GetProposalLayerNodeRequestObject) (

@@ -111,16 +111,17 @@ func (t *testNodeClock) AwaitLayer(lid types.LayerID) <-chan struct{} {
 type node struct {
 	t *tester
 
-	i          int
-	clock      *clockwork.FakeClock
-	nclock     *testNodeClock
-	signer     *signing.EdSigner
-	registered []*signing.EdSigner
-	atx        *types.ActivationTx
-	oracle     *eligibility.Oracle
-	db         sql.StateDatabase
-	atxsdata   *atxsdata.Data
-	proposals  *store.Store
+	i              int
+	clock          *clockwork.FakeClock
+	nclock         *testNodeClock
+	signer         *signing.EdSigner
+	registered     []*signing.EdSigner
+	atx            *types.ActivationTx
+	activeSetCache *eligibility.ActiveSetCache
+	oracle         *eligibility.Oracle
+	db             sql.StateDatabase
+	atxsdata       *atxsdata.Data
+	proposals      *store.Store
 
 	ctrl       *gomock.Controller
 	mpublisher *pmocks.MockPublishSubscriber
@@ -193,16 +194,19 @@ func (n *node) withOracle(tb testing.TB) *node {
 		func(_ context.Context, epoch types.EpochID) (types.Beacon, error) {
 			return beacons.Get(n.db, epoch)
 		}).AnyTimes()
+	activeSetCache, err := eligibility.NewActiveSetCache(beaconget, n.db, n.atxsdata, zaptest.NewLogger(tb))
+	require.NoError(tb, err)
+	activeSetCache.SetSync(n.msyncer)
+
 	oracle, err := eligibility.New(
+		activeSetCache,
 		beaconget,
-		n.db,
-		n.atxsdata,
 		signing.NewVRFVerifier(),
 		layersPerEpoch,
 	)
 	require.NoError(tb, err)
-	oracle.SetSync(n.msyncer)
 	n.oracle = oracle
+	n.activeSetCache = activeSetCache
 	return n
 }
 
@@ -449,7 +453,7 @@ func (cl *lockstepCluster) setup() {
 			}
 			require.NoError(cl.t, n.storeAtx(other.atx))
 		}
-		n.oracle.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
+		n.activeSetCache.UpdateActiveSet(cl.t.genesis.GetEpoch()+1, active)
 		n.mpublisher.EXPECT().
 			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, _ string, msg []byte) error {
@@ -680,7 +684,7 @@ func TestHandler(t *testing.T) {
 	n := cluster.nodes[0]
 	require.NoError(t, beacons.Add(n.db, tst.genesis.GetEpoch()+1, tst.beacon))
 	require.NoError(t, n.storeAtx(n.atx))
-	n.oracle.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
+	n.activeSetCache.UpdateActiveSet(tst.genesis.GetEpoch()+1, []types.ATXID{n.atx.ID()})
 	n.mpublisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 	layer := tst.genesis + 1
 	n.nclock.StartLayer(layer)

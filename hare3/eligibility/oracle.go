@@ -5,24 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"sync"
 
-	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/spacemeshos/fixed"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"golang.org/x/exp/maps"
 
-	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/activesets"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
-	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -31,8 +22,7 @@ const (
 )
 
 const (
-	activesCacheSize = 5                       // we don't expect to handle more than two layers concurrently
-	maxSupportedN    = (math.MaxInt32 / 2) + 1 // higher values result in an overflow when calculating CDF
+	maxSupportedN = (math.MaxInt32 / 2) + 1 // higher values result in an overflow when calculating CDF
 )
 
 var (
@@ -41,24 +31,6 @@ var (
 	errZeroTotalWeight   = errors.New("zero total weight")
 	ErrNotActive         = errors.New("oracle: miner is not active in epoch")
 )
-
-type identityWeight struct {
-	atx    types.ATXID
-	weight uint64
-}
-
-type cachedActiveSet struct {
-	set   map[types.NodeID]identityWeight
-	total uint64
-}
-
-func (c *cachedActiveSet) atxs() []types.ATXID {
-	atxs := make([]types.ATXID, 0, len(c.set))
-	for _, id := range c.set {
-		atxs = append(atxs, id.atx)
-	}
-	return atxs
-}
 
 // Config is the configuration of the oracle package.
 type Config struct {
@@ -83,38 +55,15 @@ func DefaultConfig() Config {
 
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
-	mu           sync.Mutex
-	activesCache activeSetCache
-	fallback     map[types.EpochID][]types.ATXID
-	sync         system.SyncStateProvider
-	// NOTE(dshulyak) on switch from synced to not synced reset the cache
-	// to cope with https://github.com/spacemeshos/go-spacemesh/issues/4552
-	// until graded oracle is implemented
-	synced bool
+	weights weights
 
-	beacons       BeaconProvider
-	atxsdata      *atxsdata.Data
-	db            sql.Executor
-	vrfVerifier   vrfVerifier
-	cfg           Config
-	minerWeightFn func(context.Context, types.EpochID, types.NodeID) (uint64, error)
-	totalWeightFn func(context.Context, types.EpochID) (uint64, error)
-	log           *zap.Logger
+	beacons     BeaconProvider
+	vrfVerifier vrfVerifier
+	cfg         Config
+	log         *zap.Logger
 }
 
 type Opt func(*Oracle)
-
-func WithMinerWeightFunc(f func(context.Context, types.EpochID, types.NodeID) (uint64, error)) Opt {
-	return func(o *Oracle) {
-		o.minerWeightFn = f
-	}
-}
-
-func WithTotalWeightFunc(f func(context.Context, types.EpochID) (uint64, error)) Opt {
-	return func(o *Oracle) {
-		o.totalWeightFn = f
-	}
-}
 
 func WithConfig(config Config) Opt {
 	return func(o *Oracle) {
@@ -130,29 +79,19 @@ func WithLogger(logger *zap.Logger) Opt {
 
 // New returns a new eligibility oracle instance.
 func New(
+	weights weights,
 	beacons BeaconProvider,
-	db sql.Executor,
-	atxsdata *atxsdata.Data,
 	vrfVerifier vrfVerifier,
 	layersPerEpoch uint32,
 	opts ...Opt,
 ) (*Oracle, error) {
-	activesCache, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
-	if err != nil {
-		return nil, fmt.Errorf("create lru cache for active set: %w", err)
-	}
 	oracle := &Oracle{
-		beacons:      beacons,
-		db:           db,
-		atxsdata:     atxsdata,
-		vrfVerifier:  vrfVerifier,
-		activesCache: activesCache,
-		fallback:     map[types.EpochID][]types.ATXID{},
-		cfg:          DefaultConfig(),
-		log:          zap.NewNop(),
+		beacons:     beacons,
+		vrfVerifier: vrfVerifier,
+		weights:     weights,
+		cfg:         DefaultConfig(),
+		log:         zap.NewNop(),
 	}
-	oracle.minerWeightFn = oracle.minerWeight
-	oracle.totalWeightFn = oracle.totalWeight
 	for _, opt := range opts {
 		opt(oracle)
 	}
@@ -178,24 +117,6 @@ type VrfMessage struct {
 	Layer  types.LayerID
 }
 
-func (o *Oracle) SetSync(sync system.SyncStateProvider) {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.sync = sync
-}
-
-func (o *Oracle) resetCacheOnSynced(ctx context.Context) {
-	synced := o.synced
-	o.synced = o.sync.IsSynced(ctx)
-	if !synced && o.synced {
-		ac, err := lru.New[types.EpochID, *cachedActiveSet](activesCacheSize)
-		if err != nil {
-			o.log.Fatal("failed to create lru cache for active set", zap.Error(err))
-		}
-		o.activesCache = ac
-	}
-}
-
 // buildVRFMessage builds the VRF message used as input for hare eligibility validation.
 func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	beacon, err := o.beacons.Beacon(ctx, layer.GetEpoch())
@@ -203,27 +124,6 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 	return codec.MustEncode(&VrfMessage{Type: types.EligibilityHare, Beacon: beacon, Round: round, Layer: layer}), nil
-}
-
-func (o *Oracle) totalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
-	actives, err := o.actives(ctx, epoch)
-	if err != nil {
-		return 0, err
-	}
-	return actives.total, nil
-}
-
-func (o *Oracle) minerWeight(ctx context.Context, epoch types.EpochID, id types.NodeID) (uint64, error) {
-	actives, err := o.actives(ctx, epoch)
-	if err != nil {
-		return 0, err
-	}
-
-	w, ok := actives.set[id]
-	if !ok {
-		return 0, fmt.Errorf("%w: %v", ErrNotActive, id)
-	}
-	return w.weight, nil
 }
 
 func calcVrfFrac(vrfSig types.VrfSignature) fixed.Fixed {
@@ -254,7 +154,7 @@ func (o *Oracle) prepareEligibilityCheck(
 
 	// calc hash & check threshold
 	// this is cheap in case the node is not eligible
-	minerWeight, err := o.minerWeightFn(ctx, o.layerToEpoch(layer), id)
+	minerWeight, err := o.weights.MinerWeight(ctx, o.layerToEpoch(layer), id)
 	if err != nil {
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
@@ -272,7 +172,7 @@ func (o *Oracle) prepareEligibilityCheck(
 	}
 
 	// get active set size
-	totalWeight, err := o.totalWeightFn(ctx, o.layerToEpoch(layer))
+	totalWeight, err := o.weights.TotalWeight(ctx, o.layerToEpoch(layer))
 	if err != nil {
 		logger.Error("failed to get total weight", zap.Error(err))
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
@@ -417,147 +317,4 @@ func (o *Oracle) layerToEpoch(layer types.LayerID) types.EpochID {
 		epoch -= 1
 	}
 	return epoch
-}
-
-// Returns a set of all active node IDs in the specified epoch.
-func (o *Oracle) actives(ctx context.Context, targetEpoch types.EpochID) (*cachedActiveSet, error) {
-	if !targetEpoch.FirstLayer().After(types.GetEffectiveGenesis()) {
-		return nil, errEmptyActiveSet
-	}
-	o.log.Debug("hare oracle getting active set",
-		log.ZContext(ctx),
-		zap.Uint32("target_epoch", targetEpoch.Uint32()),
-	)
-
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	o.resetCacheOnSynced(ctx)
-	if value, exists := o.activesCache.Get(targetEpoch); exists {
-		return value, nil
-	}
-	activeSet, err := o.computeActiveSet(ctx, targetEpoch)
-	if err != nil {
-		return nil, err
-	}
-	if len(activeSet) == 0 {
-		return nil, errEmptyActiveSet
-	}
-	activeWeights, err := o.computeActiveWeights(targetEpoch, activeSet)
-	if err != nil {
-		return nil, err
-	}
-
-	aset := &cachedActiveSet{set: activeWeights}
-	for _, aweight := range activeWeights {
-		aset.total += aweight.weight
-	}
-	o.log.Debug("got hare active set", log.ZContext(ctx), zap.Int("count", len(activeWeights)))
-	o.activesCache.Add(targetEpoch, aset)
-	return aset, nil
-}
-
-func (o *Oracle) ActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
-	aset, err := o.actives(ctx, targetEpoch)
-	if err != nil {
-		return nil, err
-	}
-	return aset.atxs(), nil
-}
-
-func (o *Oracle) computeActiveSet(ctx context.Context, targetEpoch types.EpochID) ([]types.ATXID, error) {
-	activeSet, ok := o.fallback[targetEpoch]
-	if ok {
-		o.log.Debug("using fallback active set",
-			log.ZContext(ctx),
-			zap.Uint32("target_epoch", targetEpoch.Uint32()),
-			zap.Int("size", len(activeSet)),
-		)
-		return activeSet, nil
-	}
-
-	activeSet, err := miner.ActiveSetFromEpochFirstBlock(o.db, targetEpoch)
-	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return nil, err
-	}
-	if len(activeSet) == 0 {
-		return o.activeSetFromRefBallots(ctx, targetEpoch)
-	}
-	return activeSet, nil
-}
-
-func (o *Oracle) computeActiveWeights(
-	targetEpoch types.EpochID,
-	activeSet []types.ATXID,
-) (map[types.NodeID]identityWeight, error) {
-	identities := make(map[types.NodeID]identityWeight, len(activeSet))
-	for _, id := range activeSet {
-		atx := o.atxsdata.Get(targetEpoch, id)
-		if atx == nil {
-			return nil, fmt.Errorf("oracle: missing atx in atxsdata %s/%s", targetEpoch, id.ShortString())
-		}
-		identities[atx.Node] = identityWeight{atx: id, weight: atx.Weight}
-	}
-	return identities, nil
-}
-
-func (o *Oracle) activeSetFromRefBallots(ctx context.Context, epoch types.EpochID) ([]types.ATXID, error) {
-	beacon, err := o.beacons.Beacon(ctx, epoch)
-	if err != nil {
-		return nil, fmt.Errorf("get beacon: %w", err)
-	}
-	ballotsrst, err := ballots.AllFirstInEpoch(o.db, epoch)
-	if err != nil {
-		return nil, fmt.Errorf("first in epoch %d: %w", epoch, err)
-	}
-	activeMap := make(map[types.ATXID]struct{}, len(ballotsrst))
-	for _, ballot := range ballotsrst {
-		if ballot.EpochData == nil {
-			o.log.Error("invalid data. first ballot doesn't have epoch data", zap.Inline(ballot))
-			continue
-		}
-		if ballot.EpochData.Beacon != beacon {
-			o.log.Debug("beacon mismatch", zap.Stringer("local", beacon), zap.Object("ballot", ballot))
-			continue
-		}
-		actives, err := activesets.Get(o.db, ballot.EpochData.ActiveSetHash)
-		if err != nil {
-			o.log.Error("failed to get active set",
-				zap.String("actives hash", ballot.EpochData.ActiveSetHash.ShortString()),
-				zap.String("ballot ", ballot.ID().String()),
-				zap.Error(err),
-			)
-			continue
-		}
-		for _, id := range actives.Set {
-			activeMap[id] = struct{}{}
-		}
-	}
-	o.log.Warn("using tortoise active set",
-		zap.Int("actives size", len(activeMap)),
-		zap.Uint32("epoch", epoch.Uint32()),
-		zap.Stringer("beacon", beacon),
-	)
-	return maps.Keys(activeMap), nil
-}
-
-func (o *Oracle) UpdateActiveSet(epoch types.EpochID, activeSet []types.ATXID) {
-	o.log.Debug("received activeset update",
-		zap.Uint32("epoch", epoch.Uint32()),
-		zap.Int("size", len(activeSet)),
-	)
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if _, ok := o.fallback[epoch]; ok {
-		o.log.Debug("fallback active set already exists", zap.Uint32("epoch", epoch.Uint32()))
-		return
-	}
-	o.fallback[epoch] = activeSet
-}
-
-func (o *Oracle) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
-	return o.totalWeightFn(ctx, epoch)
-}
-
-func (o *Oracle) MinerWeight(ctx context.Context, node types.NodeID, epoch types.EpochID) (uint64, error) {
-	return o.minerWeightFn(ctx, epoch, node)
 }
