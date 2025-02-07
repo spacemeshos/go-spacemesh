@@ -163,11 +163,6 @@ func (s *SmesherService) StopSmeshing(
 	}, nil
 }
 
-// SmesherID returns the smesher ID of this node.
-func (s *SmesherService) SmesherID(context.Context, *emptypb.Empty) (*pb.SmesherIDResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint has been deprecated, use `SmesherIDs` instead")
-}
-
 func (s *SmesherService) SmesherIDs(context.Context, *emptypb.Empty) (*pb.SmesherIDsResponse, error) {
 	ids := s.smeshingProvider.SmesherIDs()
 	res := &pb.SmesherIDsResponse{}
@@ -197,24 +192,6 @@ func (s *SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseReques
 	return &pb.SetCoinbaseResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
-}
-
-// MinGas returns the current mingas setting of this node.
-func (s *SmesherService) MinGas(context.Context, *emptypb.Empty) (*pb.MinGasResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
-}
-
-// SetMinGas sets the mingas setting of this node.
-func (s *SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.SetMinGasResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
-}
-
-// EstimatedRewards returns estimated smeshing rewards over the next epoch.
-func (s *SmesherService) EstimatedRewards(
-	context.Context,
-	*pb.EstimatedRewardsRequest,
-) (*pb.EstimatedRewardsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
 // PostSetupStatus returns post data status.
