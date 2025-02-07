@@ -200,7 +200,7 @@ func GetCommand() *cobra.Command {
 			// This blocks until the context is finished or until an error is produced
 			err = app.Start(ctx)
 			if err != nil {
-				app.log.Error("app failed", log.Err(err))
+				app.log.With().Error("app failed", log.Err(err))
 			} else {
 				app.log.With().Info("app stopped", log.Err(ctx.Err()))
 			}
