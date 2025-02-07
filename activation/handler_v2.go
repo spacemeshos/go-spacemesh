@@ -142,7 +142,7 @@ func (h *HandlerV2) processATX(
 	atx.SetID(watx.ID())
 	atx.SetReceived(received)
 
-	if err := h.storeAtx(ctx, atx, atxData); err != nil {
+	if err := h.storeAtx(ctx, atx, atxData, peer); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
@@ -941,7 +941,7 @@ func (h *HandlerV2) checkPrevAtx(
 }
 
 // Store an ATX in the DB.
-func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
+func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx, peer p2p.Peer) error {
 	republishProof := false
 	malicious := false
 	var proof wire.Proof
@@ -1050,6 +1050,13 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 			)
 		}
 	case proof != nil: // new malfeasance proof for identity created, publish proof (gossip is decided by publisher)
+		if peer == h.local {
+			h.logger.Debug(
+				"not publishing a malfeasance proof - peer is local",
+				zap.Stringer("smesherID", nodeID),
+				zap.String("proof", proof.TypeName()),
+			)
+		}
 		if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
 			h.logger.Error("failed to publish malfeasance proof",
 				zap.Stringer("atx_id", watx.ID()),
