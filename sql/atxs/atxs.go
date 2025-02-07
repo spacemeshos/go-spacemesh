@@ -244,12 +244,19 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	return id, err
 }
 
-// PrevIDByNodeID returns the previous ATX ID for a given node ID and public epoch.
-// It returns the newest ATX ID containing PoST of the given node ID that was published in or before the given epoch.
-func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID) (id types.ATXID, err error) {
+// PrevIDByNodeID returns the previous ATX ID for a given node ID and public epoch, ignoring current if present in the
+// DB (to avoid returning the same ATX ID).
+// It returns the newest ATX ID containing a PoST of the given node ID that was published in or before the given epoch.
+func PrevIDByNodeID(
+	db sql.Executor,
+	current types.ATXID,
+	nodeID types.NodeID,
+	pubEpoch types.EpochID,
+) (id types.ATXID, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, nodeID.Bytes())
 		stmt.BindInt64(2, int64(pubEpoch))
+		stmt.BindBytes(3, current.Bytes())
 	}
 	dec := func(stmt *sql.Statement) bool {
 		stmt.ColumnBytes(0, id[:])
@@ -258,7 +265,7 @@ func PrevIDByNodeID(db sql.Executor, nodeID types.NodeID, pubEpoch types.EpochID
 
 	if rows, err := db.Exec(`
 		SELECT atxid FROM posts
-		WHERE pubkey = ?1 AND publish_epoch <= ?2
+		WHERE pubkey = ?1 AND publish_epoch <= ?2 AND atxid != ?3
 		ORDER BY publish_epoch DESC
 		LIMIT 1;`, enc, dec); err != nil {
 		return types.EmptyATXID, fmt.Errorf("exec nodeID %v, epoch %d: %w", nodeID, pubEpoch, err)
