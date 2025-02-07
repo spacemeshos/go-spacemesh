@@ -60,7 +60,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg := activation.DefaultTestPostServiceConfig(t)
 	svc := grpcserver.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
@@ -155,7 +155,7 @@ func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 		activation.DefaultPostSetupOpts(),
 		nil, // no nodeID in multi smesher setup
 	)
-	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
+	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig(t))
 
 	types.SetNetworkHRP("stest")
 	providerID := uint32(7)

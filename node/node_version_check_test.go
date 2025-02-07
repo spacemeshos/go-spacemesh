@@ -14,16 +14,12 @@ import (
 
 func TestUpgradeToV15(t *testing.T) {
 	t.Run("fresh installation - no local DB file", func(t *testing.T) {
-		cfg := config.DefaultTestConfig()
-		cfg.DataDirParent = t.TempDir()
-
+		cfg := config.DefaultTestConfig(t)
 		require.NoError(t, verifyLocalDbMigrations(&cfg))
 	})
 
 	t.Run("migrated DB passes", func(t *testing.T) {
-		cfg := config.DefaultTestConfig()
-		cfg.DataDirParent = t.TempDir()
-
+		cfg := config.DefaultTestConfig(t)
 		uri := path.Join(cfg.DataDir(), localDbFile)
 		localDb, err := localsql.Open(uri)
 		require.NoError(t, err)
@@ -33,9 +29,7 @@ func TestUpgradeToV15(t *testing.T) {
 	})
 
 	t.Run("not fully migrated DB fails", func(t *testing.T) {
-		cfg := config.DefaultTestConfig()
-		cfg.DataDirParent = t.TempDir()
-
+		cfg := config.DefaultTestConfig(t)
 		uri := path.Join(cfg.DataDir(), localDbFile)
 
 		schema, err := statesql.Schema()

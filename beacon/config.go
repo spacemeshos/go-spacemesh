@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"math/big"
+	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -69,7 +70,7 @@ func UnitTestConfig() Config {
 }
 
 // NodeSimUnitTestConfig returns configuration for the beacon the unit tests with node simulation .
-func NodeSimUnitTestConfig() Config {
+func NodeSimUnitTestConfig(tb testing.TB) Config {
 	return Config{
 		Kappa:                    40,
 		Q:                        *big.NewRat(1, 3),

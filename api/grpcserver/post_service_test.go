@@ -127,7 +127,7 @@ func Test_GenerateProof(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
-	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg := activation.DefaultTestPostServiceConfig(t)
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
 	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
@@ -175,7 +175,7 @@ func Test_GenerateProof_TLS(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
-	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg := activation.DefaultTestPostServiceConfig(t)
 	serviceCfg.NodeAddress = fmt.Sprintf("https://%s", cfg.TLSListener)
 	serviceCfg.CACert = filepath.Join(certDir, caCertName)
 	serviceCfg.Cert = filepath.Join(certDir, clientCertName)
@@ -225,7 +225,7 @@ func Test_GenerateProof_Cancel(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
-	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg := activation.DefaultTestPostServiceConfig(t)
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
 	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
@@ -265,7 +265,7 @@ func Test_Metadata(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
-	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg := activation.DefaultTestPostServiceConfig(t)
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
 	id, postCleanup := launchPostSupervisor(t, log.Named("supervisor"), cfg, serviceCfg, opts)
@@ -309,7 +309,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 	opts.ProviderID.SetUint32(initialization.CPUProviderID())
 	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
-	serviceCfg := activation.DefaultTestPostServiceConfig()
+	serviceCfg := activation.DefaultTestPostServiceConfig(t)
 	serviceCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 
 	// all but one should not be able to register to the node (i.e. open a stream to it).

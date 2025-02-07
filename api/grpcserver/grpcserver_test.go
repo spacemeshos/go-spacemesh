@@ -400,7 +400,7 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 }
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
-	cfg := DefaultTestConfig()
+	cfg := DefaultTestConfig(tb)
 	grpcService, err := NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 
@@ -432,7 +432,7 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"), DefaultTestConfig())
+	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"), DefaultTestConfig(t))
 	jsonService := NewJSONHTTPServer(zaptest.NewLogger(t).Named("grpc.JSON"), fmt.Sprintf(":%d", port2),
 		[]string{}, false)
 
@@ -483,7 +483,7 @@ func TestNewLocalServer(t *testing.T) {
 			genTime := NewMockgenesisTimeAPI(ctrl)
 			syncer := NewMocksyncer(ctrl)
 
-			cfg := DefaultTestConfig()
+			cfg := DefaultTestConfig(t)
 			cfg.PostListener = tc.listener
 			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
 			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
@@ -523,7 +523,7 @@ func setupSmesherService(tb testing.TB, sig *signing.EdSigner) (*smesherServiceC
 		activation.DefaultPostSetupOpts(),
 		sig,
 	)
-	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
+	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig(tb))
 	cfg, cleanup := launchServer(tb, svc)
 	tb.Cleanup(cleanup)
 
