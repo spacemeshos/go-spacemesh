@@ -77,9 +77,9 @@ func TestPostMalfeasanceProof(t *testing.T) {
 	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
 	ctx.ClusterSize = 8
 	cl := cluster.New(ctx, cluster.WithKeys(10))
+	require.NoError(t, cl.AddPoets(ctx))
 	require.NoError(t, cl.AddBootnodes(ctx, 1))
 	require.NoError(t, cl.AddBootstrappers(ctx))
-	require.NoError(t, cl.AddPoets(ctx))
 	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
 
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))

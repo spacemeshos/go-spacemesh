@@ -902,9 +902,11 @@ func deployNode(
 				WithLimits(smesherResources.Get(ctx.Parameters).Limits),
 			).
 			WithStartupProbe(
-				corev1.Probe().WithTCPSocket(
-					corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092)),
-				).WithInitialDelaySeconds(10).WithPeriodSeconds(10),
+				corev1.Probe().
+					WithTCPSocket(corev1.TCPSocketAction().WithPort(intstr.FromInt32(9092))).
+					WithInitialDelaySeconds(10).
+					WithPeriodSeconds(5).
+					WithFailureThreshold(12),
 			).
 			WithEnv(
 				corev1.EnvVar().WithName("GOMAXPROCS").WithValue("4"),
