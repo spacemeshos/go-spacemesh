@@ -1058,7 +1058,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		}
 
 		if malicious || republishProof {
-			if h.local == peer {
+			if peer == h.local {
 				return errors.New("not publishing ATXs for malicious nodes")
 			}
 			return nil
@@ -1082,13 +1082,6 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 			)
 		}
 	case proof != nil: // new malfeasance proof for identity created, publish proof (gossip is decided by publisher)
-		if peer == h.local {
-			h.logger.Debug(
-				"not publishing a malfeasance proof - peer is local",
-				zap.Stringer("smesherID", nodeID),
-				zap.String("proof", proof.TypeName()),
-			)
-		}
 		if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
 			h.logger.Error("failed to publish malfeasance proof",
 				zap.Stringer("atx_id", watx.ID()),
