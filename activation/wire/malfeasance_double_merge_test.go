@@ -76,6 +76,8 @@ func Test_DoubleMergeProof(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
+		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(true, nil).AnyTimes()
 
 		marriageAtx := setupMarriage(db)
 
@@ -98,6 +100,78 @@ func Test_DoubleMergeProof(t *testing.T) {
 		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
+	})
+
+	t.Run("identity1 unknown", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(false, nil).AnyTimes()
+		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(true, nil).AnyTimes()
+
+		marriageAtx := setupMarriage(db)
+
+		atx1 := NewTestActivationTxV2(
+			t,
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
+		)
+		atx1.Sign(sig)
+
+		atx2 := NewTestActivationTxV2(
+			t,
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
+		)
+		atx2.Sign(otherSig)
+
+		proof, err := NewDoubleMergeProof(db, atx1, atx2)
+		require.NoError(t, err)
+		id, err := proof.Valid(context.Background(), verifier)
+		require.ErrorIs(t, err, ErrUnknownIdentity)
+		require.Equal(t, types.EmptyNodeID, id)
+	})
+
+	t.Run("identity2 unknown", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
+		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(false, nil).AnyTimes()
+
+		marriageAtx := setupMarriage(db)
+
+		atx1 := NewTestActivationTxV2(
+			t,
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
+		)
+		atx1.Sign(sig)
+
+		atx2 := NewTestActivationTxV2(
+			t,
+			WithMarriageATX(marriageAtx.ID()),
+			WithPublishEpoch(marriageAtx.PublishEpoch+1),
+		)
+		atx2.Sign(otherSig)
+
+		proof, err := NewDoubleMergeProof(db, atx1, atx2)
+		require.NoError(t, err)
+		id, err := proof.Valid(context.Background(), verifier)
+		require.ErrorIs(t, err, ErrUnknownIdentity)
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("same ATX ID", func(t *testing.T) {

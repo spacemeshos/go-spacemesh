@@ -3,8 +3,8 @@ package marriage
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"slices"
-	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -132,7 +132,7 @@ func FindByNodeID(db sql.Executor, nodeID types.NodeID) (Info, error) {
 }
 
 func MarriageATXs(db sql.Executor, id ID) ([]types.ATXID, error) {
-	var atxs []types.ATXID
+	atxs := make(map[types.ATXID]struct{})
 	rows, err := db.Exec(`
 		SELECT marriage_atx
 		FROM marriages
@@ -142,7 +142,7 @@ func MarriageATXs(db sql.Executor, id ID) ([]types.ATXID, error) {
 	}, func(s *sql.Statement) bool {
 		var atx types.ATXID
 		s.ColumnBytes(0, atx[:])
-		atxs = append(atxs, atx)
+		atxs[atx] = struct{}{}
 		return true
 	})
 	if err != nil {
@@ -151,8 +151,10 @@ func MarriageATXs(db sql.Executor, id ID) ([]types.ATXID, error) {
 	if rows == 0 {
 		return nil, sql.ErrNotFound
 	}
-	sort.Slice(atxs, func(i, j int) bool { return bytes.Compare(atxs[i].Bytes(), atxs[j].Bytes()) < 0 })
-	return slices.Compact(atxs), nil
+
+	return slices.SortedFunc(maps.Keys(atxs), func(a, b types.ATXID) int {
+		return bytes.Compare(a.Bytes(), b.Bytes())
+	}), nil
 }
 
 func NodeIDsByID(db sql.Executor, id ID) ([]types.NodeID, error) {

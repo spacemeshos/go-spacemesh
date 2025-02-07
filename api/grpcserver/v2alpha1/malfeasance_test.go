@@ -62,7 +62,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 		proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
 		proofs[i].Properties = map[string]string{
 			"domain":                strconv.FormatUint(uint64(i%4+1), 10),
-			"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+			"type":                  fmt.Sprintf("Type %d", i%4+1),
 			fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 		}
 		info.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
@@ -92,7 +92,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 	proofs[70].Proof = types.RandomBytes(100)
 	proofs[70].Properties = map[string]string{
 		"domain": "1",
-		"type":   "1",
+		"type":   "Type Marry",
 		"key":    "value",
 	}
 	info.EXPECT().Info(gomock.Any(), proofs[70].ID).DoAndReturn(
@@ -198,7 +198,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			proofs[i] = malInfo{ID: types.RandomNodeID(), Proof: types.RandomBytes(100)}
 			proofs[i].Properties = map[string]string{
 				"domain":                strconv.FormatUint(uint64(i%4+1), 10),
-				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+				"type":                  fmt.Sprintf("Type %d", i%4+1),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
 			info.EXPECT().Info(gomock.Any(), proofs[i].ID).DoAndReturn(
@@ -228,7 +228,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		proofs[70].Proof = types.RandomBytes(100)
 		proofs[70].Properties = map[string]string{
 			"domain": "1",
-			"type":   "1",
+			"type":   "Type Marry",
 			"key":    "value",
 		}
 		info.EXPECT().Info(gomock.Any(), proofs[70].ID).DoAndReturn(
@@ -324,7 +324,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			})
 			properties := map[string]string{
 				"domain":                strconv.FormatUint(uint64(i%4+1), 10),
-				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
+				"type":                  fmt.Sprintf("Type %d", i%4+1),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
 			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(
@@ -344,7 +344,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			})
 			properties := map[string]string{
 				"domain": "1",
-				"type":   "1",
+				"type":   "Type Marry",
 				"key":    "value",
 			}
 			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(

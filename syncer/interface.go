@@ -36,6 +36,7 @@ type atxSyncer interface {
 }
 
 type malSyncer interface {
+	EnsureLegacyInSync(parent context.Context, epochStart, epochEnd time.Time) error
 	EnsureInSync(parent context.Context, epochStart, epochEnd time.Time) error
 	DownloadLoop(parent context.Context) error
 }
@@ -47,7 +48,6 @@ type fetcher interface {
 	GetCert(context.Context, types.LayerID, types.BlockID, []p2p.Peer) (*types.Certificate, error)
 
 	GetAtxs(context.Context, []types.ATXID, ...system.GetAtxOpt) error
-	GetMalfeasanceProofs(context.Context, []types.NodeID) error
 	GetBallots(context.Context, []types.BallotID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	RegisterPeerHashes(peer p2p.Peer, hashes []types.Hash32)

@@ -280,12 +280,12 @@ func fetchMetaData(
 			zap.String("type", properties["type"]),
 			zap.Error(err),
 		)
-		return nil
+	} else {
+		delete(properties, "type")
 	}
-	delete(properties, "type")
 	return &spacemeshv2beta1.MalfeasanceProof{
 		Smesher:    id.Bytes(),
-		Domain:     spacemeshv2beta1.MalfeasanceProof_MalfeasanceDomain(domain), // TODO(mafa): add new domains
+		Domain:     spacemeshv2beta1.MalfeasanceProof_MalfeasanceDomain(domain),
 		Type:       uint32(proofType),
 		Properties: properties,
 	}

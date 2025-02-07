@@ -58,10 +58,51 @@ func Test_DoubleMarryProof(t *testing.T) {
 			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 				return edVerifier.Verify(d, nodeID, m, sig)
 			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(true, nil).AnyTimes()
 
 		id, err := proof.Valid(context.Background(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, otherSig.NodeID(), id)
+	})
+
+	t.Run("identity unknown", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+
+		otherAtx := &types.ActivationTx{}
+		otherAtx.SetID(types.RandomATXID())
+		otherAtx.SmesherID = otherSig.NodeID()
+		require.NoError(t, atxs.Add(db, otherAtx, types.AtxBlob{}))
+
+		atx1 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(sig, types.EmptyATXID, sig.NodeID()),
+			WithMarriageCertificate(otherSig, otherAtx.ID(), sig.NodeID()),
+		)
+		atx1.Sign(sig)
+
+		atx2 := NewTestActivationTxV2(
+			t,
+			WithMarriageCertificate(otherSig, types.EmptyATXID, otherSig.NodeID()),
+			WithMarriageCertificate(sig, atx1.ID(), otherSig.NodeID()),
+		)
+		atx2.Sign(otherSig)
+
+		proof, err := NewDoubleMarryProof(db, atx1, atx2, otherSig.NodeID())
+		require.NoError(t, err)
+		require.NotNil(t, proof)
+
+		ctrl := gomock.NewController(t)
+		verifier := NewMockMalfeasanceValidator(ctrl)
+		verifier.EXPECT().Signature(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
+				return edVerifier.Verify(d, nodeID, m, sig)
+			}).AnyTimes()
+		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(false, nil).AnyTimes()
+
+		id, err := proof.Valid(context.Background(), verifier)
+		require.ErrorIs(t, err, ErrUnknownIdentity)
+		require.Equal(t, types.EmptyNodeID, id)
 	})
 
 	t.Run("identity is not included in both ATXs", func(t *testing.T) {

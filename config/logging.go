@@ -49,6 +49,7 @@ type LoggerConfig struct {
 	ConStateLoggerLevel          string `mapstructure:"conState"`
 	ExecutorLoggerLevel          string `mapstructure:"executor"`
 	MalfeasanceLoggerLevel       string `mapstructure:"malfeasance"`
+	Malfeasance2LoggerLevel      string `mapstructure:"malfeasance2"`
 	BootstrapLoggerLevel         string `mapstructure:"bootstrap"`
 	NodeServiceLoggerLevel       string `mapstructure:"nodeService"`
 	NodeServiceClientLoggerLevel string `mapstructure:"nodeServiceClient"`
@@ -88,6 +89,7 @@ func DefaultLoggingConfig() LoggerConfig {
 		PostServiceLoggerLevel:     defaultLoggingLevel.String(),
 		ConStateLoggerLevel:        defaultLoggingLevel.String(),
 		MalfeasanceLoggerLevel:     defaultLoggingLevel.String(),
+		Malfeasance2LoggerLevel:    defaultLoggingLevel.String(),
 		BootstrapLoggerLevel:       defaultLoggingLevel.String(),
 		NodeServiceLoggerLevel:     defaultLoggingLevel.String(),
 	}

@@ -73,7 +73,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 	t.Run("malformed data", func(t *testing.T) {
 		h := newHandler(t)
 
-		err := h.HandleMalfeasanceProof(context.Background(), "peer", []byte{0x01})
+		err := h.HandleGossip(context.Background(), "peer", []byte{0x01})
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -98,7 +98,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 			},
 		}
 
-		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
 		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -134,7 +134,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 			},
 		}
 
-		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
 		require.ErrorContains(t, err, "invalid proof")
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -173,7 +173,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		}
 
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
 		require.NoError(t, err)
 
 		var blob sql.Blob
@@ -221,7 +221,7 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 			},
 		}
 
-		err := h.HandleMalfeasanceProof(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
 		require.NoError(t, err)
 
 		var blob sql.Blob
@@ -234,7 +234,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 	t.Run("malformed data", func(t *testing.T) {
 		h := newHandler(t)
 
-		err := h.HandleSyncedMalfeasanceProof(
+		err := h.HandleSynced(
 			context.Background(),
 			types.RandomHash(),
 			"peer",
@@ -262,7 +262,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 			},
 		}
 
-		err := h.HandleSyncedMalfeasanceProof(
+		err := h.HandleSynced(
 			context.Background(),
 			types.RandomHash(),
 			"peer",
@@ -304,7 +304,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 
 		expectedHash := types.RandomHash()
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleSyncedMalfeasanceProof(
+		err := h.HandleSynced(
 			context.Background(),
 			expectedHash,
 			"peer",
@@ -351,7 +351,7 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 			},
 		}
 
-		err := h.HandleSyncedMalfeasanceProof(
+		err := h.HandleSynced(
 			context.Background(),
 			types.Hash32(nodeID),
 			"peer",
@@ -394,7 +394,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		proofBytes := codec.MustEncode(proof)
 
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(nodeID), "peer", proofBytes)
+		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", proofBytes)
 		require.NoError(t, err)
 
 		var blob sql.Blob
@@ -443,7 +443,7 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 		newProofBytes := codec.MustEncode(newProof)
 		require.NotEqual(t, proofBytes, newProofBytes)
 
-		err := h.HandleSyncedMalfeasanceProof(context.Background(), types.Hash32(nodeID), "peer", newProofBytes)
+		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", newProofBytes)
 		require.NoError(t, err)
 
 		var blob sql.Blob

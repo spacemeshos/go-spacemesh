@@ -152,8 +152,8 @@ func (h *Handler) Info(ctx context.Context, nodeID types.NodeID) (map[string]str
 	return properties, nil
 }
 
-// HandleSyncedMalfeasanceProof is the sync validator for MalfeasanceProof.
-func (h *Handler) HandleSyncedMalfeasanceProof(
+// HandleSynced is the sync validator for MalfeasanceProof.
+func (h *Handler) HandleSynced(
 	ctx context.Context,
 	expHash types.Hash32,
 	peer p2p.Peer,
@@ -188,8 +188,8 @@ func (h *Handler) HandleSyncedMalfeasanceProof(
 	return err
 }
 
-// HandleMalfeasanceProof is the gossip receiver for MalfeasanceGossip.
-func (h *Handler) HandleMalfeasanceProof(ctx context.Context, peer p2p.Peer, data []byte) error {
+// HandleGossip is the gossip receiver for MalfeasanceGossip.
+func (h *Handler) HandleGossip(ctx context.Context, peer p2p.Peer, data []byte) error {
 	var p wire.MalfeasanceGossip
 	if err := codec.Decode(data, &p); err != nil {
 		h.numMalformed.Inc()

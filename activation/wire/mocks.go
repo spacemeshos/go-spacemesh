@@ -43,6 +43,45 @@ func (m *MockMalfeasanceValidator) EXPECT() *MockMalfeasanceValidatorMockRecorde
 	return m.recorder
 }
 
+// IdentityExists mocks base method.
+func (m *MockMalfeasanceValidator) IdentityExists(nodeID types.NodeID) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IdentityExists", nodeID)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IdentityExists indicates an expected call of IdentityExists.
+func (mr *MockMalfeasanceValidatorMockRecorder) IdentityExists(nodeID any) *MockMalfeasanceValidatorIdentityExistsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IdentityExists", reflect.TypeOf((*MockMalfeasanceValidator)(nil).IdentityExists), nodeID)
+	return &MockMalfeasanceValidatorIdentityExistsCall{Call: call}
+}
+
+// MockMalfeasanceValidatorIdentityExistsCall wrap *gomock.Call
+type MockMalfeasanceValidatorIdentityExistsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockMalfeasanceValidatorIdentityExistsCall) Return(arg0 bool, arg1 error) *MockMalfeasanceValidatorIdentityExistsCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockMalfeasanceValidatorIdentityExistsCall) Do(f func(types.NodeID) (bool, error)) *MockMalfeasanceValidatorIdentityExistsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockMalfeasanceValidatorIdentityExistsCall) DoAndReturn(f func(types.NodeID) (bool, error)) *MockMalfeasanceValidatorIdentityExistsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // PostIndex mocks base method.
 func (m *MockMalfeasanceValidator) PostIndex(ctx context.Context, smesherID types.NodeID, commitment types.ATXID, post *types.Post, challenge []byte, numUnits uint32, idx int) error {
 	m.ctrl.T.Helper()
@@ -141,6 +180,44 @@ func NewMockProof(ctrl *gomock.Controller) *MockProof {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockProof) EXPECT() *MockProofMockRecorder {
 	return m.recorder
+}
+
+// AllowNoRefATXs mocks base method.
+func (m *MockProof) AllowNoRefATXs() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AllowNoRefATXs")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// AllowNoRefATXs indicates an expected call of AllowNoRefATXs.
+func (mr *MockProofMockRecorder) AllowNoRefATXs() *MockProofAllowNoRefATXsCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AllowNoRefATXs", reflect.TypeOf((*MockProof)(nil).AllowNoRefATXs))
+	return &MockProofAllowNoRefATXsCall{Call: call}
+}
+
+// MockProofAllowNoRefATXsCall wrap *gomock.Call
+type MockProofAllowNoRefATXsCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockProofAllowNoRefATXsCall) Return(arg0 bool) *MockProofAllowNoRefATXsCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockProofAllowNoRefATXsCall) Do(f func() bool) *MockProofAllowNoRefATXsCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockProofAllowNoRefATXsCall) DoAndReturn(f func() bool) *MockProofAllowNoRefATXsCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
 }
 
 // DecodeScale mocks base method.

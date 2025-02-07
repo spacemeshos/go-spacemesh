@@ -464,6 +464,7 @@ func NewPoetServiceWithClient(
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
 	defer cancel()
+
 	err := service.verifyPhaseShiftConfiguration(ctx)
 	switch {
 	case errors.Is(err, errIncompatiblePhaseShift):

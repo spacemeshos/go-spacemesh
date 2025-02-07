@@ -381,44 +381,6 @@ func (c *MockfetchLogicGetLayerOpinionsCall) DoAndReturn(f func(context.Context,
 	return c
 }
 
-// GetMalfeasanceProofs mocks base method.
-func (m *MockfetchLogic) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMalfeasanceProofs", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// GetMalfeasanceProofs indicates an expected call of GetMalfeasanceProofs.
-func (mr *MockfetchLogicMockRecorder) GetMalfeasanceProofs(arg0, arg1 any) *MockfetchLogicGetMalfeasanceProofsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProofs", reflect.TypeOf((*MockfetchLogic)(nil).GetMalfeasanceProofs), arg0, arg1)
-	return &MockfetchLogicGetMalfeasanceProofsCall{Call: call}
-}
-
-// MockfetchLogicGetMalfeasanceProofsCall wrap *gomock.Call
-type MockfetchLogicGetMalfeasanceProofsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockfetchLogicGetMalfeasanceProofsCall) Return(arg0 error) *MockfetchLogicGetMalfeasanceProofsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockfetchLogicGetMalfeasanceProofsCall) Do(f func(context.Context, []types.NodeID) error) *MockfetchLogicGetMalfeasanceProofsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetchLogicGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []types.NodeID) error) *MockfetchLogicGetMalfeasanceProofsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // PeerEpochInfo mocks base method.
 func (m *MockfetchLogic) PeerEpochInfo(arg0 context.Context, arg1 p2p.Peer, arg2 types.EpochID) (*fetch.EpochData, error) {
 	m.ctrl.T.Helper()
@@ -816,6 +778,44 @@ func (c *MockmalSyncerEnsureInSyncCall) DoAndReturn(f func(context.Context, time
 	return c
 }
 
+// EnsureLegacyInSync mocks base method.
+func (m *MockmalSyncer) EnsureLegacyInSync(parent context.Context, epochStart, epochEnd time.Time) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EnsureLegacyInSync", parent, epochStart, epochEnd)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// EnsureLegacyInSync indicates an expected call of EnsureLegacyInSync.
+func (mr *MockmalSyncerMockRecorder) EnsureLegacyInSync(parent, epochStart, epochEnd any) *MockmalSyncerEnsureLegacyInSyncCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EnsureLegacyInSync", reflect.TypeOf((*MockmalSyncer)(nil).EnsureLegacyInSync), parent, epochStart, epochEnd)
+	return &MockmalSyncerEnsureLegacyInSyncCall{Call: call}
+}
+
+// MockmalSyncerEnsureLegacyInSyncCall wrap *gomock.Call
+type MockmalSyncerEnsureLegacyInSyncCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockmalSyncerEnsureLegacyInSyncCall) Return(arg0 error) *MockmalSyncerEnsureLegacyInSyncCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockmalSyncerEnsureLegacyInSyncCall) Do(f func(context.Context, time.Time, time.Time) error) *MockmalSyncerEnsureLegacyInSyncCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockmalSyncerEnsureLegacyInSyncCall) DoAndReturn(f func(context.Context, time.Time, time.Time) error) *MockmalSyncerEnsureLegacyInSyncCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
 // Mockfetcher is a mock of fetcher interface.
 type Mockfetcher struct {
 	ctrl     *gomock.Controller
@@ -1072,44 +1072,6 @@ func (c *MockfetcherGetLayerOpinionsCall) Do(f func(context.Context, p2p.Peer, t
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockfetcherGetLayerOpinionsCall) DoAndReturn(f func(context.Context, p2p.Peer, types.LayerID) ([]byte, error)) *MockfetcherGetLayerOpinionsCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// GetMalfeasanceProofs mocks base method.
-func (m *Mockfetcher) GetMalfeasanceProofs(arg0 context.Context, arg1 []types.NodeID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetMalfeasanceProofs", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// GetMalfeasanceProofs indicates an expected call of GetMalfeasanceProofs.
-func (mr *MockfetcherMockRecorder) GetMalfeasanceProofs(arg0, arg1 any) *MockfetcherGetMalfeasanceProofsCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMalfeasanceProofs", reflect.TypeOf((*Mockfetcher)(nil).GetMalfeasanceProofs), arg0, arg1)
-	return &MockfetcherGetMalfeasanceProofsCall{Call: call}
-}
-
-// MockfetcherGetMalfeasanceProofsCall wrap *gomock.Call
-type MockfetcherGetMalfeasanceProofsCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockfetcherGetMalfeasanceProofsCall) Return(arg0 error) *MockfetcherGetMalfeasanceProofsCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockfetcherGetMalfeasanceProofsCall) Do(f func(context.Context, []types.NodeID) error) *MockfetcherGetMalfeasanceProofsCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockfetcherGetMalfeasanceProofsCall) DoAndReturn(f func(context.Context, []types.NodeID) error) *MockfetcherGetMalfeasanceProofsCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
@@ -113,7 +114,9 @@ func NewCachedDB(db sql.StateDatabase, lg *zap.Logger, opts ...Opt) *CachedDB {
 	}
 }
 
-// TODO(mafa): this needs to be removed, since it only works with v1 malfeasance proofs.
+// MalfeasanceProof returns the malfeasance proof for the given node ID. This function is thread safe and will return
+// an error if the proof is not found in the ATX DB.
+// Deprecated: use functions in the `sql/identities` and `sql/malfeasance` packages.
 func (db *CachedDB) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to GetMalfeasanceProof")
@@ -137,7 +140,8 @@ func (db *CachedDB) MalfeasanceProof(id types.NodeID) ([]byte, error) {
 	return blob.Bytes, err
 }
 
-// TODO(mafa): this needs to be removed, since it only works with v1 malfeasance proofs.
+// CacheMalfeasanceProof caches the malfeasance proof for the given node ID. This function is thread safe.
+// Deprecated: caching is done by the sql database automatically.
 func (db *CachedDB) CacheMalfeasanceProof(id types.NodeID, proof []byte) {
 	if id == types.EmptyNodeID {
 		panic("invalid argument to CacheMalfeasanceProof")
@@ -188,10 +192,14 @@ func (db *CachedDB) GetAtx(id types.ATXID) (*types.ActivationTx, error) {
 }
 
 // Previous retrieves the list of previous ATXs for the given ATX ID.
+// Deprecated: replaced by atxs.Previous.
 func (db *CachedDB) Previous(id types.ATXID) ([]types.ATXID, error) {
 	return atxs.Previous(db, id)
 }
 
+// IterateMalfeasanceProofs iterates over all malfeasance proofs in the database and calls the provided callback on
+// each.
+// Deprecated: replaced by identities.IterateOps and malfeasance.IterateOps.
 func (db *CachedDB) IterateMalfeasanceProofs(
 	iter func(types.NodeID, []byte) error,
 ) error {
@@ -206,6 +214,8 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 	return callbackErr
 }
 
+// MaxHeightAtx returns the ATX ID with the maximum height.
+// Deprecated: replaced by atxs.GetIDWithMaxHeight.
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
 	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID, atxs.FilterAll)
 }
@@ -215,26 +225,46 @@ type Hint string
 
 // DB hints per DB.
 const (
-	NoHint      Hint = ""
-	BallotDB    Hint = "ballotDB"
-	BlockDB     Hint = "blocksDB"
-	ProposalDB  Hint = "proposalDB"
-	ATXDB       Hint = "ATXDB"
-	TXDB        Hint = "TXDB"
-	POETDB      Hint = "POETDB"
-	Malfeasance Hint = "malfeasance"
-	ActiveSet   Hint = "activeset"
+	NoHint            Hint = ""
+	BallotDB          Hint = "ballotDB"
+	BlockDB           Hint = "blocksDB"
+	ProposalDB        Hint = "proposalDB"
+	ATXDB             Hint = "ATXDB"
+	TXDB              Hint = "TXDB"
+	POETDB            Hint = "POETDB"
+	LegacyMalfeasance Hint = "malfeasance"
+	Malfeasance       Hint = "malfeasance2"
+	ActiveSet         Hint = "activeset"
 )
 
 // NewBlobStore returns a BlobStore.
-func NewBlobStore(db sql.Executor, proposals *store.Store) *BlobStore {
-	return &BlobStore{DB: db, proposals: proposals}
+func NewBlobStore(db sql.StateDatabase, proposals *store.Store) *BlobStore {
+	return &BlobStore{
+		DB:        db,
+		proposals: proposals,
+	}
+}
+
+// SetMalfeasanceProvider sets the malfeasance provider dependency.
+//
+// TODO(mafa): this is a hack because of a cyclic dependency between the packages
+//
+//	malfeasance2 -> fetcher -> datastore -> malfeasance2
+func (bs *BlobStore) SetMalfeasanceProvider(p MalfeasanceProvider) {
+	bs.malfeasance = p
+}
+
+//go:generate mockgen -typed -package=datastore -destination=./mocks.go -source=./store.go
+
+type MalfeasanceProvider interface {
+	ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error)
 }
 
 // BlobStore gets data as a blob to serve direct fetch requests.
 type BlobStore struct {
-	DB        sql.Executor
-	proposals *store.Store
+	DB          sql.StateDatabase
+	proposals   *store.Store
+	malfeasance MalfeasanceProvider
 }
 
 type (
@@ -247,22 +277,22 @@ var loadBlobDispatch = map[Hint]loadBlobFunc{
 		_, err := atxs.LoadBlob(ctx, db, key, blob)
 		return err
 	},
-	BallotDB:    ballots.LoadBlob,
-	BlockDB:     blocks.LoadBlob,
-	TXDB:        transactions.LoadBlob,
-	POETDB:      poets.LoadBlob,
-	Malfeasance: identities.LoadMalfeasanceBlob,
-	ActiveSet:   activesets.LoadBlob,
+	BallotDB:          ballots.LoadBlob,
+	BlockDB:           blocks.LoadBlob,
+	TXDB:              transactions.LoadBlob,
+	POETDB:            poets.LoadBlob,
+	LegacyMalfeasance: identities.LoadMalfeasanceBlob,
+	ActiveSet:         activesets.LoadBlob,
 }
 
 var blobSizeDispatch = map[Hint]blobSizeFunc{
-	ATXDB:       atxs.GetBlobSizes,
-	BallotDB:    ballots.GetBlobSizes,
-	BlockDB:     blocks.GetBlobSizes,
-	TXDB:        transactions.GetBlobSizes,
-	POETDB:      poets.GetBlobSizes,
-	Malfeasance: identities.GetBlobSizes,
-	ActiveSet:   activesets.GetBlobSizes,
+	ATXDB:             atxs.GetBlobSizes,
+	BallotDB:          ballots.GetBlobSizes,
+	BlockDB:           blocks.GetBlobSizes,
+	TXDB:              transactions.GetBlobSizes,
+	POETDB:            poets.GetBlobSizes,
+	LegacyMalfeasance: identities.GetBlobSizes,
+	ActiveSet:         activesets.GetBlobSizes,
 }
 
 func (bs *BlobStore) loadProposal(key []byte, blob *sql.Blob) error {
@@ -279,7 +309,7 @@ func (bs *BlobStore) loadProposal(key []byte, blob *sql.Blob) error {
 	}
 }
 
-func (bs *BlobStore) getProposalSizes(keys [][]byte) (sizes []int, err error) {
+func (bs *BlobStore) proposalSizes(keys [][]byte) (sizes []int, err error) {
 	sizes = make([]int, len(keys))
 	for n, k := range keys {
 		id := types.ProposalID(types.BytesToHash(k).ToHash20())
@@ -296,10 +326,45 @@ func (bs *BlobStore) getProposalSizes(keys [][]byte) (sizes []int, err error) {
 	return sizes, err
 }
 
+func (bs *BlobStore) loadMalfeasance(key []byte, blob *sql.Blob) error {
+	id := types.BytesToNodeID(key)
+	b, err := bs.malfeasance.ProofByID(context.Background(), id)
+	switch {
+	case err == nil:
+		blob.Bytes = b
+		return nil
+	case errors.Is(err, sql.ErrNotFound):
+		return ErrNotFound
+	default:
+		return err
+	}
+}
+
+func (bs *BlobStore) malfeasanceSizes(keys [][]byte) (sizes []int, err error) {
+	sizes = make([]int, len(keys))
+	for n, k := range keys {
+		id := types.NodeID(k)
+		b, err := bs.malfeasance.ProofByID(context.Background(), id)
+		switch {
+		case err == nil:
+			sizes[n] = len(b)
+		case errors.Is(err, store.ErrNotFound):
+			sizes[n] = -1
+		default:
+			return nil, err
+		}
+	}
+	return sizes, err
+}
+
 // LoadBlob gets an blob as bytes by an object ID as bytes.
 func (bs *BlobStore) LoadBlob(ctx context.Context, hint Hint, key []byte, blob *sql.Blob) error {
-	if hint == ProposalDB {
+	switch hint {
+	case ProposalDB:
 		return bs.loadProposal(key, blob)
+	case Malfeasance:
+		return bs.loadMalfeasance(key, blob)
+	default:
 	}
 	loader, found := loadBlobDispatch[hint]
 	if !found {
@@ -319,8 +384,12 @@ func (bs *BlobStore) LoadBlob(ctx context.Context, hint Hint, key []byte, blob *
 // GetBlobSizes returns the sizes of the blobs corresponding to the specified ids. For
 // non-existent objects, the corresponding items are set to -1.
 func (bs *BlobStore) GetBlobSizes(hint Hint, ids [][]byte) (sizes []int, err error) {
-	if hint == ProposalDB {
-		return bs.getProposalSizes(ids)
+	switch hint {
+	case ProposalDB:
+		return bs.proposalSizes(ids)
+	case Malfeasance:
+		return bs.malfeasanceSizes(ids)
+	default:
 	}
 	getSizes, found := blobSizeDispatch[hint]
 	if !found {
@@ -349,8 +418,10 @@ func (bs *BlobStore) Has(hint Hint, key []byte) (bool, error) {
 		return transactions.Has(bs.DB, types.TransactionID(types.BytesToHash(key)))
 	case POETDB:
 		return poets.Has(bs.DB, types.ByteToPoetProofRef(key))
-	case Malfeasance:
+	case LegacyMalfeasance:
 		return identities.IsMalicious(bs.DB, types.BytesToNodeID(key))
+	case Malfeasance:
+		return malfeasance.IsMalicious(bs.DB, types.BytesToNodeID(key))
 	case ActiveSet:
 		return activesets.Has(bs.DB, types.BytesToHash(key))
 	}
