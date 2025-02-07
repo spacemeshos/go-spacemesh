@@ -128,7 +128,6 @@ func NewHandler(
 			tortoise:        tortoise,
 			malPublisher:    legacyMalPublisher,
 			malPublisher2:   malPublisher,
-			signers:         make(map[types.NodeID]*signing.EdSigner),
 		},
 
 		v2: &HandlerV2{
@@ -161,10 +160,6 @@ func NewHandler(
 		})))
 
 	return h
-}
-
-func (h *Handler) Register(sig *signing.EdSigner) {
-	h.v1.Register(sig)
 }
 
 // HandleSyncedAtx handles atxs received by sync.
