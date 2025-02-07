@@ -9,6 +9,7 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
@@ -230,12 +231,12 @@ func malfeasanceStream(
 	ctx context.Context,
 	node *cluster.NodeClient,
 	logger *zap.Logger,
-	collector func(*pb.MalfeasanceStreamResponse) (bool, error),
+	collector func(*pb2.MalfeasanceProof) (bool, error),
 ) error {
 	retries := 0
 BACKOFF:
-	meshapi := pb.NewMeshServiceClient(node.PubConn())
-	proofs, err := meshapi.MalfeasanceStream(ctx, &pb.MalfeasanceStreamRequest{IncludeProof: true})
+	malapi := pb2.NewMalfeasanceStreamServiceClient(node.PrivConn())
+	proofs, err := malapi.Stream(ctx, &pb2.MalfeasanceStreamRequest{Watch: true})
 	if err != nil {
 		return err
 	}

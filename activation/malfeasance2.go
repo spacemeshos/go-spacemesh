@@ -12,10 +12,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 )
 
 type MalfeasanceHandlerV2 struct {
 	logger *zap.Logger
+	db     sql.StateDatabase
 
 	malPublisher malfeasancePublisher
 	edVerifier   *signing.EdVerifier
@@ -27,12 +30,14 @@ type MalfeasanceHandlerV2 struct {
 
 func NewMalfeasanceHandlerV2(
 	logger *zap.Logger,
+	db sql.StateDatabase,
 	malPublisher malfeasancePublisher,
 	edVerifier *signing.EdVerifier,
 	validator nipostValidatorV2,
 ) *MalfeasanceHandlerV2 {
 	return &MalfeasanceHandlerV2{
 		logger:       logger,
+		db:           db,
 		malPublisher: malPublisher,
 		edVerifier:   edVerifier,
 		validator:    validator,
@@ -80,7 +85,8 @@ func (p *MalfeasanceHandlerV2) Publish(ctx context.Context, nodeID types.NodeID,
 
 		Proof: codec.MustEncode(proof),
 	}
-	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof))
+	p.logger.Debug("publishing ATX malfeasance proof", log.ZShortStringer("node_id", nodeID))
+	return p.malPublisher.PublishATXProof(ctx, nodeID, codec.MustEncode(atxProof), proof.AllowNoRefATXs())
 }
 
 func (p *MalfeasanceHandlerV2) Regossip(ctx context.Context, nodeID types.NodeID) error {
@@ -157,4 +163,8 @@ func (mh *MalfeasanceHandlerV2) PostIndex(
 
 func (mh *MalfeasanceHandlerV2) Signature(d signing.Domain, nodeID types.NodeID, m []byte, sig types.EdSignature) bool {
 	return mh.edVerifier.Verify(d, nodeID, m, sig)
+}
+
+func (mh *MalfeasanceHandlerV2) IdentityExists(nodeID types.NodeID) (bool, error) {
+	return atxs.IdentityExists(mh.db, nodeID)
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/poets"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -42,14 +43,17 @@ type testP2PFetch struct {
 	tb testing.TB
 	// client proposals
 	clientPDB   *store.Store
-	clientCDB   *datastore.CachedDB
+	clientDB    sql.StateDatabase
 	clientFetch *Fetch
 	serverID    peer.ID
 	serverDB    sql.StateDatabase
 	// server proposals
-	serverPDB    *store.Store
-	serverCDB    *datastore.CachedDB
-	serverFetch  *Fetch
+	serverPDB   *store.Store
+	serverCDB   *datastore.CachedDB
+	serverFetch *Fetch
+
+	malProvider *malProvider
+
 	recvMtx      sync.Mutex
 	receivedData map[blobKey][]byte
 }
@@ -83,6 +87,17 @@ func p2pCfg(tb testing.TB) p2p.Config {
 	return p2pconf
 }
 
+type malProvider struct {
+	db sql.StateDatabase
+}
+
+func (m *malProvider) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error) {
+	// this is an incomplete implementation, the proof returned here normally needs to be wrapped into a
+	// malfeasance2.MalfeasanceProof struct before being returned to the fetcher, but for the test it is sufficient
+	proof, _, err := malfeasance.NodeIDProof(m.db, nodeID)
+	return proof, err
+}
+
 func createP2PFetch(
 	tb testing.TB,
 	clientStreaming,
@@ -113,24 +128,23 @@ func createP2PFetch(
 		sqlOpts = []sql.Opt{sql.WithQueryCache(true)}
 	}
 	clientDB := statesql.InMemoryTest(tb, sqlOpts...)
-	clientCDB := datastore.NewCachedDB(clientDB, lg)
-	tb.Cleanup(func() { assert.NoError(tb, clientDB.Close()) })
 	serverDB := statesql.InMemoryTest(tb, sqlOpts...)
 	serverCDB := datastore.NewCachedDB(serverDB, lg)
 	tb.Cleanup(func() { assert.NoError(tb, serverDB.Close()) })
 	tpf := &testP2PFetch{
 		tb:           tb,
 		clientPDB:    store.New(store.WithLogger(lg)),
-		clientCDB:    clientCDB,
+		clientDB:     clientDB,
 		serverID:     serverHost.ID(),
 		serverDB:     serverDB,
 		serverPDB:    store.New(store.WithLogger(lg)),
 		serverCDB:    serverCDB,
+		malProvider:  &malProvider{db: serverDB},
 		receivedData: make(map[blobKey][]byte),
 	}
 
 	fetcher, err := NewFetch(
-		tpf.serverCDB,
+		tpf.serverDB,
 		tpf.serverPDB,
 		serverHost,
 		peers.New(),
@@ -143,7 +157,8 @@ func createP2PFetch(
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return nil },
 	)
-	tpf.serverFetch.SetValidators(vf, vf, vf, vf, vf, vf, vf, vf, vf)
+	tpf.serverFetch.SetMalfeasanceProvider(tpf.malProvider)
+	tpf.serverFetch.SetValidators(vf, vf, vf, vf, vf, vf, vf, vf, vf, vf)
 	require.NoError(tb, tpf.serverFetch.Start())
 	tb.Cleanup(tpf.serverFetch.Stop)
 
@@ -152,7 +167,7 @@ func createP2PFetch(
 	}, 10*time.Second, 10*time.Millisecond)
 
 	fetcher, err = NewFetch(
-		tpf.clientCDB,
+		tpf.clientDB,
 		tpf.clientPDB,
 		clientHost,
 		peers.New(),
@@ -172,6 +187,7 @@ func createP2PFetch(
 		mkFakeValidator(tpf, "txBlock"),
 		mkFakeValidator(tpf, "txProposal"),
 		mkFakeValidator(tpf, "mal"),
+		mkFakeValidator(tpf, "mal2"),
 	)
 	require.NoError(tb, tpf.clientFetch.Start())
 	tb.Cleanup(tpf.clientFetch.Stop)
@@ -340,6 +356,30 @@ func TestP2PPeerMeshHashes(t *testing.T) {
 		})
 }
 
+func TestP2PLegacyMaliciousIDs(t *testing.T) {
+	forStreaming(
+		t, "database closed", false,
+		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
+			var bad []types.NodeID
+			for i := 0; i < 11; i++ {
+				nid := types.NodeID{byte(i + 1)}
+				bad = append(bad, nid)
+				require.NoError(t, identities.SetMalicious(tpf.serverCDB, nid, types.RandomBytes(11), time.Now()))
+			}
+			if errStr != "" {
+				tpf.serverDB.Close()
+			}
+
+			malIDs, err := tpf.clientFetch.LegacyMaliciousIDs(context.Background(), tpf.serverID)
+			if errStr == "" {
+				require.NoError(t, err)
+				require.ElementsMatch(t, bad, malIDs)
+			} else {
+				require.ErrorContains(t, err, errStr)
+			}
+		})
+}
+
 func TestP2PMaliciousIDs(t *testing.T) {
 	forStreaming(
 		t, "database closed", false,
@@ -348,14 +388,13 @@ func TestP2PMaliciousIDs(t *testing.T) {
 			for i := 0; i < 11; i++ {
 				nid := types.NodeID{byte(i + 1)}
 				bad = append(bad, nid)
-				require.NoError(t, identities.SetMalicious(
-					tpf.serverCDB, nid, types.RandomBytes(11), time.Now()))
+				require.NoError(t, malfeasance.AddProof(tpf.serverCDB, nid, nil, types.RandomBytes(11), 1, time.Now()))
 			}
 			if errStr != "" {
 				tpf.serverDB.Close()
 			}
 
-			malIDs, err := tpf.clientFetch.GetMaliciousIDs(context.Background(), tpf.serverID)
+			malIDs, err := tpf.clientFetch.MaliciousIDs(context.Background(), tpf.serverID)
 			if errStr == "" {
 				require.NoError(t, err)
 				require.ElementsMatch(t, bad, malIDs)
@@ -522,16 +561,35 @@ func TestP2PGetProposalTransactions(t *testing.T) {
 		})
 }
 
-func TestP2PGetMalfeasanceProofs(t *testing.T) {
+func TestP2PLegacyMalfeasanceProofs(t *testing.T) {
 	forStreaming(
 		t, "database closed", false,
 		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
-			nid := types.RandomNodeID()
+			nodeID := types.RandomNodeID()
 			proof := types.RandomBytes(11)
-			require.NoError(t, identities.SetMalicious(tpf.serverCDB, nid, proof, time.Now()))
+			require.NoError(t, identities.SetMalicious(tpf.serverCDB, nodeID, proof, time.Now()))
 			tpf.verifyGetHash(
-				func() error { return tpf.clientFetch.GetMalfeasanceProofs(context.Background(), []types.NodeID{nid}) },
-				errStr, "mal", "hs/1", types.Hash32(nid), nid.Bytes(),
+				func() error {
+					return tpf.clientFetch.LegacyMalfeasanceProofs(context.Background(), []types.NodeID{nodeID})
+				},
+				errStr, "mal", "hs/1", types.Hash32(nodeID), nodeID.Bytes(),
+				proof,
+			)
+		})
+}
+
+func TestP2PMalfeasanceProofs(t *testing.T) {
+	forStreaming(
+		t, "database closed", false,
+		func(t *testing.T, ctx context.Context, tpf *testP2PFetch, errStr string) {
+			nodeID := types.RandomNodeID()
+			proof := types.RandomBytes(11)
+			require.NoError(t, malfeasance.AddProof(tpf.serverCDB, nodeID, nil, proof, 1, time.Now()))
+			tpf.verifyGetHash(
+				func() error {
+					return tpf.clientFetch.MalfeasanceProofs(context.Background(), []types.NodeID{nodeID})
+				},
+				errStr, "mal2", "hs/1", types.Hash32(nodeID), nodeID.Bytes(),
 				proof,
 			)
 		})

@@ -85,6 +85,11 @@ type testSyncer struct {
 }
 
 func (ts *testSyncer) expectMalEnsureInSync(current types.LayerID) {
+	ts.mMalSyncer.EXPECT().EnsureLegacyInSync(
+		gomock.Any(),
+		ts.mTicker.LayerToTime(current.GetEpoch().FirstLayer()),
+		ts.mTicker.LayerToTime(current.GetEpoch().Add(1).FirstLayer()),
+	)
 	ts.mMalSyncer.EXPECT().EnsureInSync(
 		gomock.Any(),
 		ts.mTicker.LayerToTime(current.GetEpoch().FirstLayer()),
@@ -392,6 +397,7 @@ func TestSynchronize_FetchMalfeasanceFailed(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	lyr := current.Sub(1)
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+	ts.mMalSyncer.EXPECT().EnsureLegacyInSync(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("meh"))
 	ts.mMalSyncer.EXPECT().EnsureInSync(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("meh"))
 
 	require.False(t, ts.syncer.synchronize(context.Background()))

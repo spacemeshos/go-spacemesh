@@ -382,7 +382,6 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		app.clock,
 		alwaysSyncedSyncer{},
 		app.addLogger(ATXBuilderLogger, lg).Zap(),
-		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),

@@ -95,7 +95,33 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof)
+		err := tp.PublishATXProof(context.Background(), nodeID, proof, false)
+		require.NoError(t, err)
+
+		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
+		require.NoError(t, err)
+		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
+		require.Equal(t, proof, dbProof)
+	})
+
+	t.Run("not married and in sync, allow without refATXs", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		proof := types.RandomBytes(10)
+		nodeID := types.RandomNodeID()
+
+		malfeasanceProof := &malfeasance2.MalfeasanceProof{
+			Version: 0,
+			RefATXs: []types.ATXID{},
+			Domain:  malfeasance2.InvalidActivation,
+			Proof:   proof,
+		}
+
+		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
+		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
+		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
+
+		err := tp.PublishATXProof(context.Background(), nodeID, proof, true)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -128,7 +154,7 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof)).
 			Return(errPublish)
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof)
+		err := tp.PublishATXProof(context.Background(), nodeID, proof, false)
 		require.ErrorIs(t, err, errPublish)
 
 		logs := tp.observedLogs.FilterLevelExact(zap.ErrorLevel)
@@ -158,7 +184,25 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(false) // results in no gossip but only storing the proof
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof)
+		err := tp.PublishATXProof(context.Background(), nodeID, proof, false)
+		require.NoError(t, err)
+
+		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
+		require.NoError(t, err)
+		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
+		require.Equal(t, proof, dbProof)
+	})
+
+	t.Run("not married, not in sync, allow no ref ATXs", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		proof := types.RandomBytes(10)
+		nodeID := types.RandomNodeID()
+
+		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
+		tp.mockSync.EXPECT().ListenToATXGossip().Return(false) // results in no gossip but only storing the proof
+
+		err := tp.PublishATXProof(context.Background(), nodeID, proof, true)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -240,7 +284,7 @@ func TestPublishATXProof(t *testing.T) {
 			},
 		)
 
-		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof)
+		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof, false)
 		require.NoError(t, err)
 
 		for i := range nodeIDs {
@@ -268,7 +312,7 @@ func TestPublishATXProof(t *testing.T) {
 		err := malfeasance.AddProof(tp.db, nodeID, nil, proof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
-		err = tp.PublishATXProof(context.Background(), nodeID, proof)
+		err = tp.PublishATXProof(context.Background(), nodeID, proof, false)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -278,9 +322,11 @@ func TestPublishATXProof(t *testing.T) {
 
 		logs := tp.observedLogs.FilterLevelExact(zap.DebugLevel)
 
-		require.Equal(t, 1, logs.Len())
+		require.Equal(t, 2, logs.Len())
 		require.Equal(t, zap.DebugLevel, logs.All()[0].Level)
 		require.Contains(t, logs.All()[0].Message, "smesher is already marked as malicious")
+		require.Equal(t, zap.DebugLevel, logs.All()[1].Level)
+		require.Contains(t, logs.All()[1].Message, "persisted malfeasance proof")
 	})
 
 	t.Run("married and all already malicious", func(t *testing.T) {
@@ -343,7 +389,7 @@ func TestPublishATXProof(t *testing.T) {
 			require.NoError(t, malfeasance.SetMalicious(tp.db, nodeID, mID, time.Now()))
 		}
 
-		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof)
+		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof, false)
 		require.NoError(t, err)
 
 		for i := range nodeIDs {
@@ -358,11 +404,13 @@ func TestPublishATXProof(t *testing.T) {
 
 		logs := tp.observedLogs.FilterLevelExact(zap.DebugLevel)
 
-		require.Equal(t, 30, logs.Len())
+		require.Equal(t, 31, logs.Len())
 		require.Equal(t, zap.DebugLevel, logs.All()[0].Level)
 		for i := range nodeIDs {
 			require.Contains(t, logs.All()[i].Message, "smesher is already marked as malicious")
 		}
+		require.Equal(t, zap.DebugLevel, logs.All()[30].Level)
+		require.Contains(t, logs.All()[30].Message, "persisted malfeasance proof")
 	})
 
 	t.Run("married and some already malicious", func(t *testing.T) {
@@ -450,7 +498,7 @@ func TestPublishATXProof(t *testing.T) {
 			},
 		)
 
-		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof)
+		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof, false)
 		require.NoError(t, err)
 
 		for i := range nodeIDs {
@@ -465,12 +513,16 @@ func TestPublishATXProof(t *testing.T) {
 
 		logs := tp.observedLogs.FilterLevelExact(zap.DebugLevel)
 
-		require.Equal(t, 20, logs.Len())
+		require.Equal(t, 22, logs.Len())
 		require.Equal(t, zap.DebugLevel, logs.All()[0].Level)
 		for i := range nodeIDs[:20] {
 			// first 20 were already malicious
 			require.Contains(t, logs.All()[i].Message, "smesher is already marked as malicious")
 		}
+		require.Equal(t, zap.DebugLevel, logs.All()[20].Level)
+		require.Contains(t, logs.All()[20].Message, "persisted malfeasance proof")
+		require.Equal(t, zap.DebugLevel, logs.All()[21].Level)
+		require.Contains(t, logs.All()[21].Message, "broadcast malfeasance proof")
 	})
 }
 
@@ -625,5 +677,146 @@ func TestRegossip(t *testing.T) {
 
 		err = tp.Regossip(context.Background(), nodeIDs[1])
 		require.NoError(t, err)
+	})
+}
+
+func TestProofByID(t *testing.T) {
+	t.Run("not married no proof", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		nodeID := types.RandomNodeID()
+
+		proofBytes, err := tp.ProofByID(context.Background(), nodeID)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, proofBytes)
+	})
+
+	t.Run("not married with proof", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		nodeID := types.RandomNodeID()
+		atx := types.ActivationTx{
+			SmesherID: nodeID,
+		}
+		atx.SetID(types.RandomATXID())
+		atxs.Add(tp.db, &atx, types.AtxBlob{})
+		proof := types.RandomBytes(10)
+		err := malfeasance.AddProof(tp.db, nodeID, nil, proof, int(malfeasance2.InvalidActivation), time.Now())
+		require.NoError(t, err)
+
+		proofBytes, err := tp.ProofByID(context.Background(), nodeID)
+		require.NoError(t, err)
+
+		var malProof malfeasance2.MalfeasanceProof
+		require.NoError(t, codec.Decode(proofBytes, &malProof))
+		require.Equal(t, proof, malProof.Proof)
+		require.Equal(t, malfeasance2.InvalidActivation, malProof.Domain)
+		require.Len(t, malProof.RefATXs, 1)
+		require.Equal(t, atx.ID(), malProof.RefATXs[0])
+	})
+
+	t.Run("married no proof", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		nodeIDs := make([]types.NodeID, 20)
+		for i := range nodeIDs {
+			nodeIDs[i] = types.RandomNodeID()
+		}
+		mATXID := types.RandomATXID()
+		atx := &types.ActivationTx{
+			SmesherID: nodeIDs[0],
+		}
+		atx.SetID(mATXID)
+		require.NoError(t, atxs.Add(tp.db, atx, types.AtxBlob{}))
+		mATX2ID := types.RandomATXID()
+		atx2 := &types.ActivationTx{
+			SmesherID: nodeIDs[0],
+		}
+		atx2.SetID(mATX2ID)
+		require.NoError(t, atxs.Add(tp.db, atx2, types.AtxBlob{}))
+
+		mID, err := marriage.NewID(tp.db)
+		require.NoError(t, err)
+
+		for i := range nodeIDs {
+			require.NoError(t, marriage.Add(tp.db, marriage.Info{
+				ID:            mID,
+				NodeID:        nodeIDs[i],
+				ATX:           mATXID,
+				MarriageIndex: i,
+				Target:        nodeIDs[0],
+				Signature:     types.RandomEdSignature(),
+			}))
+		}
+
+		proofBytes, err := tp.ProofByID(context.Background(), nodeIDs[4])
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Nil(t, proofBytes)
+	})
+
+	t.Run("married with proof", func(t *testing.T) {
+		t.Parallel()
+		tp := newTestPublisher(t)
+		proof := types.RandomBytes(10)
+		nodeIDs := make([]types.NodeID, 20)
+		for i := range nodeIDs {
+			nodeIDs[i] = types.RandomNodeID()
+		}
+		atx := &types.ActivationTx{
+			SmesherID: nodeIDs[0],
+		}
+		atx.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(tp.db, atx, types.AtxBlob{}))
+		atx2 := &types.ActivationTx{
+			SmesherID: nodeIDs[0],
+		}
+		atx2.SetID(types.RandomATXID())
+		require.NoError(t, atxs.Add(tp.db, atx2, types.AtxBlob{}))
+
+		mID, err := marriage.NewID(tp.db)
+		require.NoError(t, err)
+
+		for i := range nodeIDs[:10] {
+			require.NoError(t, marriage.Add(tp.db, marriage.Info{
+				ID:            mID,
+				NodeID:        nodeIDs[i],
+				ATX:           atx.ID(),
+				MarriageIndex: i,
+				Target:        nodeIDs[0],
+				Signature:     types.RandomEdSignature(),
+			}))
+			if i == 0 {
+				require.NoError(t, malfeasance.AddProof(
+					tp.db,
+					nodeIDs[i],
+					&mID,
+					proof,
+					int(malfeasance2.InvalidActivation),
+					time.Now()),
+				)
+				continue
+			}
+			require.NoError(t, malfeasance.SetMalicious(tp.db, nodeIDs[i], mID, time.Now()))
+		}
+		for i := range nodeIDs[10:] { // smesher has married twice
+			require.NoError(t, marriage.Add(tp.db, marriage.Info{
+				ID:            mID,
+				NodeID:        nodeIDs[i+10],
+				ATX:           atx2.ID(),
+				MarriageIndex: i,
+				Target:        nodeIDs[0],
+				Signature:     types.RandomEdSignature(),
+			}))
+			require.NoError(t, malfeasance.SetMalicious(tp.db, nodeIDs[i], mID, time.Now()))
+		}
+
+		proofBytes, err := tp.ProofByID(context.Background(), nodeIDs[4])
+		require.NoError(t, err)
+
+		var malProof malfeasance2.MalfeasanceProof
+		require.NoError(t, codec.Decode(proofBytes, &malProof))
+		require.Equal(t, proof, malProof.Proof)
+		require.Equal(t, malfeasance2.InvalidActivation, malProof.Domain)
+		require.ElementsMatch(t, []types.ATXID{atx.ID(), atx2.ID()}, malProof.RefATXs)
 	})
 }

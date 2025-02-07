@@ -848,7 +848,7 @@ func (app *App) initServices(ctx context.Context) error {
 	peerCache := peers.New()
 	flog := app.addLogger(Fetcher, lg)
 	fetcher, err = fetch.NewFetch(
-		app.cachedDB,
+		app.db,
 		proposalsStore,
 		app.host,
 		peerCache,
@@ -1139,7 +1139,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.clock,
 		newSyncer,
 		atxBuilderLog,
-		activation.WithContext(ctx),
 		activation.WithPoetConfig(app.Config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
@@ -1214,7 +1213,7 @@ func (app *App) initServices(ctx context.Context) error {
 	malHandler.RegisterHandler(malfeasance.InvalidPrevATX, invalidPrevMH)
 
 	malHandler2 := malfeasance2.NewHandler(
-		app.cachedDB,
+		app.db,
 		malfeasanceLogger,
 		app.host.ID(),
 		nodeIDs,
@@ -1231,13 +1230,14 @@ func (app *App) initServices(ctx context.Context) error {
 
 	malfeasancePublisher := malfeasance2.NewPublisher(
 		malfeasanceLogger,
-		app.cachedDB,
+		app.db,
 		newSyncer,
 		trtl,
 		app.host,
 	)
 	atxMalHandler := activation.NewMalfeasanceHandlerV2(
 		malfeasanceLogger,
+		app.db,
 		malfeasancePublisher,
 		app.edVerifier,
 		validator,
@@ -1265,6 +1265,7 @@ func (app *App) initServices(ctx context.Context) error {
 	}
 	malHandler2.RegisterHandler(malfeasance2.InvalidActivation, atxMalHandler)
 
+	fetcher.SetMalfeasanceProvider(malfeasancePublisher)
 	fetcher.SetValidators(
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(atxHandler.HandleSyncedAtx, app.host, lg.Zap()),
@@ -1273,11 +1274,7 @@ func (app *App) initServices(ctx context.Context) error {
 			pubsub.DropPeerOnSyncValidationReject(poetDb.ValidateAndStoreMsg, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(
-				proposalListener.HandleSyncedBallot,
-				app.host,
-				lg.Zap(),
-			),
+			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedBallot, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
 			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleActiveSet, app.host, lg.Zap()),
@@ -1286,41 +1283,20 @@ func (app *App) initServices(ctx context.Context) error {
 			pubsub.DropPeerOnSyncValidationReject(blockHandler.HandleSyncedBlock, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(
-				proposalListener.HandleSyncedProposal,
-				app.host,
-				lg.Zap(),
-			),
+			pubsub.DropPeerOnSyncValidationReject(proposalListener.HandleSyncedProposal, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(
-				app.txHandler.HandleBlockTransaction,
-				app.host,
-				lg.Zap(),
-			),
+			pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleBlockTransaction, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(
-				app.txHandler.HandleProposalTransaction,
-				app.host,
-				lg.Zap(),
-			),
+			pubsub.DropPeerOnSyncValidationReject(app.txHandler.HandleProposalTransaction, app.host, lg.Zap()),
 		),
 		fetch.ValidatorFunc(
-			pubsub.DropPeerOnSyncValidationReject(
-				malHandler.HandleSyncedMalfeasanceProof,
-				app.host,
-				lg.Zap(),
-			),
+			pubsub.DropPeerOnSyncValidationReject(malHandler.HandleSynced, app.host, lg.Zap()),
 		),
-		// TODO(mafa): add malfeasance2 handler to fetcher
-		// fetch.ValidatorFunc(
-		// 	pubsub.DropPeerOnSyncValidationReject(
-		// 		malHandler2.HandleSyncedMalfeasanceProof,
-		// 		app.host,
-		// 		lg.Zap(),
-		// 	),
-		// ),
+		fetch.ValidatorFunc(
+			pubsub.DropPeerOnSyncValidationReject(malHandler2.HandleSynced, app.host, lg.Zap()),
+		),
 	)
 
 	checkSynced := func(_ context.Context, _ p2p.Peer, _ []byte) error {
@@ -1378,7 +1354,7 @@ func (app *App) initServices(ctx context.Context) error {
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof,
-		pubsub.ChainGossipHandler(checkAtxSynced, malHandler.HandleMalfeasanceProof),
+		pubsub.ChainGossipHandler(checkAtxSynced, malHandler.HandleGossip),
 	)
 	app.host.Register(
 		pubsub.MalfeasanceProof2,
@@ -2360,7 +2336,6 @@ func (app *App) Start(ctx context.Context) error {
 		Msg:   "node is shutting down",
 		Level: zapcore.InfoLevel,
 	})
-	// TODO: pass app.eg to components and wait for them collectively
 	if app.ptimesync != nil {
 		app.eg.Go(func() error {
 			app.errCh <- app.ptimesync.Wait()

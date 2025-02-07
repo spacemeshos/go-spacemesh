@@ -42,6 +42,10 @@ type ProofDoubleMarry struct {
 	Proof2 MarryProof
 }
 
+func (p ProofDoubleMarry) AllowNoRefATXs() bool {
+	return false
+}
+
 func (p ProofDoubleMarry) TypeName() string {
 	return "DoubleMarryProof"
 }
@@ -106,6 +110,11 @@ func (p ProofDoubleMarry) Valid(_ context.Context, malValidator MalfeasanceValid
 	}
 	if err := p.Proof2.Valid(malValidator, p.ATXID2, p.SmesherID2, p.NodeID); err != nil {
 		return types.EmptyNodeID, fmt.Errorf("proof 2 is invalid: %w", err)
+	}
+	if ok, err := malValidator.IdentityExists(p.NodeID); err != nil {
+		return types.EmptyNodeID, fmt.Errorf("checking identity: %w", err)
+	} else if !ok {
+		return types.EmptyNodeID, ErrUnknownIdentity
 	}
 	return p.NodeID, nil
 }

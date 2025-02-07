@@ -91,7 +91,6 @@ type Builder struct {
 	layerClock        layerClock
 	syncer            Syncer
 	logger            *zap.Logger
-	parentCtx         context.Context
 	poets             []PoetService
 	poetCfg           PoetConfig
 	poetRetryInterval time.Duration
@@ -132,14 +131,6 @@ type BuilderOption func(*Builder)
 func WithPoetRetryInterval(interval time.Duration) BuilderOption {
 	return func(b *Builder) {
 		b.poetRetryInterval = interval
-	}
-}
-
-// WithContext modifies parent context for background job.
-func WithContext(ctx context.Context) BuilderOption {
-	return func(b *Builder) {
-		// TODO(mafa): fix this
-		b.parentCtx = ctx // nolint:fatcontext
 	}
 }
 
@@ -189,7 +180,6 @@ func NewBuilder(
 	opts ...BuilderOption,
 ) *Builder {
 	b := &Builder{
-		parentCtx:         context.Background(),
 		signers:           make(map[types.NodeID]*signing.EdSigner),
 		conf:              conf,
 		localDB:           localDB,
@@ -229,7 +219,13 @@ func (b *Builder) Register(sig *signing.EdSigner) {
 	b.postStates.Set(sig.NodeID(), types.PostStateIdle)
 
 	if b.stop != nil {
-		b.startID(b.parentCtx, sig)
+		ctx, stop := context.WithCancel(context.Background())
+		prevStop := b.stop
+		b.stop = func() {
+			prevStop()
+			stop()
+		}
+		b.startID(ctx, sig)
 	}
 }
 
@@ -269,9 +265,8 @@ func (b *Builder) StartSmeshing(coinbase types.Address) error {
 	}
 
 	b.coinbaseAccount = coinbase
-	ctx, stop := context.WithCancel(b.parentCtx)
+	ctx, stop := context.WithCancel(context.Background())
 	b.stop = stop
-
 	for _, sig := range b.signers {
 		b.startID(ctx, sig)
 	}

@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/marriage"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -36,7 +35,7 @@ var (
 
 type Handler struct {
 	logger   *zap.Logger
-	db       sql.Executor
+	db       sql.StateDatabase
 	self     p2p.Peer
 	nodeIDs  []types.NodeID
 	fetcher  system.Fetcher
@@ -51,7 +50,7 @@ type Handler struct {
 }
 
 func NewHandler(
-	db sql.Executor,
+	db sql.StateDatabase,
 	lg *zap.Logger,
 	self p2p.Peer,
 	nodeIDs []types.NodeID,
@@ -262,24 +261,20 @@ func (h *Handler) handleProof(ctx context.Context, peer p2p.Peer, proof Malfeasa
 		return nil, fmt.Errorf("%w: %d", ErrUnknownDomain, proof.Domain)
 	}
 
+	if err := h.fetchReferences(ctx, peer, proof.RefATXs); err != nil {
+		return nil, fmt.Errorf("fetch references: %w", err)
+	}
+
 	nodeID, err := handler.Validate(ctx, proof.Proof)
 	if err != nil {
 		h.countInvalidProof(proof)
 		return nil, err
 	}
 
-	if err := h.fetchReferences(ctx, peer, proof.RefATXs); err != nil {
-		return nil, fmt.Errorf("fetch references: %w", err)
-	}
-
 	mID, err := marriage.FindIDByNodeID(h.db, nodeID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		// smesher is not married, check if identity exists in the DB
-		_, err := atxs.GetFirstIDByNodeID(h.db, nodeID)
-		if err != nil {
-			return nil, fmt.Errorf("%w: missing proof for identities existence", ErrMalformedData)
-		}
+		// smesher is not married
 		return []types.NodeID{nodeID}, nil
 	case err != nil:
 		return nil, fmt.Errorf("get marriage ID for %s: %w", nodeID.ShortString(), err)
@@ -315,33 +310,30 @@ func (h *Handler) fetchReferences(ctx context.Context, peer p2p.Peer, atxIDs []t
 }
 
 func (h *Handler) storeProof(ctx context.Context, nodeIDs []types.NodeID, proof []byte, domain ProofDomain) error {
-	if len(nodeIDs) == 1 {
-		// smesher is not married
-		malicious, err := malfeasance.IsMalicious(h.db, nodeIDs[0])
-		if err != nil {
-			return fmt.Errorf("check if smesher is malicious: %w", err)
-		}
-		if malicious {
-			h.logger.Debug("smesher is already marked as malicious", zap.String("smesher_id", nodeIDs[0].ShortString()))
+	// Persisting the proof in the DB has to be done within a transaction to ensure consistency. The ATX handler could
+	// update the (or merge multiple) marriage set in parallel, so we need to make sure data is consistent while we
+	// update the malfeasance table.
+	return h.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+		if len(nodeIDs) == 1 {
+			// smesher is not married
+			if err := malfeasance.AddProof(tx, nodeIDs[0], nil, proof, int(domain), time.Now()); err != nil {
+				return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0], err)
+			}
 			return nil
 		}
-		if err := malfeasance.AddProof(h.db, nodeIDs[0], nil, proof, int(domain), time.Now()); err != nil {
-			return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0], err)
+
+		mID, err := marriage.FindIDByNodeID(tx, nodeIDs[0])
+		if err != nil {
+			return fmt.Errorf("get marriage ID for %s: %w", nodeIDs[0].ShortString(), err)
+		}
+		if err := malfeasance.AddProof(tx, nodeIDs[0], &mID, proof, int(domain), time.Now()); err != nil {
+			return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0].ShortString(), err)
+		}
+		for _, nodeID := range nodeIDs[1:] {
+			if err := malfeasance.SetMalicious(tx, nodeID, mID, time.Now()); err != nil {
+				return fmt.Errorf("update malfeasance state for %s: %w", nodeID.ShortString(), err)
+			}
 		}
 		return nil
-	}
-
-	mID, err := marriage.FindIDByNodeID(h.db, nodeIDs[0])
-	if err != nil {
-		return fmt.Errorf("get marriage ID for %s: %w", nodeIDs[0].ShortString(), err)
-	}
-	if err := malfeasance.AddProof(h.db, nodeIDs[0], &mID, proof, int(domain), time.Now()); err != nil {
-		return fmt.Errorf("store malfeasance proof for %s: %w", nodeIDs[0].ShortString(), err)
-	}
-	for _, nodeID := range nodeIDs[1:] {
-		if err := malfeasance.SetMalicious(h.db, nodeID, mID, time.Now()); err != nil {
-			return fmt.Errorf("update malfeasance state for %s: %w", nodeID.ShortString(), err)
-		}
-	}
-	return nil
+	})
 }

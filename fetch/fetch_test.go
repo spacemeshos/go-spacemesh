@@ -28,15 +28,15 @@ import (
 
 type testFetch struct {
 	*Fetch
-	mh      *mocks.Mockhost
-	mMalS   *mocks.Mockrequester
-	mAtxS   *mocks.Mockrequester
-	mLyrS   *mocks.Mockrequester
-	mHashS  *mocks.Mockrequester
-	mMHashS *mocks.Mockrequester
-	mOpn2S  *mocks.Mockrequester
+	mh          *mocks.Mockhost
+	mAtxS       *mocks.Mockrequester
+	mLyrS       *mocks.Mockrequester
+	mHashS      *mocks.Mockrequester
+	mMHashS     *mocks.Mockrequester
+	mOpn2S      *mocks.Mockrequester
+	mLegacyMalS *mocks.Mockrequester
+	mMalS       *mocks.Mockrequester
 
-	mMalH        *mocks.MockSyncValidator
 	mAtxH        *mocks.MockSyncValidator
 	mBallotH     *mocks.MockSyncValidator
 	mActiveSetH  *mocks.MockSyncValidator
@@ -46,19 +46,23 @@ type testFetch struct {
 	mTxBlocksH   *mocks.MockSyncValidator
 	mTxProposalH *mocks.MockSyncValidator
 	mPoetH       *mocks.MockSyncValidator
+	mLegacyMalH  *mocks.MockSyncValidator
+	mMalH        *mocks.MockSyncValidator
 }
 
 func createFetch(tb testing.TB) *testFetch {
 	ctrl := gomock.NewController(tb)
 	tf := &testFetch{
-		mh:           mocks.NewMockhost(ctrl),
-		mMalS:        mocks.NewMockrequester(ctrl),
-		mAtxS:        mocks.NewMockrequester(ctrl),
-		mLyrS:        mocks.NewMockrequester(ctrl),
-		mHashS:       mocks.NewMockrequester(ctrl),
-		mMHashS:      mocks.NewMockrequester(ctrl),
-		mOpn2S:       mocks.NewMockrequester(ctrl),
-		mMalH:        mocks.NewMockSyncValidator(ctrl),
+		mh: mocks.NewMockhost(ctrl),
+
+		mAtxS:       mocks.NewMockrequester(ctrl),
+		mLyrS:       mocks.NewMockrequester(ctrl),
+		mHashS:      mocks.NewMockrequester(ctrl),
+		mMHashS:     mocks.NewMockrequester(ctrl),
+		mOpn2S:      mocks.NewMockrequester(ctrl),
+		mLegacyMalS: mocks.NewMockrequester(ctrl),
+		mMalS:       mocks.NewMockrequester(ctrl),
+
 		mAtxH:        mocks.NewMockSyncValidator(ctrl),
 		mBallotH:     mocks.NewMockSyncValidator(ctrl),
 		mActiveSetH:  mocks.NewMockSyncValidator(ctrl),
@@ -67,10 +71,18 @@ func createFetch(tb testing.TB) *testFetch {
 		mTxBlocksH:   mocks.NewMockSyncValidator(ctrl),
 		mTxProposalH: mocks.NewMockSyncValidator(ctrl),
 		mPoetH:       mocks.NewMockSyncValidator(ctrl),
+		mLegacyMalH:  mocks.NewMockSyncValidator(ctrl),
+		mMalH:        mocks.NewMockSyncValidator(ctrl),
 	}
-	for _, srv := range []*mocks.Mockrequester{tf.mMalS, tf.mAtxS, tf.mLyrS, tf.mHashS, tf.mMHashS, tf.mOpn2S} {
-		srv.EXPECT().Run(gomock.Any()).AnyTimes()
-	}
+
+	tf.mAtxS.EXPECT().Run(gomock.Any()).AnyTimes()
+	tf.mLyrS.EXPECT().Run(gomock.Any()).AnyTimes()
+	tf.mHashS.EXPECT().Run(gomock.Any()).AnyTimes()
+	tf.mMHashS.EXPECT().Run(gomock.Any()).AnyTimes()
+	tf.mOpn2S.EXPECT().Run(gomock.Any()).AnyTimes()
+	tf.mLegacyMalS.EXPECT().Run(gomock.Any()).AnyTimes()
+	tf.mMalS.EXPECT().Run(gomock.Any()).AnyTimes()
+
 	cfg := Config{
 		BatchTimeout:         2 * time.Second, // make sure we never hit the batch timeout
 		BatchSize:            3,
@@ -82,10 +94,9 @@ func createFetch(tb testing.TB) *testFetch {
 	}
 
 	lg := zaptest.NewLogger(tb)
-	cdb := datastore.NewCachedDB(statesql.InMemoryTest(tb), lg)
-	tb.Cleanup(func() { require.NoError(tb, cdb.Close()) })
+	db := statesql.InMemoryTest(tb)
 	fetch, err := NewFetch(
-		cdb,
+		db,
 		store.New(),
 		nil,
 		peers.New(),
@@ -93,12 +104,13 @@ func createFetch(tb testing.TB) *testFetch {
 		WithConfig(cfg),
 		WithLogger(lg),
 		withServers(map[string]requester{
-			malProtocol:      tf.mMalS,
-			atxProtocol:      tf.mAtxS,
-			lyrDataProtocol:  tf.mLyrS,
-			hashProtocol:     tf.mHashS,
-			meshHashProtocol: tf.mMHashS,
-			OpnProtocol:      tf.mOpn2S,
+			atxProtocol:       tf.mAtxS,
+			lyrDataProtocol:   tf.mLyrS,
+			hashProtocol:      tf.mHashS,
+			meshHashProtocol:  tf.mMHashS,
+			OpnProtocol:       tf.mOpn2S,
+			legacyMalProtocol: tf.mLegacyMalS,
+			malProtocol:       tf.mMalS,
 		}),
 		withHost(tf.mh),
 	)
@@ -114,6 +126,7 @@ func createFetch(tb testing.TB) *testFetch {
 		tf.mProposalH,
 		tf.mTxBlocksH,
 		tf.mTxProposalH,
+		tf.mLegacyMalH,
 		tf.mMalH,
 	)
 	return tf
@@ -129,10 +142,9 @@ func badReceiver(context.Context, types.Hash32, p2p.Peer, []byte) error {
 
 func TestFetch_Start(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), lg)
-	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
+	db := statesql.InMemoryTest(t)
 	f, err := NewFetch(
-		cdb,
+		db,
 		store.New(),
 		nil,
 		peers.New(),
@@ -140,7 +152,7 @@ func TestFetch_Start(t *testing.T) {
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
 		withServers(map[string]requester{
-			malProtocol: nil,
+			atxProtocol: nil,
 		}),
 	)
 	require.NoError(t, err)
@@ -404,10 +416,9 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	})
 	defer eg.Wait()
 
-	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), lg)
-	t.Cleanup(func() { require.NoError(t, cdb.Close()) })
+	db := statesql.InMemoryTest(t)
 	fetcher, err := NewFetch(
-		cdb,
+		db,
 		store.New(),
 		h,
 		peers.New(),
@@ -422,7 +433,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	vf := ValidatorFunc(
 		func(context.Context, types.Hash32, peer.ID, []byte) error { return pubsub.ErrValidationReject },
 	)
-	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil, nil)
+	fetcher.SetValidators(vf, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	// Request an atx by hash
 	_, err = fetcher.getHash(
@@ -444,6 +455,7 @@ func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	// Now wrap the atx validator with  DropPeerOnValidationReject and set it again
 	fetcher.SetValidators(
 		ValidatorFunc(pubsub.DropPeerOnSyncValidationReject(vf, h, lg)),
+		nil,
 		nil,
 		nil,
 		nil,
