@@ -25,6 +25,7 @@ func TestServerReadiness(t *testing.T) {
 		mocks.NewMockPublisher(ctrl),
 		NewMockpoetDB(ctrl),
 		NewMockhare(ctrl),
+		NewMockweights(ctrl),
 		NewMockproposalBuilder(ctrl),
 		zaptest.NewLogger(t),
 	)
