@@ -85,8 +85,8 @@ func NewServer(
 	}
 }
 
-// Turn the server into a HTTP handler.
-// It will return '503 Unavailable' until the readiness channel is closed.
+// IntoHandler turn the server into an HTTP handler.
+// It will return '503 Unavailable' until the sync returns true for `IsSynced`.
 func (s *Server) IntoHandler(mux *http.ServeMux, syncer syncer) http.Handler {
 	loggingMid := func(f nethttp.StrictHTTPHandlerFunc, operationID string) nethttp.StrictHTTPHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, req any) (any, error) {
