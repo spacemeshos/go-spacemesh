@@ -1064,7 +1064,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 			return nil
 		}
 
-		// malfeasance check happens after storing the ATX because storing updates the marriage set
+		// malfeasance check happens at the end of storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
 		proof, nodeID, err = h.checkMalicious(ctx, tx, watx, peer)
 		return err
