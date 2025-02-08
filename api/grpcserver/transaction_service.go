@@ -272,8 +272,6 @@ func (s *TransactionService) TransactionsStateStream(
 			// Transaction objects do not have an associated status. The status we assign them here is based on the
 			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
 			// In order to update tx status, we have to read every transaction in the layer.
-			// TODO: this is inefficient, come up with a more optimal way of doing this
-			// TODO: tx status should depend upon block status, not layer status
 
 			// In order to read transactions, we first need to read layer blocks
 			layerObj, err := s.mesh.GetLayer(layer.LayerID)
@@ -348,8 +346,6 @@ func (s *TransactionService) TransactionsStateStream(
 		case <-stream.Context().Done():
 			return nil
 		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
 	}
 }
 

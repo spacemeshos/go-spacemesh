@@ -134,7 +134,7 @@ func (s *SmesherService) postSetupOpts(in *pb.PostSetupOpts) (activation.PostSet
 	}
 
 	// Overlay default with api provided opts
-	opts := s.postOpts // TODO(mafa): fetch from post supervisor instead
+	opts := s.postOpts
 	opts.DataDir = in.DataDir
 	opts.NumUnits = in.NumUnits
 	opts.MaxFileSize = in.MaxFileSize

@@ -172,8 +172,6 @@ func (s *NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServ
 			ctxzap.Info(stream.Context(), "StatusStream closing stream, client disconnected")
 			return nil
 		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
 	}
 }
 
@@ -219,8 +217,6 @@ func (s *NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeServic
 			ctxzap.Info(stream.Context(), "ErrorStream closing stream, client disconnected")
 			return nil
 		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
 	}
 }
 
