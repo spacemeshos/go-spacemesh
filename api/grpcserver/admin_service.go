@@ -224,7 +224,7 @@ func connKind(kind peerinfo.Kind) pb.ConnectionInfo_Kind {
 	case peerinfo.KindRelayOutbound:
 		return pb.ConnectionInfo_RelayOutbound
 	default:
-		return pb.ConnectionInfo_Uknown
+		return pb.ConnectionInfo_Unknown
 	}
 }
 
