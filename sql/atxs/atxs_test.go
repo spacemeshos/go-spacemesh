@@ -1301,7 +1301,7 @@ func Test_Previous(t *testing.T) {
 func TestPrevIDByNodeID(t *testing.T) {
 	t.Run("no previous ATXs", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
-		_, err := atxs.PrevIDByNodeID(db, types.RandomNodeID(), 0)
+		_, err := atxs.PrevIDByNodeID(db, types.EmptyATXID, types.RandomNodeID(), 0)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 	})
 	t.Run("filters by epoch", func(t *testing.T) {
@@ -1315,22 +1315,49 @@ func TestPrevIDByNodeID(t *testing.T) {
 
 		atx2 := newAtx(t, sig, withPublishEpoch(2))
 		require.NoError(t, atxs.Add(db, atx2, types.AtxBlob{}))
-		require.NoError(t, atxs.SetPost(db, atx2.ID(), types.EmptyATXID, 0, sig.NodeID(), 4, atx2.PublishEpoch))
+		require.NoError(t, atxs.SetPost(db, atx2.ID(), atx1.ID(), 0, sig.NodeID(), 4, atx2.PublishEpoch))
 
-		_, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 0)
+		_, err = atxs.PrevIDByNodeID(db, types.EmptyATXID, sig.NodeID(), 0)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 
-		prevID, err := atxs.PrevIDByNodeID(db, sig.NodeID(), 1)
+		prevID, err := atxs.PrevIDByNodeID(db, types.EmptyATXID, sig.NodeID(), 1)
 		require.NoError(t, err)
 		require.Equal(t, atx1.ID(), prevID)
 
-		prevID, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 2)
+		prevID, err = atxs.PrevIDByNodeID(db, types.EmptyATXID, sig.NodeID(), 2)
 		require.NoError(t, err)
 		require.Equal(t, atx2.ID(), prevID)
 
-		prevID, err = atxs.PrevIDByNodeID(db, sig.NodeID(), 3)
+		prevID, err = atxs.PrevIDByNodeID(db, types.EmptyATXID, sig.NodeID(), 3)
 		require.NoError(t, err)
 		require.Equal(t, atx2.ID(), prevID)
+	})
+	t.Run("ignores given ATX", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		atx1 := newAtx(t, sig, withPublishEpoch(1))
+		require.NoError(t, atxs.Add(db, atx1, types.AtxBlob{}))
+		require.NoError(t, atxs.SetPost(db, atx1.ID(), types.EmptyATXID, 0, sig.NodeID(), 4, atx1.PublishEpoch))
+
+		atx2 := newAtx(t, sig, withPublishEpoch(2))
+		require.NoError(t, atxs.Add(db, atx2, types.AtxBlob{}))
+		require.NoError(t, atxs.SetPost(db, atx2.ID(), atx1.ID(), 0, sig.NodeID(), 4, atx2.PublishEpoch))
+
+		// when checking with ATX1 previous is empty for epoch 1
+		prevID, err := atxs.PrevIDByNodeID(db, atx1.ID(), sig.NodeID(), 1)
+		require.ErrorIs(t, err, sql.ErrNotFound)
+		require.Equal(t, types.EmptyATXID, prevID)
+
+		// when checking with ATX2 previous is ATX1 for epoch 1
+		prevID, err = atxs.PrevIDByNodeID(db, atx2.ID(), sig.NodeID(), 1)
+		require.NoError(t, err)
+		require.Equal(t, atx1.ID(), prevID)
+
+		prevID, err = atxs.PrevIDByNodeID(db, atx2.ID(), sig.NodeID(), 2)
+		require.NoError(t, err)
+		require.Equal(t, atx1.ID(), prevID)
 	})
 	t.Run("the previous is merged and ID is not the signer", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
@@ -1352,7 +1379,7 @@ func TestPrevIDByNodeID(t *testing.T) {
 		require.NoError(t, atxs.SetPost(db, atx2.ID(), atx1.ID(), 0, sig.NodeID(), 4, atx2.PublishEpoch))
 		require.NoError(t, atxs.SetPost(db, atx2.ID(), atx1.ID(), 0, types.RandomNodeID(), 12, atx2.PublishEpoch))
 
-		prevID, err := atxs.PrevIDByNodeID(db, id, 3)
+		prevID, err := atxs.PrevIDByNodeID(db, atx2.ID(), id, 3)
 		require.NoError(t, err)
 		require.Equal(t, atx1.ID(), prevID)
 	})

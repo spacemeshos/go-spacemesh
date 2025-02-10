@@ -392,7 +392,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	atx *wire.ActivationTxV1,
 	peer peer.ID,
 ) (bool, error) {
-	expectedPrevID, err := atxs.PrevIDByNodeID(tx, atx.SmesherID, atx.PublishEpoch)
+	expectedPrevID, err := atxs.PrevIDByNodeID(tx, atx.ID(), atx.SmesherID, atx.PublishEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return false, fmt.Errorf("get last atx by node id: %w", err)
 	}
