@@ -25,6 +25,7 @@ func TestServerReadiness(t *testing.T) {
 		mocks.NewMockPublisher(ctrl),
 		NewMockpoetDB(ctrl),
 		NewMockhare(ctrl),
+		NewMockweights(ctrl),
 		NewMockproposalBuilder(ctrl),
 		zaptest.NewLogger(t),
 	)
@@ -48,7 +49,7 @@ func TestServerReadiness(t *testing.T) {
 
 	t.Run("returns 503 when not ready", func(t *testing.T) {
 		syncer.EXPECT().IsSynced(gomock.Any()).Return(false)
-		resp, err := http.Get("http://" + listener.Addr().String() + "/hare/beacon/1")
+		resp, err := http.Get("http://" + listener.Addr().String() + "/beacon/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusServiceUnavailable, resp.StatusCode)
 	})
@@ -59,7 +60,7 @@ func TestServerReadiness(t *testing.T) {
 			Beacon(gomock.Any(), gomock.Any()).
 			Return(types.Beacon{1, 2, 3}, nil)
 
-		resp, err := http.Get("http://" + listener.Addr().String() + "/hare/beacon/1")
+		resp, err := http.Get("http://" + listener.Addr().String() + "/beacon/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 	})

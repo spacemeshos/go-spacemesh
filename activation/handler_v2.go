@@ -114,7 +114,7 @@ func (h *HandlerV2) processATX(
 		return fmt.Errorf("%w: validating marriages: %w", pubsub.ErrValidationReject, err)
 	}
 
-	atxData, err := h.syntacticallyValidateDeps(ctx, watx)
+	atxData, err := h.syntacticallyValidateDeps(ctx, watx, peer)
 	if err != nil {
 		return fmt.Errorf("%w: validating atx %s (deps): %w", pubsub.ErrValidationReject, watx.ID(), err)
 	}
@@ -142,7 +142,7 @@ func (h *HandlerV2) processATX(
 	atx.SetID(watx.ID())
 	atx.SetReceived(received)
 
-	if err := h.storeAtx(ctx, atx, atxData); err != nil {
+	if err := h.storeAtx(ctx, atx, atxData, peer); err != nil {
 		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 
@@ -510,6 +510,7 @@ func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error 
 func (h *HandlerV2) syntacticallyValidateDeps(
 	ctx context.Context,
 	atx *wire.ActivationTxV2,
+	peer p2p.Peer,
 ) (*activationTx, error) {
 	result := activationTx{
 		ActivationTxV2: atx,
@@ -612,7 +613,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		nipostIdx := 0
 		challenge := atx.NIPosts[nipostIdx].Challenge
 		post := atx.NIPosts[nipostIdx].Posts[0]
-		if err := h.validatePost(ctx, atx.SmesherID, atx, commitment, challenge, post, nipostIdx); err != nil {
+		if err := h.validatePost(ctx, atx.SmesherID, atx, peer, commitment, challenge, post, nipostIdx); err != nil {
 			return nil, err
 		}
 		result.ids[atx.SmesherID] = idData{
@@ -635,7 +636,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			if id == atx.SmesherID {
 				smesherCommitment = &commitment
 			}
-			if err := h.validatePost(ctx, id, atx, commitment, niPosts.Challenge, post, idx); err != nil {
+			if err := h.validatePost(ctx, id, atx, peer, commitment, niPosts.Challenge, post, idx); err != nil {
 				return nil, err
 			}
 			result.ids[id] = idData{
@@ -662,6 +663,7 @@ func (h *HandlerV2) validatePost(
 	ctx context.Context,
 	nodeID types.NodeID,
 	atx *wire.ActivationTxV2,
+	peer p2p.Peer,
 	commitment types.ATXID,
 	challenge types.Hash32,
 	post wire.SubPostV2,
@@ -683,6 +685,11 @@ func (h *HandlerV2) validatePost(
 	if !errors.As(err, &errInvalidIdx) {
 		return fmt.Errorf("validating post for ID %s: %w", nodeID.ShortString(), err)
 	}
+
+	if peer == h.local {
+		return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalidIdx)
+	}
+
 	h.logger.Debug("ATX with invalid post index",
 		log.ZContext(ctx),
 		zap.Stringer("atx_id", atx.ID()),
@@ -729,15 +736,16 @@ func (h *HandlerV2) validatePost(
 	if err := h.malPublisher.Publish(ctx, nodeID, proof); err != nil {
 		return fmt.Errorf("publishing malfeasance proof for invalid post: %w", err)
 	}
-	return fmt.Errorf("invalid post for ID %s: %w", nodeID.ShortString(), errInvalidIdx)
+	return nil
 }
 
 func (h *HandlerV2) checkMalicious(
 	ctx context.Context,
 	tx sql.Transaction,
 	watx *activationTx,
+	peer p2p.Peer,
 ) (wire.Proof, types.NodeID, error) {
-	proof, nodeID, err := h.checkDoubleMarry(ctx, tx, watx)
+	proof, nodeID, err := h.checkDoubleMarry(ctx, tx, watx, peer)
 	if err != nil {
 		return nil, types.EmptyNodeID, fmt.Errorf("checking double marry: %w", err)
 	}
@@ -745,7 +753,7 @@ func (h *HandlerV2) checkMalicious(
 		return proof, nodeID, nil
 	}
 
-	proof, nodeID, err = h.checkDoubleMerge(ctx, tx, watx)
+	proof, nodeID, err = h.checkDoubleMerge(ctx, tx, watx, peer)
 	if err != nil {
 		return nil, types.EmptyNodeID, fmt.Errorf("checking double merge: %w", err)
 	}
@@ -753,7 +761,7 @@ func (h *HandlerV2) checkMalicious(
 		return proof, nodeID, nil
 	}
 
-	proof, nodeID, err = h.checkPrevAtx(ctx, tx, watx)
+	proof, nodeID, err = h.checkPrevAtx(ctx, tx, watx, peer)
 	if err != nil {
 		return nil, types.EmptyNodeID, fmt.Errorf("checking previous ATX: %w", err)
 	}
@@ -782,6 +790,7 @@ func (h *HandlerV2) checkDoubleMarry(
 	ctx context.Context,
 	tx sql.Transaction,
 	atx *activationTx,
+	peer p2p.Peer,
 ) (wire.Proof, types.NodeID, error) {
 	for _, m := range atx.marriages {
 		info, err := marriage.FindByNodeID(tx, m.id)
@@ -790,6 +799,13 @@ func (h *HandlerV2) checkDoubleMarry(
 		}
 		if info.ATX == atx.ID() {
 			continue
+		}
+
+		if peer == h.local {
+			return nil, types.EmptyNodeID, fmt.Errorf("%s is already married via ATX %s",
+				atx.SmesherID.ShortString(),
+				info.ATX.ShortString(),
+			)
 		}
 
 		otherAtx, err := h.fetchWireAtx(ctx, tx, info.ATX)
@@ -815,6 +831,7 @@ func (h *HandlerV2) checkDoubleMerge(
 	ctx context.Context,
 	tx sql.Transaction,
 	atx *activationTx,
+	peer p2p.Peer,
 ) (wire.Proof, types.NodeID, error) {
 	if atx.MarriageATX == nil {
 		return nil, types.EmptyNodeID, nil
@@ -826,6 +843,14 @@ func (h *HandlerV2) checkDoubleMerge(
 	case err != nil:
 		return nil, types.EmptyNodeID, fmt.Errorf("searching for ATXs with the same marriage ATX: %w", err)
 	}
+
+	if peer == h.local {
+		return nil, types.EmptyNodeID, fmt.Errorf("multiple ATXs with the same marriage ATX %s published in epoch %d",
+			atx.MarriageATX.ShortString(),
+			atx.PublishEpoch,
+		)
+	}
+
 	otherIndex := slices.IndexFunc(ids, func(id types.ATXID) bool { return id != atx.ID() })
 	other := ids[otherIndex]
 
@@ -862,9 +887,10 @@ func (h *HandlerV2) checkPrevAtx(
 	ctx context.Context,
 	tx sql.Transaction,
 	atx *activationTx,
+	peer p2p.Peer,
 ) (wire.Proof, types.NodeID, error) {
 	for id, data := range atx.ids {
-		expectedPrevID, err := atxs.PrevIDByNodeID(tx, id, atx.PublishEpoch)
+		expectedPrevID, err := atxs.PrevIDByNodeID(tx, atx.ID(), id, atx.PublishEpoch)
 		if err != nil && !errors.Is(err, sql.ErrNotFound) {
 			return nil, types.EmptyNodeID, fmt.Errorf("get last atx by node id: %w", err)
 		}
@@ -877,6 +903,13 @@ func (h *HandlerV2) checkPrevAtx(
 			log.ZShortStringer("actual", data.previous),
 			log.ZShortStringer("expected", expectedPrevID),
 		)
+
+		if peer == h.local {
+			return nil, types.EmptyNodeID, fmt.Errorf("multiple ATXs with the same previous ATX %s published by %s",
+				data.previous.ShortString(),
+				id.ShortString(),
+			)
+		}
 
 		collisions, err := atxs.PrevATXCollisions(tx, data.previous, id)
 		switch {
@@ -941,7 +974,7 @@ func (h *HandlerV2) checkPrevAtx(
 }
 
 // Store an ATX in the DB.
-func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx) error {
+func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx *activationTx, peer p2p.Peer) error {
 	republishProof := false
 	malicious := false
 	var proof wire.Proof
@@ -1025,16 +1058,15 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		}
 
 		if malicious || republishProof {
+			if peer == h.local {
+				return errors.New("not publishing ATXs for malicious nodes")
+			}
 			return nil
 		}
 
-		// malfeasance check happens after storing the ATX because storing updates the marriage set
+		// malfeasance check happens at the end of storing the ATX because storing updates the marriage set
 		// that is needed for the malfeasance proof
-		//
-		// TODO(mafa): don't store own ATX if it would mark the node as malicious
-		//    this probably needs to be done by validating and storing own ATXs eagerly and skipping validation in
-		//    the gossip handler (not sync!)
-		proof, nodeID, err = h.checkMalicious(ctx, tx, watx)
+		proof, nodeID, err = h.checkMalicious(ctx, tx, watx, peer)
 		return err
 	}); err != nil {
 		return fmt.Errorf("store atx: %w", err)
