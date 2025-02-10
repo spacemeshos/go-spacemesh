@@ -108,13 +108,20 @@ func (s *Server) IntoHandler(mux *http.ServeMux, syncer syncer) http.Handler {
 			return response, err
 		}
 	}
-	readinessMid := func(f nethttp.StrictHTTPHandlerFunc, _ string) nethttp.StrictHTTPHandlerFunc {
+	readinessMid := func(f nethttp.StrictHTTPHandlerFunc, operationID string) nethttp.StrictHTTPHandlerFunc {
 		return func(ctx context.Context, w http.ResponseWriter, r *http.Request, req any) (any, error) {
 			if syncer.IsSynced(ctx) {
 				return f(ctx, w, r, req)
 			} else {
+				s.logger.Debug("received request while not synced",
+					zap.String("path", r.URL.Path),
+					zap.String("method", r.Method),
+					zap.String("operation", operationID),
+				)
+
 				w.WriteHeader(http.StatusServiceUnavailable)
-				return nil, errors.New("service not ready: not in sync with the network")
+				w.Write([]byte("service not ready: not in sync with the network"))
+				return nil, nil
 			}
 		}
 	}
