@@ -668,22 +668,6 @@ func TestSmesherService(t *testing.T) {
 		require.Equal(t, addr1, addr)
 	})
 
-	t.Run("MinGas", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
-		_, err := c.MinGas(ctx, &emptypb.Empty{})
-		require.Error(t, err)
-		require.Equal(t, codes.Unimplemented, status.Code(err))
-	})
-
-	t.Run("SetMinGas", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
-		_, err := c.SetMinGas(ctx, &pb.SetMinGasRequest{})
-		require.Error(t, err)
-		require.Equal(t, codes.Unimplemented, status.Code(err))
-	})
-
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupSmesherService(t, nil)

@@ -336,25 +336,3 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 		require.False(t, resp.Status.Opts.Throttle)
 	})
 }
-
-func TestSmesherService_SmesherID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
-	svc := grpcserver.NewSmesherService(
-		smeshingProvider,
-		postSupervisor,
-		grpcPostService,
-		time.Second,
-		activation.DefaultPostSetupOpts(),
-		nil,
-	)
-
-	resp, err := svc.SmesherID(context.Background(), &emptypb.Empty{})
-	require.Error(t, err)
-	require.Nil(t, resp)
-	statusErr, ok := status.FromError(err)
-	require.True(t, ok)
-	require.Equal(t, codes.Unimplemented, statusErr.Code())
-}

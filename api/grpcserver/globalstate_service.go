@@ -191,14 +191,6 @@ func (s *GlobalStateService) AccountDataQuery(
 	return res, nil
 }
 
-// SmesherDataQuery returns historical info on smesher rewards.
-func (s *GlobalStateService) SmesherDataQuery(
-	_ context.Context,
-	in *pb.SmesherDataQueryRequest,
-) (*pb.SmesherDataQueryResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "DEPRECATED")
-}
-
 // STREAMS
 
 // AccountDataStream exposes a stream of account-related data.
@@ -322,22 +314,6 @@ func (s *GlobalStateService) AccountDataStream(
 			return nil
 		}
 	}
-}
-
-// SmesherRewardStream exposes a stream of smesher rewards.
-func (s *GlobalStateService) SmesherRewardStream(
-	in *pb.SmesherRewardStreamRequest,
-	stream pb.GlobalStateService_SmesherRewardStreamServer,
-) error {
-	return status.Errorf(codes.Unimplemented, "DEPRECATED")
-}
-
-// AppEventStream exposes a stream of emitted app events.
-func (s *GlobalStateService) AppEventStream(
-	*pb.AppEventStreamRequest,
-	pb.GlobalStateService_AppEventStreamServer,
-) error {
-	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash.
