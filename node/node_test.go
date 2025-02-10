@@ -976,30 +976,6 @@ func TestGenesisConfig(t *testing.T) {
 	})
 }
 
-func TestFlock(t *testing.T) {
-	t.Run("sanity", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		require.NoError(t, app.Lock())
-		t.Cleanup(app.Unlock)
-
-		app1 := *app
-		require.ErrorContains(t, app1.Lock(), "only one spacemesh instance")
-		app.Unlock()
-		require.NoError(t, app.Lock())
-	})
-
-	t.Run("dir doesn't exist", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		cfg.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
-		app := New(WithConfig(cfg))
-
-		require.NoError(t, app.Lock())
-		t.Cleanup(app.Unlock)
-	})
-}
-
 func TestEmptyExtraData(t *testing.T) {
 	cfg := getTestDefaultConfig(t)
 	cfg.Genesis.ExtraData = ""

@@ -6,23 +6,33 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"maps"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"syscall"
 	"time"
 
 	pyroscope "github.com/grafana/pyroscope-go"
+	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2beta1"
 	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	nodeclient "github.com/spacemeshos/go-spacemesh/api/node/client"
+	"github.com/spacemeshos/go-spacemesh/api/proxy"
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -30,21 +40,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
-	"github.com/spacemeshos/go-spacemesh/hare4"
-	"github.com/spacemeshos/go-spacemesh/hash"
 	"github.com/spacemeshos/go-spacemesh/identity"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
-	"github.com/spacemeshos/go-spacemesh/metrics/public"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 )
 
 func GetSmeshingServiceCommand() *cobra.Command {
-	conf := config.MainnetConfig()
+	conf := config.MainnetSmeshingServiceConfig()
 	var configPath *string
 	c := &cobra.Command{
 		Use:   "smeshing",
@@ -54,60 +60,46 @@ func GetSmeshingServiceCommand() *cobra.Command {
 				return err
 			}
 
-			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
-			// otherwise it will fail later when child logger will try to increase level.
 			encoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
 			if conf.LOGGING.Encoder == config.JSONLogEncoder {
 				encoder = zapcore.NewJSONEncoder(zap.NewDevelopmentEncoderConfig())
 			}
-			lg := log.NewWithLevel("node", zap.NewAtomicLevelAt(zap.DebugLevel), encoder, events.EventHook())
+			core := zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), zap.DebugLevel)
+			lg := zap.New(zapcore.RegisterHooks(core, events.EventHook())).Named("node")
 
-			app := New(WithConfig(&conf), WithLog(lg))
+			events.InitializeReporter()
+			lg.Info(getAppInfo(conf.Genesis))
+			lg.Info("Welcome to Spacemesh. Spacemesh activation service is starting...")
+
+			app, err := NewSmeshingService(&conf, lg)
+			if err != nil {
+				return fmt.Errorf("creating smeshing service app: %w", err)
+			}
+			unlock, err := lock(conf.FileLock)
+			if err != nil {
+				return err
+			}
+			defer func() {
+				if err := unlock(); err != nil {
+					lg.Error("failed to unlock file", zap.String("path", conf.FileLock), zap.Error(err))
+				}
+			}()
 
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 			defer cancel()
 
-			types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
-			// ensure all data folders exist
-			if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
-				return fmt.Errorf("ensure folders exist: %w", err)
-			}
-
-			if err := app.Lock(); err != nil {
-				return fmt.Errorf("getting exclusive file lock: %w", err)
-			}
-			defer app.Unlock()
-
-			if err := app.Initialize(); err != nil {
-				return fmt.Errorf("initializing app: %w", err)
-			}
-
-			err := app.LoadIdentities()
-			switch {
-			case errors.Is(err, fs.ErrNotExist):
-				app.log.Info("Identity file not found. Creating new identity...")
-				if err := app.NewIdentity(); err != nil {
-					return fmt.Errorf("creating new identity: %w", err)
-				}
-			case err != nil:
-				return fmt.Errorf("loading identities: %w", err)
-			}
-
-			// Don't print usage on error from this point forward
-			c.SilenceUsage = true
-
 			// This blocks until the context is finished or until an error is produced
-			err = app.StartSmeshingService(ctx)
-			cleanupCtx, cleanupCancel := context.WithTimeout(
-				context.Background(),
-				30*time.Second,
-			)
+			if err := app.Start(ctx); err != nil {
+				lg.Error("app failed", zap.Error(err))
+			}
+
+			cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cleanupCancel()
 			done := make(chan struct{}, 1)
 			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 			go func() {
-				app.Cleanup(cleanupCtx)
+				app.stopServices(cleanupCtx)
 				close(done)
 			}()
 			select {
@@ -115,7 +107,7 @@ func GetSmeshingServiceCommand() *cobra.Command {
 			case <-cleanupCtx.Done():
 				app.log.Error("app failed to clean up in time")
 			}
-			return err
+			return nil
 		},
 	}
 
@@ -135,53 +127,92 @@ func GetSmeshingServiceCommand() *cobra.Command {
 	return c
 }
 
-// Initialize parses and validates the node configuration and sets up logging.
-func (app *App) InitializeSmeshingService() error {
-	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
-	var existing config.GenesisConfig
-	if err := existing.LoadFromFile(gpath); err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
-		}
-		if err := app.Config.Genesis.Validate(); err != nil {
-			return err
-		}
-		if err := app.Config.Genesis.WriteToFile(gpath); err != nil {
-			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
-		}
-	} else {
-		diff := existing.Diff(&app.Config.Genesis)
-		if len(diff) > 0 {
-			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
-				" at %s.\ndiff:\n%s", gpath, diff,
-			)
-			return errors.New("genesis config updated after node initialization")
-		}
-	}
+type SmeshingService struct {
+	signers           []*signing.EdSigner
+	config            *config.Config
+	db                sql.StateDatabase // FIXME: remove
+	dbMetrics         *dbmetrics.DBMetricsCollector
+	localDB           sql.LocalDatabase
+	grpcPublicServer  *grpcserver.Server
+	grpcPrivateServer *grpcserver.Server
+	grpcPostServer    *grpcserver.Server
+	grpcTLSServer     *grpcserver.Server
+	jsonAPIServer     *grpcserver.JSONHTTPServer
+	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService      *http.Server
+	profilerService   *pyroscope.Profiler
+	proposalsBuilder  *miner.RemoteProposalBuilder
+	clock             *timesync.NodeClock
+	remoteHare        *hare3.RemoteHare
+	atxBuilder        *activation.Builder
+	validator         *activation.Validator
+	log               *zap.Logger
+	postVerifier      activation.PostVerifier
+	postSupervisor    *activation.PostSupervisor
+	idStates          *identity.StateStorage
+	apiProxy          *proxy.Server
+	poetClients       []activation.PoetService
 
-	// override default config in timesync since timesync is using TimeConfigValues
-	timeCfg.TimeConfigValues = app.Config.TIME
+	errCh chan error
 
-	app.setupLogging()
-	app.log.Info("Welcome to Spacemesh. Spacemesh activation service is starting...")
-
-	public.Version.WithLabelValues(cmd.Version).Set(1)
-	public.SmeshingOptsProvingNonces.Set(float64(app.Config.SMESHING.ProvingOpts.Nonces))
-	public.SmeshingOptsProvingThreads.Set(float64(app.Config.SMESHING.ProvingOpts.Threads))
-	return nil
+	loggers *loggers
+	eg      errgroup.Group
+	started chan struct{}
 }
 
-func (app *App) initSmeshingServiceServices(ctx context.Context) error {
-	layerSize := app.Config.LayerAvgSize
+func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingService, error) {
+	loggers, err := newLoggers(&cfg.LOGGING)
+	if err != nil {
+		return nil, fmt.Errorf("parsing loggers config: %w", err)
+	}
+
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+	types.SetNetworkHRP(cfg.NetworkHRP)
+
+	// ensure all data folders exist
+	if err := os.MkdirAll(cfg.DataDir(), 0o700); err != nil {
+		return nil, fmt.Errorf("ensure folders exist: %w", err)
+	}
+
+	signers, err := loadIdentities(cfg.DataDir(), cfg.Genesis.GenesisID(), logger)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		logger.Info("Identity file not found. Creating new identity...")
+		signer, err := newIdentity(cfg.DataDir(), cfg.Genesis.GenesisID(), logger)
+		if err != nil {
+			return nil, fmt.Errorf("creating new identity: %w", err)
+		}
+		signers = []*signing.EdSigner{signer}
+	case err != nil:
+		return nil, fmt.Errorf("loading identities: %w", err)
+	}
+
+	gpath := filepath.Join(cfg.DataDir(), genesisFileName)
+	if err := applyGenesis(gpath, cfg.Genesis); err != nil {
+		return nil, err
+	}
+
+	return &SmeshingService{
+		config:       cfg,
+		loggers:      loggers,
+		log:          logger,
+		signers:      signers,
+		grpcServices: make(map[grpcserver.Service]grpcserver.ServiceAPI),
+		started:      make(chan struct{}),
+	}, nil
+}
+
+func (app *SmeshingService) initServices(ctx context.Context) error {
+	layerSize := app.config.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
 	lg := app.log
 
 	var nodeServiceClient *client.NodeService
-	listenAddress := app.Config.BaseConfig.NodeServiceAddress
-	logger := app.addLogger(NodeServiceClientLogger, lg).Zap()
+	listenAddress := app.config.BaseConfig.NodeServiceAddress
+	logger := app.loggers.add(NodeServiceClientLogger, lg)
 	cfg := &nodeclient.Config{
-		RetryWaitMin: time.Millisecond * 500,
-		RetryWaitMax: time.Second,
+		RetryWaitMin: time.Second,
+		RetryWaitMax: time.Second * 30,
 		RetryMax:     10,
 	}
 	var err error
@@ -192,18 +223,18 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 
 	poetDb, err := activation.NewPoetDb(
 		app.db,
-		app.addLogger(PoetDbLogger, lg).Zap(),
-		activation.WithCacheSize(app.Config.POET.PoetProofsCache),
+		app.loggers.add(PoetDbLogger, lg),
+		activation.WithCacheSize(app.config.POET.PoetProofsCache),
 	)
 	if err != nil {
 		return fmt.Errorf("creating poet db: %w", err)
 	}
-	postStates := activation.NewPostStates(app.addLogger(PostLogger, lg).Zap())
+	postStates := activation.NewPostStates(app.loggers.add(PostLogger, lg))
 
-	app.idStates = identity.NewIdentityStateStorage(app.localDB, app.log.Zap())
+	app.idStates = identity.NewIdentityStateStorage(app.localDB, app.log)
 
 	opts := []activation.PostVerifierOpt{
-		activation.WithVerifyingOpts(app.Config.SMESHING.VerifyingOpts),
+		activation.WithVerifyingOpts(app.config.SMESHING.VerifyingOpts),
 		activation.WithAutoscaling(postStates),
 	}
 	for _, sig := range app.signers {
@@ -211,8 +242,8 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 	}
 
 	verifier, err := activation.NewPostVerifier(
-		app.Config.POST,
-		app.addLogger(NipostValidatorLogger, lg).Zap(),
+		app.config.POST,
+		app.loggers.add(NipostValidatorLogger, lg),
 		opts...,
 	)
 	if err != nil {
@@ -220,37 +251,26 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 	}
 	app.postVerifier = verifier
 
-	validator := activation.NewValidator(
+	app.validator = activation.NewValidator(
 		app.db,
 		poetDb,
-		app.Config.POST,
-		app.Config.SMESHING.Opts.Scrypt,
+		app.config.POST,
+		app.config.SMESHING.Opts.Scrypt,
 		app.postVerifier,
 	)
-	app.validator = validator
 
-	goldenATXID := types.ATXID(app.Config.Genesis.GoldenATX())
+	goldenATXID := types.ATXID(app.config.Genesis.GoldenATX())
 	if goldenATXID == types.EmptyATXID {
 		return errors.New("invalid golden atx id")
 	}
 
-	app.edVerifier = signing.NewEdVerifier(
-		signing.WithVerifierPrefix(app.Config.Genesis.GenesisID().Bytes()),
-	)
-
-	vrfVerifier := signing.NewVRFVerifier()
-
-	var msh *mesh.Mesh
-	var atxHandler *activation.Handler
-
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-
-	if app.Config.HareEligibility.ConfidenceParam >= app.Config.BaseConfig.LayersPerEpoch {
+	if app.config.HareEligibility.ConfidenceParam >= app.config.BaseConfig.LayersPerEpoch {
 		return fmt.Errorf(
 			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
 				"layers-per-epoch: %d",
-			app.Config.HareEligibility.ConfidenceParam,
-			app.Config.BaseConfig.LayersPerEpoch,
+			app.config.HareEligibility.ConfidenceParam,
+			app.config.BaseConfig.LayersPerEpoch,
 		)
 	}
 
@@ -259,25 +279,22 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 	hOracle, err := eligibility.New(
 		cachedWeights,
 		beaconProvider,
-		vrfVerifier,
-		app.Config.LayersPerEpoch,
-		eligibility.WithConfig(app.Config.HareEligibility),
-		eligibility.WithLogger(app.addLogger(HareOracleLogger, lg).Zap()),
+		signing.NewVRFVerifier(),
+		app.config.LayersPerEpoch,
+		eligibility.WithConfig(app.config.HareEligibility),
+		eligibility.WithLogger(app.loggers.add(HareOracleLogger, lg)),
 	)
 	if err != nil {
 		return fmt.Errorf("create hare oracle: %w", err)
 	}
 
-	err = app.Config.HARE3.Validate(time.Duration(app.Config.Tortoise.Zdist) * app.Config.LayerDuration)
+	err = app.config.HARE3.Validate(time.Duration(app.config.Tortoise.Zdist) * app.config.LayerDuration)
 	if err != nil {
 		return err
 	}
-	logger = app.addLogger(HareLogger, lg).Zap()
-
-	// should be removed after hare4 transition is complete
-	app.hareResultsChan = make(chan hare4.ConsensusOutput, 32)
+	logger = app.loggers.add(HareLogger, lg)
 	app.remoteHare = hare3.NewRemoteHare(
-		app.Config.HARE3,
+		app.config.HARE3,
 		app.clock,
 		nodeServiceClient,
 		beaconProvider,
@@ -296,23 +313,23 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		nodeServiceClient,
 		layerSize,
 		layersPerEpoch,
-		app.addLogger(ProposalBuilderLogger, lg).Zap(),
+		app.loggers.add(ProposalBuilderLogger, lg),
 		app.idStates,
 	)
 	for _, sig := range app.signers {
 		remoteProposalBuilder.Register(sig)
 	}
-	app.remoteProposalBuilder = remoteProposalBuilder
+	app.proposalsBuilder = remoteProposalBuilder
 
 	postSetupMgr, err := activation.NewPostSetupManager(
-		app.Config.POST,
-		app.addLogger(PostLogger, lg).Zap(),
+		app.config.POST,
+		app.loggers.add(PostLogger, lg),
 		app.db,
-		app.atxsdata,
+		atxsdata.New(), // FIXME: remove this dependency
 		goldenATXID,
 		nil,
 		app.validator,
-		activation.PostValidityDelay(app.Config.PostValidDelay),
+		activation.PostValidityDelay(app.config.PostValidDelay),
 	)
 	if err != nil {
 		return fmt.Errorf("create post setup manager: %v", err)
@@ -323,27 +340,27 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		return fmt.Errorf("init post grpc service: %w", err)
 	}
 
-	nipostLogger := app.addLogger(NipostBuilderLogger, lg).Zap()
+	nipostLogger := app.loggers.add(NipostBuilderLogger, lg)
 	client := activation.NewCertifierClient(
 		app.db,
 		app.localDB,
 		nipostLogger,
-		activation.WithCertifierClientConfig(app.Config.Certifier.Client),
+		activation.WithCertifierClientConfig(app.config.Certifier.Client),
 	)
 	poetCertifier := activation.NewCertifier(app.localDB, nipostLogger, client)
 
-	poetClients := make([]activation.PoetService, 0, len(app.Config.PoetServers))
-	for _, server := range app.Config.PoetServers {
+	poetClients := make([]activation.PoetService, 0, len(app.config.PoetServers))
+	for _, server := range app.config.PoetServers {
 		client, err := activation.NewPoetService(
 			poetDb,
 			server,
-			app.Config.POET,
-			lg.Zap().Named("poet"),
-			app.Config.TickSize,
+			app.config.POET,
+			app.loggers.add("poet", app.log),
+			app.config.TickSize,
 			activation.WithCertifier(poetCertifier),
 		)
 		if err != nil {
-			app.log.Panic("failed to create poet client with address %v: %v", server.Address, err)
+			app.log.Sugar().Panicf("failed to create poet client with address %v: %v", server.Address, err)
 		}
 		poetClients = append(poetClients, client)
 	}
@@ -353,7 +370,7 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		app.localDB,
 		grpcPostService.(*grpcserver.PostService),
 		nipostLogger,
-		app.Config.POET,
+		app.config.POET,
 		app.clock,
 		app.validator,
 		activation.NipostbuilderWithPostStates(postStates),
@@ -366,7 +383,7 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		RegossipInterval: app.Config.RegossipAtxInterval,
+		RegossipInterval: app.config.RegossipAtxInterval,
 	}
 
 	atxBuilder := activation.NewBuilder(
@@ -379,14 +396,14 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		nipostBuilder,
 		app.clock,
 		alwaysSyncedSyncer{},
-		app.addLogger(ATXBuilderLogger, lg).Zap(),
-		activation.WithPoetConfig(app.Config.POET),
+		app.loggers.add(ATXBuilderLogger, lg),
+		activation.WithPoetConfig(app.config.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
-		activation.WithPoetRetryInterval(app.Config.HARE3.PreroundDelay),
+		activation.WithPoetRetryInterval(app.config.HARE3.PreroundDelay),
 		activation.WithPostStates(postStates),
 		activation.WithIdentityStates(app.idStates),
 		activation.WithPoets(poetClients...),
-		activation.BuilderAtxVersions(app.Config.AtxVersions),
+		activation.BuilderAtxVersions(app.config.AtxVersions),
 	)
 
 	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
@@ -402,9 +419,9 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		}
 	}
 	app.postSupervisor = activation.NewPostSupervisor(
-		app.log.Zap(),
-		app.Config.POST,
-		app.Config.SMESHING.ProvingOpts,
+		app.log,
+		app.config.POST,
+		app.config.SMESHING.ProvingOpts,
 		postSetupMgr,
 		atxBuilder,
 	)
@@ -412,28 +429,22 @@ func (app *App) initSmeshingServiceServices(ctx context.Context) error {
 		return fmt.Errorf("init post service: %w", err)
 	}
 
-	app.mesh = msh
 	app.atxBuilder = atxBuilder
-	app.atxHandler = atxHandler
-	app.poetDb = poetDb
 
 	return nil
 }
 
-func (app *App) startSmeshingServiceServices(ctx context.Context) error {
-	if app.remoteProposalBuilder == nil {
-		panic("remote proposal builder can not be nil at this point")
-	}
+func (app *SmeshingService) startServices(ctx context.Context) error {
 	app.eg.Go(func() error {
-		return app.remoteProposalBuilder.Run(ctx)
+		return app.proposalsBuilder.Run(ctx)
 	})
 
-	if app.Config.SMESHING.CoinbaseAccount != "" {
-		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
+	if app.config.SMESHING.CoinbaseAccount != "" {
+		coinbaseAddr, err := types.StringToAddress(app.config.SMESHING.CoinbaseAccount)
 		if err != nil {
 			return fmt.Errorf(
 				"parse CoinbaseAccount address on start `%s`: %w",
-				app.Config.SMESHING.CoinbaseAccount,
+				app.config.SMESHING.CoinbaseAccount,
 				err,
 			)
 		}
@@ -448,14 +459,14 @@ func (app *App) startSmeshingServiceServices(ctx context.Context) error {
 // StartSmeshingService starts the Spacemesh activation service and
 // initializes all relevant services according to command line
 // arguments provided.
-func (app *App) StartSmeshingService(ctx context.Context) error {
-	if err := app.verifyVersionUpgrades(); err != nil {
+func (app *SmeshingService) Start(ctx context.Context) error {
+	if err := verifyLocalDbMigrations(app.config); err != nil {
 		return fmt.Errorf("version upgrade verification failed: %w", err)
 	}
 
 	err := app.startSmeshingServiceSynchronous(ctx)
 	if err != nil {
-		app.log.With().Error("failed to start App", log.Err(err))
+		app.log.Error("failed to start App", zap.Error(err))
 		return err
 	}
 	defer events.ReportError(events.NodeError{
@@ -473,61 +484,60 @@ func (app *App) StartSmeshingService(ctx context.Context) error {
 	}
 }
 
-func (app *App) startSmeshingServiceSynchronous(ctx context.Context) (err error) {
+func (app *SmeshingService) startSmeshingServiceSynchronous(ctx context.Context) (err error) {
 	// notify anyone who might be listening that the app has finished starting.
 	// this can be used by, e.g., app tests.
 	defer close(app.started)
-
-	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
-	// using context passed down to them)
-	logger := app.log.WithContext(ctx)
 
 	hostname, err := os.Hostname()
 	if err != nil {
 		return fmt.Errorf("error reading hostname: %w", err)
 	}
 
-	logger.With().Info("starting spacemesh",
-		log.String("data-dir", app.Config.DataDir()),
-		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
-		log.String("hostname", hostname),
+	app.log.Info("starting spacemesh",
+		zap.String("data-dir", app.config.DataDir()),
+		zap.String("post-dir", app.config.SMESHING.Opts.DataDir),
+		zap.String("hostname", hostname),
 	)
 
-	if err := os.MkdirAll(app.Config.DataDir(), 0o700); err != nil {
+	if err := os.MkdirAll(app.config.DataDir(), 0o700); err != nil {
 		return fmt.Errorf(
 			"data-dir %s not found or could not be created: %w",
-			app.Config.DataDir(),
+			app.config.DataDir(),
 			err,
 		)
 	}
 
 	/* Setup monitoring */
-	app.errCh = make(chan error, 100)
-	if app.Config.PprofHTTPServer {
-		logger.With().Info("starting pprof server", log.String("address", app.Config.PprofHTTPServerListener))
-		app.pprofService = &http.Server{Addr: app.Config.PprofHTTPServerListener}
+	app.errCh = make(chan error, 5)
+	if app.config.PprofHTTPServer {
+		app.log.Info("starting pprof server", zap.String("address", app.config.PprofHTTPServerListener))
+		app.pprofService = &http.Server{}
+		lis, err := net.Listen("tcp", app.config.PprofHTTPServerListener)
+		if err != nil {
+			return fmt.Errorf("starting pprof server: %w", err)
+		}
 		app.eg.Go(func() error {
-			if err := app.pprofService.ListenAndServe(); err != nil {
+			err := app.pprofService.Serve(lis)
+			if err != nil {
 				app.errCh <- fmt.Errorf("cannot start pprof http server: %w", err)
 			}
-			return nil
+			return err
 		})
-		if app.Config.PprofMutexProfile {
+		if app.config.PprofMutexProfile {
 			// this will set the mutex profiling to sample a third of all lock events
 			runtime.SetMutexProfileFraction(3)
 		}
-		if app.Config.PprofBlockProfile {
+		if app.config.PprofBlockProfile {
 			// record block sample for every block event that takes more than 10 milliseconds
 			runtime.SetBlockProfileRate(int(10 * time.Millisecond))
 		}
 	}
 
-	if app.Config.ProfilerURL != "" {
+	if app.config.ProfilerURL != "" {
 		app.profilerService, err = pyroscope.Start(pyroscope.Config{
-			ApplicationName: app.Config.ProfilerName,
-			// app.Config.ProfilerURL should be the pyroscope server address
-			// TODO: AuthToken? no need right now since server isn't public
-			ServerAddress: app.Config.ProfilerURL,
+			ApplicationName: app.config.ProfilerName,
+			ServerAddress:   app.config.ProfilerURL,
 			// by default all profilers are enabled,
 		})
 		if err != nil {
@@ -537,39 +547,40 @@ func (app *App) startSmeshingServiceSynchronous(ctx context.Context) (err error)
 
 	/* Initialize all protocol services */
 	app.clock, err = timesync.NewClock(
-		timesync.WithLayerDuration(app.Config.LayerDuration),
+		timesync.WithLayerDuration(app.config.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(app.Config.Genesis.GenesisTime.Time()),
-		timesync.WithLogger(app.addLogger(ClockLogger, logger).Zap()),
+		timesync.WithGenesisTime(app.config.Genesis.GenesisTime.Time()),
+		timesync.WithLogger(app.loggers.add(ClockLogger, app.log)),
 	)
 	if err != nil {
 		return fmt.Errorf("cannot create clock: %w", err)
 	}
 
-	if err := app.setupDBs(ctx, logger); err != nil {
+	if err := app.setupDBs(ctx); err != nil {
 		return err
 	}
 
-	if err := app.initSmeshingServiceServices(ctx); err != nil {
+	if err := app.initServices(ctx); err != nil {
 		return fmt.Errorf("init services: %w", err)
 	}
 
-	if app.Config.CollectMetrics {
-		metrics.StartMetricsServer(app.Config.MetricsPort)
+	if app.config.CollectMetrics {
+		metrics.StartMetricsServer(app.config.MetricsPort)
 	}
 
-	if app.Config.PublicMetrics.MetricsURL != "" {
-		id := hash.Sum([]byte(app.host.ID()))
+	if app.config.PublicMetrics.MetricsURL != "" {
 		metrics.StartPushingMetrics(
-			app.Config.PublicMetrics.MetricsURL,
-			app.Config.PublicMetrics.MetricsPushUser,
-			app.Config.PublicMetrics.MetricsPushPass,
-			app.Config.PublicMetrics.MetricsPushHeader,
-			app.Config.PublicMetrics.MetricsPushPeriod,
-			types.Hash32(id).ShortString(), app.Config.Genesis.GenesisID().ShortString())
+			app.config.PublicMetrics.MetricsURL,
+			app.config.PublicMetrics.MetricsPushUser,
+			app.config.PublicMetrics.MetricsPushPass,
+			app.config.PublicMetrics.MetricsPushHeader,
+			app.config.PublicMetrics.MetricsPushPeriod,
+			app.signers[0].NodeID().ShortString(),
+			app.config.Genesis.GenesisID().ShortString(),
+		)
 	}
 
-	if err := app.startSmeshingServiceServices(ctx); err != nil {
+	if err := app.startServices(ctx); err != nil {
 		return fmt.Errorf("start services: %w", err)
 	}
 
@@ -581,4 +592,439 @@ func (app *App) startSmeshingServiceSynchronous(ctx context.Context) (err error)
 	app.log.Info("app started")
 
 	return nil
+}
+
+func (app *SmeshingService) grpcService(svc grpcserver.Service, logger *zap.Logger) (grpcserver.ServiceAPI, error) {
+	if service, ok := app.grpcServices[svc]; ok {
+		return service, nil
+	}
+
+	switch svc {
+	case grpcserver.Debug:
+		service := grpcserver.NewSmeshingServiceDebugService(app.loggers.levels)
+		app.grpcServices[svc] = service
+		return service, nil
+	case grpcserver.Smesher:
+		var sig *signing.EdSigner
+		if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// StartSmeshing is only supported in a supervised setup (single signer)
+			sig = app.signers[0]
+		}
+		postService, err := app.grpcService(grpcserver.Post, logger)
+		if err != nil {
+			return nil, err
+		}
+		service := grpcserver.NewSmesherService(
+			app.atxBuilder,
+			app.postSupervisor,
+			postService.(*grpcserver.PostService),
+			app.config.API.SmesherStreamInterval,
+			app.config.SMESHING.Opts,
+			sig,
+		)
+		app.grpcServices[svc] = service
+		return service, nil
+	case grpcserver.Post:
+		service := grpcserver.NewPostService(app.loggers.add(PostServiceLogger, logger))
+		isCoinbaseSet := app.config.SMESHING.CoinbaseAccount != ""
+		if !isCoinbaseSet {
+			app.log.Warn("coinbase account is not set, connections from remote post services will be rejected")
+		}
+		service.AllowConnections(isCoinbaseSet)
+		app.grpcServices[svc] = service
+		return service, nil
+	case grpcserver.PostInfo:
+		service := grpcserver.NewPostInfoService(app.atxBuilder)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.SmeshingIdentities:
+		service := v2beta1.NewSmeshingIdentitiesService(app.idStates, app.poetClients, app.config.POET)
+		app.grpcServices[svc] = service
+		return service, nil
+	case v2beta1.Smeshing:
+		service := v2beta1.NewSmeshingService(cmd.Version, cmd.Commit)
+		app.grpcServices[svc] = service
+		return service, nil
+	}
+	return nil, fmt.Errorf("unknown service %s", svc)
+}
+
+func (app *SmeshingService) startAPIServices(ctx context.Context) error {
+	logger := app.loggers.add(GRPCLogger, app.log)
+	grpczap.SetGrpcLoggerV2(grpcLog, logger)
+
+	var (
+		publicSvcs        = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.config.API.PublicServices))
+		privateSvcs       = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.config.API.PrivateServices))
+		postSvcs          = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.config.API.PostServices))
+		authenticatedSvcs = make(map[grpcserver.Service]grpcserver.ServiceAPI, len(app.config.API.TLSServices))
+	)
+
+	// check services for uniques across all endpoints
+	for _, svc := range app.config.API.PublicServices {
+		if _, exists := publicSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on public grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
+		if err != nil {
+			return err
+		}
+		logger.Info("registering public service", zap.String("name", svc))
+		publicSvcs[svc] = gsvc
+	}
+	for _, svc := range app.config.API.PrivateServices {
+		if _, exists := privateSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on private grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
+		if err != nil {
+			return err
+		}
+		logger.Info("registering private service", zap.String("name", svc))
+		privateSvcs[svc] = gsvc
+	}
+	for _, svc := range app.config.API.PostServices {
+		if _, exists := postSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on post grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
+		if err != nil {
+			return err
+		}
+		logger.Info("registering post service", zap.String("name", svc))
+		postSvcs[svc] = gsvc
+	}
+	for _, svc := range app.config.API.TLSServices {
+		if _, exists := authenticatedSvcs[svc]; exists {
+			return fmt.Errorf("can't start more than one %s on authenticated grpc endpoint", svc)
+		}
+		gsvc, err := app.grpcService(svc, app.log)
+		if err != nil {
+			return err
+		}
+		logger.Info("registering authenticated service", zap.String("name", svc))
+		authenticatedSvcs[svc] = gsvc
+	}
+
+	// start servers if at least one endpoint is defined for them
+	if len(publicSvcs) > 0 {
+		var err error
+		app.grpcPublicServer, err = grpcserver.NewWithServices(
+			app.config.API.PublicListener,
+			logger,
+			app.config.API,
+			slices.Collect(maps.Values(publicSvcs)),
+			// public server needs restriction on max connection age to prevent attacks
+			grpc.KeepaliveParams(keepalive.ServerParameters{
+				MaxConnectionIdle:     2 * time.Hour,
+				MaxConnectionAge:      3 * time.Hour,
+				MaxConnectionAgeGrace: 10 * time.Minute,
+				Time:                  time.Minute,
+				Timeout:               10 * time.Second,
+			}),
+		)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcPublicServer.Start(); err != nil {
+			return err
+		}
+		logger.Info("public grpc service started",
+			zap.String("address", app.config.API.PublicListener),
+			zap.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+				for _, svc := range slices.Sorted(maps.Keys(publicSvcs)) {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
+	}
+	if len(privateSvcs) > 0 {
+		var err error
+		app.grpcPrivateServer, err = grpcserver.NewWithServices(
+			app.config.API.PrivateListener,
+			logger,
+			app.config.API,
+			slices.Collect(maps.Values(privateSvcs)),
+		)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcPrivateServer.Start(); err != nil {
+			return err
+		}
+		logger.Info("private grpc service started",
+			zap.String("address", app.config.API.PrivateListener),
+			zap.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+				for _, svc := range slices.Sorted(maps.Keys(privateSvcs)) {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
+	}
+	if len(postSvcs) > 0 && app.config.API.PostListener != "" {
+		var err error
+		app.grpcPostServer, err = grpcserver.NewWithServices(
+			app.config.API.PostListener,
+			logger,
+			app.config.API,
+			slices.Collect(maps.Values(postSvcs)),
+		)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcPostServer.Start(); err != nil {
+			return err
+		}
+		logger.Info("post grpc service started",
+			zap.String("address", app.config.API.PostListener),
+			zap.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+				for _, svc := range slices.Sorted(maps.Keys(postSvcs)) {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
+
+		host, port, err := net.SplitHostPort(app.grpcPostServer.BoundAddress)
+		if err != nil {
+			return fmt.Errorf("parse grpc-post-listener: %w", err)
+		}
+		ip := net.ParseIP(host)
+		if ip.IsUnspecified() { // 0.0.0.0 isn't a valid address to connect to on windows
+			host = "127.0.0.1"
+		}
+		app.config.POSTService.NodeAddress = fmt.Sprintf("http://%s:%s", host, port)
+		svc, err := app.grpcService(grpcserver.Smesher, app.log)
+		if err != nil {
+			return err
+		}
+		svc.(*grpcserver.SmesherService).SetPostServiceConfig(app.config.POSTService)
+		if app.config.SMESHING.Start {
+			if app.config.SMESHING.CoinbaseAccount == "" {
+				return errors.New("smeshing enabled but no coinbase account provided")
+			}
+			if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+				app.log.Error("supervised smeshing cannot be started in a remote or multi-smeshing setup")
+				app.log.Sugar().Errorf(
+					"if you run a supervised node ensure your key file is named %s and try again",
+					supervisedIDKeyFileName,
+				)
+				return errors.New("smeshing enabled in remote setup")
+			}
+			if err := app.postSupervisor.Start(
+				app.config.POSTService,
+				app.config.SMESHING.Opts,
+				app.signers[0],
+			); err != nil {
+				return fmt.Errorf("start post service: %w", err)
+			}
+		} else if len(app.signers) == 1 && app.signers[0].Name() == supervisedIDKeyFileName {
+			// supervised setup but not started
+			app.log.Info("smeshing not started, waiting to be triggered via smesher api")
+		}
+	}
+
+	if len(authenticatedSvcs) > 0 && app.config.API.TLSListener != "" {
+		var err error
+		app.grpcTLSServer, err = grpcserver.NewTLS(
+			logger,
+			app.config.API,
+			slices.Collect(maps.Values(authenticatedSvcs)),
+		)
+		if err != nil {
+			return err
+		}
+		if err := app.grpcTLSServer.Start(); err != nil {
+			return err
+		}
+		logger.Info("authenticated grpc service started",
+			zap.String("address", app.config.API.TLSListener),
+			zap.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+				for _, svc := range slices.Sorted(maps.Keys(authenticatedSvcs)) {
+					encoder.AppendString(svc)
+				}
+				return nil
+			})),
+		)
+	}
+
+	if len(app.config.API.JSONListener) > 0 {
+		if len(publicSvcs) == 0 {
+			return errors.New("start json server without public services")
+		}
+		if len(app.config.API.ProxyApiV2Address) > 0 {
+			var localSvcs []proxy.Service
+			for _, svcName := range app.config.API.NonProxiedServices {
+				svc, err := app.grpcService(svcName, logger)
+				if err != nil {
+					return fmt.Errorf("creating smeshing id service: %w", err)
+				}
+				if svc, ok := svc.(proxy.Service); ok {
+					localSvcs = append(localSvcs, svc)
+				} else {
+					return fmt.Errorf("cannot use service %q as non-proxied local service", svcName)
+				}
+			}
+
+			p, err := proxy.NewServer(
+				app.config.API.JSONListener,
+				app.config.API.ProxyApiV2Address,
+				app.config.API.JSONCorsEverywhere,
+				logger,
+				localSvcs...,
+			)
+			if err != nil {
+				return err
+			}
+			app.apiProxy = p
+
+			if err = p.Start(); err != nil {
+				return err
+			}
+			logger.Info("json proxy listener started",
+				zap.String("address", app.config.API.JSONListener),
+				zap.String("proxying to", app.config.API.ProxyApiV2Address),
+				zap.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+					for _, svc := range slices.Sorted(maps.Keys(publicSvcs)) {
+						encoder.AppendString(svc)
+					}
+					return nil
+				})),
+			)
+		} else {
+			app.jsonAPIServer = grpcserver.NewJSONHTTPServer(
+				logger.Named("JSON"),
+				app.config.API.JSONListener,
+				app.config.API.JSONCorsAllowedOrigins,
+				app.config.API.JSONCorsEverywhere,
+				app.config.CollectMetrics,
+			)
+
+			if err := app.jsonAPIServer.StartService(slices.Collect(maps.Values(publicSvcs))...); err != nil {
+				return fmt.Errorf("start listen server: %w", err)
+			}
+			logger.Info("json listener started",
+				zap.String("address", app.config.API.JSONListener),
+				zap.Array("services", zapcore.ArrayMarshalerFunc(func(encoder zapcore.ArrayEncoder) error {
+					for _, svc := range slices.Sorted(maps.Keys(publicSvcs)) {
+						encoder.AppendString(svc)
+					}
+					return nil
+				})),
+			)
+		}
+	}
+
+	return nil
+}
+
+func (app *SmeshingService) setupDBs(ctx context.Context) error {
+	dbLog := app.loggers.add(StateDbLogger, app.log)
+	// FIXME: remove need for state DB
+	db, err := openStateDB(app.config, dbLog)
+	if err != nil {
+		return err
+	}
+	app.db = db
+
+	if app.config.CollectMetrics && app.config.DatabaseSizeMeteringInterval != 0 {
+		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
+			ctx,
+			app.db,
+			dbLog,
+			app.config.DatabaseSizeMeteringInterval,
+		)
+	}
+
+	localDB, err := openLocalDb(app.config, dbLog)
+	if err != nil {
+		return err
+	}
+
+	app.localDB = localDB
+	return nil
+}
+
+func (app *SmeshingService) stopServices(ctx context.Context) {
+	app.log.Info("app stopping services...")
+	defer app.log.Info("...finished stopping services")
+
+	if app.jsonAPIServer != nil {
+		if err := app.jsonAPIServer.Shutdown(ctx); err != nil {
+			app.log.Error("error stopping json gateway server", zap.Error(err))
+		}
+	}
+	if app.grpcPublicServer != nil {
+		app.log.Info("stopping public grpc service")
+		app.grpcPublicServer.Close() // err is always nil
+	}
+	if app.grpcPrivateServer != nil {
+		app.log.Info("stopping private grpc service")
+		app.grpcPrivateServer.Close() // err is always nil
+	}
+	if app.grpcPostServer != nil {
+		app.log.Info("stopping local grpc service")
+		app.grpcPostServer.Close() // err is always nil
+	}
+	if app.grpcTLSServer != nil {
+		app.log.Info("stopping tls grpc service")
+		app.grpcTLSServer.Close() // err is always nil
+	}
+
+	if app.clock != nil {
+		app.clock.Close()
+	}
+
+	if app.atxBuilder != nil {
+		app.atxBuilder.StopSmeshing(false)
+	}
+
+	if app.postVerifier != nil {
+		app.postVerifier.Close()
+	}
+
+	if app.postSupervisor != nil {
+		if err := app.postSupervisor.Stop(false); err != nil {
+			app.log.Error("error stopping local post service", zap.Error(err))
+		}
+	}
+
+	if app.db != nil {
+		if err := app.db.Close(); err != nil {
+			app.log.Warn("db exited with error", zap.Error(err))
+		}
+	}
+	if app.dbMetrics != nil {
+		app.dbMetrics.Close()
+	}
+	if app.localDB != nil {
+		if err := app.localDB.Close(); err != nil {
+			app.log.Warn("local db exited with error", zap.Error(err))
+		}
+	}
+
+	if app.pprofService != nil {
+		if err := app.pprofService.Close(); err != nil {
+			app.log.Warn("pprof service exited with error", zap.Error(err))
+		}
+	}
+	if app.profilerService != nil {
+		if err := app.profilerService.Stop(); err != nil {
+			app.log.Warn("profiler service exited with error", zap.Error(err))
+		}
+	}
+	if app.apiProxy != nil {
+		if err := app.apiProxy.Stop(); err != nil {
+			app.log.Warn("proxy server exited with error", zap.Error(err))
+		}
+	}
+	app.eg.Wait()
+
+	events.CloseEventReporter()
+	// SetGrpcLogger unfortunately is global
+	// this ensures that a test-logger isn't used after the app shuts down
+	// by e.g. a grpc connection to the node that is still open - like in TestSpacemeshApp_NodeService
+	grpczap.SetGrpcLoggerV2(grpcLog, zap.NewNop())
 }

@@ -76,6 +76,7 @@ const (
 	MalfeasanceV2Beta1        Service = "malfeasance_v2beta1"
 	MalfeasanceStreamV2Beta1  Service = "malfeasance_stream_v2beta1"
 	SmeshingIdentitiesV2Beta1 Service = "smeshing_identities_v2beta1"
+	SmeshingV2Beta1           Service = "smeshing_v2beta1"
 )
 
 // DefaultConfig defines the default configuration options for api.

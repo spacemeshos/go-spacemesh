@@ -247,3 +247,140 @@ func MainnetConfig() Config {
 		Certifier: activation.DefaultCertifierConfig(),
 	}
 }
+
+func MainnetSmeshingServiceConfig() Config {
+	genesisTime, err := time.Parse(time.RFC3339, "2023-07-14T08:00:00Z")
+	if err != nil {
+		panic(err)
+	}
+
+	var postPowDifficulty activation.PowDifficulty
+	difficulty := []byte("000dfb23b0979b4b000000000000000000000000000000000000000000000000")
+	if err := postPowDifficulty.UnmarshalText(difficulty); err != nil {
+		panic(err)
+	}
+
+	smeshing := DefaultSmeshingConfig()
+	smeshing.ProvingOpts.Nonces = 288
+	smeshing.ProvingOpts.Threads = uint(runtime.NumCPU() * 3 / 4)
+	if smeshing.ProvingOpts.Threads < 1 {
+		smeshing.ProvingOpts.Threads = 1
+	}
+	hare3conf := hare3.DefaultConfig()
+	hare3conf.Committee = 400
+	hare3conf.Enable = true
+	hare3conf.EnableLayer = 35117
+	hare3conf.CommitteeUpgrade = &hare3.CommitteeUpgrade{
+		Layer: 105_720, // July 15, 2024, 10:00:00 AM UTC
+		Size:  50,
+	}
+
+	hare4conf := hare4.DefaultConfig()
+	hare4conf.Enable = false
+
+	return Config{
+		BaseConfig: BaseConfig{
+			DataDirParent:           defaultDataDir,
+			FileLock:                filepath.Join(os.TempDir(), "spacemesh.lock"),
+			MetricsPort:             1010,
+			DatabaseConnections:     32,
+			DatabasePruneInterval:   30 * time.Minute,
+			DatabaseVacuumState:     21,
+			DatabaseConnIdleTimeout: 10 * time.Millisecond,
+			NetworkHRP:              "sm",
+
+			LayerDuration:  5 * time.Minute,
+			LayerAvgSize:   50,
+			LayersPerEpoch: 4032,
+
+			TickSize: 9331200,
+			PoetServers: []types.PoetServer{
+				{
+					Address: "https://mainnet-poet-0.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("cFnqCS5oER7GOX576oPtahlxB/1y95aDibdK7RHQFVg="),
+				},
+				{
+					Address: "https://mainnet-poet-1.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("Qh1efxY4YhoYBEXKPTiHJ/a7n1GsllRSyweQKO3j7m0="),
+				},
+				{
+					Address: "https://poet-110.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("8Qqgid+37eyY7ik+EA47Nd5TrQjXolbv2Mdgir243No="),
+				},
+				{
+					Address: "https://poet-111.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("caIV0Ym59L3RqbVAL6UrCPwr+z+lwe2TBj57QWnAgtM="),
+				},
+				{
+					Address: "https://poet-112.spacemesh.network",
+					Pubkey:  types.MustBase64FromString("5p/mPvmqhwdvf8U0GVrNq/9IN/HmZj5hCkFLAN04g1E="),
+				},
+			},
+			RegossipAtxInterval:     2 * time.Hour,
+			PostValidDelay:          time.Duration(math.MaxInt64),
+			PprofHTTPServerListener: "localhost:6060",
+		},
+		Genesis: GenesisConfig{
+			GenesisTime: Genesis(genesisTime),
+			ExtraData:   "00000000000000000001a6bc150307b5c1998045752b3c87eccf3c013036f3cc",
+			Accounts:    MainnetAccounts(),
+		},
+		Tortoise: tortoise.Config{
+			Hdist: 10,
+			Zdist: 2,
+		},
+		HARE3: hare3conf,
+		HARE4: hare4conf,
+		HareEligibility: eligibility.Config{
+			ConfidenceParam: 200,
+		},
+		POET: activation.PoetConfig{
+			PhaseShift:                     240 * time.Hour,
+			CycleGap:                       12 * time.Hour,
+			GracePeriod:                    1 * time.Hour,
+			PositioningATXSelectionTimeout: 50 * time.Minute,
+			InfoCacheTTL:                   5 * time.Minute,
+			PowParamsCacheTTL:              5 * time.Minute,
+			// RequestTimeout = RequestRetryDelay * 2 * MaxRequestRetries*(MaxRequestRetries+1)/2
+			RequestTimeout:    1100 * time.Second,
+			RequestRetryDelay: 10 * time.Second,
+			MaxRequestRetries: 10,
+			PoetProofsCache:   200,
+		},
+		POST: activation.PostConfig{
+			MinNumUnits:   4,
+			MaxNumUnits:   math.MaxUint32,
+			LabelsPerUnit: 4294967296,
+			K1:            26,
+			K2:            37,
+			K3:            1,
+			PowDifficulty: postPowDifficulty,
+		},
+		API: grpcserver.Config{
+			PublicServices: []grpcserver.Service{
+				grpcserver.SmeshingIdentitiesV2Beta1,
+				grpcserver.SmeshingV2Beta1,
+			},
+			PublicListener: "0.0.0.0:9092",
+			PrivateServices: []grpcserver.Service{
+				grpcserver.Smesher,
+			},
+			PrivateListener:        "127.0.0.1:9093",
+			PostServices:           []grpcserver.Service{grpcserver.Post, grpcserver.PostInfo},
+			PostListener:           "127.0.0.1:0",
+			TLSServices:            []grpcserver.Service{grpcserver.Post, grpcserver.PostInfo},
+			TLSListener:            "",
+			JSONListener:           "127.0.0.1:9094",
+			JSONCorsAllowedOrigins: []string{""},
+			JSONCorsEverywhere:     false,
+			GrpcSendMsgSize:        1024 * 1024 * 10,
+			GrpcRecvMsgSize:        1024 * 1024 * 10,
+			SmesherStreamInterval:  time.Second,
+			DatabaseConnections:    16,
+		},
+		SMESHING:    smeshing,
+		POSTService: activation.DefaultPostServiceConfig(),
+		LOGGING:     DefaultLoggingConfig(),
+		Certifier:   activation.DefaultCertifierConfig(),
+	}
+}
