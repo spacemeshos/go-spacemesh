@@ -24,7 +24,7 @@ func testTransactions(
 	sendFor uint32,
 ) {
 	var (
-		// start sending transactions after two layers or after genesis
+		// start sending transactions now + two layers but not earlier than layer 8 (effective genesis)
 		first  = max(currentLayer(tctx, tb, cl.Client(0))+2, 8)
 		stop   = first + sendFor
 		batch  = 10
@@ -65,7 +65,7 @@ func testTransactions(
 				func(rst *pb.TransactionResponse) (bool, error) {
 					txs[i] = append(txs[i], rst.Tx)
 					count := len(txs[i])
-					tctx.Log.Desugar().Debug("received transaction client",
+					tctx.Log.Desugar().Debug("received transaction",
 						zap.Uint32("layer", rst.TxResult.Layer),
 						zap.String("client", client.Name),
 						zap.String("tx", "0x"+hex.EncodeToString(rst.Tx.Id)),
