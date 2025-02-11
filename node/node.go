@@ -906,6 +906,7 @@ func (app *App) initServices(ctx context.Context) error {
 		),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
+		syncer.WithAtxVersions(app.Config.AtxVersions),
 	)
 	if err != nil {
 		return fmt.Errorf("create syncer: %w", err)
