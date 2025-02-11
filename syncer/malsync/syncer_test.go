@@ -3,7 +3,6 @@ package malsync
 import (
 	"context"
 	"errors"
-	"os"
 	"slices"
 	"testing"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -29,17 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync/mocks"
 )
-
-const (
-	layersPerEpoch = 3
-)
-
-func TestMain(m *testing.M) {
-	types.SetLayersPerEpoch(layersPerEpoch)
-
-	res := m.Run()
-	os.Exit(res)
-}
 
 type fakeCounter struct {
 	n int
@@ -153,13 +140,10 @@ type tester struct {
 	tb       testing.TB
 	syncer   *Syncer
 	db       sql.StateDatabase
-	localDB  sql.LocalDatabase
 	cfg      Config
 	mFetcher *mocks.Mockfetcher
 	mClock   *clockwork.FakeClock
-	mTicker  *mocks.MocklayerTicker
 
-	atxv2Epoch     types.EpochID
 	peers          []p2p.Peer
 	peerErrCount   *fakeCounter
 	receivedLegacy map[types.NodeID]bool
@@ -173,13 +157,9 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	db := statesql.InMemoryTest(tb)
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
-	ticker := mocks.NewMocklayerTicker(ctrl)
 	clock := clockwork.NewFakeClock()
 	peerErrCount := &fakeCounter{}
-	syncer := New(fetcher, db, localDB, ticker,
-		WithAtxVersions(activation.AtxVersions{
-			10: types.AtxV2,
-		}),
+	syncer := New(fetcher, db, localDB,
 		WithConfig(cfg),
 		WithLogger(zaptest.NewLogger(tb)),
 		WithPeerErrMetric(peerErrCount),
@@ -189,12 +169,9 @@ func newTester(tb testing.TB, cfg Config) *tester {
 		tb:             tb,
 		syncer:         syncer,
 		db:             db,
-		localDB:        localDB,
 		cfg:            cfg,
 		mFetcher:       fetcher,
 		mClock:         clock,
-		mTicker:        ticker,
-		atxv2Epoch:     10,
 		receivedLegacy: make(map[types.NodeID]bool),
 		attemptsLegacy: make(map[types.NodeID]int),
 		received:       make(map[types.NodeID]bool),
@@ -282,16 +259,6 @@ func (tester *tester) expectPeers(peers []p2p.Peer) {
 	tester.mFetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).Return(peers).AnyTimes()
 }
 
-func (tester *tester) beforeMalSyncEnabled() {
-	tester.mTicker.EXPECT().LayerToTime(tester.atxv2Epoch.FirstLayer()).
-		Return(tester.mClock.Now().Add(time.Hour)).AnyTimes()
-}
-
-func (tester *tester) afterMalSyncEnabled() {
-	tester.mTicker.EXPECT().LayerToTime(tester.atxv2Epoch.FirstLayer()).
-		Return(tester.mClock.Now().Add(-time.Hour)).AnyTimes()
-}
-
 func TestSyncer(t *testing.T) {
 	t.Run("EnsureLegacyInSync", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -317,7 +284,6 @@ func TestSyncer(t *testing.T) {
 	})
 	t.Run("EnsureInSync", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
-		tester.afterMalSyncEnabled()
 		tester.expectPeers(tester.peers)
 		tester.expectMaliciousIDs()
 		tester.expectProofs(nil)
@@ -337,27 +303,6 @@ func TestSyncer(t *testing.T) {
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 	})
-	t.Run("EnsureInSync before ATXv2 is no-op", func(t *testing.T) {
-		tester := newTester(t, DefaultConfig())
-		tester.beforeMalSyncEnabled()
-		epochStart := tester.mClock.Now().Truncate(time.Second)
-		epochEnd := epochStart.Add(10 * time.Minute)
-		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
-	})
-	t.Run("EnsureInSync default always before ATXv2", func(t *testing.T) {
-		tester := newTester(t, DefaultConfig())
-		syncer := New(tester.mFetcher, tester.db, tester.localDB, tester.mTicker,
-			WithConfig(tester.cfg),
-			WithLogger(zaptest.NewLogger(t)),
-			WithPeerErrMetric(tester.peerErrCount),
-			withClock(tester.mClock),
-			WithAtxVersions(activation.AtxVersions{}), // no ATXv2 set in config
-		)
-		tester.syncer = syncer
-		epochStart := tester.mClock.Now().Truncate(time.Second)
-		epochEnd := epochStart.Add(10 * time.Minute)
-		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
-	})
 	t.Run("EnsureLegacyInSync with no malfeasant identities", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		tester.expectPeers(tester.peers)
@@ -373,7 +318,6 @@ func TestSyncer(t *testing.T) {
 	})
 	t.Run("EnsureInSync with no malfeasant identities", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
-		tester.afterMalSyncEnabled()
 		tester.expectPeers(tester.peers)
 		for _, p := range tester.peers {
 			tester.mFetcher.EXPECT().
@@ -402,7 +346,7 @@ func TestSyncer(t *testing.T) {
 		tester.mFetcher.EXPECT().
 			MalfeasanceProofs(gomock.Any(), gomock.Any()).
 			Return(errors.New("no atxs")).AnyTimes()
-		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
+		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, true), context.Canceled)
 	})
 	t.Run("retries on no peers", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -414,7 +358,7 @@ func TestSyncer(t *testing.T) {
 			}).AnyTimes()
 		var eg errgroup.Group
 		eg.Go(func() error {
-			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
+			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, true), context.Canceled)
 			return nil
 		})
 		tester.mClock.BlockUntilContext(context.Background(), 2)
@@ -470,7 +414,6 @@ func TestSyncer(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.MinSyncPeers = 2
 		tester := newTester(t, cfg)
-		tester.afterMalSyncEnabled()
 		tester.expectPeers(tester.peers)
 		tester.mFetcher.EXPECT().
 			MaliciousIDs(gomock.Any(), tester.peers[0]).
@@ -528,7 +471,6 @@ func TestSyncer(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.RequestsLimit = 3
 		tester := newTester(t, cfg)
-		tester.afterMalSyncEnabled()
 		tester.expectPeers(tester.peers)
 		tester.expectMaliciousIDs()
 		tester.expectProofs(map[types.NodeID]error{
@@ -577,7 +519,6 @@ func TestSyncer(t *testing.T) {
 	})
 	t.Run("skip hashes after validation reject", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
-		tester.afterMalSyncEnabled()
 		tester.expectPeers(tester.peers)
 		tester.expectMaliciousIDs()
 		tester.expectProofs(map[types.NodeID]error{

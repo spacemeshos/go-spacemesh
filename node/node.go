@@ -831,14 +831,14 @@ func (app *App) initServices(ctx context.Context) error {
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
 		),
-		malsync.New(fetcher, app.db, app.localDB, app.clock,
+		malsync.New(fetcher, app.db, app.localDB,
 			malsync.WithConfig(app.Config.Sync.MalSync),
 			malsync.WithLogger(app.syncLogger.Zap()),
 			malsync.WithPeerErrMetric(syncer.MalPeerError),
-			malsync.WithAtxVersions(app.Config.AtxVersions),
 		),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
+		syncer.WithAtxVersions(app.Config.AtxVersions),
 	)
 	if err != nil {
 		return fmt.Errorf("create syncer: %w", err)

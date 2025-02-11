@@ -12,7 +12,6 @@ package mocks
 import (
 	context "context"
 	reflect "reflect"
-	time "time"
 
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
@@ -231,106 +230,6 @@ func (c *MockfetcherSelectBestShuffledCall) Do(f func(int) []p2p.Peer) *Mockfetc
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockfetcherSelectBestShuffledCall) DoAndReturn(f func(int) []p2p.Peer) *MockfetcherSelectBestShuffledCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// MocklayerTicker is a mock of layerTicker interface.
-type MocklayerTicker struct {
-	ctrl     *gomock.Controller
-	recorder *MocklayerTickerMockRecorder
-	isgomock struct{}
-}
-
-// MocklayerTickerMockRecorder is the mock recorder for MocklayerTicker.
-type MocklayerTickerMockRecorder struct {
-	mock *MocklayerTicker
-}
-
-// NewMocklayerTicker creates a new mock instance.
-func NewMocklayerTicker(ctrl *gomock.Controller) *MocklayerTicker {
-	mock := &MocklayerTicker{ctrl: ctrl}
-	mock.recorder = &MocklayerTickerMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocklayerTicker) EXPECT() *MocklayerTickerMockRecorder {
-	return m.recorder
-}
-
-// CurrentLayer mocks base method.
-func (m *MocklayerTicker) CurrentLayer() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CurrentLayer")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// CurrentLayer indicates an expected call of CurrentLayer.
-func (mr *MocklayerTickerMockRecorder) CurrentLayer() *MocklayerTickerCurrentLayerCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CurrentLayer", reflect.TypeOf((*MocklayerTicker)(nil).CurrentLayer))
-	return &MocklayerTickerCurrentLayerCall{Call: call}
-}
-
-// MocklayerTickerCurrentLayerCall wrap *gomock.Call
-type MocklayerTickerCurrentLayerCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MocklayerTickerCurrentLayerCall) Return(arg0 types.LayerID) *MocklayerTickerCurrentLayerCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MocklayerTickerCurrentLayerCall) Do(f func() types.LayerID) *MocklayerTickerCurrentLayerCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocklayerTickerCurrentLayerCall) DoAndReturn(f func() types.LayerID) *MocklayerTickerCurrentLayerCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
-// LayerToTime mocks base method.
-func (m *MocklayerTicker) LayerToTime(arg0 types.LayerID) time.Time {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerToTime", arg0)
-	ret0, _ := ret[0].(time.Time)
-	return ret0
-}
-
-// LayerToTime indicates an expected call of LayerToTime.
-func (mr *MocklayerTickerMockRecorder) LayerToTime(arg0 any) *MocklayerTickerLayerToTimeCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerToTime", reflect.TypeOf((*MocklayerTicker)(nil).LayerToTime), arg0)
-	return &MocklayerTickerLayerToTimeCall{Call: call}
-}
-
-// MocklayerTickerLayerToTimeCall wrap *gomock.Call
-type MocklayerTickerLayerToTimeCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MocklayerTickerLayerToTimeCall) Return(arg0 time.Time) *MocklayerTickerLayerToTimeCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MocklayerTickerLayerToTimeCall) Do(f func(types.LayerID) time.Time) *MocklayerTickerLayerToTimeCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MocklayerTickerLayerToTimeCall) DoAndReturn(f func(types.LayerID) time.Time) *MocklayerTickerLayerToTimeCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
