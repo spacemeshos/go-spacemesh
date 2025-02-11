@@ -38,7 +38,7 @@ type atxSyncer interface {
 type malSyncer interface {
 	EnsureLegacyInSync(parent context.Context, epochStart, epochEnd time.Time) error
 	EnsureInSync(parent context.Context, epochStart, epochEnd time.Time) error
-	DownloadLoop(parent context.Context) error
+	DownloadLoop(parent context.Context, malSyncEnabled bool) error
 }
 
 // fetcher is the interface to the low-level fetching.
