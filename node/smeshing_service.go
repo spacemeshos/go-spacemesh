@@ -45,7 +45,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	dbmetrics "github.com/spacemeshos/go-spacemesh/sql/metrics"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -128,11 +127,13 @@ func GetSmeshingServiceCommand() *cobra.Command {
 }
 
 type SmeshingService struct {
-	signers           []*signing.EdSigner
-	config            *config.Config
-	db                sql.StateDatabase // FIXME: remove
-	dbMetrics         *dbmetrics.DBMetricsCollector
-	localDB           sql.LocalDatabase
+	log     *zap.Logger
+	loggers *loggers
+	signers []*signing.EdSigner
+	config  *config.Config
+	db      sql.StateDatabase // FIXME: remove
+	localDB sql.LocalDatabase
+
 	grpcPublicServer  *grpcserver.Server
 	grpcPrivateServer *grpcserver.Server
 	grpcPostServer    *grpcserver.Server
@@ -141,23 +142,20 @@ type SmeshingService struct {
 	grpcServices      map[grpcserver.Service]grpcserver.ServiceAPI
 	pprofService      *http.Server
 	profilerService   *pyroscope.Profiler
-	proposalsBuilder  *miner.RemoteProposalBuilder
-	clock             *timesync.NodeClock
-	remoteHare        *hare3.RemoteHare
-	atxBuilder        *activation.Builder
-	validator         *activation.Validator
-	log               *zap.Logger
-	postVerifier      activation.PostVerifier
-	postSupervisor    *activation.PostSupervisor
-	idStates          *identity.StateStorage
 	apiProxy          *proxy.Server
-	poetClients       []activation.PoetService
 
-	errCh chan error
+	proposalsBuilder *miner.RemoteProposalBuilder
+	clock            *timesync.NodeClock
+	remoteHare       *hare3.RemoteHare
+	atxBuilder       *activation.Builder
+	postVerifier     activation.PostVerifier
+	postSupervisor   *activation.PostSupervisor
+	idStates         *identity.StateStorage
+	poetClients      []activation.PoetService
 
-	loggers *loggers
-	eg      errgroup.Group
 	started chan struct{}
+	errCh   chan error
+	eg      errgroup.Group
 }
 
 func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingService, error) {
@@ -172,6 +170,15 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 	// ensure all data folders exist
 	if err := os.MkdirAll(cfg.DataDir(), 0o700); err != nil {
 		return nil, fmt.Errorf("ensure folders exist: %w", err)
+	}
+
+	if err := verifyLocalDbMigrations(cfg); err != nil {
+		return nil, fmt.Errorf("version upgrade verification failed: %w", err)
+	}
+
+	localDB, stateDB, err := setupDBs(cfg, loggers.add(StateDbLogger, logger))
+	if err != nil {
+		return nil, err
 	}
 
 	signers, err := loadIdentities(cfg.DataDir(), cfg.Genesis.GenesisID(), logger)
@@ -192,85 +199,61 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 		return nil, err
 	}
 
-	return &SmeshingService{
-		config:       cfg,
-		loggers:      loggers,
-		log:          logger,
-		signers:      signers,
-		grpcServices: make(map[grpcserver.Service]grpcserver.ServiceAPI),
-		started:      make(chan struct{}),
-	}, nil
-}
-
-func (app *SmeshingService) initServices(ctx context.Context) error {
-	layerSize := app.config.LayerAvgSize
+	layerSize := cfg.LayerAvgSize
 	layersPerEpoch := types.GetLayersPerEpoch()
-	lg := app.log
 
 	var nodeServiceClient *client.NodeService
-	listenAddress := app.config.BaseConfig.NodeServiceAddress
-	logger := app.loggers.add(NodeServiceClientLogger, lg)
-	cfg := &nodeclient.Config{
+	listenAddress := cfg.BaseConfig.NodeServiceAddress
+	nodeClientLog := loggers.add(NodeServiceClientLogger, logger)
+	nodeClientCfg := &nodeclient.Config{
 		RetryWaitMin: time.Second,
 		RetryWaitMax: time.Second * 30,
 		RetryMax:     10,
 	}
-	var err error
-	nodeServiceClient, err = nodeclient.NewNodeServiceClient(listenAddress, logger, cfg)
+	nodeServiceClient, err = nodeclient.NewNodeServiceClient(listenAddress, nodeClientLog, nodeClientCfg)
 	if err != nil {
-		return fmt.Errorf("creating node service client: %w", err)
+		return nil, fmt.Errorf("creating node service client: %w", err)
 	}
 
 	poetDb, err := activation.NewPoetDb(
-		app.db,
-		app.loggers.add(PoetDbLogger, lg),
-		activation.WithCacheSize(app.config.POET.PoetProofsCache),
+		stateDB,
+		loggers.add(PoetDbLogger, logger),
+		activation.WithCacheSize(cfg.POET.PoetProofsCache),
 	)
 	if err != nil {
-		return fmt.Errorf("creating poet db: %w", err)
+		return nil, fmt.Errorf("creating poet db: %w", err)
 	}
-	postStates := activation.NewPostStates(app.loggers.add(PostLogger, lg))
+	idStates := identity.NewIdentityStateStorage(localDB, logger)
 
-	app.idStates = identity.NewIdentityStateStorage(app.localDB, app.log)
-
-	opts := []activation.PostVerifierOpt{
-		activation.WithVerifyingOpts(app.config.SMESHING.VerifyingOpts),
-		activation.WithAutoscaling(postStates),
-	}
-	for _, sig := range app.signers {
-		opts = append(opts, activation.WithPrioritizedID(sig.NodeID()))
-	}
-
-	verifier, err := activation.NewPostVerifier(
-		app.config.POST,
-		app.loggers.add(NipostValidatorLogger, lg),
-		opts...,
+	postVerifier, err := activation.NewPostVerifier(
+		cfg.POST,
+		loggers.add(NipostValidatorLogger, logger),
+		activation.WithVerifyingOpts(cfg.SMESHING.VerifyingOpts),
 	)
 	if err != nil {
-		return fmt.Errorf("creating post verifier: %w", err)
+		return nil, fmt.Errorf("creating post verifier: %w", err)
 	}
-	app.postVerifier = verifier
 
-	app.validator = activation.NewValidator(
-		app.db,
+	validator := activation.NewValidator(
+		stateDB,
 		poetDb,
-		app.config.POST,
-		app.config.SMESHING.Opts.Scrypt,
-		app.postVerifier,
+		cfg.POST,
+		cfg.SMESHING.Opts.Scrypt,
+		postVerifier,
 	)
 
-	goldenATXID := types.ATXID(app.config.Genesis.GoldenATX())
+	goldenATXID := types.ATXID(cfg.Genesis.GoldenATX())
 	if goldenATXID == types.EmptyATXID {
-		return errors.New("invalid golden atx id")
+		return nil, errors.New("invalid golden atx id")
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
-	if app.config.HareEligibility.ConfidenceParam >= app.config.BaseConfig.LayersPerEpoch {
-		return fmt.Errorf(
+	if cfg.HareEligibility.ConfidenceParam >= cfg.BaseConfig.LayersPerEpoch {
+		return nil, fmt.Errorf(
 			"confidence param should be smaller than layers per epoch. eligibility-confidence-param: %d. "+
 				"layers-per-epoch: %d",
-			app.config.HareEligibility.ConfidenceParam,
-			app.config.BaseConfig.LayersPerEpoch,
+			cfg.HareEligibility.ConfidenceParam,
+			cfg.BaseConfig.LayersPerEpoch,
 		)
 	}
 
@@ -280,133 +263,140 @@ func (app *SmeshingService) initServices(ctx context.Context) error {
 		cachedWeights,
 		beaconProvider,
 		signing.NewVRFVerifier(),
-		app.config.LayersPerEpoch,
-		eligibility.WithConfig(app.config.HareEligibility),
-		eligibility.WithLogger(app.loggers.add(HareOracleLogger, lg)),
+		cfg.LayersPerEpoch,
+		eligibility.WithConfig(cfg.HareEligibility),
+		eligibility.WithLogger(loggers.add(HareOracleLogger, logger)),
 	)
 	if err != nil {
-		return fmt.Errorf("create hare oracle: %w", err)
+		return nil, fmt.Errorf("create hare oracle: %w", err)
 	}
 
-	err = app.config.HARE3.Validate(time.Duration(app.config.Tortoise.Zdist) * app.config.LayerDuration)
+	clock, err := timesync.NewClock(
+		timesync.WithLayerDuration(cfg.LayerDuration),
+		timesync.WithTickInterval(1*time.Second),
+		timesync.WithGenesisTime(cfg.Genesis.GenesisTime.Time()),
+		timesync.WithLogger(loggers.add(ClockLogger, logger)),
+	)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("cannot create clock: %w", err)
 	}
-	logger = app.loggers.add(HareLogger, lg)
-	app.remoteHare = hare3.NewRemoteHare(
-		app.config.HARE3,
-		app.clock,
+
+	if err := cfg.HARE3.Validate(time.Duration(cfg.Tortoise.Zdist) * cfg.LayerDuration); err != nil {
+		return nil, err
+	}
+	remoteHare := hare3.NewRemoteHare(
+		cfg.HARE3,
+		clock,
 		nodeServiceClient,
 		beaconProvider,
 		hOracle,
-		logger,
+		loggers.add(HareLogger, logger),
 	)
-	for _, sig := range app.signers {
-		app.remoteHare.Register(sig)
+	for _, sig := range signers {
+		remoteHare.Register(sig)
 	}
-	app.remoteHare.Start(ctx)
 
-	remoteProposalBuilder := miner.NewRemoteBuilder(
-		app.clock,
+	proposalBuilder := miner.NewRemoteBuilder(
+		clock,
 		nodeServiceClient,
 		beaconProvider,
 		nodeServiceClient,
 		layerSize,
 		layersPerEpoch,
-		app.loggers.add(ProposalBuilderLogger, lg),
-		app.idStates,
+		loggers.add(ProposalBuilderLogger, logger),
+		idStates,
 	)
-	for _, sig := range app.signers {
-		remoteProposalBuilder.Register(sig)
+	for _, sig := range signers {
+		proposalBuilder.Register(sig)
 	}
-	app.proposalsBuilder = remoteProposalBuilder
 
 	postSetupMgr, err := activation.NewPostSetupManager(
-		app.config.POST,
-		app.loggers.add(PostLogger, lg),
-		app.db,
+		cfg.POST,
+		loggers.add(PostLogger, logger),
+		stateDB,
 		atxsdata.New(), // FIXME: remove this dependency
 		goldenATXID,
 		nil,
-		app.validator,
-		activation.PostValidityDelay(app.config.PostValidDelay),
+		validator,
+		activation.PostValidityDelay(cfg.PostValidDelay),
 	)
 	if err != nil {
-		return fmt.Errorf("create post setup manager: %v", err)
+		return nil, fmt.Errorf("create post setup manager: %v", err)
 	}
 
-	grpcPostService, err := app.grpcService(grpcserver.Post, lg)
-	if err != nil {
-		return fmt.Errorf("init post grpc service: %w", err)
-	}
-
-	nipostLogger := app.loggers.add(NipostBuilderLogger, lg)
+	nipostLogger := loggers.add(NipostBuilderLogger, logger)
 	client := activation.NewCertifierClient(
-		app.db,
-		app.localDB,
+		stateDB,
+		localDB,
 		nipostLogger,
-		activation.WithCertifierClientConfig(app.config.Certifier.Client),
+		activation.WithCertifierClientConfig(cfg.Certifier.Client),
 	)
-	poetCertifier := activation.NewCertifier(app.localDB, nipostLogger, client)
+	poetCertifier := activation.NewCertifier(localDB, nipostLogger, client)
 
-	poetClients := make([]activation.PoetService, 0, len(app.config.PoetServers))
-	for _, server := range app.config.PoetServers {
+	poetClients := make([]activation.PoetService, 0, len(cfg.PoetServers))
+	for _, server := range cfg.PoetServers {
 		client, err := activation.NewPoetService(
 			poetDb,
 			server,
-			app.config.POET,
-			app.loggers.add("poet", app.log),
-			app.config.TickSize,
+			cfg.POET,
+			loggers.add(PoetLogger, logger),
+			cfg.TickSize,
 			activation.WithCertifier(poetCertifier),
 		)
 		if err != nil {
-			app.log.Sugar().Panicf("failed to create poet client with address %v: %v", server.Address, err)
+			return nil, fmt.Errorf("creating poet client for %s: %w", server, err)
 		}
 		poetClients = append(poetClients, client)
 	}
-	app.poetClients = poetClients
+	grpcServices := make(map[grpcserver.Service]grpcserver.ServiceAPI)
+
+	grpcPostService := grpcserver.NewPostService(loggers.add(PostServiceLogger, logger))
+	isCoinbaseSet := cfg.SMESHING.CoinbaseAccount != ""
+	if !isCoinbaseSet {
+		logger.Warn("coinbase account is not set, connections from remote post services will be rejected")
+	}
+	grpcPostService.AllowConnections(isCoinbaseSet)
+	grpcServices[grpcserver.Post] = grpcPostService
 
 	nipostBuilder, err := activation.NewNIPostBuilder(
-		app.localDB,
-		grpcPostService.(*grpcserver.PostService),
+		localDB,
+		grpcPostService,
 		nipostLogger,
-		app.config.POET,
-		app.clock,
-		app.validator,
-		activation.NipostbuilderWithPostStates(postStates),
-		activation.NipostbuilderWithIdentityStates(app.idStates),
+		cfg.POET,
+		clock,
+		validator,
+		activation.NipostbuilderWithIdentityStates(idStates),
 		activation.WithPoetServices(poetClients...),
 	)
 	if err != nil {
-		return fmt.Errorf("create nipost builder: %w", err)
+		return nil, fmt.Errorf("create nipost builder: %w", err)
 	}
 
 	builderConfig := activation.Config{
 		GoldenATXID:      goldenATXID,
-		RegossipInterval: app.config.RegossipAtxInterval,
+		RegossipInterval: cfg.RegossipAtxInterval,
 	}
 
 	atxBuilder := activation.NewBuilder(
 		builderConfig,
-		app.localDB,
+		localDB,
 		poetDb,
 		nodeServiceClient,
 		nodeServiceClient,
-		app.validator,
+		validator,
 		nipostBuilder,
-		app.clock,
+		clock,
 		alwaysSyncedSyncer{},
-		app.loggers.add(ATXBuilderLogger, lg),
-		activation.WithPoetConfig(app.config.POET),
+		loggers.add(ATXBuilderLogger, logger),
+		activation.WithPoetConfig(cfg.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
-		activation.WithPoetRetryInterval(app.config.HARE3.PreroundDelay),
-		activation.WithPostStates(postStates),
-		activation.WithIdentityStates(app.idStates),
+		activation.WithPoetRetryInterval(cfg.HARE3.PreroundDelay),
+		activation.WithIdentityStates(idStates),
 		activation.WithPoets(poetClients...),
-		activation.BuilderAtxVersions(app.config.AtxVersions),
+		activation.BuilderAtxVersions(cfg.AtxVersions),
 	)
 
-	if len(app.signers) > 1 || app.signers[0].Name() != supervisedIDKeyFileName {
+	if len(signers) > 1 || signers[0].Name() != supervisedIDKeyFileName {
 		// in a remote setup we register eagerly so the atxBuilder can warn about missing connections asap.
 		// Any setup with more than one signer is considered a remote setup. If there is only one signer it
 		// is considered a remote setup if the key for the signer has not been sourced from `supervisedIDKeyFileName`.
@@ -414,27 +404,46 @@ func (app *SmeshingService) initServices(ctx context.Context) error {
 		// In a supervised setup the postSetupManager will register at the atxBuilder when
 		// it finished initializing, to avoid warning about a missing connection when the supervised post
 		// service isn't ready yet.
-		for _, sig := range app.signers {
+		for _, sig := range signers {
 			atxBuilder.Register(sig)
 		}
 	}
-	app.postSupervisor = activation.NewPostSupervisor(
-		app.log,
-		app.config.POST,
-		app.config.SMESHING.ProvingOpts,
+	postSupervisor := activation.NewPostSupervisor(
+		logger,
+		cfg.POST,
+		cfg.SMESHING.ProvingOpts,
 		postSetupMgr,
 		atxBuilder,
 	)
 	if err != nil {
-		return fmt.Errorf("init post service: %w", err)
+		return nil, fmt.Errorf("init post service: %w", err)
 	}
 
-	app.atxBuilder = atxBuilder
+	return &SmeshingService{
+		db:           stateDB,
+		localDB:      localDB,
+		config:       cfg,
+		loggers:      loggers,
+		log:          logger,
+		signers:      signers,
+		grpcServices: grpcServices,
 
-	return nil
+		proposalsBuilder: proposalBuilder,
+		clock:            clock,
+		remoteHare:       remoteHare,
+		atxBuilder:       atxBuilder,
+		postVerifier:     postVerifier,
+		postSupervisor:   postSupervisor,
+		idStates:         idStates,
+		poetClients:      poetClients,
+
+		errCh:   make(chan error, 5),
+		started: make(chan struct{}),
+	}, nil
 }
 
 func (app *SmeshingService) startServices(ctx context.Context) error {
+	app.remoteHare.Start(ctx)
 	app.eg.Go(func() error {
 		return app.proposalsBuilder.Run(ctx)
 	})
@@ -460,19 +469,11 @@ func (app *SmeshingService) startServices(ctx context.Context) error {
 // initializes all relevant services according to command line
 // arguments provided.
 func (app *SmeshingService) Start(ctx context.Context) error {
-	if err := verifyLocalDbMigrations(app.config); err != nil {
-		return fmt.Errorf("version upgrade verification failed: %w", err)
-	}
-
-	err := app.startSmeshingServiceSynchronous(ctx)
+	err := app.start(ctx)
 	if err != nil {
 		app.log.Error("failed to start App", zap.Error(err))
 		return err
 	}
-	defer events.ReportError(events.NodeError{
-		Msg:   "node is shutting down",
-		Level: zapcore.InfoLevel,
-	})
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
@@ -484,32 +485,22 @@ func (app *SmeshingService) Start(ctx context.Context) error {
 	}
 }
 
-func (app *SmeshingService) startSmeshingServiceSynchronous(ctx context.Context) (err error) {
-	// notify anyone who might be listening that the app has finished starting.
-	// this can be used by, e.g., app tests.
+func (app *SmeshingService) start(ctx context.Context) (err error) {
 	defer close(app.started)
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("error reading hostname: %w", err)
+		app.log.Warn("couldn't read hostname", zap.Error(err))
+		hostname = "unknown"
 	}
 
-	app.log.Info("starting spacemesh",
+	app.log.Info("starting smeshing service",
 		zap.String("data-dir", app.config.DataDir()),
 		zap.String("post-dir", app.config.SMESHING.Opts.DataDir),
 		zap.String("hostname", hostname),
 	)
 
-	if err := os.MkdirAll(app.config.DataDir(), 0o700); err != nil {
-		return fmt.Errorf(
-			"data-dir %s not found or could not be created: %w",
-			app.config.DataDir(),
-			err,
-		)
-	}
-
 	/* Setup monitoring */
-	app.errCh = make(chan error, 5)
 	if app.config.PprofHTTPServer {
 		app.log.Info("starting pprof server", zap.String("address", app.config.PprofHTTPServerListener))
 		app.pprofService = &http.Server{}
@@ -543,25 +534,6 @@ func (app *SmeshingService) startSmeshingServiceSynchronous(ctx context.Context)
 		if err != nil {
 			return fmt.Errorf("cannot start profiling client: %w", err)
 		}
-	}
-
-	/* Initialize all protocol services */
-	app.clock, err = timesync.NewClock(
-		timesync.WithLayerDuration(app.config.LayerDuration),
-		timesync.WithTickInterval(1*time.Second),
-		timesync.WithGenesisTime(app.config.Genesis.GenesisTime.Time()),
-		timesync.WithLogger(app.loggers.add(ClockLogger, app.log)),
-	)
-	if err != nil {
-		return fmt.Errorf("cannot create clock: %w", err)
-	}
-
-	if err := app.setupDBs(ctx); err != nil {
-		return err
-	}
-
-	if err := app.initServices(ctx); err != nil {
-		return fmt.Errorf("init services: %w", err)
 	}
 
 	if app.config.CollectMetrics {
@@ -920,31 +892,19 @@ func (app *SmeshingService) startAPIServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *SmeshingService) setupDBs(ctx context.Context) error {
-	dbLog := app.loggers.add(StateDbLogger, app.log)
+func setupDBs(cfg *config.Config, logger *zap.Logger) (sql.LocalDatabase, sql.StateDatabase, error) {
 	// FIXME: remove need for state DB
-	db, err := openStateDB(app.config, dbLog)
+	db, err := openStateDB(cfg, logger)
 	if err != nil {
-		return err
-	}
-	app.db = db
-
-	if app.config.CollectMetrics && app.config.DatabaseSizeMeteringInterval != 0 {
-		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
-			ctx,
-			app.db,
-			dbLog,
-			app.config.DatabaseSizeMeteringInterval,
-		)
+		return nil, nil, err
 	}
 
-	localDB, err := openLocalDb(app.config, dbLog)
+	localDB, err := openLocalDb(cfg, logger)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
-	app.localDB = localDB
-	return nil
+	return localDB, db, nil
 }
 
 func (app *SmeshingService) stopServices(ctx context.Context) {
@@ -973,36 +933,19 @@ func (app *SmeshingService) stopServices(ctx context.Context) {
 		app.grpcTLSServer.Close() // err is always nil
 	}
 
-	if app.clock != nil {
-		app.clock.Close()
+	app.clock.Close()
+	app.atxBuilder.StopSmeshing(false)
+	app.postVerifier.Close()
+
+	if err := app.postSupervisor.Stop(false); err != nil {
+		app.log.Error("error stopping local post service", zap.Error(err))
 	}
 
-	if app.atxBuilder != nil {
-		app.atxBuilder.StopSmeshing(false)
+	if err := app.db.Close(); err != nil {
+		app.log.Warn("db exited with error", zap.Error(err))
 	}
-
-	if app.postVerifier != nil {
-		app.postVerifier.Close()
-	}
-
-	if app.postSupervisor != nil {
-		if err := app.postSupervisor.Stop(false); err != nil {
-			app.log.Error("error stopping local post service", zap.Error(err))
-		}
-	}
-
-	if app.db != nil {
-		if err := app.db.Close(); err != nil {
-			app.log.Warn("db exited with error", zap.Error(err))
-		}
-	}
-	if app.dbMetrics != nil {
-		app.dbMetrics.Close()
-	}
-	if app.localDB != nil {
-		if err := app.localDB.Close(); err != nil {
-			app.log.Warn("local db exited with error", zap.Error(err))
-		}
+	if err := app.localDB.Close(); err != nil {
+		app.log.Warn("local db exited with error", zap.Error(err))
 	}
 
 	if app.pprofService != nil {

@@ -118,6 +118,7 @@ const (
 	ApiStateDBLogger        = "apiStateDB"
 	BeaconLogger            = "beacon"
 	CachedDBLogger          = "cachedDB"
+	PoetLogger              = "poet"
 	PoetDbLogger            = "poetDb"
 	TrtlLogger              = "trtl"
 	ATXHandlerLogger        = "atxHandler"
