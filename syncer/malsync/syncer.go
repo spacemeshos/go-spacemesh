@@ -11,6 +11,7 @@ import (
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -22,15 +23,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./syncer.go
-
-type fetcher interface {
-	SelectBestShuffled(int) []p2p.Peer
-	LegacyMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
-	MaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
-	LegacyMalfeasanceProofs(context.Context, []types.NodeID) error
-	MalfeasanceProofs(context.Context, []types.NodeID) error
+type counter interface {
+	Inc()
 }
+
+type noCounter struct{}
+
+func (noCounter) Inc() {}
 
 type Opt func(*Syncer)
 
@@ -40,17 +39,21 @@ func WithLogger(logger *zap.Logger) Opt {
 	}
 }
 
-type counter interface {
-	Inc()
-}
-
-type noCounter struct{}
-
-func (noCounter) Inc() {}
-
 func WithPeerErrMetric(counter counter) Opt {
 	return func(s *Syncer) {
 		s.peerErrMetric = counter
+	}
+}
+
+func WithAtxVersions(v activation.AtxVersions) Opt {
+	return func(s *Syncer) {
+		for epoch, version := range v {
+			if version == types.AtxV2 {
+				s.malSyncStartEpoch = new(types.EpochID)
+				*s.malSyncStartEpoch = epoch
+				break
+			}
+		}
 	}
 }
 
@@ -215,23 +218,26 @@ func (sst *syncState) missing(max int, has func(nodeID types.NodeID) (bool, erro
 }
 
 type Syncer struct {
-	logger        *zap.Logger
-	cfg           Config
-	fetcher       fetcher
-	db            sql.Executor
-	localdb       sql.LocalDatabase
-	clock         clockwork.Clock
-	peerErrMetric counter
+	logger            *zap.Logger
+	cfg               Config
+	fetcher           fetcher
+	db                sql.Executor
+	localDB           sql.LocalDatabase
+	clock             clockwork.Clock
+	ticker            layerTicker
+	peerErrMetric     counter
+	malSyncStartEpoch *types.EpochID
 }
 
-func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localDB sql.LocalDatabase, ticker layerTicker, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:        zap.NewNop(),
 		cfg:           DefaultConfig(),
 		fetcher:       fetcher,
 		db:            db,
-		localdb:       localdb,
+		localDB:       localDB,
 		clock:         clockwork.NewRealClock(),
+		ticker:        ticker,
 		peerErrMetric: noCounter{},
 	}
 	for _, opt := range opts {
@@ -241,7 +247,7 @@ func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Op
 }
 
 func (s *Syncer) shouldSyncLegacy(epochStart, epochEnd time.Time) (bool, error) {
-	timestamp, err := malsync.LegacySyncState(s.localdb)
+	timestamp, err := malsync.LegacySyncState(s.localDB)
 	if err != nil {
 		return false, fmt.Errorf("error getting malfeasance sync state: %w", err)
 	}
@@ -253,7 +259,15 @@ func (s *Syncer) shouldSyncLegacy(epochStart, epochEnd time.Time) (bool, error) 
 }
 
 func (s *Syncer) shouldSync(epochStart, epochEnd time.Time) (bool, error) {
-	timestamp, err := malsync.SyncState(s.localdb)
+	// until ATXv2 is enabled, malsync should be dormant
+	if s.malSyncStartEpoch == nil {
+		return false, nil
+	}
+	malSyncStart := s.ticker.LayerToTime(s.malSyncStartEpoch.FirstLayer())
+	if s.clock.Now().Before(malSyncStart) {
+		return false, nil
+	}
+	timestamp, err := malsync.SyncState(s.localDB)
 	if err != nil {
 		return false, fmt.Errorf("error getting malfeasance sync state: %w", err)
 	}
@@ -447,7 +461,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 }
 
 func (s *Syncer) updateLegacyState(ctx context.Context) error {
-	if err := s.localdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+	if err := s.localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		return malsync.UpdateLegacySyncState(tx, s.clock.Now())
 	}); err != nil {
 		if ctx.Err() != nil {
@@ -458,12 +472,11 @@ func (s *Syncer) updateLegacyState(ctx context.Context) error {
 		}
 		return fmt.Errorf("error updating legacy malsync state: %w", err)
 	}
-
 	return nil
 }
 
 func (s *Syncer) updateState(ctx context.Context) error {
-	if err := s.localdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+	if err := s.localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		return malsync.UpdateSyncState(tx, s.clock.Now())
 	}); err != nil {
 		if ctx.Err() != nil {

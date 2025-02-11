@@ -662,7 +662,7 @@ func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
 		}
 		s.logger.Info("malicious IDs synced", log.ZContext(ctx))
 		// Malfeasance proofs are synced after the actual ATXs.
-		// We set ATX synced status after both ATXs and malfeascance proofs
+		// We set ATX synced status after both ATXs and malfeasance proofs
 		// are in sync.
 		s.setATXSynced()
 	}
