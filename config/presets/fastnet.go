@@ -22,7 +22,7 @@ func fastnet() config.Config {
 
 	conf.BaseConfig.OptFilterThreshold = 90
 	conf.BaseConfig.DatabasePruneInterval = time.Minute
-	conf.BaseConfig.DatabaseConnections = 10
+	conf.BaseConfig.DatabaseConnections = 20
 
 	// set for systest TestEquivocation
 	conf.BaseConfig.MinerGoodAtxsPercent = 50
