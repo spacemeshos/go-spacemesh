@@ -890,9 +890,6 @@ func (app *App) initServices(ctx context.Context) error {
 		activation.WithTickSize(app.Config.TickSize),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
-	for _, sig := range app.signers {
-		atxHandler.Register(sig)
-	}
 
 	blockHandler := blocks.NewHandler(
 		fetcher,
