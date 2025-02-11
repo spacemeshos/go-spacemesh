@@ -2,6 +2,8 @@ package node
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -208,4 +210,31 @@ func TestSmeshingService_StopServices(t *testing.T) {
 
 		service.stopServices(stopCtx)
 	})
+}
+
+func TestSmeshingService_PprofServer(t *testing.T) {
+	cfg := getSmeshingServiceTestConfig(t)
+	cfg.PprofHTTPServer = true
+	cfg.PprofHTTPServerListener = ":0"
+	cfg.PprofBlockProfile = true
+	cfg.PprofMutexProfile = true
+	service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	require.NoError(t, service.start(ctx))
+	defer func() {
+		cancel()
+		service.stopServices(context.Background())
+	}()
+
+	url := fmt.Sprintf("http://%s/debug/pprof/", service.pprofService.Addr)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(url)
+		require.NoError(t, err, url)
+		resp.Body.Close()
+		return http.StatusOK == resp.StatusCode
+	}, time.Second*10, time.Millisecond*100)
 }

@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -503,10 +504,12 @@ func (app *SmeshingService) start(ctx context.Context) (err error) {
 	/* Setup monitoring */
 	if app.config.PprofHTTPServer {
 		app.log.Info("starting pprof server", zap.String("address", app.config.PprofHTTPServerListener))
-		app.pprofService = &http.Server{}
 		lis, err := net.Listen("tcp", app.config.PprofHTTPServerListener)
 		if err != nil {
 			return fmt.Errorf("starting pprof server: %w", err)
+		}
+		app.pprofService = &http.Server{
+			Addr: lis.Addr().String(),
 		}
 		app.eg.Go(func() error {
 			err := app.pprofService.Serve(lis)
