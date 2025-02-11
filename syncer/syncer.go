@@ -812,6 +812,7 @@ func (s *Syncer) syncMalfeasance(parent context.Context, epoch types.EpochID) er
 	eg.Go(func() error {
 		return s.malsyncer.EnsureLegacyInSync(ctx, epochStart, epochEnd)
 	})
+	// TODO(mafa): remove this check again when ATXv2 is live https://github.com/spacemeshos/go-spacemesh/issues/6716
 	if epoch >= s.malSyncStartEpoch {
 		eg.Go(func() error {
 			return s.malsyncer.EnsureInSync(ctx, epochStart, epochEnd)
