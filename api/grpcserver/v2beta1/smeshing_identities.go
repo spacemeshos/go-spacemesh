@@ -73,7 +73,7 @@ func (s *SmeshingIdentitiesService) States(
 	}
 
 	var states []*pb.IdentityStateInfo
-	events, err := s.states.All(*ops)
+	events, err := s.states.All(ops)
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -88,8 +88,8 @@ func (s *SmeshingIdentitiesService) States(
 	return &pb.IdentityStatesResponse{States: states}, nil
 }
 
-func toEventOperations(filter *pb.IdentityStatesRequest) (*builder.Operations, error) {
-	ops := &builder.Operations{}
+func toEventOperations(filter *pb.IdentityStatesRequest) (builder.Operations, error) {
+	ops := builder.Operations{}
 	if filter == nil {
 		return ops, nil
 	}
@@ -116,7 +116,7 @@ func toEventOperations(filter *pb.IdentityStatesRequest) (*builder.Operations, e
 
 	if filter.From != nil {
 		if err := filter.From.CheckValid(); err != nil {
-			return nil, fmt.Errorf("'from' is invalid: %w", err)
+			return ops, fmt.Errorf("'from' is invalid: %w", err)
 		}
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: "timestamp",
@@ -126,7 +126,7 @@ func toEventOperations(filter *pb.IdentityStatesRequest) (*builder.Operations, e
 	}
 	if filter.To != nil {
 		if err := filter.To.CheckValid(); err != nil {
-			return nil, fmt.Errorf("'to' is invalid: %w", err)
+			return ops, fmt.Errorf("'to' is invalid: %w", err)
 		}
 		ops.Filter = append(ops.Filter, builder.Op{
 			Field: "timestamp",
@@ -147,7 +147,7 @@ func toEventOperations(filter *pb.IdentityStatesRequest) (*builder.Operations, e
 			Value: "timestamp desc",
 		})
 	default:
-		return nil, fmt.Errorf("unknown sort order: %d", filter.Order)
+		return ops, fmt.Errorf("unknown sort order: %d", filter.Order)
 	}
 
 	return ops, nil

@@ -75,25 +75,16 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 
 	nodeID := types.RandomNodeID()
 
-	firstTimestamp := time.Now().Add(-time.Minute)
-	lastTimestamp := firstTimestamp
-	nextTimestamp := func() time.Time {
-		t := lastTimestamp
-		lastTimestamp = lastTimestamp.Add(time.Second)
-		return t
-	}
-
 	broadcasted := identity.ATXBroadcasted{
 		AtxId:   types.RandomATXID(),
 		Publish: 9,
 	}
+	firstTimestamp := time.Now().Add(-time.Minute)
 	states := map[time.Time]identity.State{
-		nextTimestamp(): &identity.ATXReady{
-			Publish: 9,
-		},
-		nextTimestamp(): &broadcasted,
-		nextTimestamp(): &identity.WaitForATXSynced{},
-		nextTimestamp(): &identity.WaitForPoetRoundEnd{},
+		firstTimestamp.Add(time.Second * 0): &identity.ATXReady{Publish: 9},
+		firstTimestamp.Add(time.Second * 1): &broadcasted,
+		firstTimestamp.Add(time.Second * 2): &identity.WaitForATXSynced{},
+		firstTimestamp.Add(time.Second * 3): &identity.WaitForPoetRoundEnd{},
 	}
 	for t, s := range states {
 		statesDB.SetAt(nodeID, s, t)
