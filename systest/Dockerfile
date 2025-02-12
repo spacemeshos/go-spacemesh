@@ -1,4 +1,4 @@
-FROM golang:1.23 AS build
+FROM golang:1.24 AS build
 RUN set -ex \
     && apt-get update --fix-missing \
     && apt-get install -qy --no-install-recommends \
@@ -42,5 +42,5 @@ COPY --from=build /src/build/libpost.so /bin/
 COPY --from=build /src/build/post-service /bin/
 ENV LD_LIBRARY_PATH="/bin/"
 
-ENV GOVERSION=1.23
+ENV GOVERSION=1.24
 ENV GOTESTSUM_FORMAT=standard-quiet
