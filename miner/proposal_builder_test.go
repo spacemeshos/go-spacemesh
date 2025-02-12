@@ -331,7 +331,7 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 			return nil
 		})
 
-	require.NoError(t, builder.build(context.Background(), lid))
+	require.NoError(t, builder.build(t.Context(), lid))
 
 	// Try again in the next layer
 	// signer[1] is still NOT initialized (missing ATX) but it won't block this time
@@ -354,7 +354,7 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 	conState.EXPECT().SelectProposalTXs(lid, gomock.Any()).Return(txs)
 
 	publisher.EXPECT().
-		Publish(context.Background(), pubsub.ProposalProtocol, gomock.Any()).
+		Publish(t.Context(), pubsub.ProposalProtocol, gomock.Any()).
 		DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
 			var proposal types.Proposal
 			codec.MustDecode(msg, &proposal)
@@ -363,7 +363,7 @@ func TestBuild_BlockedSignerInitDoesntBlockEligible(t *testing.T) {
 			return nil
 		})
 
-	require.NoError(t, builder.build(context.Background(), lid))
+	require.NoError(t, builder.build(t.Context(), lid))
 }
 
 func TestBuild(t *testing.T) {
@@ -910,7 +910,7 @@ func TestBuild(t *testing.T) {
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
 			var (
-				ctx       = context.Background()
+				ctx       = t.Context()
 				ctrl      = gomock.NewController(t)
 				conState  = mocks.NewMockconservativeState(ctrl)
 				clock     = mocks.NewMocklayerClock(ctrl)
@@ -1123,7 +1123,7 @@ func TestStartStop(t *testing.T) {
 	)
 	builder.Register(signer)
 	var (
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		eg          errgroup.Group
 	)
 	eg.Go(func() error {

@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -85,7 +84,7 @@ func TestHandler_Validate(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &bp)
+		nodeID, err := h.Validate(t.Context(), &bp)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -119,7 +118,7 @@ func TestHandler_Validate(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &bp)
+		nodeID, err := h.Validate(t.Context(), &bp)
 		require.ErrorContains(t, err, "invalid ballot malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -152,7 +151,7 @@ func TestHandler_Validate(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &bp)
+		nodeID, err := h.Validate(t.Context(), &bp)
 		require.ErrorContains(t, err, "invalid ballot malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -189,7 +188,7 @@ func TestHandler_Validate(t *testing.T) {
 		bp.Messages[1].Signature = sig2.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig2.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &bp)
+		nodeID, err := h.Validate(t.Context(), &bp)
 		require.ErrorContains(t, err, "invalid ballot malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -222,7 +221,7 @@ func TestHandler_Validate(t *testing.T) {
 		bp.Messages[1].Signature = sig.Sign(signing.BALLOT, bp.Messages[1].SignedBytes())
 		bp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &bp)
+		nodeID, err := h.Validate(t.Context(), &bp)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})

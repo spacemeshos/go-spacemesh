@@ -1,7 +1,6 @@
 package activation_test
 
 import (
-	"context"
 	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
@@ -56,7 +55,7 @@ func TestCertification(t *testing.T) {
 	postClient, err := svc.Client(sig.NodeID())
 	require.NoError(t, err)
 
-	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
+	post, info, err := postClient.Proof(t.Context(), shared.ZeroChallenge)
 	require.NoError(t, err)
 
 	fullPost := nipost.Post{
@@ -76,7 +75,7 @@ func TestCertification(t *testing.T) {
 
 		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		_, err := client.
-			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certify(t.Context(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.NoError(t, err)
 	})
 	t.Run("certify rejects invalid cert (expired)", func(t *testing.T) {
@@ -91,7 +90,7 @@ func TestCertification(t *testing.T) {
 
 		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		cert, err := client.
-			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certify(t.Context(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})
@@ -103,7 +102,7 @@ func TestCertification(t *testing.T) {
 
 		client := activation.NewCertifierClient(db, localDb, zaptest.NewLogger(t))
 		cert, err := client.
-			Certify(context.Background(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
+			Certify(t.Context(), sig.NodeID(), &url.URL{Scheme: "http", Host: addr.String()}, pubKey)
 		require.Error(t, err)
 		require.Nil(t, cert)
 	})
@@ -141,7 +140,7 @@ func (c *testCertifier) certify(w http.ResponseWriter, r *http.Request) {
 		LabelsPerUnit:   c.cfg.LabelsPerUnit,
 	}
 	if err := c.postVerifier.Verify(
-		context.Background(),
+		r.Context(),
 		proof, metadata,
 		activation.WithVerifierOptions(c.opts...)); err != nil {
 		http.Error(w, fmt.Sprintf("verifying POST: %v", err), http.StatusBadRequest)

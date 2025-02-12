@@ -125,7 +125,8 @@ func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 	for _, opt := range opts {
 		opt(sync)
 	}
-	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
+	// TODO(mafa): fix this
+	sync.ctx, sync.cancel = context.WithCancel(sync.ctx) // nolint:fatcontext
 	h.SetStreamHandler(protocolName, sync.streamHandler)
 	return sync
 }

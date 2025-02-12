@@ -1,7 +1,6 @@
 package activation_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -62,7 +61,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	require.NoError(t, err)
 	validator := activation.NewValidator(db, poetDb, cfg, opts.Scrypt, verifier)
 
-	eg, ctx := errgroup.WithContext(context.Background())
+	eg, ctx := errgroup.WithContext(t.Context())
 	for _, sig := range signers {
 		opts := opts
 		opts.DataDir = t.TempDir()
@@ -133,10 +132,10 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	publish := types.EpochID(1)
 	var niposts [2]nipostData
 	var initialPosts [2]*types.Post
-	eg, ctx = errgroup.WithContext(context.Background())
+	eg, ctx = errgroup.WithContext(t.Context())
 	for i, signer := range signers {
 		eg.Go(func() error {
-			post, postInfo, err := nb.Proof(context.Background(), signer.NodeID(), types.EmptyHash32[:], nil)
+			post, postInfo, err := nb.Proof(t.Context(), signer.NodeID(), types.EmptyHash32[:], nil)
 			if err != nil {
 				return err
 			}
@@ -147,7 +146,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 				InitialPost:    post,
 			}
 			challenge := wire.NIPostChallengeToWireV2(postChallenge).Hash()
-			nipost, err := nb.BuildNIPost(context.Background(), signer, challenge, postChallenge)
+			nipost, err := nb.BuildNIPost(t.Context(), signer, challenge, postChallenge)
 			if err != nil {
 				return err
 			}
@@ -185,14 +184,14 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{mergedIdAtx.ID()}, gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any()).Times(2)
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any()).Times(2)
-	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedIdAtx))
+	err = atxHdlr.HandleGossipAtx(t.Context(), p2p.NoPeer, codec.MustEncode(mergedIdAtx))
 	require.NoError(t, err)
-	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(marriageATX))
+	err = atxHdlr.HandleGossipAtx(t.Context(), p2p.NoPeer, codec.MustEncode(marriageATX))
 	require.NoError(t, err)
 
 	// Step 2. Publish merged ATX together
 	publish = marriageATX.PublishEpoch + 2
-	eg, ctx = errgroup.WithContext(context.Background())
+	eg, ctx = errgroup.WithContext(t.Context())
 	// 2.1. NiPOST for main ID (the publisher)
 	eg.Go(func() error {
 		n, err := buildNipost(ctx, nb, mainID, publish, marriageATX.ID(), marriageATX.ID())
@@ -213,7 +212,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	// 2.3 Construct a multi-ID poet membership merkle proof for both IDs
-	_, members, err := poetSvc.Proof(context.Background(), "1")
+	_, members, err := poetSvc.Proof(t.Context(), "1")
 	require.NoError(t, err)
 	membershipProof := constructMerkleProof(t, members, map[uint64]bool{0: true, 1: true})
 
@@ -238,7 +237,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX))
+	err = atxHdlr.HandleGossipAtx(t.Context(), p2p.NoPeer, codec.MustEncode(mergedATX))
 	require.NoError(t, err)
 
 	// Step 3. Checkpoint
@@ -248,7 +247,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	fs := afero.NewMemMapFs()
 	dir, err := afero.TempDir(fs, "", "Generate")
 	require.NoError(t, err)
-	err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 1)
+	err = checkpoint.Generate(t.Context(), fs, db, dir, snapshot, 1)
 	require.NoError(t, err)
 
 	// 3.2. Recover from checkpoint
@@ -261,7 +260,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	}
 	filename := checkpoint.SelfCheckpointFilename(dir, snapshot)
 
-	data, err := checkpoint.RecoverFromLocalFile(context.Background(), logger, db, localDB, fs, &recoveryCfg, filename)
+	data, err := checkpoint.RecoverFromLocalFile(t.Context(), logger, db, localDB, fs, &recoveryCfg, filename)
 	require.NoError(t, err)
 	require.Nil(t, data)
 
@@ -323,7 +322,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	// Step 4. Publish merged using the same previous now
 	// Publish by the other signer this time.
 	publish = mergedATX.PublishEpoch + 1
-	eg, ctx = errgroup.WithContext(context.Background())
+	eg, ctx = errgroup.WithContext(t.Context())
 	for i, sig := range signers {
 		eg.Go(func() error {
 			n, err := buildNipost(ctx, nb, sig, publish, mergedATX.ID(), mergedATX.ID())
@@ -333,7 +332,7 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 		})
 	}
 	require.NoError(t, eg.Wait())
-	_, members, err = poetSvc.Proof(context.Background(), "2")
+	_, members, err = poetSvc.Proof(t.Context(), "2")
 	require.NoError(t, err)
 	membershipProof = constructMerkleProof(t, members, map[uint64]bool{0: true})
 
@@ -355,6 +354,6 @@ func Test_CheckpointAfterMerge(t *testing.T) {
 	mFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any(), gomock.Any())
 	mBeacon.EXPECT().OnAtx(gomock.Any())
 	mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-	err = atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(mergedATX2))
+	err = atxHdlr.HandleGossipAtx(t.Context(), p2p.NoPeer, codec.MustEncode(mergedATX2))
 	require.NoError(t, err)
 }

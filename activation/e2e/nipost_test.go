@@ -54,7 +54,7 @@ func fullPost(post *types.Post, info *types.PostInfo, challenge []byte) *nipost.
 
 func spawnPoet(tb testing.TB, opts ...HTTPPoetOpt) *HTTPPoetTestHarness {
 	tb.Helper()
-	ctx, cancel := context.WithCancel(logging.NewContext(context.Background(), zaptest.NewLogger(tb)))
+	ctx, cancel := context.WithCancel(logging.NewContext(tb.Context(), zaptest.NewLogger(tb)))
 
 	poetProver, err := NewHTTPPoetTestHarness(ctx, tb.TempDir(), opts...)
 	require.NoError(tb, err)
@@ -194,7 +194,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	postClient, err := svc.Client(sig.NodeID())
 	require.NoError(t, err)
 
-	post, info, err := postClient.Proof(context.Background(), shared.ZeroChallenge)
+	post, info, err := postClient.Proof(t.Context(), shared.ZeroChallenge)
 	require.NoError(t, err)
 	err = nipost.AddPost(localDb, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 	require.NoError(t, err)
@@ -215,12 +215,12 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	require.NoError(t, err)
 
 	challenge := types.RandomHash()
-	nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
+	nipost, err := nb.BuildNIPost(t.Context(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
 	require.NoError(t, err)
 
 	v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 	_, err = v.NIPost(
-		context.Background(),
+		t.Context(),
 		sig.NodeID(),
 		goldenATX,
 		nipost.NIPost,
@@ -303,17 +303,17 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	challenge := types.RandomHash()
 	for _, sig := range signers {
 		eg.Go(func() error {
-			post, info, err := nb.Proof(context.Background(), sig.NodeID(), shared.ZeroChallenge, nil)
+			post, info, err := nb.Proof(t.Context(), sig.NodeID(), shared.ZeroChallenge, nil)
 			require.NoError(t, err)
 			err = nipost.AddPost(localDB, sig.NodeID(), *fullPost(post, info, shared.ZeroChallenge))
 			require.NoError(t, err)
 
-			nipost, err := nb.BuildNIPost(context.Background(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
+			nipost, err := nb.BuildNIPost(t.Context(), sig, challenge, &types.NIPostChallenge{PublishEpoch: 7})
 			require.NoError(t, err)
 
 			v := activation.NewValidator(nil, poetDb, cfg, opts.Scrypt, verifier)
 			_, err = v.NIPost(
-				context.Background(),
+				t.Context(),
 				sig.NodeID(),
 				goldenATX,
 				nipost.NIPost,

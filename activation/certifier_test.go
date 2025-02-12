@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"net/url"
 	"testing"
 
@@ -34,11 +33,11 @@ func TestPersistsCerts(t *testing.T) {
 
 		_, err := certdb.Certificate(db, id, pubkey)
 		require.ErrorIs(t, err, sql.ErrNotFound)
-		got, err := c.Certificate(context.Background(), id, certifierAddress, pubkey)
+		got, err := c.Certificate(t.Context(), id, certifierAddress, pubkey)
 		require.NoError(t, err)
 		require.Equal(t, cert, got)
 
-		got, err = c.Certificate(context.Background(), id, certifierAddress, pubkey)
+		got, err = c.Certificate(t.Context(), id, certifierAddress, pubkey)
 		require.NoError(t, err)
 		require.Equal(t, cert, got)
 
@@ -49,7 +48,7 @@ func TestPersistsCerts(t *testing.T) {
 	{
 		// Create new certifier and check that it loads the certs back.
 		c := NewCertifier(db, zaptest.NewLogger(t), client)
-		got, err := c.Certificate(context.Background(), id, certifierAddress, pubkey)
+		got, err := c.Certificate(t.Context(), id, certifierAddress, pubkey)
 		require.NoError(t, err)
 		require.Equal(t, cert, got)
 	}
@@ -77,19 +76,19 @@ func TestAvoidsRedundantQueries(t *testing.T) {
 	var eg errgroup.Group
 	for i := 0; i < 10; i++ {
 		eg.Go(func() error {
-			got, err := c.Certificate(context.Background(), id1, certifierAddress, pubkey)
+			got, err := c.Certificate(t.Context(), id1, certifierAddress, pubkey)
 			require.NoError(t, err)
 			require.Equal(t, cert1, got)
 			return nil
 		})
 		eg.Go(func() error {
-			got, err := c.Certificate(context.Background(), id2, certifierAddress, pubkey)
+			got, err := c.Certificate(t.Context(), id2, certifierAddress, pubkey)
 			require.NoError(t, err)
 			require.Equal(t, cert2, got)
 			return nil
 		})
 		eg.Go(func() error {
-			got, err := c.Certificate(context.Background(), id1, certifierAddress, pubkey2)
+			got, err := c.Certificate(t.Context(), id1, certifierAddress, pubkey2)
 			require.NoError(t, err)
 			require.Equal(t, cert3, got)
 			return nil
@@ -118,7 +117,7 @@ func TestObtainingPost(t *testing.T) {
 		localDb := localsql.InMemoryTest(t)
 
 		certifier := NewCertifierClient(db, localDb, zaptest.NewLogger(t))
-		_, err := certifier.obtainPost(context.Background(), id)
+		_, err := certifier.obtainPost(t.Context(), id)
 		require.ErrorContains(t, err, "PoST not found")
 	})
 	t.Run("initial POST available", func(t *testing.T) {
@@ -138,7 +137,7 @@ func TestObtainingPost(t *testing.T) {
 		require.NoError(t, err)
 
 		certifier := NewCertifierClient(db, localDb, zaptest.NewLogger(t))
-		got, err := certifier.obtainPost(context.Background(), id)
+		got, err := certifier.obtainPost(t.Context(), id)
 		require.NoError(t, err)
 		require.Equal(t, post, *got)
 	})
@@ -151,7 +150,7 @@ func TestObtainingPost(t *testing.T) {
 		require.NoError(t, atxs.Add(db, toAtx(t, atx), atx.Blob()))
 
 		certifier := NewCertifierClient(db, localDb, zaptest.NewLogger(t))
-		got, err := certifier.obtainPost(context.Background(), id)
+		got, err := certifier.obtainPost(t.Context(), id)
 		require.NoError(t, err)
 		require.Equal(t, atx.NIPost.Post.Indices, got.Indices)
 		require.Equal(t, atx.NIPost.Post.Nonce, got.Nonce)

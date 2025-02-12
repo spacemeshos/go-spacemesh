@@ -79,3 +79,65 @@ func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func(context.Context, types.
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
+
+// Mocksyncer is a mock of syncer interface.
+type Mocksyncer struct {
+	ctrl     *gomock.Controller
+	recorder *MocksyncerMockRecorder
+	isgomock struct{}
+}
+
+// MocksyncerMockRecorder is the mock recorder for Mocksyncer.
+type MocksyncerMockRecorder struct {
+	mock *Mocksyncer
+}
+
+// NewMocksyncer creates a new mock instance.
+func NewMocksyncer(ctrl *gomock.Controller) *Mocksyncer {
+	mock := &Mocksyncer{ctrl: ctrl}
+	mock.recorder = &MocksyncerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocksyncer) EXPECT() *MocksyncerMockRecorder {
+	return m.recorder
+}
+
+// IsSynced mocks base method.
+func (m *Mocksyncer) IsSynced(arg0 context.Context) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsSynced", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsSynced indicates an expected call of IsSynced.
+func (mr *MocksyncerMockRecorder) IsSynced(arg0 any) *MocksyncerIsSyncedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*Mocksyncer)(nil).IsSynced), arg0)
+	return &MocksyncerIsSyncedCall{Call: call}
+}
+
+// MocksyncerIsSyncedCall wrap *gomock.Call
+type MocksyncerIsSyncedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocksyncerIsSyncedCall) Return(arg0 bool) *MocksyncerIsSyncedCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocksyncerIsSyncedCall) Do(f func(context.Context) bool) *MocksyncerIsSyncedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocksyncerIsSyncedCall) DoAndReturn(f func(context.Context) bool) *MocksyncerIsSyncedCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}

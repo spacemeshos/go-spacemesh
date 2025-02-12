@@ -1,7 +1,6 @@
 package node
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -90,7 +89,7 @@ func TestCheckDBValidity(t *testing.T) {
 		err := codec.Decode(bytes, proof)
 		require.NoError(t, err)
 
-		id, err := handler.Validate(context.Background(), proof)
+		id, err := handler.Validate(t.Context(), proof)
 		require.NoError(t, err)
 		require.Equal(t, nodeID, id)
 

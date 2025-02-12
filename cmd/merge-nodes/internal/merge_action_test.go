@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"context"
 	"encoding/hex"
 	"io/fs"
 	"math/rand"
@@ -42,7 +41,7 @@ func Test_MergeDBs_InvalidTargetSchema(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), zaptest.NewLogger(t), "", tmpDst)
+	err = MergeDBs(t.Context(), zaptest.NewLogger(t), "", tmpDst)
 	require.ErrorIs(t, err, sql.ErrOldSchema)
 	require.ErrorContains(t, err, "target database")
 }
@@ -66,7 +65,7 @@ func Test_MergeDBs_TargetIsSupervised(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), logger, "", tmpDst)
+	err = MergeDBs(t.Context(), logger, "", tmpDst)
 	require.ErrorIs(t, err, ErrSupervisedNode)
 
 	require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
@@ -81,7 +80,7 @@ func Test_MergeDBs_InvalidSourcePath(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), logger, "/invalid/source/path", tmpDst)
+	err = MergeDBs(t.Context(), logger, "/invalid/source/path", tmpDst)
 	require.ErrorIs(t, err, fs.ErrNotExist)
 }
 
@@ -101,7 +100,7 @@ func Test_MergeDBs_InvalidSourceSchema(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
+	err = MergeDBs(t.Context(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.ErrorIs(t, err, sql.ErrOldSchema)
 	require.ErrorContains(t, err, "source database")
 }
@@ -131,7 +130,7 @@ func Test_MergeDBs_SourceIsSupervised(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), logger, tmpSrc, tmpDst)
+	err = MergeDBs(t.Context(), logger, tmpSrc, tmpDst)
 	require.ErrorIs(t, err, ErrSupervisedNode)
 
 	require.Equal(t, 1, observedLogs.Len(), "Expected a warning log")
@@ -156,7 +155,7 @@ func Test_MergeDBs_InvalidSourceKey(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
+	err = MergeDBs(t.Context(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.ErrorContains(t, err, "not a valid key file")
 	require.ErrorContains(t, err, "invalid.key")
 }
@@ -192,7 +191,7 @@ func Test_MergeDBs_TargetKeyAlreadyExists(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
-	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
+	err = MergeDBs(t.Context(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.ErrorIs(t, err, fs.ErrExist)
 	require.ErrorContains(t, err, "exists.key")
 
@@ -332,7 +331,7 @@ func Test_MergeDBs_Successful_Existing_Node(t *testing.T) {
 
 	require.NoError(t, srcDB.Close())
 
-	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
+	err = MergeDBs(t.Context(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.NoError(t, err)
 
 	require.FileExists(t, filepath.Join(tmpDst, keyDir, "id1.key"))
@@ -439,7 +438,7 @@ func Test_MergeDBs_Successful_Empty_Dir(t *testing.T) {
 
 	require.NoError(t, srcDB.Close())
 
-	err = MergeDBs(context.Background(), zaptest.NewLogger(t), tmpSrc, tmpDst)
+	err = MergeDBs(t.Context(), zaptest.NewLogger(t), tmpSrc, tmpDst)
 	require.NoError(t, err)
 
 	require.FileExists(t, filepath.Join(tmpDst, keyDir, "id.key"))

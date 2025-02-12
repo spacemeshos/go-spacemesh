@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"go.uber.org/zap"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -103,7 +103,7 @@ func (sps syncPeerSet) add(peer p2p.Peer) {
 }
 
 func (sps syncPeerSet) clear() {
-	maps.Clear(sps)
+	clear(sps)
 }
 
 func (sps syncPeerSet) updateFrom(other syncPeerSet) {
@@ -134,7 +134,7 @@ func (sst *syncState) done() {
 		sst.syncedPeers.updateFrom(sst.syncingPeers)
 		sst.syncingPeers.clear()
 	}
-	maps.Clear(sst.state)
+	clear(sst.state)
 }
 
 func (sst *syncState) numSyncedPeers() int {

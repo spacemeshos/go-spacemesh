@@ -11,3 +11,8 @@ import (
 type malfeasanceInfo interface {
 	Info(ctx context.Context, nodeID types.NodeID) (map[string]string, error)
 }
+
+// syncer is an API to get sync status.
+type syncer interface {
+	IsSynced(context.Context) bool
+}

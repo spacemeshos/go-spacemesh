@@ -1,7 +1,6 @@
 package v2beta1
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -13,7 +12,7 @@ import (
 )
 
 func TestNetworkService_Info(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	genesis := time.Unix(genTimeUnix, 0)
 	c := config.DefaultTestConfig(t)
 

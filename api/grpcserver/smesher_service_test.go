@@ -1,7 +1,6 @@
 package grpcserver_test
 
 import (
-	"context"
 	"math/rand/v2"
 	"testing"
 	"time"
@@ -43,7 +42,7 @@ func TestPostConfig(t *testing.T) {
 	}
 	postSupervisor.EXPECT().Config().Return(postConfig)
 
-	response, err := svc.PostConfig(context.Background(), &emptypb.Empty{})
+	response, err := svc.PostConfig(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	require.EqualValues(t, config.BitsPerLabel, response.BitsPerLabel)
 	require.Equal(t, postConfig.MinNumUnits, response.MinNumUnits)
@@ -88,7 +87,7 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	smeshingProvider.EXPECT().StartSmeshing(addr).Return(nil)
 	grpcPostService.EXPECT().AllowConnections(true)
 
-	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+	_, err = svc.StartSmeshing(t.Context(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
 		Opts: &pb.PostSetupOpts{
 			DataDir:     "data-dir",
@@ -118,17 +117,7 @@ func TestStartSmeshing_ErrorOnMissingPostServiceConfig(t *testing.T) {
 	)
 
 	providerID := uint32(7)
-	opts := activation.PostSetupOpts{
-		DataDir:          "data-dir",
-		NumUnits:         1,
-		MaxFileSize:      1024,
-		Throttle:         true,
-		Scrypt:           config.DefaultLabelParams(),
-		ComputeBatchSize: config.DefaultComputeBatchSize,
-	}
-	opts.ProviderID.SetUint32(providerID)
-
-	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+	_, err = svc.StartSmeshing(t.Context(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
 		Opts: &pb.PostSetupOpts{
 			DataDir:     "data-dir",
@@ -158,18 +147,9 @@ func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig(t))
 
 	types.SetNetworkHRP("stest")
-	providerID := uint32(7)
-	opts := activation.PostSetupOpts{
-		DataDir:          "data-dir",
-		NumUnits:         1,
-		MaxFileSize:      1024,
-		Throttle:         true,
-		Scrypt:           config.DefaultLabelParams(),
-		ComputeBatchSize: config.DefaultComputeBatchSize,
-	}
-	opts.ProviderID.SetUint32(providerID)
 
-	_, err := svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+	providerID := uint32(7)
+	_, err := svc.StartSmeshing(t.Context(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
 		Opts: &pb.PostSetupOpts{
 			DataDir:     "data-dir",
@@ -209,7 +189,7 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 	}
 	postSupervisor.EXPECT().Providers().Return(providers, nil).AnyTimes()
 
-	resp, err := svc.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{
+	resp, err := svc.PostSetupProviders(t.Context(), &pb.PostSetupProvidersRequest{
 		Benchmark: false,
 	})
 	require.NoError(t, err)
@@ -220,7 +200,7 @@ func TestSmesherService_PostSetupProviders(t *testing.T) {
 	postSupervisor.EXPECT().Benchmark(providers[0]).Return(1_000, nil)
 	postSupervisor.EXPECT().Benchmark(providers[1]).Return(100_000, nil)
 
-	resp, err = svc.PostSetupProviders(context.Background(), &pb.PostSetupProvidersRequest{
+	resp, err = svc.PostSetupProviders(t.Context(), &pb.PostSetupProvidersRequest{
 		Benchmark: true,
 	})
 	require.NoError(t, err)
@@ -251,7 +231,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			NumLabelsWritten: 1_000,
 			LastOpts:         nil,
 		})
-		resp, err := svc.PostSetupStatus(context.Background(), &emptypb.Empty{})
+		resp, err := svc.PostSetupStatus(t.Context(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.Equal(t, pb.PostSetupStatus_STATE_COMPLETE, resp.Status.State)
 		require.EqualValues(t, 1_000, resp.Status.NumLabelsWritten)
@@ -286,7 +266,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			NumLabelsWritten: 1_000,
 			LastOpts:         &opts,
 		})
-		resp, err := svc.PostSetupStatus(context.Background(), &emptypb.Empty{})
+		resp, err := svc.PostSetupStatus(t.Context(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.Equal(t, pb.PostSetupStatus_STATE_COMPLETE, resp.Status.State)
 		require.EqualValues(t, 1_000, resp.Status.NumLabelsWritten)
@@ -325,7 +305,7 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 			NumLabelsWritten: 1_000,
 			LastOpts:         &opts,
 		})
-		resp, err := svc.PostSetupStatus(context.Background(), &emptypb.Empty{})
+		resp, err := svc.PostSetupStatus(t.Context(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.Equal(t, pb.PostSetupStatus_STATE_IN_PROGRESS, resp.Status.State)
 		require.EqualValues(t, 1_000, resp.Status.NumLabelsWritten)

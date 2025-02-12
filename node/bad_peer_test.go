@@ -23,7 +23,7 @@ import (
 )
 
 func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	l := logtest.New(t)
@@ -66,7 +66,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	})
 
 	// Connect app2 to app1
-	err := app2.Host().Connect(context.Background(), peer.AddrInfo{
+	err := app2.Host().Connect(t.Context(), peer.AddrInfo{
 		ID:    app1.Host().ID(),
 		Addrs: app1.Host().Addrs(),
 	})

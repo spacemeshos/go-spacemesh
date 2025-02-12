@@ -1,7 +1,6 @@
 package atxs_test
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"slices"
@@ -348,7 +347,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 
 func TestGetIDsByEpoch(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sig1, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -478,7 +477,7 @@ func TestVRFNonce(t *testing.T) {
 
 func TestLoadBlob(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -548,7 +547,7 @@ func TestLoadBlob_DefaultsToV1(t *testing.T) {
 	require.NoError(t, atxs.Add(db, atx, blob))
 
 	var b sql.Blob
-	version, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	version, err := atxs.LoadBlob(t.Context(), db, atx.ID().Bytes(), &b)
 	require.NoError(t, err)
 	require.Equal(t, types.AtxV1, version)
 	require.Equal(t, blob.Blob, b.Bytes)
@@ -556,7 +555,7 @@ func TestLoadBlob_DefaultsToV1(t *testing.T) {
 
 func TestGetBlobCached(t *testing.T) {
 	db := statesql.InMemoryTest(t, sql.WithQueryCache(true))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -587,7 +586,7 @@ func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
 	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
 
 	b := &sql.Blob{}
-	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), b)
+	_, err := atxs.LoadBlob(t.Context(), db, atx.ID().Bytes(), b)
 	require.NoError(t, err)
 	require.Equal(t, blob.Blob, b.Bytes)
 
@@ -598,11 +597,11 @@ func TestGetBlobCached_CacheEntriesAreDistinct(t *testing.T) {
 	require.NoError(t, atxs.Add(db, &atx2, blob2))
 
 	// Loading atx2 doesn't overwrite the cached blob for atx1
-	_, err = atxs.LoadBlob(context.Background(), db, atx2.ID().Bytes(), b)
+	_, err = atxs.LoadBlob(t.Context(), db, atx2.ID().Bytes(), b)
 	require.NoError(t, err)
 	require.Equal(t, blob2.Blob, b.Bytes)
 
-	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), b)
+	_, err = atxs.LoadBlob(t.Context(), db, atx.ID().Bytes(), b)
 	require.NoError(t, err)
 	require.Equal(t, blob.Blob, b.Bytes)
 }
@@ -618,11 +617,11 @@ func TestGetBlobCached_OverwriteSafety(t *testing.T) {
 	require.Equal(t, 2, db.QueryCount()) // insert atx + blob
 
 	var b sql.Blob // we will reuse the blob between queries
-	_, err := atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	_, err := atxs.LoadBlob(t.Context(), db, atx.ID().Bytes(), &b)
 	require.NoError(t, err)
 	require.Equal(t, blob.Blob, b.Bytes)
 	b.Bytes[0] = 'X' // modify the blob
-	_, err = atxs.LoadBlob(context.Background(), db, atx.ID().Bytes(), &b)
+	_, err = atxs.LoadBlob(t.Context(), db, atx.ID().Bytes(), &b)
 	require.NoError(t, err)
 	require.Equal(t, blob.Blob, b.Bytes)
 }
@@ -633,7 +632,7 @@ func TestCachedBlobEviction(t *testing.T) {
 		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
 			atxs.CacheKindATXBlob: 10,
 		}))
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -671,7 +670,7 @@ func TestCachedBlobEviction(t *testing.T) {
 
 func TestCheckpointATX(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)

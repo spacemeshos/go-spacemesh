@@ -89,7 +89,7 @@ func TestPostVerifierScaling(t *testing.T) {
 	mockVerifier := NewMockPostVerifier(gomock.NewController(t))
 	v := newOffloadingPostVerifier(mockVerifier, 0, zaptest.NewLogger(t))
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 
 	err := v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
@@ -97,12 +97,12 @@ func TestPostVerifierScaling(t *testing.T) {
 
 	mockVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
 	v.scale(1)
-	err = v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{})
+	err = v.Verify(t.Context(), &shared.Proof{}, &shared.ProofMetadata{})
 	require.NoError(t, err)
 
 	v.scale(0)
 
-	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Millisecond)
+	ctx, cancel = context.WithTimeout(t.Context(), 10*time.Millisecond)
 	defer cancel()
 	err = v.Verify(ctx, &shared.Proof{}, &shared.ProofMetadata{})
 	require.ErrorIs(t, err, context.DeadlineExceeded)

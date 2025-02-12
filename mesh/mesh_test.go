@@ -66,7 +66,7 @@ func createTestMesh(tb testing.TB) *testMesh {
 	exec := NewExecutor(db, atxsdata, tm.mockVM, tm.mockState, lg)
 	msh, err := NewMesh(db, atxsdata, tm.mockTortoise, exec, tm.mockState, lg)
 	require.NoError(tb, err)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(tb.Context())
 	done := make(chan struct{})
 	go func() {
 		msh.Start(ctx)
@@ -168,7 +168,7 @@ func createLayerBallots(tb testing.TB, mesh *Mesh, lyrID types.LayerID) []*types
 	for i := 0; i < numBallots; i++ {
 		ballot := genLayerBallot(tb, lyrID)
 		blts = append(blts, ballot)
-		malProof, err := mesh.AddBallot(context.Background(), ballot)
+		malProof, err := mesh.AddBallot(tb.Context(), ballot)
 		require.NoError(tb, err)
 		require.Nil(tb, malProof)
 		require.False(tb, ballot.IsMalicious())
@@ -333,7 +333,7 @@ func TestMesh_AddTXsFromProposal(t *testing.T) {
 	pid := types.RandomProposalID()
 	txIDs := types.RandomTXSet(numTXs)
 	tm.mockState.EXPECT().LinkTXsWithProposal(layerID, pid, txIDs).Return(nil)
-	r.NoError(tm.AddTXsFromProposal(context.Background(), layerID, pid, txIDs))
+	r.NoError(tm.AddTXsFromProposal(t.Context(), layerID, pid, txIDs))
 }
 
 func TestMesh_AddBlockWithTXs(t *testing.T) {
@@ -345,7 +345,7 @@ func TestMesh_AddBlockWithTXs(t *testing.T) {
 	layerID := types.GetEffectiveGenesis().Add(1)
 	block := genLayerBlock(layerID, txIDs)
 	tm.mockState.EXPECT().LinkTXsWithBlock(layerID, block.ID(), txIDs).Return(nil)
-	r.NoError(tm.AddBlockWithTXs(context.Background(), block))
+	r.NoError(tm.AddBlockWithTXs(t.Context(), block))
 }
 
 func TestMesh_CallOnBlock(t *testing.T) {
@@ -356,7 +356,7 @@ func TestMesh_CallOnBlock(t *testing.T) {
 
 	tm.mockTortoise.EXPECT().OnBlock(block.ToVote())
 	tm.mockState.EXPECT().LinkTXsWithBlock(block.LayerIndex, block.ID(), block.TxIDs)
-	require.NoError(t, tm.AddBlockWithTXs(context.Background(), &block))
+	require.NoError(t, tm.AddBlockWithTXs(t.Context(), &block))
 }
 
 func TestMesh_MaliciousBallots(t *testing.T) {
@@ -379,7 +379,7 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 		require.NoError(t, b.Initialize())
 		blts = append(blts, b)
 	}
-	malProof, err := tm.AddBallot(context.Background(), blts[0])
+	malProof, err := tm.AddBallot(t.Context(), blts[0])
 	require.NoError(t, err)
 	require.Nil(t, malProof)
 	require.False(t, blts[0].IsMalicious())
@@ -390,18 +390,18 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 
 	// second one will create a MalfeasanceProof
 	tm.mockTortoise.EXPECT().OnMalfeasance(sig.NodeID())
-	malProof, err = tm.AddBallot(context.Background(), blts[1])
+	malProof, err = tm.AddBallot(t.Context(), blts[1])
 	require.NoError(t, err)
 	require.NotNil(t, malProof)
 	require.True(t, blts[1].IsMalicious())
 
 	mh := NewMalfeasanceHandler(tm.cdb, signing.NewEdVerifier(), WithMalfeasanceLogger(tm.logger))
-	nodeID, err := mh.Validate(context.Background(), malProof.Proof.Data)
+	nodeID, err := mh.Validate(t.Context(), malProof.Proof.Data)
 	require.NoError(t, err)
 	require.Equal(t, sig.NodeID(), nodeID)
 
 	// third one will NOT generate another MalfeasanceProof
-	malProof, err = tm.AddBallot(context.Background(), blts[2])
+	malProof, err = tm.AddBallot(t.Context(), blts[2])
 	require.NoError(t, err)
 	require.Nil(t, malProof)
 }
@@ -759,7 +759,7 @@ func TestProcessLayer(t *testing.T) {
 
 				tm.mockTortoise.EXPECT().Updates().Return(c.updates)
 				ensuresDatabaseConsistent(t, tm.cdb, c.updates)
-				err := tm.ProcessLayer(context.Background(), lid)
+				err := tm.ProcessLayer(t.Context(), lid)
 				if len(c.err) > 0 {
 					require.ErrorContains(t, err, c.err)
 				} else {
@@ -959,7 +959,7 @@ func TestProcessLayerPerHareOutput(t *testing.T) {
 				if c.onHare {
 					tm.mockTortoise.EXPECT().OnHareOutput(c.lid, c.bid)
 				}
-				err := tm.ProcessLayerPerHareOutput(context.Background(), c.lid, c.bid, false)
+				err := tm.ProcessLayerPerHareOutput(t.Context(), c.lid, c.bid, false)
 				if len(c.err) > 0 {
 					require.ErrorContains(t, err, c.err)
 				}

@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -60,7 +59,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 			}).AnyTimes()
 		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(true, nil).AnyTimes()
 
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, otherSig.NodeID(), id)
 	})
@@ -100,7 +99,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 			}).AnyTimes()
 		verifier.EXPECT().IdentityExists(otherSig.NodeID()).Return(false, nil).AnyTimes()
 
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorIs(t, err, ErrUnknownIdentity)
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -169,7 +168,7 @@ func Test_DoubleMarryProof(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		verifier := NewMockMalfeasanceValidator(ctrl)
 
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "same ATX ID")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -209,42 +208,42 @@ func Test_DoubleMarryProof(t *testing.T) {
 
 		// invalid signature for ATX1
 		proof.Signature1 = types.RandomEdSignature()
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX1")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Signature1 = atx1.Signature
 
 		// invalid signature for ATX2
 		proof.Signature2 = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX2")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Signature2 = atx2.Signature
 
 		// invalid smesher ID for ATX1
 		proof.SmesherID1 = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX1")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.SmesherID1 = atx1.SmesherID
 
 		// invalid smesher ID for ATX2
 		proof.SmesherID2 = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX2")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.SmesherID2 = atx2.SmesherID
 
 		// invalid ATX ID for ATX1
 		proof.ATXID1 = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX1")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXID1 = atx1.ID()
 
 		// invalid ATX ID for ATX2
 		proof.ATXID2 = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid signature for ATX2")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXID2 = atx2.ID()

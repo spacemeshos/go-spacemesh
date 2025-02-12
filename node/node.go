@@ -1153,9 +1153,6 @@ func (app *App) initServices(ctx context.Context) error {
 		postSetupMgr,
 		atxBuilder,
 	)
-	if err != nil {
-		return fmt.Errorf("init post service: %w", err)
-	}
 
 	activationMH := activation.NewMalfeasanceHandler(
 		app.cachedDB,

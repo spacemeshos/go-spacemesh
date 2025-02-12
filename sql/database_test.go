@@ -37,7 +37,7 @@ func Test_ConReturnedToPool(t *testing.T) {
 		})
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	con := db.pool.Get(ctx)
 	require.NotNil(t, con, "connection was not returned")
@@ -56,7 +56,7 @@ func Test_Transaction_Isolation(t *testing.T) {
 		}),
 		WithNoCheckSchemaDrift(),
 	)
-	tx, err := db.Tx(context.Background())
+	tx, err := db.Tx(t.Context())
 	require.NoError(t, err)
 
 	key := "dsada"
@@ -521,7 +521,7 @@ func TestDBClosed(t *testing.T) {
 	require.NoError(t, db.Close())
 	_, err := db.Exec("select 1", nil, nil)
 	require.ErrorIs(t, err, ErrClosed)
-	err = db.WithTxImmediate(context.Background(), func(tx Transaction) error { return nil })
+	err = db.WithTxImmediate(t.Context(), func(tx Transaction) error { return nil })
 	require.ErrorIs(t, err, ErrClosed)
 }
 
@@ -643,7 +643,7 @@ func TestExclusive(t *testing.T) {
 func TestConnection(t *testing.T) {
 	db := InMemoryTest(t)
 	var r int
-	require.NoError(t, db.WithConnection(context.Background(), func(ex Executor) error {
+	require.NoError(t, db.WithConnection(t.Context(), func(ex Executor) error {
 		n, err := ex.Exec("select ?", func(stmt *Statement) {
 			stmt.BindInt64(1, 42)
 		}, func(stmt *Statement) bool {
@@ -656,7 +656,7 @@ func TestConnection(t *testing.T) {
 		return nil
 	}))
 
-	require.Error(t, db.WithConnection(context.Background(), func(Executor) error {
+	require.Error(t, db.WithConnection(t.Context(), func(Executor) error {
 		return errors.New("error")
 	}))
 }
@@ -668,7 +668,7 @@ func TestConnection_Idle(t *testing.T) {
 	}
 	require.Zero(t, numConns())
 	db := InMemoryTest(t, WithDBName(dbName))
-	require.NoError(t, db.WithConnection(context.Background(), func(ex Executor) error {
+	require.NoError(t, db.WithConnection(t.Context(), func(ex Executor) error {
 		for range 3 {
 			for range 3 {
 				_, err := ex.Exec("select 1", nil, func(stmt *Statement) bool {

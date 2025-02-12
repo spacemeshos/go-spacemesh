@@ -34,7 +34,7 @@ func TestPeerInfoApi(t *testing.T) {
 	infos := make([][]*pb.PeerInfo, networkSize)
 	for i, app := range network {
 		adminapi := pb.NewAdminServiceClient(app.Conn)
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second*5)
 		defer cancel()
 
 		streamClient, err := adminapi.PeerInfoStream(ctx, &emptypb.Empty{})

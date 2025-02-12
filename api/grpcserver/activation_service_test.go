@@ -1,7 +1,6 @@
 package grpcserver
 
 import (
-	"context"
 	"errors"
 	"math/rand/v2"
 	"testing"
@@ -26,7 +25,7 @@ func Test_Highest_ReturnsGoldenAtxOnError(t *testing.T) {
 	activationService := NewActivationService(atxProvider, goldenAtx)
 
 	atxProvider.EXPECT().MaxHeightAtx().Return(types.EmptyATXID, errors.New("blah"))
-	response, err := activationService.Highest(context.Background(), &emptypb.Empty{})
+	response, err := activationService.Highest(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	require.Equal(t, goldenAtx.Bytes(), response.Atx.Id.Id)
 	require.Nil(t, response.Atx.Layer)
@@ -56,7 +55,7 @@ func Test_Highest_ReturnsMaxTickHeight(t *testing.T) {
 	atxProvider.EXPECT().GetAtx(id).Return(&atx, nil)
 	atxProvider.EXPECT().Previous(id).Return([]types.ATXID{previous}, nil)
 
-	response, err := activationService.Highest(context.Background(), &emptypb.Empty{})
+	response, err := activationService.Highest(t.Context(), &emptypb.Empty{})
 	require.NoError(t, err)
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
 	require.Equal(t, atx.PublishEpoch.Uint32(), response.Atx.Layer.Number)
@@ -72,7 +71,7 @@ func TestGet_RejectInvalidAtxID(t *testing.T) {
 	atxProvider := NewMockatxProvider(ctrl)
 	activationService := NewActivationService(atxProvider, types.ATXID{1})
 
-	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: []byte{1, 2, 3}})
+	_, err := activationService.Get(t.Context(), &pb.GetRequest{Id: []byte{1, 2, 3}})
 	require.Error(t, err)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
@@ -85,7 +84,7 @@ func TestGet_AtxNotPresent(t *testing.T) {
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetAtx(id).Return(nil, nil)
 
-	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
+	_, err := activationService.Get(t.Context(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
 	require.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -98,7 +97,7 @@ func TestGet_AtxProviderReturnsFailure(t *testing.T) {
 	id := types.RandomATXID()
 	atxProvider.EXPECT().GetAtx(id).Return(&types.ActivationTx{}, errors.New(""))
 
-	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
+	_, err := activationService.Get(t.Context(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
 	require.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -112,7 +111,7 @@ func TestGet_AtxProviderFailsObtainPreviousAtxs(t *testing.T) {
 	atxProvider.EXPECT().GetAtx(id).Return(&types.ActivationTx{}, nil)
 	atxProvider.EXPECT().Previous(id).Return(nil, errors.New(""))
 
-	_, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
+	_, err := activationService.Get(t.Context(), &pb.GetRequest{Id: id.Bytes()})
 	require.Error(t, err)
 	require.Equal(t, codes.Internal, status.Code(err))
 }
@@ -135,7 +134,7 @@ func TestGet_HappyPath(t *testing.T) {
 	atxProvider.EXPECT().MalfeasanceProof(gomock.Any()).Return(nil, sql.ErrNotFound)
 	atxProvider.EXPECT().Previous(id).Return(previous, nil)
 
-	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
+	response, err := activationService.Get(t.Context(), &pb.GetRequest{Id: id.Bytes()})
 	require.NoError(t, err)
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)
@@ -171,7 +170,7 @@ func TestGet_IdentityCanceled(t *testing.T) {
 	atxProvider.EXPECT().MalfeasanceProof(smesher).Return(codec.MustEncode(proof), nil)
 	atxProvider.EXPECT().Previous(id).Return([]types.ATXID{previous}, nil)
 
-	response, err := activationService.Get(context.Background(), &pb.GetRequest{Id: id.Bytes()})
+	response, err := activationService.Get(t.Context(), &pb.GetRequest{Id: id.Bytes()})
 	require.NoError(t, err)
 
 	require.Equal(t, atx.ID().Bytes(), response.Atx.Id.Id)

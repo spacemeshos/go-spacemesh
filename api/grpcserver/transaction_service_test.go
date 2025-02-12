@@ -31,7 +31,7 @@ import (
 func TestTransactionService_StreamResults(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	gen := fixture.NewTransactionResultGenerator().
@@ -108,7 +108,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 			},
 		} {
 			t.Run(tc.desc, func(t *testing.T) {
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 				defer cancel()
 
 				stream, err := client.StreamResults(ctx, tc.request)
@@ -137,7 +137,7 @@ func TestTransactionService_StreamResults(t *testing.T) {
 func BenchmarkStreamResults(b *testing.B) {
 	db := statesql.InMemoryTest(b)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(b.Context(), 10*time.Second)
 	defer cancel()
 
 	var (
@@ -290,7 +290,7 @@ func TestParseTransactions(t *testing.T) {
 		},
 	} {
 		t.Run(tc.desc, func(t *testing.T) {
-			resp, err := client.ParseTransaction(context.Background(), &pb.ParseTransactionRequest{
+			resp, err := client.ParseTransaction(t.Context(), &pb.ParseTransactionRequest{
 				Transaction: tc.tx,
 				Verify:      tc.verify,
 			})

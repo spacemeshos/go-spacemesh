@@ -352,12 +352,7 @@ func IterateLayersWithBlockOps(
 				return fn(l)
 			}
 
-			l.Block, err = types.NewExistingBlock(l.AppliedBlock, inner), nil
-			if err != nil {
-				derr = err
-				return false
-			}
-
+			l.Block = types.NewExistingBlock(l.AppliedBlock, inner)
 			return fn(l)
 		})
 	if err != nil {
@@ -397,12 +392,7 @@ func Get(
 				return false
 			}
 
-			layer.Block, err = types.NewExistingBlock(layer.AppliedBlock, inner), nil
-			if err != nil {
-				derr = err
-				return false
-			}
-
+			layer.Block = types.NewExistingBlock(layer.AppliedBlock, inner)
 			return true
 		})
 	if err != nil {

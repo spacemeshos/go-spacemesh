@@ -1,7 +1,6 @@
 package v2beta1
 
 import (
-	"context"
 	"encoding/binary"
 	"fmt"
 	"testing"
@@ -33,7 +32,7 @@ type testAccount struct {
 func TestAccountService_List(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
-	ctrl, ctx := gomock.WithContext(context.Background(), t)
+	ctrl, ctx := gomock.WithContext(t.Context(), t)
 	conState := NewMockaccountConState(ctrl)
 
 	accs := make([]testAccount, 100)

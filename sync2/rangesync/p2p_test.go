@@ -242,9 +242,9 @@ func testWireSync(t *testing.T, getRequester getRequesterFunc) {
 			// and thus fakeRecentSet.Add is not invoked for them, just underlying
 			// set's Add method
 			setA := &fakeRecentSet{OrderedSet: st.setA, clock: clock}
-			require.NoError(t, setA.registerAll(context.Background()))
+			require.NoError(t, setA.registerAll(t.Context()))
 			setB := &fakeRecentSet{OrderedSet: st.setB, clock: clock}
-			require.NoError(t, setB.registerAll(context.Background()))
+			require.NoError(t, setB.registerAll(t.Context()))
 			var tr syncTracer
 			clock.Advance(tc.advance)
 			cfg := st.cfg

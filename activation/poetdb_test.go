@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -29,7 +28,7 @@ func getPoetProof(tb testing.TB) types.PoetProofMessage {
 		challenge := []byte("hello world, this is a challenge")
 
 		leaves, merkleProof, err := prover.GenerateProofWithoutPersistency(
-			context.Background(),
+			tb.Context(),
 			prover.TreeConfig{Datadir: tb.TempDir()},
 			poetHash.GenLabelHashFunc(challenge),
 			poetHash.GenMerkleHashFunc(challenge),
@@ -75,7 +74,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	expectedRef := types.CalcHash32(proofBytes)
 	r.Equal(types.PoetProofRef(expectedRef), ref)
 
-	r.NoError(poetDb.StoreProof(context.Background(), ref, &msg))
+	r.NoError(poetDb.StoreProof(t.Context(), ref, &msg))
 	got, err := poetDb.GetProofRef(msg.PoetServiceID, msg.RoundID)
 	r.NoError(err)
 	r.Equal(ref, got)

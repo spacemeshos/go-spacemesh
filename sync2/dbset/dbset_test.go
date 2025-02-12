@@ -1,7 +1,6 @@
 package dbset_test
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -249,7 +248,7 @@ func TestDBSet_Copy(t *testing.T) {
 	require.Equal(t, "0000000000000000000000000000000000000000000000000000000000000000",
 		firstKey(t, s.Items()).String())
 
-	require.NoError(t, s.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
+	require.NoError(t, s.WithCopy(t.Context(), func(copy rangesync.OrderedSet) error {
 		info, err := copy.RangeInfo(ids[2], ids[0])
 		require.NoError(t, err)
 		require.Equal(t, 2, info.Count)
@@ -298,7 +297,7 @@ func TestDBItemStore_Advance(t *testing.T) {
 	verifyDS := func(db sql.Database, os rangesync.OrderedSet) {
 		require.NoError(t, os.EnsureLoaded())
 
-		require.NoError(t, os.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
+		require.NoError(t, os.WithCopy(t.Context(), func(copy rangesync.OrderedSet) error {
 			info, err := os.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 4, info.Count)
@@ -345,7 +344,7 @@ func TestDBItemStore_Advance(t *testing.T) {
 			return nil
 		}))
 
-		require.NoError(t, os.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
+		require.NoError(t, os.WithCopy(t.Context(), func(copy rangesync.OrderedSet) error {
 			info, err := copy.RangeInfo(ids[0], ids[0])
 			require.NoError(t, err)
 			require.Equal(t, 5, info.Count)
@@ -364,7 +363,7 @@ func TestDBItemStore_Advance(t *testing.T) {
 	t.Run("DBSet copy", func(t *testing.T) {
 		db := sqlstore.PopulateDB(t, testKeyLen, ids)
 		origSet := dbset.NewDBSet(db, st, testKeyLen, testDepth)
-		require.NoError(t, origSet.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
+		require.NoError(t, origSet.WithCopy(t.Context(), func(copy rangesync.OrderedSet) error {
 			verifyDS(db, copy)
 			return nil
 		}))
@@ -404,7 +403,7 @@ func TestDBSet_Added(t *testing.T) {
 		rangesync.MustParseHexKeyBytes("4444444444444444444444444444444444444444444444444444444444444444"),
 	}, recvd)
 
-	require.NoError(t, s.WithCopy(context.Background(), func(copy rangesync.OrderedSet) error {
+	require.NoError(t, s.WithCopy(t.Context(), func(copy rangesync.OrderedSet) error {
 		recvd1, err := copy.(*dbset.DBSet).Received().FirstN(3)
 		require.NoError(t, err)
 		require.ElementsMatch(t, recvd, recvd1)

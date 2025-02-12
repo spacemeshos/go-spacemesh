@@ -79,7 +79,7 @@ func TestAtxHandler_Success(t *testing.T) {
 			}
 			return nil
 		}).Times(3)
-	require.NoError(t, h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs)))
+	require.NoError(t, h.Commit(t.Context(), peer, baseSet, atxSeqResult(allAtxs)))
 	require.Empty(t, toFetch)
 	require.Equal(t, []int{4, 4, 2}, batches)
 }
@@ -139,7 +139,7 @@ func TestAtxHandler_Retry(t *testing.T) {
 
 	// If it so happens that a full batch fails, we need to advance the clock to
 	// trigger the retry.
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
@@ -152,7 +152,7 @@ func TestAtxHandler_Retry(t *testing.T) {
 		}
 	})
 
-	require.NoError(t, h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs)))
+	require.NoError(t, h.Commit(t.Context(), peer, baseSet, atxSeqResult(allAtxs)))
 	require.ElementsMatch(t, allAtxs[1:], fetched)
 	cancel()
 	require.NoError(t, eg.Wait())
@@ -179,7 +179,7 @@ func TestAtxHandler_Cancel(t *testing.T) {
 		},
 		Error: rangesync.NoSeqError,
 	}
-	require.ErrorIs(t, h.Commit(context.Background(), peer, baseSet, sr), context.Canceled)
+	require.ErrorIs(t, h.Commit(t.Context(), peer, baseSet, sr), context.Canceled)
 }
 
 func TestAtxHandler_BatchRetry(t *testing.T) {
@@ -204,10 +204,10 @@ func TestAtxHandler_BatchRetry(t *testing.T) {
 		})
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return h.Commit(context.Background(), peer, baseSet, atxSeqResult(allAtxs))
+		return h.Commit(t.Context(), peer, baseSet, atxSeqResult(allAtxs))
 	})
 	// wait for delay after 1st batch failure
-	clock.BlockUntilContext(context.Background(), 1)
+	clock.BlockUntilContext(t.Context(), 1)
 	toFetch := make(map[types.ATXID]bool)
 	for _, id := range allAtxs {
 		toFetch[id] = true
@@ -263,10 +263,10 @@ func TestAtxHandler_BatchRetry_Fail(t *testing.T) {
 		}).Times(3)
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return h.Commit(context.Background(), peer, baseSet, sr)
+		return h.Commit(t.Context(), peer, baseSet, sr)
 	})
 	for range 2 {
-		clock.BlockUntilContext(context.Background(), 1)
+		clock.BlockUntilContext(t.Context(), 1)
 		clock.Advance(testCfg.FailedBatchDelay)
 	}
 	require.Error(t, eg.Wait())
@@ -282,7 +282,7 @@ func TestMultiEpochATXSyncer(t *testing.T) {
 	hss := NewMockHashSyncSource(ctrl)
 	mhs, err := sync2.NewMultiEpochATXSyncer(logger, hss, oldCfg, newCfg, 1)
 	require.NoError(t, err)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	lastSynced, err := mhs.EnsureSync(ctx, 0, 0)
 	require.NoError(t, err)

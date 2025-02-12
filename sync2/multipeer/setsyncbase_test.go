@@ -58,7 +58,7 @@ func TestSetSyncBase(t *testing.T) {
 		}
 		set := st.expectCopy()
 		st.ps.EXPECT().Probe(gomock.Any(), p2p.Peer("p1"), set, nil, nil).Return(expPr, nil)
-		pr, err := st.ssb.Probe(context.Background(), p2p.Peer("p1"))
+		pr, err := st.ssb.Probe(t.Context(), p2p.Peer("p1"))
 		require.NoError(t, err)
 		require.Equal(t, expPr, pr)
 	})
@@ -86,7 +86,7 @@ func TestSetSyncBase(t *testing.T) {
 				return nil
 			})
 		st.os.EXPECT().Advance()
-		st.ssb.Sync(context.Background(), p2p.Peer("p1"), x, y)
+		st.ssb.Sync(t.Context(), p2p.Peer("p1"), x, y)
 	})
 
 	t.Run("count", func(t *testing.T) {

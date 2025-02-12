@@ -235,7 +235,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 				require.Equal(t, previous, atx.PositioningATXID)
 			}
 			_, err = validator.NIPost(
-				context.Background(),
+				t.Context(),
 				sig.NodeID(),
 				commitment,
 				wire.NiPostFromWireV1(atx.NIPost),

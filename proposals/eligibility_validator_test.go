@@ -1,7 +1,6 @@
 package proposals
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -577,9 +576,9 @@ func TestEligibilityValidator(t *testing.T) {
 					ReportBeaconFromBallot(tc.executed.Layer.GetEpoch(), &tc.executed, gomock.Any(), gomock.Any())
 			}
 			totalWeight, _ := c.WeightForSet(tc.executed.Layer.GetEpoch(), tc.actives)
-			err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
+			err := tv.CheckEligibility(t.Context(), &tc.executed, totalWeight)
 			if len(tc.err) == 0 {
-				assert.Empty(t, err)
+				assert.NoError(t, err)
 			} else {
 				assert.ErrorContains(t, err, tc.err)
 			}

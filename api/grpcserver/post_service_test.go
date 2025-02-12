@@ -37,11 +37,6 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = tb.TempDir()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	goldenATXID := types.RandomATXID()
@@ -81,11 +76,6 @@ func launchPostSupervisorTLS(
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
-
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = tb.TempDir()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
@@ -145,7 +135,7 @@ func Test_GenerateProof(t *testing.T) {
 		challenge[i] = byte(0xca)
 	}
 
-	proof, meta, err := client.Proof(context.Background(), challenge)
+	proof, meta, err := client.Proof(t.Context(), challenge)
 	require.NoError(t, err)
 	require.NotNil(t, proof)
 	require.NotNil(t, meta)
@@ -153,7 +143,7 @@ func Test_GenerateProof(t *testing.T) {
 	// drop connection
 	postCleanup()
 	require.Eventually(t, func() bool {
-		proof, meta, err = client.Proof(context.Background(), challenge)
+		proof, meta, err = client.Proof(t.Context(), challenge)
 		return err != nil
 	}, 5*time.Second, 100*time.Millisecond)
 
@@ -196,7 +186,7 @@ func Test_GenerateProof_TLS(t *testing.T) {
 		challenge[i] = byte(0xca)
 	}
 
-	proof, meta, err := client.Proof(context.Background(), challenge)
+	proof, meta, err := client.Proof(t.Context(), challenge)
 	require.NoError(t, err)
 	require.NotNil(t, proof)
 	require.NotNil(t, meta)
@@ -204,7 +194,7 @@ func Test_GenerateProof_TLS(t *testing.T) {
 	// drop connection
 	postCleanup()
 	require.Eventually(t, func() bool {
-		proof, meta, err = client.Proof(context.Background(), challenge)
+		proof, meta, err = client.Proof(t.Context(), challenge)
 		return err != nil
 	}, 5*time.Second, 100*time.Millisecond)
 
@@ -244,7 +234,7 @@ func Test_GenerateProof_Cancel(t *testing.T) {
 	}
 
 	// cancel on sending
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 
 	proof, meta, err := client.Proof(ctx, challenge)
@@ -278,7 +268,7 @@ func Test_Metadata(t *testing.T) {
 		return err == nil
 	}, 10*time.Second, 100*time.Millisecond, "timed out waiting for connection")
 
-	meta, err := client.Info(context.Background())
+	meta, err := client.Info(t.Context())
 	require.NoError(t, err)
 	require.NotNil(t, meta)
 	require.Equal(t, id, meta.NodeID)
@@ -289,7 +279,7 @@ func Test_Metadata(t *testing.T) {
 	// drop connection
 	postCleanup()
 	require.Eventually(t, func() bool {
-		meta, err = client.Info(context.Background())
+		meta, err = client.Info(t.Context())
 		return err != nil
 	}, 5*time.Second, 100*time.Millisecond)
 
@@ -336,7 +326,7 @@ func Test_GenerateProof_MultipleServices(t *testing.T) {
 		challenge[i] = byte(0xca)
 	}
 
-	proof, meta, err := client.Proof(context.Background(), challenge)
+	proof, meta, err := client.Proof(t.Context(), challenge)
 	require.NoError(t, err)
 	require.NotNil(t, proof)
 	require.NotNil(t, meta)
@@ -357,7 +347,7 @@ func Test_PostService_Connection_NotAllowed(t *testing.T) {
 
 	client := pb.NewPostServiceClient(conn)
 
-	stream, err := client.Register(context.Background())
+	stream, err := client.Register(t.Context())
 	require.NoError(t, err)
 
 	_, err = stream.Recv()

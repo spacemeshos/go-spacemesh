@@ -73,7 +73,7 @@ func TestMalfeasancePublisher(t *testing.T) {
 		malPublisher.mTortoise.EXPECT().OnMalfeasance(nodeID)
 		malPublisher.mSyncer.EXPECT().ListenToATXGossip().Return(true)
 		malPublisher.mPublisher.EXPECT().
-			Publish(context.Background(), pubsub.MalfeasanceProof, gomock.Any()).
+			Publish(t.Context(), pubsub.MalfeasanceProof, gomock.Any()).
 			DoAndReturn(func(ctx context.Context, s string, b []byte) error {
 				var gossip wire.MalfeasanceGossip
 				codec.MustDecode(b, &gossip)
@@ -81,7 +81,7 @@ func TestMalfeasancePublisher(t *testing.T) {
 				return nil
 			})
 
-		err := malPublisher.PublishProof(context.Background(), nodeID, proof)
+		err := malPublisher.PublishProof(t.Context(), nodeID, proof)
 		require.NoError(t, err)
 
 		malicious, err := identities.IsMalicious(malPublisher.cdb, nodeID)
@@ -104,7 +104,7 @@ func TestMalfeasancePublisher(t *testing.T) {
 		malPublisher.mTortoise.EXPECT().OnMalfeasance(nodeID)
 		malPublisher.mSyncer.EXPECT().ListenToATXGossip().Return(false)
 
-		err := malPublisher.PublishProof(context.Background(), nodeID, proof)
+		err := malPublisher.PublishProof(t.Context(), nodeID, proof)
 		require.NoError(t, err)
 
 		// proof is only persisted but not published
@@ -135,12 +135,12 @@ func TestMalfeasancePublisher(t *testing.T) {
 				Data: &wire.BallotProof{},
 			},
 		}
-		err = malPublisher.PublishProof(context.Background(), nodeID, proof)
+		err = malPublisher.PublishProof(t.Context(), nodeID, proof)
 		require.NoError(t, err)
 
 		// no new malfeasance proof is added
 		var blob sql.Blob
-		err = identities.LoadMalfeasanceBlob(context.Background(), malPublisher.cdb, nodeID.Bytes(), &blob)
+		err = identities.LoadMalfeasanceBlob(t.Context(), malPublisher.cdb, nodeID.Bytes(), &blob)
 		require.NoError(t, err)
 
 		dbProof := &wire.MalfeasanceProof{}
@@ -165,10 +165,10 @@ func TestMalfeasancePublisher(t *testing.T) {
 		malPublisher.mSyncer.EXPECT().ListenToATXGossip().Return(true)
 		errPublish := errors.New("publish failed")
 		malPublisher.mPublisher.EXPECT().
-			Publish(context.Background(), pubsub.MalfeasanceProof, gomock.Any()).
+			Publish(t.Context(), pubsub.MalfeasanceProof, gomock.Any()).
 			Return(errPublish)
 
-		err := malPublisher.PublishProof(context.Background(), nodeID, proof)
+		err := malPublisher.PublishProof(t.Context(), nodeID, proof)
 		require.ErrorIs(t, err, errPublish)
 
 		// malfeasance proof is still added to db

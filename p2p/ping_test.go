@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -54,7 +53,7 @@ func TestPing(t *testing.T) {
 			require.NoError(t, h2.discovery.Start())
 			t.Cleanup(func() { h2.Stop() })
 
-			err = h2.Connect(context.Background(), peer.AddrInfo{
+			err = h2.Connect(t.Context(), peer.AddrInfo{
 				ID:    h1.ID(),
 				Addrs: h1.Addrs(),
 			})

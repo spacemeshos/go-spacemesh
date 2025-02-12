@@ -169,7 +169,6 @@ func TestBeacon_votingThreshold(t *testing.T) {
 			t.Parallel()
 
 			pd := ProtocolDriver{
-				logger: zaptest.NewLogger(t).Named("Beacon"),
 				config: Config{},
 				theta:  new(big.Float).SetRat(tc.theta),
 			}

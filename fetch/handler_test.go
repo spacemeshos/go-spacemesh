@@ -2,7 +2,6 @@ package fetch
 
 import (
 	"bytes"
-	"context"
 	"testing"
 	"time"
 
@@ -104,7 +103,7 @@ func TestHandleLayerDataReq(t *testing.T) {
 			lidBytes, err := codec.Encode(&lid)
 			require.NoError(t, err)
 
-			out, err := th.handleLayerDataReq(context.Background(), p2p.Peer(""), lidBytes)
+			out, err := th.handleLayerDataReq(t.Context(), p2p.Peer(""), lidBytes)
 			require.NoError(t, err)
 			var got LayerData
 			err = codec.Decode(out, &got)
@@ -151,7 +150,7 @@ func TestHandleLayerOpinionsReq(t *testing.T) {
 			reqBytes, err := codec.Encode(&req)
 			require.NoError(t, err)
 
-			out, err := th.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), reqBytes)
+			out, err := th.handleLayerOpinionsReq2(t.Context(), p2p.Peer(""), reqBytes)
 			require.NoError(t, err)
 
 			var got LayerOpinion
@@ -178,14 +177,14 @@ func TestHandleCertReq(t *testing.T) {
 	reqData, err := codec.Encode(req)
 	require.NoError(t, err)
 
-	resp, err := th.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), reqData)
+	resp, err := th.handleLayerOpinionsReq2(t.Context(), p2p.Peer(""), reqData)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 	require.Nil(t, resp)
 
 	cert := &types.Certificate{BlockID: bid}
 	require.NoError(t, certificates.Add(th.db, lid, cert))
 
-	resp, err = th.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), reqData)
+	resp, err = th.handleLayerOpinionsReq2(t.Context(), p2p.Peer(""), reqData)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	var got types.Certificate
@@ -245,7 +244,7 @@ func TestHandleMeshHashReq(t *testing.T) {
 			reqData, err := codec.Encode(req)
 			require.NoError(t, err)
 
-			resp, err := th.handleMeshHashReq(context.Background(), p2p.Peer(""), reqData)
+			resp, err := th.handleMeshHashReq(t.Context(), p2p.Peer(""), reqData)
 			if tc.err == nil {
 				require.NoError(t, err)
 				got, err := codec.DecodeSlice[types.Hash32](resp)
@@ -304,7 +303,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			require.NoError(t, err)
 
 			t.Run("non-streamed", func(t *testing.T) {
-				out, err := th.handleEpochInfoReq(context.Background(), p2p.Peer(""), epochBytes)
+				out, err := th.handleEpochInfoReq(t.Context(), p2p.Peer(""), epochBytes)
 				require.NoError(t, err)
 				var got EpochData
 				require.NoError(t, codec.Decode(out, &got))
@@ -313,7 +312,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 
 			t.Run("streamed", func(t *testing.T) {
 				var b bytes.Buffer
-				require.NoError(t, th.handleEpochInfoReqStream(context.Background(),
+				require.NoError(t, th.handleEpochInfoReqStream(t.Context(),
 					p2p.Peer(""), epochBytes, &b))
 				var resp server.Response
 				require.NoError(t, codec.Decode(b.Bytes(), &resp))
@@ -325,7 +324,7 @@ func TestHandleEpochInfoReq(t *testing.T) {
 			t.Run("streamed request failure", func(t *testing.T) {
 				th.db.Close()
 				var b bytes.Buffer
-				require.NoError(t, th.handleEpochInfoReqStream(context.Background(),
+				require.NoError(t, th.handleEpochInfoReqStream(t.Context(),
 					p2p.Peer(""), epochBytes, &b))
 				var resp server.Response
 				require.NoError(t, codec.Decode(b.Bytes(), &resp))
@@ -362,7 +361,7 @@ func TestHandleLegacyMaliciousIDsReq(t *testing.T) {
 				require.NoError(t, identities.SetMalicious(th.db, nodeID, types.RandomBytes(11), time.Now()))
 			}
 
-			out, err := th.handleLegacyMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
+			out, err := th.handleLegacyMaliciousIDsReq(t.Context(), p2p.Peer(""), []byte{})
 			require.NoError(t, err)
 			var got MaliciousIDs
 			require.NoError(t, codec.Decode(out, &got))
@@ -397,7 +396,7 @@ func TestHandleMaliciousIDsReq(t *testing.T) {
 				require.NoError(t, malfeasance.AddProof(th.db, nodeID, nil, types.RandomBytes(11), 1, time.Now()))
 			}
 
-			out, err := th.handleMaliciousIDsReq(context.Background(), p2p.Peer(""), []byte{})
+			out, err := th.handleMaliciousIDsReq(t.Context(), p2p.Peer(""), []byte{})
 			require.NoError(t, err)
 			var got MaliciousIDs
 			require.NoError(t, codec.Decode(out, &got))

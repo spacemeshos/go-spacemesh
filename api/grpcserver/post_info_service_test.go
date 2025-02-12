@@ -37,7 +37,7 @@ func TestPostInfoService(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	client := pb.NewPostInfoServiceClient(conn)

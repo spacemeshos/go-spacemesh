@@ -511,7 +511,7 @@ type smesherServiceConn struct {
 }
 
 func setupSmesherService(tb testing.TB, sig *signing.EdSigner) (*smesherServiceConn, context.Context) {
-	ctrl, mockCtx := gomock.WithContext(context.Background(), tb)
+	ctrl, mockCtx := gomock.WithContext(tb.Context(), tb)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
 	postSupervisor := NewMockpostSupervisor(ctrl)
 	grpcPostService := NewMockgrpcPostService(ctrl)
@@ -739,32 +739,32 @@ func TestMeshService(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"GenesisTime", func(t *testing.T) {
-			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+			response, err := c.GenesisTime(t.Context(), &pb.GenesisTimeRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(genesis.Unix()), response.Unixtime.Value)
 		}},
 		{"CurrentLayer", func(t *testing.T) {
-			response, err := c.CurrentLayer(context.Background(), &pb.CurrentLayerRequest{})
+			response, err := c.CurrentLayer(t.Context(), &pb.CurrentLayerRequest{})
 			require.NoError(t, err)
 			require.Equal(t, layerCurrent.Uint32(), response.Layernum.Number)
 		}},
 		{"CurrentEpoch", func(t *testing.T) {
-			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
+			response, err := c.CurrentEpoch(t.Context(), &pb.CurrentEpochRequest{})
 			require.NoError(t, err)
 			require.Equal(t, layerCurrent.GetEpoch().Uint32(), response.Epochnum.Number)
 		}},
 		{"GenesisID", func(t *testing.T) {
-			response, err := c.GenesisID(context.Background(), &pb.GenesisIDRequest{})
+			response, err := c.GenesisID(t.Context(), &pb.GenesisIDRequest{})
 			require.NoError(t, err)
 			require.Equal(t, genesisID.Bytes(), response.GenesisId)
 		}},
 		{"LayerDuration", func(t *testing.T) {
-			response, err := c.LayerDuration(context.Background(), &pb.LayerDurationRequest{})
+			response, err := c.LayerDuration(t.Context(), &pb.LayerDurationRequest{})
 			require.NoError(t, err)
 			require.Equal(t, layerDuration, time.Duration(response.Duration.Value)*time.Second)
 		}},
 		{"MaxTransactionsPerSecond", func(t *testing.T) {
-			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
+			response, err := c.MaxTransactionsPerSecond(t.Context(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
 			require.Equal(
 				t,
@@ -782,7 +782,7 @@ func TestMeshService(t *testing.T) {
 					// query is valid but MaxResults is 0 so expect no results
 					name: "no_inputs",
 					run: func(t *testing.T) {
-						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{})
+						_, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{})
 						require.ErrorContains(t, err, "`Filter` must be provided")
 						require.Equal(t, codes.InvalidArgument, status.Code(err))
 					},
@@ -790,7 +790,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "MinLayer_too_high",
 					run: func(t *testing.T) {
-						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MinLayer: &pb.LayerNumber{Number: layerCurrent.Add(1).Uint32()},
 						})
 						require.ErrorContains(t, err, "`LatestLayer` must be less than")
@@ -801,7 +801,7 @@ func TestMeshService(t *testing.T) {
 					// This does not produce an error but we expect no results
 					name: "Offset_too_high",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{
 									Address: types.GenerateAddress(make([]byte, types.AddressLength)).String(),
@@ -818,7 +818,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "no_filter",
 					run: func(t *testing.T) {
-						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 						})
 						require.ErrorContains(t, err, "`Filter` must be provided")
@@ -828,7 +828,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "empty_filter",
 					run: func(t *testing.T) {
-						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter:     &pb.AccountMeshDataFilter{},
 						})
@@ -839,7 +839,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_empty_AccountId",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{
@@ -856,7 +856,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
@@ -871,7 +871,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_zero",
 					run: func(t *testing.T) {
-						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId:            &pb.AccountId{Address: addr1.String()},
@@ -885,7 +885,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_tx_only",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{Address: addr1.String()},
@@ -903,7 +903,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_activations_only",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId:            &pb.AccountId{Address: addr1.String()},
@@ -918,7 +918,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_all",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							// Zero means unlimited
 							MaxResults: uint32(0),
 							Filter: &pb.AccountMeshDataFilter{
@@ -937,7 +937,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "max_results",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(1),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{Address: addr1.String()},
@@ -955,7 +955,7 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "max_results_page_2",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						res, err := c.AccountMeshDataQuery(t.Context(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(1),
 							Offset:     uint32(1),
 							Filter: &pb.AccountMeshDataFilter{
@@ -982,7 +982,7 @@ func TestMeshService(t *testing.T) {
 			generateRunFn := func(req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
 				return func(*testing.T) {
 					// Just try opening and immediately closing the stream
-					stream, err := c.AccountMeshDataStream(context.Background(), req)
+					stream, err := c.AccountMeshDataStream(t.Context(), req)
 					require.NoError(t, err, "unexpected error opening stream")
 
 					// Do we need this? It doesn't seem to cause any harm
@@ -992,7 +992,7 @@ func TestMeshService(t *testing.T) {
 			generateRunFnError := func(msg string, req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
 				return func(t *testing.T) {
 					// there should be no error opening the stream
-					stream, err := c.AccountMeshDataStream(context.Background(), req)
+					stream, err := c.AccountMeshDataStream(t.Context(), req)
 					require.NoError(t, err, "unexpected error opening stream")
 
 					// sending a request should generate an error
@@ -1076,14 +1076,14 @@ func TestMeshService(t *testing.T) {
 		{"LayersQuery", func(t *testing.T) {
 			generateRunFn := func(numResults int, req *pb.LayersQueryRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					res, err := c.LayersQuery(context.Background(), req)
+					res, err := c.LayersQuery(t.Context(), req)
 					require.NoError(t, err, "query returned an unexpected error")
 					require.Len(t, res.Layer, numResults, "unexpected number of layer results")
 				}
 			}
 			generateRunFnError := func(msg string, req *pb.LayersQueryRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					_, err := c.LayersQuery(context.Background(), req)
+					_, err := c.LayersQuery(t.Context(), req)
 					require.ErrorContains(t, err, msg, "expected error to contain string")
 				}
 			}
@@ -1189,7 +1189,7 @@ func TestMeshService(t *testing.T) {
 							EndLayer:   &pb.LayerNumber{Number: layerLatest.Uint32()},
 						}
 
-						res, err := c.LayersQuery(context.Background(), req)
+						res, err := c.LayersQuery(t.Context(), req)
 						require.NoError(t, err, "query returned unexpected error")
 
 						// endpoint inclusive so add one
@@ -1240,7 +1240,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
@@ -1280,7 +1280,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
@@ -1314,7 +1314,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	cfg, cleanup := launchServer(t, grpcService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewTransactionServiceClient(conn)
@@ -1352,7 +1352,7 @@ func TestTransactionService(t *testing.T) {
 		run  func(*testing.T)
 	}{
 		{"SubmitSpawnTransaction", func(t *testing.T) {
-			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+			res, err := c.SubmitTransaction(t.Context(), &pb.SubmitTransactionRequest{
 				Transaction: globalTx.Raw,
 			})
 			require.NoError(t, err)
@@ -1361,12 +1361,12 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 		}},
 		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
-			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{})
+			_, err := c.TransactionsState(t.Context(), &pb.TransactionsStateRequest{})
 			require.Equal(t, codes.InvalidArgument, status.Code(err))
 			require.ErrorContains(t, err, "`TransactionId` must include")
 		}},
 		{"TransactionsState_TransactionIdZeroLen", func(t *testing.T) {
-			_, err := c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{
+			_, err := c.TransactionsState(t.Context(), &pb.TransactionsStateRequest{
 				TransactionId: []*pb.TransactionId{},
 			})
 			require.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -1377,7 +1377,7 @@ func TestTransactionService(t *testing.T) {
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
 				Id: globalTx.ID.Bytes(),
 			})
-			res, err := c.TransactionsState(context.Background(), req)
+			res, err := c.TransactionsState(t.Context(), req)
 			require.NoError(t, err)
 			require.Len(t, res.TransactionsState, 1)
 			require.Empty(t, res.Transactions)
@@ -1390,7 +1390,7 @@ func TestTransactionService(t *testing.T) {
 			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
 				Id: globalTx.ID.Bytes(),
 			})
-			res, err := c.TransactionsState(context.Background(), req)
+			res, err := c.TransactionsState(t.Context(), req)
 			require.NoError(t, err)
 			require.Len(t, res.TransactionsState, 1)
 			require.Len(t, res.Transactions, 1)
@@ -1401,7 +1401,7 @@ func TestTransactionService(t *testing.T) {
 		}},
 		{"TransactionsStateStream_MissingTransactionId", func(t *testing.T) {
 			req := &pb.TransactionsStateStreamRequest{}
-			stream, err := c.TransactionsStateStream(context.Background(), req)
+			stream, err := c.TransactionsStateStream(t.Context(), req)
 			require.NoError(t, err)
 			_, err = stream.Recv()
 			require.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -1411,7 +1411,7 @@ func TestTransactionService(t *testing.T) {
 			req := &pb.TransactionsStateStreamRequest{
 				TransactionId: []*pb.TransactionId{},
 			}
-			stream, err := c.TransactionsStateStream(context.Background(), req)
+			stream, err := c.TransactionsStateStream(t.Context(), req)
 			require.NoError(t, err)
 			_, err = stream.Recv()
 			require.Equal(t, codes.InvalidArgument, status.Code(err))
@@ -1428,7 +1428,7 @@ func TestTransactionService(t *testing.T) {
 
 			events.InitializeReporter()
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			stream, err := c.TransactionsStateStream(ctx, req)
 			require.NoError(t, err)
@@ -1453,7 +1453,7 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 			stream, err := c.TransactionsStateStream(ctx, req)
 			require.NoError(t, err)
@@ -1487,7 +1487,7 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			// Simulate the process by which a newly-broadcast tx lands in the mempool
@@ -1538,7 +1538,7 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			const subscriberCount = 10
@@ -1572,7 +1572,7 @@ func TestTransactionService(t *testing.T) {
 			})
 			req.IncludeTransactions = true
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			stream, err := c.TransactionsStateStream(ctx, req)
@@ -1673,7 +1673,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	stream, err := c.AccountMeshDataStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1722,7 +1722,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	stream, err := c.AccountDataStream(ctx, req)
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1777,7 +1777,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	stream, err := c.GlobalStateStream(ctx, req)
@@ -1848,7 +1848,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	// set up the grpc listener stream
 	c := pb.NewMeshServiceClient(conn)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	stream, err := c.LayerStream(ctx, &pb.LayerStreamRequest{})
 	require.NoError(t, err, "stream request returned unexpected error")
@@ -1962,7 +1962,7 @@ func checkGlobalStateDataGlobalState(tb testing.TB, dataItem any) {
 }
 
 func TestMultiService(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	ctrl, ctx := gomock.WithContext(ctx, t)
@@ -2037,7 +2037,7 @@ func TestDebugService(t *testing.T) {
 	c := pb.NewDebugServiceClient(conn)
 
 	t.Run("Accounts", func(t *testing.T) {
-		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{})
+		res, err := c.Accounts(t.Context(), &pb.AccountsRequest{})
 		require.NoError(t, err)
 		require.Len(t, res.AccountWrapper, 2)
 
@@ -2060,7 +2060,7 @@ func TestDebugService(t *testing.T) {
 				Layer:     lid,
 			})
 		}
-		res, err := c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32()})
+		res, err := c.Accounts(t.Context(), &pb.AccountsRequest{Layer: lid.Uint32()})
 		require.NoError(t, err)
 		require.Len(t, res.AccountWrapper, 2)
 
@@ -2072,7 +2072,7 @@ func TestDebugService(t *testing.T) {
 		require.Contains(t, addresses, globalTx.Principal.String())
 		require.Contains(t, addresses, addr1.String())
 
-		_, err = c.Accounts(context.Background(), &pb.AccountsRequest{Layer: lid.Uint32() - 1})
+		_, err = c.Accounts(t.Context(), &pb.AccountsRequest{Layer: lid.Uint32() - 1})
 		require.Error(t, err)
 	})
 
@@ -2103,7 +2103,7 @@ func TestDebugService(t *testing.T) {
 			})
 		netInfo.EXPECT().PeerInfo().Return(peerInfo).AnyTimes()
 
-		response, err := c.NetworkInfo(context.Background(), &emptypb.Empty{})
+		response, err := c.NetworkInfo(t.Context(), &emptypb.Empty{})
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
@@ -2129,7 +2129,7 @@ func TestDebugService(t *testing.T) {
 		epoch := types.EpochID(3)
 		activeSet := types.RandomActiveSet(11)
 		mOracle.EXPECT().ActiveSet(gomock.Any(), epoch).Return(activeSet, nil)
-		res, err := c.ActiveSet(context.Background(), &pb.ActiveSetRequest{
+		res, err := c.ActiveSet(t.Context(), &pb.ActiveSetRequest{
 			Epoch: epoch.Uint32(),
 		})
 		require.NoError(t, err)
@@ -2145,7 +2145,7 @@ func TestDebugService(t *testing.T) {
 		events.InitializeReporter()
 		t.Cleanup(events.CloseEventReporter)
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 		defer cancel()
 		stream, err := c.ProposalsStream(ctx, &emptypb.Empty{})
 		require.NoError(t, err)
@@ -2165,7 +2165,7 @@ func TestDebugService(t *testing.T) {
 	})
 
 	t.Run("ChangeLogLevel module debug", func(t *testing.T) {
-		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+		_, err := c.ChangeLogLevel(t.Context(), &pb.ChangeLogLevelRequest{
 			Module: "test",
 			Level:  "DEBUG",
 		})
@@ -2175,7 +2175,7 @@ func TestDebugService(t *testing.T) {
 	})
 
 	t.Run("ChangeLogLevel module not found", func(t *testing.T) {
-		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+		_, err := c.ChangeLogLevel(t.Context(), &pb.ChangeLogLevelRequest{
 			Module: "unknown-module",
 			Level:  "DEBUG",
 		})
@@ -2187,7 +2187,7 @@ func TestDebugService(t *testing.T) {
 	})
 
 	t.Run("ChangeLogLevel unknown level", func(t *testing.T) {
-		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+		_, err := c.ChangeLogLevel(t.Context(), &pb.ChangeLogLevelRequest{
 			Module: "test",
 			Level:  "unknown-level",
 		})
@@ -2199,7 +2199,7 @@ func TestDebugService(t *testing.T) {
 	})
 
 	t.Run("ChangeLogLevel '*' to debug", func(t *testing.T) {
-		_, err := c.ChangeLogLevel(context.Background(), &pb.ChangeLogLevelRequest{
+		_, err := c.ChangeLogLevel(t.Context(), &pb.ChangeLogLevelRequest{
 			Module: "*",
 			Level:  "DEBUG",
 		})
@@ -2219,7 +2219,7 @@ func TestEventsReceived(t *testing.T) {
 	cfg, cleanup := launchServer(t, txService, gsService)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	conn1 := dialGrpc(t, cfg)
@@ -2267,7 +2267,7 @@ func TestEventsReceived(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	svm := vm.New(db, vm.WithLogger(lg))
 	conState := txs.NewConservativeState(svm, db, txs.WithLogger(lg.Named("conState")))
-	conState.AddToCache(context.Background(), globalTx, time.Now())
+	conState.AddToCache(t.Context(), globalTx, time.Now())
 
 	weight := new(big.Rat).SetFloat64(18.7)
 	require.NoError(t, err)
@@ -2308,7 +2308,7 @@ func TestTransactionsRewards(t *testing.T) {
 	cfg, cleanup := launchServer(t, NewGlobalStateService(meshAPIMock, conStateAPI))
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(cancel)
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 
@@ -2396,7 +2396,7 @@ func TestVMAccountUpdates(t *testing.T) {
 	_, _, err = svm.Apply(lid, spawns, nil)
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	t.Cleanup(cancel)
 	client := pb.NewGlobalStateServiceClient(dialGrpc(t, cfg))
 	eg, ctx := errgroup.WithContext(ctx)
@@ -2492,7 +2492,7 @@ func TestMeshService_EpochStream(t *testing.T) {
 			expected = append(expected, vatx.ID())
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	client := pb.NewMeshServiceClient(conn)

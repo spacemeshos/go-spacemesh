@@ -109,7 +109,7 @@ func (fr *fakeRequester) StreamRequest(
 
 func runRequester(tb testing.TB, r rangesync.Requester) context.Context {
 	var eg errgroup.Group
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(tb.Context())
 	eg.Go(func() error {
 		return r.Run(ctx)
 	})
@@ -172,7 +172,7 @@ func TestWireConduit(t *testing.T) {
 	runRequester(t, srv)
 
 	client := newFakeRequester(t, "client", nil, srv)
-	require.NoError(t, client.StreamRequest(context.Background(), "srv", []byte("hello"),
+	require.NoError(t, client.StreamRequest(t.Context(), "srv", []byte("hello"),
 		func(ctx context.Context, stream io.ReadWriter) error {
 			c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 			defer c.Stop()
@@ -265,7 +265,7 @@ func TestWireConduit_Limits(t *testing.T) {
 
 			client := newFakeRequester(t, "client", nil, srv)
 			var eg errgroup.Group
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer func() {
 				cancel()
 				eg.Wait()
@@ -312,7 +312,7 @@ func TestWireConduit_StopSend(t *testing.T) {
 	runRequester(t, srv)
 
 	client := newFakeRequester(t, "client", nil, srv)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	client.StreamRequest(ctx, "srv", []byte("hello"),
 		func(ctx context.Context, stream io.ReadWriter) error {

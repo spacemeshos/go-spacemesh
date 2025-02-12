@@ -1,7 +1,6 @@
 package bootstrap_test
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -201,7 +200,7 @@ func TestLoad(t *testing.T) {
 			)
 			ch, err := updater.Subscribe()
 			require.NoError(t, err)
-			require.NoError(t, updater.Load(context.Background()))
+			require.NoError(t, updater.Load(t.Context()))
 			for epoch, suffix := range tc.cached {
 				require.True(t, updater.Downloaded(epoch, suffix))
 			}
@@ -253,13 +252,13 @@ func TestLoadedNotDownloadedAgain(t *testing.T) {
 	)
 	ch, err := updater.Subscribe()
 	require.NoError(t, err)
-	require.NoError(t, updater.Load(context.Background()))
+	require.NoError(t, updater.Load(t.Context()))
 	require.Len(t, ch, 3)
 	for i := 0; i < 3; i++ {
 		got := <-ch
 		require.NotNil(t, got)
 	}
-	require.NoError(t, updater.DoIt(context.Background()))
+	require.NoError(t, updater.DoIt(t.Context()))
 	require.Empty(t, ch)
 	require.Nil(t, queried.Load(), "should not have queried for update %s", queried.Load())
 }
@@ -326,7 +325,7 @@ func TestPrune(t *testing.T) {
 		bootstrap.WithFilesystem(fs),
 		bootstrap.WithHttpClient(ts.Client()),
 	)
-	require.NoError(t, updater.DoIt(context.Background()))
+	require.NoError(t, updater.DoIt(t.Context()))
 	files, err = afero.ReadDir(fs, bsDir)
 	require.NoError(t, err)
 	require.Len(t, files, 3)
@@ -390,7 +389,7 @@ func TestDoIt(t *testing.T) {
 			)
 			ch, err := updater.Subscribe()
 			require.NoError(t, err)
-			require.NoError(t, updater.DoIt(context.Background()))
+			require.NoError(t, updater.DoIt(t.Context()))
 			require.Len(t, ch, len(tc.checkers))
 			for i, checker := range tc.checkers {
 				got := <-ch
@@ -428,7 +427,7 @@ func TestEmptyResponse(t *testing.T) {
 
 	ch, err := updater.Subscribe()
 	require.NoError(t, err)
-	require.NoError(t, updater.DoIt(context.Background()))
+	require.NoError(t, updater.DoIt(t.Context()))
 	require.Empty(t, ch)
 	require.Equal(t, 9, numQ)
 }
@@ -499,7 +498,7 @@ func TestGetInvalidUpdate(t *testing.T) {
 
 			ch, err := updater.Subscribe()
 			require.NoError(t, err)
-			require.ErrorIs(t, updater.DoIt(context.Background()), tc.err)
+			require.ErrorIs(t, updater.DoIt(t.Context()), tc.err)
 			require.Empty(t, ch)
 		})
 	}
@@ -533,7 +532,7 @@ func TestNoNewUpdate(t *testing.T) {
 
 	ch, err := updater.Subscribe()
 	require.NoError(t, err)
-	require.NoError(t, updater.DoIt(context.Background()))
+	require.NoError(t, updater.DoIt(t.Context()))
 	require.Len(t, ch, 1)
 	got := <-ch
 	require.NotNil(t, got)
@@ -541,10 +540,10 @@ func TestNoNewUpdate(t *testing.T) {
 	require.NotEmpty(t, got.Persisted)
 	data, err := afero.ReadFile(fs, got.Persisted)
 	require.NoError(t, err)
-	require.Equal(t, []byte(update1), data)
+	require.JSONEq(t, update1, string(data))
 
 	// no new update
-	require.NoError(t, updater.DoIt(context.Background()))
+	require.NoError(t, updater.DoIt(t.Context()))
 	require.Empty(t, ch)
 	require.Equal(t, 1, numQ)
 }
@@ -654,7 +653,7 @@ func TestRequiredEpochs(t *testing.T) {
 
 			ch, err := updater.Subscribe()
 			require.NoError(t, err)
-			require.NoError(t, updater.DoIt(context.Background()))
+			require.NoError(t, updater.DoIt(t.Context()))
 			require.Empty(t, ch)
 			require.Equal(t, tc.exp, queried)
 			if tc.newGenesis > 0 {
@@ -681,7 +680,7 @@ func TestIntegration(t *testing.T) {
 	)
 	ch, err := updater.Subscribe()
 	require.NoError(t, err)
-	require.NoError(t, updater.DoIt(context.Background()))
+	require.NoError(t, updater.DoIt(t.Context()))
 	require.Len(t, ch, 3)
 	got := <-ch
 	require.EqualValues(t, 53, got.Data.Epoch)
@@ -696,7 +695,7 @@ func TestIntegration(t *testing.T) {
 	require.NotEqual(t, types.EmptyBeacon, got.Data.Beacon)
 	require.NotEmpty(t, got.Data.ActiveSet)
 
-	require.NoError(t, updater.DoIt(context.Background()))
+	require.NoError(t, updater.DoIt(t.Context()))
 	require.Empty(t, ch)
 }
 

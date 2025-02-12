@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -56,7 +55,7 @@ func TestRecoverState(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 
 	tortoise2, err := Recover(
-		context.Background(),
+		t.Context(),
 		s.GetState(0).DB.Database,
 		simState.Atxdata,
 		last,
@@ -80,7 +79,7 @@ func TestRecoverEmpty(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	tortoise, err := Recover(
-		context.Background(),
+		t.Context(),
 		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		100,
@@ -117,7 +116,7 @@ func TestRecoverWithOpinion(t *testing.T) {
 		last = rst
 	}
 	tortoise, err := Recover(
-		context.Background(),
+		t.Context(),
 		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		last.Layer,
@@ -161,7 +160,7 @@ func TestResetPending(t *testing.T) {
 	}
 
 	recovered, err := Recover(
-		context.Background(),
+		t.Context(),
 		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		last,
@@ -208,7 +207,7 @@ func TestWindowRecovery(t *testing.T) {
 	}
 
 	recovered, err := Recover(
-		context.Background(),
+		t.Context(),
 		s.GetState(0).DB.Database,
 		atxsdata.New(),
 		last,
@@ -238,13 +237,13 @@ func TestRecoverOnlyAtxs(t *testing.T) {
 		trt.TallyVotes(lid)
 	}
 	future := last + 1000
-	recovered, err := Recover(context.Background(), s.GetState(0).DB.Database, s.GetState(0).Atxdata, future,
+	recovered, err := Recover(t.Context(), s.GetState(0).DB.Database, s.GetState(0).Atxdata, future,
 		WithLogger(zaptest.NewLogger(t)),
 		WithConfig(cfg),
 	)
 	require.NoError(t, err)
 	epoch := types.EpochID(2)
-	ids, err := atxs.GetIDsByEpoch(context.Background(), s.GetState(0).DB, epoch)
+	ids, err := atxs.GetIDsByEpoch(t.Context(), s.GetState(0).DB, epoch)
 	require.NoError(t, err)
 	require.NotEmpty(t, ids)
 	require.Empty(t, recovered.GetMissingActiveSet(epoch+1, ids), "target epoch %v", epoch+1)

@@ -2,7 +2,6 @@ package handshake
 
 import (
 	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -130,12 +129,12 @@ func TestTransportWrapper(t *testing.T) {
 			require.NoError(t, err)
 			defer clientTransport.(io.Closer).Close()
 
-			c, err := clientTransport.Dial(context.Background(), ln.Multiaddr(), serverID)
+			c, err := clientTransport.Dial(t.Context(), ln.Multiaddr(), serverID)
 			if tc.dialError {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				s, err := c.OpenStream(context.Background())
+				s, err := c.OpenStream(t.Context())
 				require.NoError(t, err)
 				defer s.Close()
 				_, err = s.Write([]byte{10, 20, 30, 40})

@@ -344,7 +344,7 @@ func TestRunner_Generate(t *testing.T) {
 			fs := afero.NewMemMapFs()
 			dir, err := afero.TempDir(fs, "", "Generate")
 			require.NoError(t, err)
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 			defer cancel()
 			err = checkpoint.Generate(ctx, fs, db, dir, snapshot, tc.numAtxs)
 			require.NoError(t, err)
@@ -382,7 +382,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		fs := afero.NewMemMapFs()
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
-		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = checkpoint.Generate(t.Context(), fs, db, dir, snapshot, 2)
 		require.ErrorContains(t, err, "atxs snapshot commitment")
 	})
 	t.Run("no atxs", func(t *testing.T) {
@@ -395,7 +395,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
 
-		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = checkpoint.Generate(t.Context(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
 	t.Run("no accounts", func(t *testing.T) {
@@ -408,7 +408,7 @@ func TestRunner_Generate_Error(t *testing.T) {
 		dir, err := afero.TempDir(fs, "", "Generate")
 		require.NoError(t, err)
 
-		err = checkpoint.Generate(context.Background(), fs, db, dir, snapshot, 2)
+		err = checkpoint.Generate(t.Context(), fs, db, dir, snapshot, 2)
 		require.Error(t, err)
 	})
 }
@@ -433,7 +433,7 @@ func TestRunner_Generate_PreservesMarriageATX(t *testing.T) {
 	dir, err := afero.TempDir(fs, "", "Generate")
 	require.NoError(t, err)
 
-	err = checkpoint.Generate(context.Background(), fs, db, dir, 5, 2)
+	err = checkpoint.Generate(t.Context(), fs, db, dir, 5, 2)
 	require.NoError(t, err)
 
 	file, err := fs.Open(checkpoint.SelfCheckpointFilename(dir, 5))

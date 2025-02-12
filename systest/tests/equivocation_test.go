@@ -124,7 +124,7 @@ func TestEquivocation(t *testing.T) {
 	for i := 0; i < honest; i++ {
 		client := cl.Client(i)
 		proofs := make([]types.NodeID, 0, len(malfeasants))
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 		defer cancel()
 		malfeasanceStream(ctx, client, cctx.Log.Desugar(), func(proof *pb2.MalfeasanceProof) (bool, error) {
 			malfeasant := proof.GetSmesher()

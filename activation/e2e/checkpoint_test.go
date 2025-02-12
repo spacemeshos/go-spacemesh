@@ -38,7 +38,7 @@ import (
 
 func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	logger := zaptest.NewLogger(t)
 	goldenATX := types.ATXID{2, 3, 4}
 

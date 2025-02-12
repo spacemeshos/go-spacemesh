@@ -14,7 +14,7 @@ import (
 )
 
 func TestGossip(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	n := 5

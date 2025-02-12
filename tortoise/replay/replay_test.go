@@ -1,7 +1,6 @@
 package replay
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"testing"
@@ -59,7 +58,7 @@ func TestReplayMainnet(t *testing.T) {
 	atxsdata, err := atxsdata.Warm(db, cfg.Tortoise.WindowSizeEpochs(applied), logger)
 	require.NoError(t, err)
 	trtl, err := tortoise.Recover(
-		context.Background(),
+		t.Context(),
 		db,
 		atxsdata,
 		clock.CurrentLayer(), opts...,

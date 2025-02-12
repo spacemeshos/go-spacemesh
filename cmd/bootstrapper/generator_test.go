@@ -76,7 +76,7 @@ func launchServer(tb testing.TB, db sql.StateDatabase) (grpcserver.Config, func(
 	cfg.JSONListener = jsonService.BoundAddress
 
 	return cfg, func() {
-		err := jsonService.Shutdown(context.Background())
+		err := jsonService.Shutdown(tb.Context())
 		if !errors.Is(err, http.ErrServerClosed) {
 			require.NoError(tb, err)
 		}
@@ -144,7 +144,7 @@ func TestGenerator_Generate(t *testing.T) {
 				WithLogger(zaptest.NewLogger(t)),
 				WithFilesystem(fs),
 			)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			persisted, err := g.Generate(ctx, targetEpoch, tc.beacon, tc.actives)
 			require.NoError(t, err)
@@ -221,7 +221,7 @@ func TestGenerator_Generate_CheckBitcoinAPIResilience(t *testing.T) {
 				WithLogger(zaptest.NewLogger(t)),
 				WithFilesystem(fs),
 			)
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(t.Context())
 			defer cancel()
 			_, err := g.Generate(ctx, targetEpoch, true, false)
 
@@ -249,7 +249,7 @@ func TestGenerator_CheckAPI(t *testing.T) {
 		WithLogger(zaptest.NewLogger(t)),
 		WithFilesystem(fs),
 	)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	persisted, err := g.Generate(ctx, targetEpoch, true, false)
 	require.NoError(t, err)

@@ -64,7 +64,7 @@ func TestAdminService_Checkpoint(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
@@ -100,7 +100,7 @@ func TestAdminService_CheckpointError(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
@@ -120,7 +120,7 @@ func TestAdminService_Recovery(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
@@ -140,7 +140,7 @@ func TestAdminService_PeerInfo(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := pb.NewAdminServiceClient(conn)
