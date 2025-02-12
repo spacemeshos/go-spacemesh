@@ -106,6 +106,13 @@ func toEventOperations(filter *pb.IdentityStatesRequest) (builder.Operations, er
 			Value: states,
 		})
 	}
+	if len(filter.Smeshers) > 0 {
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: "id",
+			Token: builder.In,
+			Value: filter.Smeshers,
+		})
+	}
 
 	if filter.Limit != 0 {
 		ops.Modifiers = append(ops.Modifiers, builder.Modifier{

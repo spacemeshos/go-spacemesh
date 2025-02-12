@@ -185,3 +185,55 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 		require.Equal(t, pb.IdentityState_ATX_BROADCASTED, resp.States[1].State)
 	})
 }
+
+func TestSmeshingIdentitiesService_FilterBySmeshers(t *testing.T) {
+	statesDB := identity.NewIdentityStateStorage(localsql.InMemoryTest(t), zaptest.NewLogger(t))
+	svc := NewSmeshingIdentitiesService(statesDB, nil, activation.PoetConfig{})
+
+	timestamp := time.Now()
+	nodeID := types.RandomNodeID()
+	states := []identity.State{
+		&identity.GeneratingPostProof{},
+		&identity.PoetRegistered{},
+	}
+	for _, s := range states {
+		statesDB.SetAt(nodeID, s, timestamp)
+		timestamp = timestamp.Add(time.Second)
+	}
+
+	nodeID2 := types.RandomNodeID()
+	states2 := []identity.State{
+		&identity.Eligible{},
+		&identity.GeneratingPostProof{},
+	}
+	for _, s := range states2 {
+		statesDB.SetAt(nodeID2, s, timestamp)
+		timestamp = timestamp.Add(time.Second)
+	}
+	nodeID3 := types.RandomNodeID()
+	states3 := []identity.State{
+		&identity.Retrying{},
+		&identity.Retrying{},
+		&identity.Retrying{},
+	}
+	for _, s := range states3 {
+		statesDB.SetAt(nodeID3, s, timestamp)
+		timestamp = timestamp.Add(time.Second)
+	}
+
+	resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		Smeshers: [][]byte{
+			nodeID2[:],
+			nodeID3[:],
+		},
+		Limit: 4,
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.States, 4)
+	for i, state := range resp.States[:2] {
+		require.Equal(t, states2[i].APIStateInfo().State, state.State)
+	}
+	for i, state := range resp.States[2:] {
+		require.Equal(t, states3[i].APIStateInfo().State, state.State)
+	}
+}
