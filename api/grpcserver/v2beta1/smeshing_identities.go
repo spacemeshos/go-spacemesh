@@ -80,7 +80,7 @@ func (s *SmeshingIdentitiesService) States(
 	for _, info := range events {
 		identityStateInfo := info.State.APIStateInfo()
 		identityStateInfo.Time = timestamppb.New(info.Time)
-		identityStateInfo.Id = info.ID.Bytes()
+		identityStateInfo.Smesher = info.ID.Bytes()
 
 		states = append(states, identityStateInfo)
 	}
