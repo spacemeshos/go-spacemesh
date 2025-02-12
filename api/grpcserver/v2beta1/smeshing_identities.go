@@ -14,10 +14,17 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	identity "github.com/spacemeshos/go-spacemesh/identity"
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
 const SmeshingIdentities = "smeshing_identities_v2beta1"
+
+type identityState interface {
+	All(ops builder.Operations) ([]identity.IdStateInfo, error)
+	AllProposals() map[types.NodeID][]*types.Proposal
+	AllEligibilities() map[types.NodeID]map[types.LayerID][]types.VotingEligibility
+}
 
 type SmeshingIdentitiesService struct {
 	states      identityState
@@ -65,21 +72,20 @@ func (s *SmeshingIdentitiesService) States(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	pbIdentities := make(map[string]*pb.Identity, request.Limit)
-	for nodeId, history := range s.states.All(*ops) {
-		pbIdentities[nodeId.String()] = &pb.Identity{
-			History: []*pb.IdentityStateInfo{},
-		}
+	var states []*pb.IdentityStateInfo
+	events, err := s.states.All(*ops)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	for _, info := range events {
+		identityStateInfo := info.State.APIStateInfo()
+		identityStateInfo.Time = timestamppb.New(info.Time)
+		identityStateInfo.Id = info.ID.Bytes()
 
-		for _, info := range history {
-			identityStateInfo := info.State.APIStateInfo()
-			identityStateInfo.Time = timestamppb.New(info.Time)
-
-			pbIdentities[nodeId.String()].History = append(pbIdentities[nodeId.String()].History, identityStateInfo)
-		}
+		states = append(states, identityStateInfo)
 	}
 
-	return &pb.IdentityStatesResponse{Identities: pbIdentities}, nil
+	return &pb.IdentityStatesResponse{States: states}, nil
 }
 
 func toEventOperations(filter *pb.IdentityStatesRequest) (*builder.Operations, error) {
@@ -112,41 +118,21 @@ func toEventOperations(filter *pb.IdentityStatesRequest) (*builder.Operations, e
 		if err := filter.From.CheckValid(); err != nil {
 			return nil, fmt.Errorf("'from' is invalid: %w", err)
 		}
-		from := filter.From.AsTime()
-		switch filter.Order {
-		case pb.SortOrder_ASC:
-			ops.Filter = append(ops.Filter, builder.Op{
-				Field: "timestamp",
-				Token: builder.Gte,
-				Value: from.UnixMicro(),
-			})
-		case pb.SortOrder_DESC:
-			ops.Filter = append(ops.Filter, builder.Op{
-				Field: "timestamp",
-				Token: builder.Lte,
-				Value: from.UnixMicro(),
-			})
-		}
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: "timestamp",
+			Token: builder.Gte,
+			Value: filter.From.AsTime().UnixMicro(),
+		})
 	}
 	if filter.To != nil {
 		if err := filter.To.CheckValid(); err != nil {
 			return nil, fmt.Errorf("'to' is invalid: %w", err)
 		}
-		to := filter.To.AsTime()
-		switch filter.Order {
-		case pb.SortOrder_ASC:
-			ops.Filter = append(ops.Filter, builder.Op{
-				Field: "timestamp",
-				Token: builder.Lt,
-				Value: to.UnixMicro(),
-			})
-		case pb.SortOrder_DESC:
-			ops.Filter = append(ops.Filter, builder.Op{
-				Field: "timestamp",
-				Token: builder.Gt,
-				Value: to.UnixMicro(),
-			})
-		}
+		ops.Filter = append(ops.Filter, builder.Op{
+			Field: "timestamp",
+			Token: builder.Lt,
+			Value: filter.To.AsTime().UnixMicro(),
+		})
 	}
 
 	switch filter.Order {

@@ -21,6 +21,11 @@ type StateInfo struct {
 	Time  time.Time
 }
 
+type IdStateInfo struct {
+	*StateInfo
+	ID types.NodeID
+}
+
 type StateStorage struct {
 	db     sql.Executor
 	logger *zap.Logger
@@ -76,8 +81,8 @@ func (s *StateStorage) Get(id types.NodeID) ([]StateInfo, error) {
 	return allEvents, nil
 }
 
-func (s *StateStorage) All(ops builder.Operations) map[types.NodeID][]StateInfo {
-	allEvents := make(map[types.NodeID][]StateInfo)
+func (s *StateStorage) All(ops builder.Operations) ([]IdStateInfo, error) {
+	var allEvents []IdStateInfo
 	err := events.IterateAllEvents(s.db, ops, func(id types.NodeID, timestamp time.Time, eventBytes []byte) bool {
 		event, err := unmarshalState(eventBytes)
 		if err != nil {
@@ -88,16 +93,10 @@ func (s *StateStorage) All(ops builder.Operations) map[types.NodeID][]StateInfo 
 				zap.Error(err),
 			)
 		}
-		if _, ok := allEvents[id]; !ok {
-			allEvents[id] = make([]StateInfo, 0)
-		}
-		allEvents[id] = append(allEvents[id], *event)
+		allEvents = append(allEvents, IdStateInfo{event, id})
 		return true
 	})
-	if err != nil {
-		panic(err.Error())
-	}
-	return allEvents
+	return allEvents, err
 }
 
 func (s *StateStorage) SetEligibilities(

@@ -105,11 +105,9 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 			Limit:  10,
 		})
 		require.NoError(t, err)
-		require.Len(t, resp.Identities, 1)
-		got := resp.Identities[nodeID.String()].History
-		require.Len(t, got, 1)
-		require.Equal(t, *broadcasted.APIStateInfo().PublishEpoch, *got[0].PublishEpoch)
-		require.Equal(t, broadcasted.APIStateInfo().State, got[0].State)
+		require.Len(t, resp.States, 1)
+		require.Equal(t, *broadcasted.APIStateInfo().PublishEpoch, *resp.States[0].PublishEpoch)
+		require.Equal(t, broadcasted.APIStateInfo().State, resp.States[0].State)
 	})
 	t.Run("DESC", func(t *testing.T) {
 		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
@@ -117,14 +115,12 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 			Limit: 10,
 		})
 		require.NoError(t, err)
-		require.Len(t, resp.Identities, 1)
 
-		got := resp.Identities[nodeID.String()].History
-		require.Len(t, got, len(states))
+		require.Len(t, resp.States, len(states))
 		for i, timestamp := range slices.SortedFunc(maps.Keys(states), func(a, b time.Time) int {
 			return b.Compare(a)
 		}) {
-			require.Equal(t, states[timestamp].APIStateInfo().State, got[i].State)
+			require.Equal(t, states[timestamp].APIStateInfo().State, resp.States[i].State)
 		}
 	})
 	t.Run("ASC", func(t *testing.T) {
@@ -133,14 +129,12 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 			Limit: 10,
 		})
 		require.NoError(t, err)
-		require.Len(t, resp.Identities, 1)
 
-		got := resp.Identities[nodeID.String()].History
-		require.Len(t, got, len(states))
+		require.Len(t, resp.States, len(states))
 		for i, timestamp := range slices.SortedFunc(maps.Keys(states), func(a, b time.Time) int {
 			return a.Compare(b)
 		}) {
-			require.Equal(t, states[timestamp].APIStateInfo().State, got[i].State)
+			require.Equal(t, states[timestamp].APIStateInfo().State, resp.States[i].State)
 		}
 	})
 	t.Run("from ASC", func(t *testing.T) {
@@ -151,12 +145,10 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 			Limit: 10,
 		})
 		require.NoError(t, err)
-		require.Len(t, resp.Identities, 1)
 
-		states := resp.Identities[nodeID.String()].History
-		require.Len(t, states, 2)
-		require.Equal(t, pb.IdentityState_WAIT_FOR_ATX_SYNCED, states[0].State)
-		require.Equal(t, pb.IdentityState_WAIT_FOR_POET_ROUND_END, states[1].State)
+		require.Len(t, resp.States, 2)
+		require.Equal(t, pb.IdentityState_WAIT_FOR_ATX_SYNCED, resp.States[0].State)
+		require.Equal(t, pb.IdentityState_WAIT_FOR_POET_ROUND_END, resp.States[1].State)
 	})
 	t.Run("from DESC", func(t *testing.T) {
 		from := firstTimestamp.Add(2 * time.Second)
@@ -166,17 +158,14 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 			Limit: 10,
 		})
 		require.NoError(t, err)
-		require.Len(t, resp.Identities, 1)
 
-		states := resp.Identities[nodeID.String()].History
-		require.Len(t, states, 3)
-		require.Equal(t, pb.IdentityState_WAIT_FOR_ATX_SYNCED, states[0].State)
-		require.Equal(t, pb.IdentityState_ATX_BROADCASTED, states[1].State)
-		require.Equal(t, pb.IdentityState_ATX_READY, states[2].State)
+		require.Len(t, resp.States, 2)
+		require.Equal(t, pb.IdentityState_WAIT_FOR_POET_ROUND_END, resp.States[0].State)
+		require.Equal(t, pb.IdentityState_WAIT_FOR_ATX_SYNCED, resp.States[1].State)
 	})
 	t.Run("from to ASC", func(t *testing.T) {
-		from := firstTimestamp.Add(2 * time.Second)
-		to := from.Add(time.Second)
+		from := firstTimestamp.Add(time.Second)
+		to := from.Add(2 * time.Second)
 		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
 			From:  timestamppb.New(from),
 			To:    timestamppb.New(to),
@@ -184,10 +173,24 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 			Limit: 10,
 		})
 		require.NoError(t, err)
-		require.Len(t, resp.Identities, 1)
 
-		states := resp.Identities[nodeID.String()].History
-		require.Len(t, states, 1)
-		require.Equal(t, pb.IdentityState_WAIT_FOR_ATX_SYNCED, states[0].State)
+		require.Len(t, resp.States, 2)
+		require.Equal(t, pb.IdentityState_ATX_BROADCASTED, resp.States[0].State)
+		require.Equal(t, pb.IdentityState_WAIT_FOR_ATX_SYNCED, resp.States[1].State)
+	})
+	t.Run("from to DESC", func(t *testing.T) {
+		from := firstTimestamp.Add(time.Second)
+		to := from.Add(2 * time.Second)
+		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+			From:  timestamppb.New(from),
+			To:    timestamppb.New(to),
+			Order: pb.SortOrder_DESC,
+			Limit: 10,
+		})
+		require.NoError(t, err)
+
+		require.Len(t, resp.States, 2)
+		require.Equal(t, pb.IdentityState_WAIT_FOR_ATX_SYNCED, resp.States[0].State)
+		require.Equal(t, pb.IdentityState_ATX_BROADCASTED, resp.States[1].State)
 	})
 }

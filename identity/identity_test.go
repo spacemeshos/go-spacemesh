@@ -58,17 +58,15 @@ func Test_StatesPersistance(t *testing.T) {
 			},
 		},
 	}
-	states1 := storage1.All(ops)
+	states1, err := storage1.All(ops)
+	require.NoError(t, err)
 
 	// Create new storage instance with same DB
 	storage2 := identity.NewIdentityStateStorage(db, zaptest.NewLogger(t))
-	states2 := storage2.All(ops)
+	states2, err := storage2.All(ops)
+	require.NoError(t, err)
 
-	for id, states1 := range states1 {
-		for i, state := range states1 {
-			identity.RequireEqual(t, &state, &states2[id][i])
-		}
-	}
+	require.Equal(t, states1, states2)
 }
 
 func Test_StatesOperations(t *testing.T) {
@@ -99,9 +97,11 @@ func Test_StatesOperations(t *testing.T) {
 			},
 		}
 
-		rst := storage.All(ops)
+		rst, err := storage.All(ops)
+		require.NoError(t, err)
 		require.Len(t, rst, 2)
-		require.Equal(t, states[2].state, rst[id2][0].State)
+		require.Equal(t, states[1].state, rst[0].State)
+		require.Equal(t, states[2].state, rst[1].State)
 	})
 
 	t.Run("filter by state", func(t *testing.T) {
@@ -115,16 +115,11 @@ func Test_StatesOperations(t *testing.T) {
 					Value: []int32{11},
 				},
 			},
-			Modifiers: []builder.Modifier{
-				{
-					Key:   builder.Limit,
-					Value: int64(10),
-				},
-			},
 		}
 
-		rst := storage.All(ops)
+		rst, err := storage.All(ops)
+		require.NoError(t, err)
 		require.Len(t, rst, 1)
-		require.Equal(t, states[3].state, rst[id1][0].State)
+		require.Equal(t, states[3].state, rst[0].State)
 	})
 }
