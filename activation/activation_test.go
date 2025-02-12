@@ -1630,5 +1630,5 @@ func Test_Builder_RegenerateInitialPost(t *testing.T) {
 		tab.run(ctx, sig)
 		return nil
 	})
-	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+	require.NoError(t, eg.Wait())
 }
