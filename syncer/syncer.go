@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -144,6 +146,17 @@ func WithLogger(l *zap.Logger) Option {
 	}
 }
 
+func WithAtxVersions(v activation.AtxVersions) Option {
+	return func(s *Syncer) {
+		for epoch, version := range v {
+			if version == types.AtxV2 {
+				s.malSyncStartEpoch = epoch
+				break
+			}
+		}
+	}
+}
+
 func withDataFetcher(d fetchLogic) Option {
 	return func(s *Syncer) {
 		s.dataFetcher = d
@@ -186,6 +199,9 @@ type Syncer struct {
 	lastEpochSynced  atomic.Uint32
 	stateErr         atomic.Bool
 
+	// malSyncStartEpoch is the epoch from which we start syncing malfeasance proofs through the new protocol.
+	malSyncStartEpoch types.EpochID
+
 	// backgroundSync always runs one sync operation in the background.
 	backgroundSync struct {
 		epoch  atomic.Uint32
@@ -225,17 +241,18 @@ func NewSyncer(
 	opts ...Option,
 ) (*Syncer, error) {
 	s := &Syncer{
-		logger:           zap.NewNop(),
-		cfg:              DefaultConfig(),
-		cdb:              cdb,
-		atxsyncer:        atxSyncer,
-		malsyncer:        malSyncer,
-		ticker:           ticker,
-		mesh:             mesh,
-		tortoise:         tortoise,
-		certHandler:      ch,
-		patrol:           patrol,
-		awaitATXSyncedCh: make(chan struct{}),
+		logger:            zap.NewNop(),
+		cfg:               DefaultConfig(),
+		cdb:               cdb,
+		atxsyncer:         atxSyncer,
+		malsyncer:         malSyncer,
+		ticker:            ticker,
+		mesh:              mesh,
+		tortoise:          tortoise,
+		certHandler:       ch,
+		patrol:            patrol,
+		malSyncStartEpoch: math.MaxUint32,
+		awaitATXSyncedCh:  make(chan struct{}),
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -662,7 +679,7 @@ func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
 		}
 		s.logger.Info("malicious IDs synced", log.ZContext(ctx))
 		// Malfeasance proofs are synced after the actual ATXs.
-		// We set ATX synced status after both ATXs and malfeascance proofs
+		// We set ATX synced status after both ATXs and malfeasance proofs
 		// are in sync.
 		s.setATXSynced()
 	}
@@ -674,7 +691,7 @@ func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			case <-s.awaitATXSyncedCh:
-				err := s.malsyncer.DownloadLoop(ctx)
+				err := s.malsyncer.DownloadLoop(ctx, current.GetEpoch() >= s.malSyncStartEpoch)
 				if err != nil && !errors.Is(err, context.Canceled) {
 					s.logger.Error("malfeasance sync failed", log.ZContext(ctx), zap.Error(err))
 				}
@@ -795,9 +812,12 @@ func (s *Syncer) syncMalfeasance(parent context.Context, epoch types.EpochID) er
 	eg.Go(func() error {
 		return s.malsyncer.EnsureLegacyInSync(ctx, epochStart, epochEnd)
 	})
-	eg.Go(func() error {
-		return s.malsyncer.EnsureInSync(ctx, epochStart, epochEnd)
-	})
+	// TODO(mafa): remove this check again when ATXv2 is live https://github.com/spacemeshos/go-spacemesh/issues/6716
+	if epoch >= s.malSyncStartEpoch {
+		eg.Go(func() error {
+			return s.malsyncer.EnsureInSync(ctx, epochStart, epochEnd)
+		})
+	}
 	if err := eg.Wait(); err != nil {
 		return fmt.Errorf("syncing malfeasance proof: %w", err)
 	}

@@ -22,15 +22,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/malsync"
 )
 
-//go:generate mockgen -typed -package=mocks -destination=./mocks/mocks.go -source=./syncer.go
-
-type fetcher interface {
-	SelectBestShuffled(int) []p2p.Peer
-	LegacyMaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
-	MaliciousIDs(context.Context, p2p.Peer) ([]types.NodeID, error)
-	LegacyMalfeasanceProofs(context.Context, []types.NodeID) error
-	MalfeasanceProofs(context.Context, []types.NodeID) error
+type counter interface {
+	Inc()
 }
+
+type noCounter struct{}
+
+func (noCounter) Inc() {}
 
 type Opt func(*Syncer)
 
@@ -39,14 +37,6 @@ func WithLogger(logger *zap.Logger) Opt {
 		s.logger = logger
 	}
 }
-
-type counter interface {
-	Inc()
-}
-
-type noCounter struct{}
-
-func (noCounter) Inc() {}
 
 func WithPeerErrMetric(counter counter) Opt {
 	return func(s *Syncer) {
@@ -219,18 +209,18 @@ type Syncer struct {
 	cfg           Config
 	fetcher       fetcher
 	db            sql.Executor
-	localdb       sql.LocalDatabase
+	localDB       sql.LocalDatabase
 	clock         clockwork.Clock
 	peerErrMetric counter
 }
 
-func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localDB sql.LocalDatabase, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:        zap.NewNop(),
 		cfg:           DefaultConfig(),
 		fetcher:       fetcher,
 		db:            db,
-		localdb:       localdb,
+		localDB:       localDB,
 		clock:         clockwork.NewRealClock(),
 		peerErrMetric: noCounter{},
 	}
@@ -241,7 +231,7 @@ func New(fetcher fetcher, db sql.Executor, localdb sql.LocalDatabase, opts ...Op
 }
 
 func (s *Syncer) shouldSyncLegacy(epochStart, epochEnd time.Time) (bool, error) {
-	timestamp, err := malsync.LegacySyncState(s.localdb)
+	timestamp, err := malsync.LegacySyncState(s.localDB)
 	if err != nil {
 		return false, fmt.Errorf("error getting malfeasance sync state: %w", err)
 	}
@@ -253,7 +243,7 @@ func (s *Syncer) shouldSyncLegacy(epochStart, epochEnd time.Time) (bool, error) 
 }
 
 func (s *Syncer) shouldSync(epochStart, epochEnd time.Time) (bool, error) {
-	timestamp, err := malsync.SyncState(s.localdb)
+	timestamp, err := malsync.SyncState(s.localDB)
 	if err != nil {
 		return false, fmt.Errorf("error getting malfeasance sync state: %w", err)
 	}
@@ -447,7 +437,7 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 }
 
 func (s *Syncer) updateLegacyState(ctx context.Context) error {
-	if err := s.localdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+	if err := s.localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		return malsync.UpdateLegacySyncState(tx, s.clock.Now())
 	}); err != nil {
 		if ctx.Err() != nil {
@@ -458,12 +448,11 @@ func (s *Syncer) updateLegacyState(ctx context.Context) error {
 		}
 		return fmt.Errorf("error updating legacy malsync state: %w", err)
 	}
-
 	return nil
 }
 
 func (s *Syncer) updateState(ctx context.Context) error {
-	if err := s.localdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+	if err := s.localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		return malsync.UpdateSyncState(tx, s.clock.Now())
 	}); err != nil {
 		if ctx.Err() != nil {
@@ -688,14 +677,16 @@ func (s *Syncer) EnsureInSync(ctx context.Context, epochStart, epochEnd time.Tim
 	return s.download(ctx, true)
 }
 
-func (s *Syncer) DownloadLoop(parent context.Context) error {
+func (s *Syncer) DownloadLoop(parent context.Context, malSyncEnabled bool) error {
 	eg, ctx := errgroup.WithContext(parent)
 	eg.Go(func() error {
 		return s.downloadLegacy(ctx, false)
 	})
-	eg.Go(func() error {
-		return s.download(ctx, false)
-	})
+	if malSyncEnabled {
+		eg.Go(func() error {
+			return s.download(ctx, false)
+		})
+	}
 	return eg.Wait()
 }
 

@@ -137,12 +137,12 @@ func malData(ids ...string) []types.NodeID {
 }
 
 type tester struct {
-	tb      testing.TB
-	syncer  *Syncer
-	db      sql.StateDatabase
-	cfg     Config
-	fetcher *mocks.Mockfetcher
-	clock   *clockwork.FakeClock
+	tb       testing.TB
+	syncer   *Syncer
+	db       sql.StateDatabase
+	cfg      Config
+	mFetcher *mocks.Mockfetcher
+	mClock   *clockwork.FakeClock
 
 	peers          []p2p.Peer
 	peerErrCount   *fakeCounter
@@ -153,25 +153,25 @@ type tester struct {
 }
 
 func newTester(tb testing.TB, cfg Config) *tester {
-	localdb := localsql.InMemoryTest(tb)
+	localDB := localsql.InMemoryTest(tb)
 	db := statesql.InMemoryTest(tb)
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
 	clock := clockwork.NewFakeClock()
 	peerErrCount := &fakeCounter{}
-	syncer := New(fetcher, db, localdb,
-		withClock(clock),
+	syncer := New(fetcher, db, localDB,
 		WithConfig(cfg),
 		WithLogger(zaptest.NewLogger(tb)),
 		WithPeerErrMetric(peerErrCount),
+		withClock(clock),
 	)
 	return &tester{
 		tb:             tb,
 		syncer:         syncer,
 		db:             db,
 		cfg:            cfg,
-		fetcher:        fetcher,
-		clock:          clock,
+		mFetcher:       fetcher,
+		mClock:         clock,
 		receivedLegacy: make(map[types.NodeID]bool),
 		attemptsLegacy: make(map[types.NodeID]int),
 		received:       make(map[types.NodeID]bool),
@@ -183,11 +183,11 @@ func newTester(tb testing.TB, cfg Config) *tester {
 
 func (tester *tester) expectLegacyMaliciousIDs() {
 	// "2" comes just from a single peer via legacy protocol
-	tester.fetcher.EXPECT().
+	tester.mFetcher.EXPECT().
 		LegacyMaliciousIDs(gomock.Any(), tester.peers[0]).
 		Return(malData("4", "1", "3", "2"), nil)
 	for _, p := range tester.peers[1:] {
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			LegacyMaliciousIDs(gomock.Any(), p).
 			Return(malData("4", "1", "3"), nil)
 	}
@@ -195,18 +195,18 @@ func (tester *tester) expectLegacyMaliciousIDs() {
 
 func (tester *tester) expectMaliciousIDs() {
 	// "102" comes just from a single peer
-	tester.fetcher.EXPECT().
+	tester.mFetcher.EXPECT().
 		MaliciousIDs(gomock.Any(), tester.peers[0]).
 		Return(malData("104", "101", "103", "102"), nil)
 	for _, p := range tester.peers[1:] {
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			MaliciousIDs(gomock.Any(), p).
 			Return(malData("104", "101", "103"), nil)
 	}
 }
 
 func (t *tester) expectLegacyProofs(errMap map[types.NodeID]error) {
-	t.fetcher.EXPECT().
+	t.mFetcher.EXPECT().
 		LegacyMalfeasanceProofs(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, ids []types.NodeID) error {
 			batchErr := &fetch.BatchError{
@@ -231,7 +231,7 @@ func (t *tester) expectLegacyProofs(errMap map[types.NodeID]error) {
 }
 
 func (t *tester) expectProofs(errMap map[types.NodeID]error) {
-	t.fetcher.EXPECT().
+	t.mFetcher.EXPECT().
 		MalfeasanceProofs(gomock.Any(), gomock.Any()).
 		DoAndReturn(func(_ context.Context, ids []types.NodeID) error {
 			batchErr := &fetch.BatchError{
@@ -256,7 +256,7 @@ func (t *tester) expectProofs(errMap map[types.NodeID]error) {
 }
 
 func (tester *tester) expectPeers(peers []p2p.Peer) {
-	tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).Return(peers).AnyTimes()
+	tester.mFetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).Return(peers).AnyTimes()
 }
 
 func TestSyncer(t *testing.T) {
@@ -265,7 +265,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectPeers(tester.peers)
 		tester.expectLegacyMaliciousIDs()
 		tester.expectLegacyProofs(nil)
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
@@ -277,7 +277,7 @@ func TestSyncer(t *testing.T) {
 			nid("3"): 1,
 			nid("4"): 1,
 		}, tester.attemptsLegacy)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.Zero(t, tester.peerErrCount.n)
@@ -287,7 +287,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectPeers(tester.peers)
 		tester.expectMaliciousIDs()
 		tester.expectProofs(nil)
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
@@ -299,7 +299,7 @@ func TestSyncer(t *testing.T) {
 			nid("103"): 1,
 			nid("104"): 1,
 		}, tester.attempts)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 	})
@@ -307,11 +307,11 @@ func TestSyncer(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		tester.expectPeers(tester.peers)
 		for _, p := range tester.peers {
-			tester.fetcher.EXPECT().
+			tester.mFetcher.EXPECT().
 				LegacyMaliciousIDs(gomock.Any(), p).
 				Return(nil, nil)
 		}
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.Zero(t, tester.peerErrCount.n)
@@ -320,11 +320,11 @@ func TestSyncer(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		tester.expectPeers(tester.peers)
 		for _, p := range tester.peers {
-			tester.fetcher.EXPECT().
+			tester.mFetcher.EXPECT().
 				MaliciousIDs(gomock.Any(), p).
 				Return(nil, nil)
 		}
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.Zero(t, tester.peerErrCount.n)
@@ -334,39 +334,39 @@ func TestSyncer(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		tester.expectPeers([]p2p.Peer{"a"})
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			LegacyMaliciousIDs(gomock.Any(), gomock.Any()).
 			Return(malData("1"), nil).AnyTimes()
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			LegacyMalfeasanceProofs(gomock.Any(), gomock.Any()).
 			Return(errors.New("no atxs")).AnyTimes()
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			MaliciousIDs(gomock.Any(), gomock.Any()).
 			Return(malData("101"), nil).AnyTimes()
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			MalfeasanceProofs(gomock.Any(), gomock.Any()).
 			Return(errors.New("no atxs")).AnyTimes()
-		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
+		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, true), context.Canceled)
 	})
 	t.Run("retries on no peers", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
 		ctx, cancel := context.WithCancel(context.Background())
 		ch := make(chan []p2p.Peer)
-		tester.fetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).
+		tester.mFetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).
 			DoAndReturn(func(int) []p2p.Peer {
 				return <-ch
 			}).AnyTimes()
 		var eg errgroup.Group
 		eg.Go(func() error {
-			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx), context.Canceled)
+			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, true), context.Canceled)
 			return nil
 		})
-		tester.clock.BlockUntilContext(context.Background(), 2)
-		tester.clock.Advance(tester.cfg.IDRequestInterval)
+		tester.mClock.BlockUntilContext(context.Background(), 2)
+		tester.mClock.Advance(tester.cfg.IDRequestInterval)
 		ch <- nil
 		ch <- nil
-		tester.clock.BlockUntilContext(context.Background(), 2)
-		tester.clock.Advance(tester.cfg.IDRequestInterval)
+		tester.mClock.BlockUntilContext(context.Background(), 2)
+		tester.mClock.Advance(tester.cfg.IDRequestInterval)
 
 		tester.expectLegacyMaliciousIDs()
 		tester.expectLegacyProofs(nil)
@@ -374,7 +374,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectProofs(nil)
 		ch <- tester.peers
 		ch <- tester.peers
-		tester.clock.BlockUntilContext(context.Background(), 2)
+		tester.mClock.BlockUntilContext(context.Background(), 2)
 		cancel()
 		eg.Wait()
 	})
@@ -383,16 +383,16 @@ func TestSyncer(t *testing.T) {
 		cfg.MinSyncPeers = 2
 		tester := newTester(t, cfg)
 		tester.expectPeers(tester.peers)
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			LegacyMaliciousIDs(gomock.Any(), tester.peers[0]).
 			Return(nil, errors.New("fail"))
 		for _, p := range tester.peers[1:] {
-			tester.fetcher.EXPECT().
+			tester.mFetcher.EXPECT().
 				LegacyMaliciousIDs(gomock.Any(), p).
 				Return(malData("4", "1", "3", "2"), nil)
 		}
 		tester.expectLegacyProofs(nil)
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t,
 			tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
@@ -405,7 +405,7 @@ func TestSyncer(t *testing.T) {
 			nid("3"): 1,
 			nid("4"): 1,
 		}, tester.attemptsLegacy)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.Equal(t, 1, tester.peerErrCount.n)
@@ -415,16 +415,16 @@ func TestSyncer(t *testing.T) {
 		cfg.MinSyncPeers = 2
 		tester := newTester(t, cfg)
 		tester.expectPeers(tester.peers)
-		tester.fetcher.EXPECT().
+		tester.mFetcher.EXPECT().
 			MaliciousIDs(gomock.Any(), tester.peers[0]).
 			Return(nil, errors.New("fail"))
 		for _, p := range tester.peers[1:] {
-			tester.fetcher.EXPECT().
+			tester.mFetcher.EXPECT().
 				MaliciousIDs(gomock.Any(), p).
 				Return(malData("104", "101", "103", "102"), nil)
 		}
 		tester.expectProofs(nil)
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t,
 			tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
@@ -437,7 +437,7 @@ func TestSyncer(t *testing.T) {
 			nid("103"): 1,
 			nid("104"): 1,
 		}, tester.attempts)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.Equal(t, 1, tester.peerErrCount.n)
@@ -451,7 +451,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectLegacyProofs(map[types.NodeID]error{
 			nid("2"): errors.New("fail"),
 		})
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
@@ -463,7 +463,7 @@ func TestSyncer(t *testing.T) {
 			nid("3"): 1,
 			nid("4"): 1,
 		}, tester.attemptsLegacy)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 	})
@@ -476,7 +476,7 @@ func TestSyncer(t *testing.T) {
 		tester.expectProofs(map[types.NodeID]error{
 			nid("102"): errors.New("fail"),
 		})
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
@@ -488,7 +488,7 @@ func TestSyncer(t *testing.T) {
 			nid("103"): 1,
 			nid("104"): 1,
 		}, tester.attempts)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 	})
@@ -501,7 +501,7 @@ func TestSyncer(t *testing.T) {
 			// (see expectMaliciousIDs)
 			nid("2"): pubsub.ErrValidationReject,
 		})
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
@@ -513,7 +513,7 @@ func TestSyncer(t *testing.T) {
 			nid("3"): 1,
 			nid("4"): 1,
 		}, tester.attemptsLegacy)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureLegacyInSync(context.Background(), epochStart, epochEnd))
 	})
@@ -526,7 +526,7 @@ func TestSyncer(t *testing.T) {
 			// (see expectMaliciousIDs)
 			nid("102"): pubsub.ErrValidationReject,
 		})
-		epochStart := tester.clock.Now().Truncate(time.Second)
+		epochStart := tester.mClock.Now().Truncate(time.Second)
 		epochEnd := epochStart.Add(10 * time.Minute)
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 		require.ElementsMatch(t, []types.NodeID{
@@ -538,7 +538,7 @@ func TestSyncer(t *testing.T) {
 			nid("103"): 1,
 			nid("104"): 1,
 		}, tester.attempts)
-		tester.clock.Advance(1 * time.Minute)
+		tester.mClock.Advance(1 * time.Minute)
 		// second call does nothing after recent sync
 		require.NoError(t, tester.syncer.EnsureInSync(context.Background(), epochStart, epochEnd))
 	})
