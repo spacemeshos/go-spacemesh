@@ -103,17 +103,9 @@ func (ts *testSyncer) expectMalEnsureInSync(current types.LayerID, malSyncEnable
 
 func (ts *testSyncer) expectMalDownloadLoop(malSyncEnabled bool) chan struct{} {
 	ch := make(chan struct{})
-	ts.mMalSyncer.EXPECT().DownloadLoop(gomock.Any(), malSyncEnabled).
-		DoAndReturn(func(context.Context, bool) error {
-			close(ch)
-			return nil
-		})
-	ts.tb.Cleanup(func() {
-		select {
-		case <-ch:
-		case <-time.After(10 * time.Second):
-			require.FailNow(ts.tb, "timed out waiting for malsync loop start")
-		}
+	ts.mMalSyncer.EXPECT().DownloadLoop(gomock.Any(), malSyncEnabled).DoAndReturn(func(context.Context, bool) error {
+		close(ch)
+		return nil
 	})
 	return ch
 }
