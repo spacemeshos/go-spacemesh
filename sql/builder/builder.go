@@ -161,8 +161,18 @@ func FilterFrom(operations Operations) string {
 		}
 	}
 
+	// Apply modifiers in correct SQL order: GROUP BY, ORDER BY, OFFSET, LIMIT
+	var limit *Modifier
 	for _, m := range operations.Modifiers {
+		if m.Key == Limit {
+			limit = &m
+			continue
+		}
 		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(m.Key), m.Value))
+	}
+	// Apply LIMIT at the end
+	if limit != nil {
+		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(limit.Key), limit.Value))
 	}
 	return queryBuilder.String()
 }

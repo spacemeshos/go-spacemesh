@@ -2,6 +2,7 @@ package v2beta1
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
@@ -59,17 +60,18 @@ func (s *SmeshingIdentitiesService) States(
 		return nil, status.Error(codes.InvalidArgument, "limit must be set to <= 100")
 	}
 
-	ops := toEventOperations(request)
+	ops, err := toEventOperations(request)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
 	pbIdentities := make(map[string]*pb.Identity, request.Limit)
-	for nodeId, history := range s.states.All(ops) {
+	for nodeId, history := range s.states.All(*ops) {
 		pbIdentities[nodeId.String()] = &pb.Identity{
 			History: []*pb.IdentityStateInfo{},
 		}
 
-		for i := len(history) - 1; i >= 0; i-- {
-			info := history[i]
-
+		for _, info := range history {
 			identityStateInfo := info.State.APIStateInfo()
 			identityStateInfo.Time = timestamppb.New(info.Time)
 
@@ -80,10 +82,10 @@ func (s *SmeshingIdentitiesService) States(
 	return &pb.IdentityStatesResponse{Identities: pbIdentities}, nil
 }
 
-func toEventOperations(filter *pb.IdentityStatesRequest) builder.Operations {
-	ops := builder.Operations{}
+func toEventOperations(filter *pb.IdentityStatesRequest) (*builder.Operations, error) {
+	ops := &builder.Operations{}
 	if filter == nil {
-		return ops
+		return ops, nil
 	}
 
 	if len(filter.States) > 0 {
@@ -105,14 +107,64 @@ func toEventOperations(filter *pb.IdentityStatesRequest) builder.Operations {
 			Value: int64(filter.Limit),
 		})
 	}
-	if filter.Offset != 0 {
-		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
-			Key:   builder.Offset,
-			Value: int64(filter.Offset),
-		})
+
+	if filter.From != nil {
+		if err := filter.From.CheckValid(); err != nil {
+			return nil, fmt.Errorf("'from' is invalid: %w", err)
+		}
+		from := filter.From.AsTime()
+		switch filter.Order {
+		case pb.SortOrder_ASC:
+			ops.Filter = append(ops.Filter, builder.Op{
+				Field: "timestamp",
+				Token: builder.Gte,
+				Value: from.UnixMicro(),
+			})
+		case pb.SortOrder_DESC:
+			ops.Filter = append(ops.Filter, builder.Op{
+				Field: "timestamp",
+				Token: builder.Lte,
+				Value: from.UnixMicro(),
+			})
+		}
+	}
+	if filter.To != nil {
+		if err := filter.To.CheckValid(); err != nil {
+			return nil, fmt.Errorf("'to' is invalid: %w", err)
+		}
+		to := filter.To.AsTime()
+		switch filter.Order {
+		case pb.SortOrder_ASC:
+			ops.Filter = append(ops.Filter, builder.Op{
+				Field: "timestamp",
+				Token: builder.Lt,
+				Value: to.UnixMicro(),
+			})
+		case pb.SortOrder_DESC:
+			ops.Filter = append(ops.Filter, builder.Op{
+				Field: "timestamp",
+				Token: builder.Gt,
+				Value: to.UnixMicro(),
+			})
+		}
 	}
 
-	return ops
+	switch filter.Order {
+	case pb.SortOrder_ASC:
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.OrderBy,
+			Value: "timestamp asc",
+		})
+	case pb.SortOrder_DESC:
+		ops.Modifiers = append(ops.Modifiers, builder.Modifier{
+			Key:   builder.OrderBy,
+			Value: "timestamp desc",
+		})
+	default:
+		return nil, fmt.Errorf("unknown sort order: %d", filter.Order)
+	}
+
+	return ops, nil
 }
 
 func (s *SmeshingIdentitiesService) PoetInfo(
