@@ -402,7 +402,8 @@ func TestProxyingJsonService(t *testing.T) {
 	require.Equal(t, http.StatusOK, status)
 	var resp pbV2.IdentityStatesResponse
 	require.NoError(t, protojson.Unmarshal(respBody, &resp))
-	require.Contains(t, resp.Identities, nodeID.String())
+	require.Len(t, resp.States, 1)
+	require.Equal(t, nodeID.Bytes(), resp.States[0].Smesher)
 }
 
 type noopHook struct{}

@@ -21,6 +21,11 @@ type StateInfo struct {
 	Time  time.Time
 }
 
+type IdStateInfo struct {
+	*StateInfo
+	ID types.NodeID
+}
+
 type StateStorage struct {
 	db     sql.Executor
 	logger *zap.Logger
@@ -33,10 +38,10 @@ func NewIdentityStateStorage(db sql.Executor, logger *zap.Logger) *StateStorage 
 	}
 }
 
-func (s *StateStorage) Set(id types.NodeID, newState State) {
+func (s *StateStorage) SetAt(id types.NodeID, newState State, time time.Time) {
 	info := StateInfo{
 		State: newState,
-		Time:  time.Now(),
+		Time:  time,
 	}
 
 	stateBytes, err := marshalState(&info)
@@ -46,6 +51,10 @@ func (s *StateStorage) Set(id types.NodeID, newState State) {
 	if err := events.InsertEvent(s.db, id, info.Time, int32(info.State.APIStateInfo().State), stateBytes); err != nil {
 		s.logger.Panic("inserting state into local DB", zap.Error(err))
 	}
+}
+
+func (s *StateStorage) Set(id types.NodeID, newState State) {
+	s.SetAt(id, newState, time.Now())
 }
 
 func (s *StateStorage) Get(id types.NodeID) ([]StateInfo, error) {
@@ -72,9 +81,9 @@ func (s *StateStorage) Get(id types.NodeID) ([]StateInfo, error) {
 	return allEvents, nil
 }
 
-func (s *StateStorage) All(ops builder.Operations) map[types.NodeID][]StateInfo {
-	allEvents := make(map[types.NodeID][]StateInfo)
-	events.IterateAllEvents(s.db, ops, func(id types.NodeID, timestamp time.Time, eventBytes []byte) bool {
+func (s *StateStorage) All(ops builder.Operations) ([]IdStateInfo, error) {
+	var allEvents []IdStateInfo
+	err := events.IterateAllEvents(s.db, ops, func(id types.NodeID, timestamp time.Time, eventBytes []byte) bool {
 		event, err := unmarshalState(eventBytes)
 		if err != nil {
 			s.logger.Panic(
@@ -84,13 +93,10 @@ func (s *StateStorage) All(ops builder.Operations) map[types.NodeID][]StateInfo 
 				zap.Error(err),
 			)
 		}
-		if _, ok := allEvents[id]; !ok {
-			allEvents[id] = make([]StateInfo, 0)
-		}
-		allEvents[id] = append(allEvents[id], *event)
+		allEvents = append(allEvents, IdStateInfo{event, id})
 		return true
 	})
-	return allEvents
+	return allEvents, err
 }
 
 func (s *StateStorage) SetEligibilities(

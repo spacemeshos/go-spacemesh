@@ -161,8 +161,27 @@ func FilterFrom(operations Operations) string {
 		}
 	}
 
+	// Apply modifiers in correct SQL order: GROUP BY, ORDER BY, LIMIT, OFFSET
+	var (
+		limit  *Modifier
+		offset *Modifier
+	)
 	for _, m := range operations.Modifiers {
-		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(m.Key), m.Value))
+		switch m.Key {
+		case Limit:
+			limit = &m
+		case Offset:
+			offset = &m
+		default:
+			queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(m.Key), m.Value))
+		}
+	}
+	// Apply LIMIT and OFFSET at the end in correct order
+	if limit != nil {
+		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(limit.Key), limit.Value))
+	}
+	if offset != nil {
+		queryBuilder.WriteString(fmt.Sprintf(" %s %v", string(offset.Key), offset.Value))
 	}
 	return queryBuilder.String()
 }
