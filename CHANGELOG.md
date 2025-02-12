@@ -2,6 +2,20 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.14
+
+### Improvements
+
+* [#6708](https://github.com/spacemeshos/go-spacemesh/pull/6708) Long deprecated or unimplemented endpoints for GRPC
+  v1 have been removed.
+
+* [#6712](https://github.com/spacemeshos/go-spacemesh/pull/6712) Added additional checks to prevent publishing ATXs
+  that would mark the identity that created them as malicious. Instead the publication will fail and the node will
+  log an error.
+
+* [#6715](https://github.com/spacemeshos/go-spacemesh/pull/6715) The new malfeasance protocol is disabled until ATXv2
+  goes live. This prevents nodes getting stuck on syncing when upgrading without ATXv2 enabled.
+
 ## v1.7.13
 
 ### Highlights
