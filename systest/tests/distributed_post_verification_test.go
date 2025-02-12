@@ -75,12 +75,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// Prepare cluster
 	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
-	ctx.ClusterSize = 8
+	ctx.ClusterSize = 4
 	cl := cluster.New(ctx, cluster.WithKeys(10))
 	require.NoError(t, cl.AddPoets(ctx))
 	require.NoError(t, cl.AddBootnodes(ctx, 1))
 	require.NoError(t, cl.AddBootstrappers(ctx))
-	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
+	// a k3 of 3 with 4 smeshers should find the malicious post in ~ 99.6% of all test runs
+	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(3))))
 
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 	cfg := getConfig(t, logger, cl, ctx)
