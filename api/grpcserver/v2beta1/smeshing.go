@@ -24,6 +24,10 @@ type SmeshingService struct {
 	appCommit  string
 }
 
+func (s *SmeshingService) Path() string {
+	return "/spacemesh.v2beta1.SmeshingService/"
+}
+
 func (s *SmeshingService) Version(
 	_ context.Context,
 	_ *spacemeshv2beta1.SmeshingVersionRequest,
