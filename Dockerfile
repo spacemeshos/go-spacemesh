@@ -26,7 +26,7 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
-FROM golang:1.23 AS builder
+FROM golang:1.24 AS builder
 ARG VERSION=""
 ENV VERSION=${VERSION}
 RUN set -ex \
