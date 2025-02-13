@@ -11,8 +11,10 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -106,10 +108,12 @@ func TestSmeshingService_Start(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		errCh := make(chan error)
-		go func() {
-			errCh <- service.Start(ctx)
-		}()
+		var eg errgroup.Group
+		eg.Go(func() error {
+			return service.Start(ctx)
+		})
+		t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
+
 		select {
 		case <-service.started:
 		case <-ctx.Done():

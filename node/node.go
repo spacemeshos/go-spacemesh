@@ -186,7 +186,7 @@ func GetNodeServiceCommand() *cobra.Command {
 			}
 			defer func() {
 				if err := unlock(); err != nil {
-					lg.Error("failed to unlock file", zap.String("path", conf.FileLock), zap.Error(err))
+					lg.Zap().Error("failed to unlock file", zap.String("path", conf.FileLock), zap.Error(err))
 				}
 			}()
 
