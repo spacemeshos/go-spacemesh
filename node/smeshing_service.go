@@ -204,14 +204,13 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 	layersPerEpoch := types.GetLayersPerEpoch()
 
 	var nodeServiceClient *client.NodeService
-	listenAddress := cfg.BaseConfig.NodeServiceAddress
 	nodeClientLog := loggers.add(NodeServiceClientLogger, logger)
 	nodeClientCfg := &nodeclient.Config{
 		RetryWaitMin: time.Second,
 		RetryWaitMax: time.Second * 30,
 		RetryMax:     10,
 	}
-	nodeServiceClient, err = nodeclient.NewNodeServiceClient(listenAddress, nodeClientLog, nodeClientCfg)
+	nodeServiceClient, err = nodeclient.NewNodeServiceClient(cfg.NodeServiceAddress, nodeClientLog, nodeClientCfg)
 	if err != nil {
 		return nil, fmt.Errorf("creating node service client: %w", err)
 	}

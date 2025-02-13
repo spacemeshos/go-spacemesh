@@ -37,6 +37,9 @@ type Config struct {
 }
 
 func NewNodeServiceClient(server string, logger *zap.Logger, cfg *Config) (*NodeService, error) {
+	if server == "" {
+		return nil, errors.New("missing node-service server address")
+	}
 	retryableClient := retryablehttp.Client{
 		Logger:       &retryableHttpLogger{logger},
 		RetryWaitMin: cfg.RetryWaitMin,
