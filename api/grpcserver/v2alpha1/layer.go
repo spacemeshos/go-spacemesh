@@ -20,11 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
-const (
-	Layer       = "layer_v2alpha1"
-	LayerStream = "layer_stream_v2alpha1"
-)
-
 func NewLayerStreamService(db sql.Executor) *LayerStreamService {
 	return &LayerStreamService{db: db}
 }

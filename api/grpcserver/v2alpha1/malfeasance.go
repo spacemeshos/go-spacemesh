@@ -26,11 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 )
 
-const (
-	Malfeasance       = "malfeasance_v2alpha1"
-	MalfeasanceStream = "malfeasance_stream_v2alpha1"
-)
-
 func NewMalfeasanceService(db sql.StateDatabase, malHandler, legacyHandler malfeasanceInfo) *MalfeasanceService {
 	return &MalfeasanceService{
 		db:         db,

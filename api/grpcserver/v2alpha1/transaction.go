@@ -31,11 +31,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-const (
-	Transaction       = "transaction_v2alpha1"
-	TransactionStream = "transaction_stream_v2alpha1"
-)
-
 // transactionConState is an API to validate transaction.
 type transactionConState interface {
 	Validation(raw types.RawTx) system.ValidationRequest

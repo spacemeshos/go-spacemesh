@@ -15,10 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
-const (
-	Account = "account_v2alpha1"
-)
-
 type accountConState interface {
 	GetProjection(types.Address) (uint64, uint64)
 }

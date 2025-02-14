@@ -11,10 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-const (
-	Node = "node_v2beta1"
-)
-
 // nodePeerCounter is an api to get current peer count.
 type nodePeerCounter interface {
 	PeerCount() uint64

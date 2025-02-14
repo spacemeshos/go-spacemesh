@@ -14,10 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 )
 
-const (
-	Network = "network_v2alpha1"
-)
-
 func NewNetworkService(genesisTime time.Time, config *config.Config) *NetworkService {
 	return &NetworkService{
 		genesisTime:   genesisTime,

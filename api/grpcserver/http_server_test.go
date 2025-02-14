@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/protobuf/encoding/protojson"
 
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -59,16 +60,16 @@ func TestJsonApi(t *testing.T) {
 	const build = "cafebabe"
 
 	ctrl, ctx := gomock.WithContext(context.Background(), t)
-	peerCounter := NewMockpeerCounter(ctrl)
-	meshAPIMock := NewMockmeshAPI(ctrl)
-	genTime := NewMockgenesisTimeAPI(ctrl)
-	syncer := NewMocksyncer(ctrl)
-	conStateAPI := NewMockconservativeState(ctrl)
+	peerCounter := v1.NewMockpeerCounter(ctrl)
+	meshAPIMock := v1.NewMockmeshAPI(ctrl)
+	genTime := v1.NewMockgenesisTimeAPI(ctrl)
+	syncer := v1.NewMocksyncer(ctrl)
+	conStateAPI := v1.NewMockconservativeState(ctrl)
 
 	cdb := datastore.NewCachedDB(statesql.InMemoryTest(t), zaptest.NewLogger(t))
 	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
-	svc1 := NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
-	svc2 := NewMeshService(
+	svc1 := v1.NewNodeService(peerCounter, meshAPIMock, genTime, syncer, version, build)
+	svc2 := v1.NewMeshService(
 		cdb,
 		meshAPIMock,
 		conStateAPI,
