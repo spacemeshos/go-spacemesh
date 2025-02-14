@@ -217,7 +217,13 @@ func (db *CachedDB) IterateMalfeasanceProofs(
 // MaxHeightAtx returns the ATX ID with the maximum height.
 // Deprecated: replaced by atxs.GetIDWithMaxHeight.
 func (db *CachedDB) MaxHeightAtx() (types.ATXID, error) {
-	return atxs.GetIDWithMaxHeight(db, types.EmptyNodeID, atxs.FilterAll)
+	var id types.ATXID
+	err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+		var err error
+		id, err = atxs.GetIDWithMaxHeight(tx, types.EmptyNodeID, atxs.FilterAll)
+		return err
+	})
+	return id, err
 }
 
 // Hint marks which DB should be queried for a certain provided hash.

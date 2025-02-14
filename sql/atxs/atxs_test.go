@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -778,11 +779,12 @@ func newAtx(tb testing.TB, signer *signing.EdSigner, opts ...createAtxOpt) *type
 }
 
 type header struct {
-	coinbase    types.Address
-	base, count uint64
-	epoch       types.EpochID
-	malicious   bool
-	filteredOut bool
+	coinbase        types.Address
+	base, count     uint64
+	epoch           types.EpochID
+	malicious       bool
+	legacyMalicious bool
+	filteredOut     bool
 }
 
 func createAtx(tb testing.TB, db sql.StateDatabase, hdr header) (types.ATXID, *signing.EdSigner) {
@@ -801,8 +803,11 @@ func createAtx(tb testing.TB, db sql.StateDatabase, hdr header) (types.ATXID, *s
 	full.SetID(types.RandomATXID())
 
 	require.NoError(tb, atxs.Add(db, full, types.AtxBlob{}))
-	if hdr.malicious {
+	if hdr.legacyMalicious {
 		require.NoError(tb, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
+	}
+	if hdr.malicious {
+		require.NoError(tb, malfeasance.AddProof(db, sig.NodeID(), nil, []byte("bad"), 1, time.Now()))
 	}
 
 	return full.ID(), sig
@@ -857,6 +862,16 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 			expect: 1,
 		},
 		{
+			desc: "skip legacy malicious id",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1, legacyMalicious: true},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1, legacyMalicious: true},
+				{coinbase: types.Address{3}, base: 1, count: 1, epoch: 2},
+			},
+			pref:   1,
+			expect: 2,
+		},
+		{
 			desc: "skip malicious id",
 			atxs: []header{
 				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1, malicious: true},
@@ -865,6 +880,16 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 			},
 			pref:   1,
 			expect: 2,
+		},
+		{
+			desc: "skip legacy malicious id not found",
+			atxs: []header{
+				{coinbase: types.Address{1}, base: 1, count: 2, epoch: 1, legacyMalicious: true},
+				{coinbase: types.Address{2}, base: 1, count: 2, epoch: 1, legacyMalicious: true},
+				{coinbase: types.Address{3}, base: 1, count: 2, epoch: 2, legacyMalicious: true},
+			},
+			pref:   1,
+			expect: -1,
 		},
 		{
 			desc: "skip malicious id not found",
@@ -916,9 +941,14 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 			if tc.pref > 0 {
 				pref = sigs[tc.pref].NodeID()
 			}
-			rst, err := atxs.GetIDWithMaxHeight(db, pref, func(id types.ATXID) bool {
-				_, ok := filtered[id]
-				return !ok
+			var rst types.ATXID
+			err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+				var err error
+				rst, err = atxs.GetIDWithMaxHeight(tx, pref, func(id types.ATXID) bool {
+					_, ok := filtered[id]
+					return !ok
+				})
+				return err
 			})
 			if len(tc.atxs) == 0 || tc.expect < 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
