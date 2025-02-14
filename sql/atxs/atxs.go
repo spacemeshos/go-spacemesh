@@ -554,11 +554,13 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 		return true
 	}
 
+	// TODO(mafa): this query is inefficient and incomplete (doesn't check malfeasance table)
 	_, err := db.Exec(`
-	SELECT id, base_tick_height + tick_count AS height, pubkey
-	FROM atxs LEFT JOIN identities using(pubkey)
-	WHERE identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
-	ORDER BY height DESC, epoch DESC;`, nil, dec)
+		SELECT id, base_tick_height + tick_count AS height, pubkey
+		FROM atxs LEFT JOIN identities using(pubkey)
+		WHERE identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
+		ORDER BY height DESC, epoch DESC
+	`, nil, dec)
 	switch {
 	case err != nil:
 		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", err)
@@ -803,21 +805,22 @@ func IterateForGrading(
 	epoch types.EpochID,
 	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
 ) error {
+	// TODO(mafa): this query is inefficient and incomplete (doesn't check malfeasance table)
 	if _, err := db.Exec(`
 		select atxs.id, atxs.received, identities.received, effective_num_units, tick_count from atxs
 		left join identities on atxs.pubkey = identities.pubkey
-		where atxs.epoch == ?1;`,
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(epoch))
-		}, func(stmt *sql.Statement) bool {
-			id := types.ATXID{}
-			stmt.ColumnBytes(0, id[:])
-			atxtime := stmt.ColumnInt64(1)
-			prooftime := stmt.ColumnInt64(2)
-			units := uint64(stmt.ColumnInt64(3))
-			ticks := uint64(stmt.ColumnInt64(4))
-			return fn(id, atxtime, prooftime, units*ticks)
-		}); err != nil {
+		where atxs.epoch == ?1
+	`, func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+	}, func(stmt *sql.Statement) bool {
+		id := types.ATXID{}
+		stmt.ColumnBytes(0, id[:])
+		atxtime := stmt.ColumnInt64(1)
+		prooftime := stmt.ColumnInt64(2)
+		units := uint64(stmt.ColumnInt64(3))
+		ticks := uint64(stmt.ColumnInt64(4))
+		return fn(id, atxtime, prooftime, units*ticks)
+	}); err != nil {
 		return fmt.Errorf("iterate for grading: %w", err)
 	}
 	return nil
@@ -828,6 +831,7 @@ func IterateAtxsWithMalfeasance(
 	publish types.EpochID,
 	fn func(atx *types.ActivationTx, malicious bool) bool,
 ) error {
+	// TODO(mafa): this query is inefficient and incomplete (doesn't check malfeasance table)
 	query := fieldsQuery + `, iif(i.proof is null, 0, 1) as malicious
 	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
 
@@ -848,6 +852,7 @@ func IterateAtxIdsWithMalfeasance(
 	publish types.EpochID,
 	fn func(id types.ATXID, malicious bool) bool,
 ) error {
+	// TODO(mafa): this query is inefficient and incomplete (doesn't check malfeasance table)
 	query := `select id, iif(i.proof is null, 0, 1) as malicious
 	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
 
