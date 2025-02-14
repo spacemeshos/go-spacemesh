@@ -167,7 +167,7 @@ func toAtx(atx *types.ActivationTx) *spacemeshv2alpha1.Activation {
 	}
 }
 
-func NewActivationService(db sql.StateDatabase, goldenAtx types.ATXID) *ActivationService {
+func NewActivationService(db sql.Executor, goldenAtx types.ATXID) *ActivationService {
 	return &ActivationService{
 		db:        db,
 		goldenAtx: goldenAtx,
@@ -176,7 +176,7 @@ func NewActivationService(db sql.StateDatabase, goldenAtx types.ATXID) *Activati
 
 type ActivationService struct {
 	goldenAtx types.ATXID
-	db        sql.StateDatabase
+	db        sql.Executor
 }
 
 func (s *ActivationService) RegisterService(server *grpc.Server) {
@@ -242,15 +242,10 @@ func (s *ActivationService) ActivationsCount(
 }
 
 func (s *ActivationService) Highest(
-	ctx context.Context,
+	_ context.Context,
 	_ *spacemeshv2alpha1.HighestRequest,
 ) (*spacemeshv2alpha1.HighestResponse, error) {
-	var highest types.ATXID
-	err := s.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
-		var err error
-		highest, err = atxs.GetIDWithMaxHeight(tx, types.EmptyNodeID, atxs.FilterAll)
-		return err
-	})
+	highest, err := atxs.GetIDWithMaxHeight(s.db, types.EmptyNodeID, atxs.FilterAll)
 	if err != nil {
 		return &spacemeshv2alpha1.HighestResponse{
 			Activation: &spacemeshv2alpha1.Activation{

@@ -518,27 +518,14 @@ func FilterAll(types.ATXID) bool { return true }
 // highest ticked atx still in previous epoch and the atxs building on top of it have not been published yet.
 // Selecting from the last two epochs to strike a balance between being fair to honest miners while not giving
 // unfair advantage for malicious actors who retroactively publish a high tick atx many epochs back.
-func GetIDWithMaxHeight(tx sql.Transaction, pref types.NodeID, filter Filter) (types.ATXID, error) {
+func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (types.ATXID, error) {
 	if filter == nil {
 		filter = FilterAll
 	}
-
-	// find max epoch
-	var maxEpoch types.EpochID
-	if _, err := tx.Exec("select max(epoch) from atxs;", nil, func(stmt *sql.Statement) bool {
-		maxEpoch = types.EpochID(uint32(stmt.ColumnInt64(0)))
-		return false
-	}); err != nil {
-		return types.ATXID{}, fmt.Errorf("selecting max epoch: %w", err)
-	}
-
 	var (
 		rst     types.ATXID
 		highest uint64
 	)
-	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(maxEpoch-1))
-	}
 	dec := func(stmt *sql.Statement) bool {
 		var id types.ATXID
 		stmt.ColumnBytes(0, id[:])
@@ -567,12 +554,13 @@ func GetIDWithMaxHeight(tx sql.Transaction, pref types.NodeID, filter Filter) (t
 		return true
 	}
 
-	_, err := tx.Exec(`
+	_, err := db.Exec(`
+		WITH max_epoch AS (SELECT MAX(epoch) AS max_epoch FROM atxs)
 		SELECT a.id, a.height, a.pubkey
 		FROM (
 			SELECT id, base_tick_height + tick_count AS height, pubkey, epoch
 			FROM atxs
-			WHERE epoch >= ?1
+			WHERE epoch >= (SELECT max_epoch FROM max_epoch)-1
 		) a
 		WHERE NOT EXISTS (
 			SELECT 1 FROM identities i WHERE i.pubkey = a.pubkey
@@ -580,7 +568,7 @@ func GetIDWithMaxHeight(tx sql.Transaction, pref types.NodeID, filter Filter) (t
 		 	SELECT 1 FROM malfeasance m WHERE m.pubkey = a.pubkey
 		)
 		ORDER BY a.height DESC, a.epoch DESC
-	`, enc, dec)
+	`, nil, dec)
 	switch {
 	case err != nil:
 		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", err)

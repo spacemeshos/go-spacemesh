@@ -941,14 +941,9 @@ func TestGetIDWithMaxHeight(t *testing.T) {
 			if tc.pref > 0 {
 				pref = sigs[tc.pref].NodeID()
 			}
-			var rst types.ATXID
-			err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-				var err error
-				rst, err = atxs.GetIDWithMaxHeight(tx, pref, func(id types.ATXID) bool {
-					_, ok := filtered[id]
-					return !ok
-				})
-				return err
+			rst, err := atxs.GetIDWithMaxHeight(db, pref, func(id types.ATXID) bool {
+				_, ok := filtered[id]
+				return !ok
 			})
 			if len(tc.atxs) == 0 || tc.expect < 0 {
 				require.ErrorIs(t, err, sql.ErrNotFound)
