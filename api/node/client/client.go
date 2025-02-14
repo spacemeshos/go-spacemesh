@@ -129,6 +129,12 @@ func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) er
 	// The `hare3.DefaultProtocolName` contains slashes which
 	// makes it unsuitable for a path parameter,
 	// thus we change it to hare3 here and backwards on the server side.
+	// FIXME: we check if `proto == ""` because the testnet config has
+	// empty hare3 proto in `config/presets/testenet.go`.
+	// Remove it after fixing the testnet preset.
+	if proto == "" {
+		proto = "testnet-hare3-workaround"
+	}
 	if proto == hare3.DefaultProtocolName {
 		proto = "hare3"
 	}
