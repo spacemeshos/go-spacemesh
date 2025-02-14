@@ -537,7 +537,7 @@ func GetIDWithMaxHeight(tx sql.Transaction, pref types.NodeID, filter Filter) (t
 		highest uint64
 	)
 	enc := func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(maxEpoch))
+		stmt.BindInt64(1, int64(maxEpoch-1))
 	}
 	dec := func(stmt *sql.Statement) bool {
 		var id types.ATXID
@@ -572,7 +572,7 @@ func GetIDWithMaxHeight(tx sql.Transaction, pref types.NodeID, filter Filter) (t
 		FROM (
 			SELECT id, base_tick_height + tick_count AS height, pubkey, epoch
 			FROM atxs
-			WHERE epoch >= (?1 - 1)
+			WHERE epoch >= ?1
 		) a
 		WHERE NOT EXISTS (
 			SELECT 1 FROM identities i WHERE i.pubkey = a.pubkey
