@@ -1212,6 +1212,41 @@ func TestGradeAtx(t *testing.T) {
 	}
 }
 
+func TestProposalBuilder_CalculateEligibilitySlotsFor(t *testing.T) {
+	t.Run("returns 0 when node doesn't have an ATX", func(t *testing.T) {
+		clock := mocks.NewMocklayerClock(gomock.NewController(t))
+		stateDB := statesql.InMemoryTest(t)
+		atxsdata := atxsdata.New()
+		pb := New(
+			clock,
+			stateDB,
+			localsql.InMemoryTest(t),
+			atxsdata,
+			nil,
+			nil,
+			nil,
+			nil,
+			WithLogger(zaptest.NewLogger(t)),
+		)
+		nodeID := types.NodeID{1, 2, 3}
+		epoch := types.EpochID(6)
+
+		require.NoError(t, beacons.Add(stateDB, epoch, types.Beacon{1}))
+		clock.EXPECT().CurrentLayer().Return(epoch.FirstLayer())
+		firstLayerTime := time.Now().Add(-time.Minute)
+		clock.EXPECT().LayerToTime(epoch.FirstLayer()).Return(firstLayerTime)
+
+		atx := gatx(types.RandomATXID(), epoch-1, types.RandomNodeID(), 10)
+		atxsdata.AddFromAtx(atx, false)
+		require.NoError(t, atxs.Add(stateDB, atx, types.AtxBlob{}))
+
+		slots, nonce, err := pb.CalculateEligibilitySlotsFor(context.Background(), nodeID, epoch)
+		require.NoError(t, err)
+		require.Equal(t, uint32(0), slots)
+		require.Equal(t, types.VRFPostIndex(0), nonce)
+	})
+}
+
 func BenchmarkCache(b *testing.B) {
 	runtime.GC()
 	cache := make(map[types.ATXID]*atxsdata.ATX, 10_000_000)

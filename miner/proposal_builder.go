@@ -595,7 +595,17 @@ func (pb *ProposalBuilder) CalculateEligibilitySlotsFor(
 	}
 	var ss session
 	if err := pb.initSignerSessionData(&ss, epoch, node); err != nil {
-		return 0, 0, err
+		if errors.Is(err, errAtxNotAvailable) {
+			pb.logger.Debug("smesher doesn't have atx that targets this epoch",
+				log.ZContext(ctx),
+				log.ZShortStringer("smesherID", node),
+				zap.Uint32("epoch", epoch.Uint32()),
+			)
+			// no atx in epoch means not eligible in epoch
+			return 0, 0, nil
+		} else {
+			return 0, 0, err
+		}
 	}
 	return ss.eligibilities.slots, ss.nonce, nil
 }
