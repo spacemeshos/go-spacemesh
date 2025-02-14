@@ -521,9 +521,6 @@ func (app *App) Initialize() error {
 		}
 	}
 
-	// override default config in timesync since timesync is using TimeConfigValues
-	timeCfg.TimeConfigValues = app.Config.TIME
-
 	app.setupLogging()
 	app.log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 
