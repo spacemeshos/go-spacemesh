@@ -130,7 +130,7 @@ func (s *NodeService) Publish(ctx context.Context, proto string, blob []byte) er
 	// makes it unsuitable for a path parameter,
 	// thus we change it to hare3 here and backwards on the server side.
 	// FIXME: we check if `proto == ""` because the testnet config has
-	// empty hare3 proto in `config/presets/testenet.go`.
+	// empty hare3 proto in `config/presets/testnet.go`.
 	// Remove it after fixing the testnet preset.
 	if proto == "" {
 		proto = "testnet-hare3-workaround"
