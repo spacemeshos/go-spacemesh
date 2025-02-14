@@ -261,6 +261,13 @@ func (s *Server) PostPublishProtocol(
 	}
 
 	protocol := string(request.Protocol)
+	// FIXME: we check if `proto == "testnet-hare3-workaround"` as a workaround for
+	// an empty hare3 proto in `config/presets/testnet.go`.
+	// The client set "testnet-hare3-workaround" and we change back to "".
+	// Remove it after fixing the testnet preset.
+	if protocol == "testnet-hare3-workaround" {
+		protocol = ""
+	}
 	if protocol == "hare3" {
 		// Revert protocol change (avoiding slashes) done on the client side.
 		// TODO: hare3 takes that from configuration what also should be done
