@@ -9,7 +9,7 @@ type TimeConfig struct {
 	Peersync peersync.Config `mapstructure:"peersync"`
 }
 
-// DefaultConfig defines the default tymesync configuration.
+// DefaultConfig defines the default timesync configuration.
 func DefaultConfig() TimeConfig {
 	// TimeConfigValues defines default values for all time and ntp related params.
 	return TimeConfig{
