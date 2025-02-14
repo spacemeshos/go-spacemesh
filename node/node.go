@@ -21,7 +21,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
