@@ -97,7 +97,12 @@ func createTestHandler(tb testing.TB) *testHandler {
 	db := statesql.InMemoryTest(tb)
 	atxsdata := atxsdata.New()
 	ms.md.EXPECT().GetBallot(gomock.Any()).AnyTimes().DoAndReturn(func(id types.BallotID) *tortoise.BallotData {
-		ballot, err := ballots.Get(db, id)
+		var ballot *types.Ballot
+		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			var err error
+			ballot, err = ballots.Get(tx, id)
+			return err
+		})
 		if err != nil {
 			return nil
 		}

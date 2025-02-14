@@ -1064,33 +1064,6 @@ func TestBaseBallotGenesis(t *testing.T) {
 	require.Empty(t, votes.Base)
 }
 
-func ensureBaseAndExceptionsFromLayer(
-	tb testing.TB,
-	lid types.LayerID,
-	votes *types.Opinion,
-	db sql.Executor,
-) {
-	tb.Helper()
-
-	blts, err := ballots.Get(db, votes.Base)
-	require.NoError(tb, err)
-	require.Equal(tb, lid, blts.Layer)
-
-	for _, vote := range votes.Support {
-		block, err := blocks.Get(db, vote.ID)
-		require.NoError(tb, err)
-		require.Equal(
-			tb,
-			lid,
-			block.LayerIndex,
-			"block=%s block layer=%s last=%s",
-			block.ID(),
-			block.LayerIndex,
-			lid,
-		)
-	}
-}
-
 func TestBaseBallotEvictedBlock(t *testing.T) {
 	const size = 12
 	s := sim.New(t,
@@ -1123,7 +1096,21 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		votes, err := tortoise.EncodeVotes(context.Background())
 		require.NoError(t, err)
-		ensureBaseAndExceptionsFromLayer(t, last, votes, s.GetState(0).DB)
+
+		var ballot *types.Ballot
+		err = s.GetState(0).DB.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			var err error
+			ballot, err = ballots.Get(tx, votes.Base)
+			return err
+		})
+		require.NoError(t, err)
+		require.Equal(t, last, ballot.Layer)
+
+		for _, vote := range votes.Support {
+			block, err := blocks.Get(s.GetState(0).DB, vote.ID)
+			require.NoError(t, err)
+			require.Equalf(t, last, block.LayerIndex, "block=%s layer=%s last=%s", block.ID(), block.LayerIndex, last)
+		}
 
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		tortoise.TallyVotes(last)
@@ -1199,7 +1186,13 @@ func TestBaseBallotPrioritization(t *testing.T) {
 
 			votes, err := tortoise.EncodeVotes(context.Background())
 			require.NoError(t, err)
-			ballot, err := ballots.Get(s.GetState(0).DB, votes.Base)
+
+			var ballot *types.Ballot
+			err = s.GetState(0).DB.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+				var err error
+				ballot, err = ballots.Get(tx, votes.Base)
+				return err
+			})
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, ballot.Layer)
 		})
@@ -1237,21 +1230,6 @@ func splitVoting(n int) sim.VotesGenerator {
 		}
 		return voting
 	}
-}
-
-func ensureBallotLayerWithin(
-	tb testing.TB,
-	db sql.Executor,
-	ballotID types.BallotID,
-	from, to types.LayerID,
-) {
-	tb.Helper()
-
-	ballot, err := ballots.Get(db, ballotID)
-	require.NoError(tb, err)
-	require.True(tb, !ballot.Layer.Before(from) && !ballot.Layer.After(to),
-		"%s not in [%s,%s]", ballot.Layer, from, to,
-	)
 }
 
 func ensureBlockLayerWithin(
@@ -1378,7 +1356,15 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 
 	votes, err := tortoise.EncodeVotes(context.Background())
 	require.NoError(t, err)
-	ensureBallotLayerWithin(t, s.GetState(0).DB, votes.Base, last, last)
+
+	var ballot *types.Ballot
+	err = s.GetState(0).DB.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+		var err error
+		ballot, err = ballots.Get(tx, votes.Base)
+		return err
+	})
+	require.NoError(t, err)
+	require.True(t, !ballot.Layer.Before(last) && !ballot.Layer.After(last), "%s not in [%s,%s]", ballot.Layer, last, last)
 
 	require.Len(t, votes.Against, len(unsupported))
 	for _, vote := range votes.Against {
@@ -2916,7 +2902,13 @@ func TestBaseBallotBeforeCurrentLayer(t *testing.T) {
 		tortoise.TallyVotes(last)
 		encoded, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(last))
 		require.NoError(t, err)
-		ballot, err := ballots.Get(s.GetState(0).DB, encoded.Base)
+
+		var ballot *types.Ballot
+		s.GetState(0).DB.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			var err error
+			ballot, err = ballots.Get(tx, encoded.Base)
+			return err
+		})
 		require.NoError(t, err)
 		require.NotEqual(t, last, ballot.Layer)
 	})

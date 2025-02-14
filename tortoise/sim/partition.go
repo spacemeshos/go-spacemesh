@@ -1,9 +1,11 @@
 package sim
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 )
@@ -157,7 +159,11 @@ func (g *Generator) mergeLayers(other *Generator) {
 				}
 			}
 			if !exists {
-				rst, _ := ballots.Get(g.GetState(0).DB, ballot.ID())
+				var rst *types.Ballot
+				g.GetState(0).DB.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+					rst, _ = ballots.Get(tx, ballot.ID())
+					return nil
+				})
 				if rst != nil {
 					continue
 				}

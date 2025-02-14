@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -48,41 +49,84 @@ func TestLayer(t *testing.T) {
 	for i, ballot := range rst {
 		require.Equal(t, &ballots[i], ballot)
 	}
-
-	require.NoError(t, identities.SetMalicious(db, pub, []byte("proof"), time.Now()))
-	rst, err = Layer(db, start)
-	require.NoError(t, err)
-	require.Len(t, rst, len(ballots))
-	for _, ballot := range rst {
-		require.True(t, ballot.IsMalicious())
-	}
-
-	rst, err = LayerNoMalicious(db, start)
-	require.NoError(t, err)
-	require.Len(t, rst, len(ballots))
-	for _, ballot := range rst {
-		require.False(t, ballot.IsMalicious())
-	}
 }
 
 func TestAdd(t *testing.T) {
-	db := statesql.InMemoryTest(t)
-	nodeID := types.RandomNodeID()
-	ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
-	_, err := Get(db, ballot.ID())
-	require.ErrorIs(t, err, sql.ErrNotFound)
+	t.Parallel()
 
-	require.NoError(t, Add(db, &ballot))
-	require.ErrorIs(t, Add(db, &ballot), sql.ErrObjectExists)
+	t.Run("double add fails", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+		nodeID := types.RandomNodeID()
+		ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
-	stored, err := Get(db, ballot.ID())
-	require.NoError(t, err)
-	require.Equal(t, &ballot, stored)
+		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			_, err := Get(tx, ballot.ID())
+			return err
+		})
+		require.ErrorIs(t, err, sql.ErrNotFound)
 
-	require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof"), time.Now()))
-	stored, err = Get(db, ballot.ID())
-	require.NoError(t, err)
-	require.True(t, stored.IsMalicious())
+		require.NoError(t, Add(db, &ballot))
+		require.ErrorIs(t, Add(db, &ballot), sql.ErrObjectExists)
+	})
+
+	t.Run("add and get", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+		nodeID := types.RandomNodeID()
+		ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+
+		require.NoError(t, Add(db, &ballot))
+
+		var stored *types.Ballot
+		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			var err error
+			stored, err = Get(tx, ballot.ID())
+			return err
+		})
+		require.NoError(t, err)
+		require.Equal(t, &ballot, stored)
+	})
+
+	t.Run("add and get, legacy malicious", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+		nodeID := types.RandomNodeID()
+		ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+
+		ballot.SetMalicious() // not actually persisted in DB
+		require.NoError(t, Add(db, &ballot))
+		require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof"), time.Now()))
+
+		var stored *types.Ballot
+		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			var err error
+			stored, err = Get(tx, ballot.ID())
+			return err
+		})
+		require.NoError(t, err)
+		require.True(t, stored.IsMalicious())
+	})
+
+	t.Run("add and get, malicious", func(t *testing.T) {
+		t.Parallel()
+		db := statesql.InMemoryTest(t)
+		nodeID := types.RandomNodeID()
+		ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
+
+		ballot.SetMalicious() // not actually persisted in DB
+		require.NoError(t, Add(db, &ballot))
+		require.NoError(t, malfeasance.AddProof(db, nodeID, nil, []byte("proof"), 1, time.Now()))
+
+		var stored *types.Ballot
+		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			var err error
+			stored, err = Get(tx, ballot.ID())
+			return err
+		})
+		require.NoError(t, err)
+		require.True(t, stored.IsMalicious())
+	})
 }
 
 func TestHas(t *testing.T) {
@@ -182,20 +226,12 @@ func TestFirstInEpoch(t *testing.T) {
 
 	got, err = FirstInEpoch(db, atx.ID(), 2)
 	require.NoError(t, err)
-	require.False(t, got.IsMalicious())
 	require.Equal(t, got.AtxID, atx.ID())
 	require.Equal(t, got.ID(), b1.ID())
 
 	last, err := LastInEpoch(db, atx.ID(), 2)
 	require.NoError(t, err)
 	require.Equal(t, b3.ID(), last.ID())
-
-	require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), time.Now()))
-	got, err = FirstInEpoch(db, atx.ID(), 2)
-	require.NoError(t, err)
-	require.True(t, got.IsMalicious())
-	require.Equal(t, got.AtxID, atx.ID())
-	require.Equal(t, got.ID(), b1.ID())
 }
 
 func TestAllFirstInEpoch(t *testing.T) {
