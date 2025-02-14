@@ -507,7 +507,7 @@ func applyGenesis(gpath string, genesis config.GenesisConfig) error {
 		}
 		return nil
 	}
-	if diff := cmp.Diff(&existing, &genesis); len(diff) > 0 {
+	if diff := existing.Diff(&genesis); len(diff) > 0 {
 		return fmt.Errorf(
 			"genesis config updated after node initialization, "+
 				"if this update is required delete config "+
