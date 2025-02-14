@@ -255,8 +255,8 @@ func Test_Hare(t *testing.T) {
 }
 
 func TestProposals(t *testing.T) {
-	svc, mock := setupE2E(t)
 	t.Run("build for", func(t *testing.T) {
+		svc, mock := setupE2E(t)
 		p := createProposal(t, true)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
 		prop, _, err := svc.Proposal(context.Background(), p.Layer, p.SmesherID)
@@ -264,13 +264,35 @@ func TestProposals(t *testing.T) {
 		prop.MustInitialize()
 		require.EqualValues(t, p, prop)
 	})
-	svc, mock = setupE2E(t)
 	t.Run("build for - no eligibility", func(t *testing.T) {
+		svc, mock := setupE2E(t)
 		p := createProposal(t, false)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
 		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
 		require.NoError(t, err)
 		require.Empty(t, prop)
+	})
+}
+
+func TestCalculateEligibilitySlots(t *testing.T) {
+	t.Run("smesher has eligibility", func(t *testing.T) {
+		svc, mock := setupE2E(t)
+		node := types.RandomNodeID()
+		epoch := types.EpochID(5)
+		mock.proposals.EXPECT().CalculateEligibilitySlotsFor(gomock.Any(), node, epoch).Return(10, 11111, nil)
+		slots, vrfNonce, err := svc.CalculateEligibilitySlotsFor(context.Background(), node, epoch)
+		require.NoError(t, err)
+		require.EqualValues(t, 10, slots)
+		require.EqualValues(t, 11111, vrfNonce)
+	})
+	t.Run("smesher doesn't have an ATX - 0 slots returned", func(t *testing.T) {
+		svc, mock := setupE2E(t)
+		node := types.RandomNodeID()
+		epoch := types.EpochID(5)
+		mock.proposals.EXPECT().CalculateEligibilitySlotsFor(gomock.Any(), node, epoch).Return(0, 0, nil)
+		slots, _, err := svc.CalculateEligibilitySlotsFor(context.Background(), node, epoch)
+		require.NoError(t, err)
+		require.Zero(t, slots)
 	})
 }
 
