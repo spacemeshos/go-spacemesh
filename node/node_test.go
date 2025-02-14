@@ -1288,14 +1288,20 @@ func launchPostSupervisor(
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
-	cfg := config.MainnetConfig()
+	cfg := testConfigFrom(tb, config.MainnetConfig())
+	// FIXME: unfortunately, many tests depend on globals being set.
 	types.SetNetworkHRP(cfg.NetworkHRP)
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
+	return cfg
+}
+
+func testConfigFrom(tb testing.TB, cfg config.Config) *config.Config {
 	tmp := tb.TempDir()
 	cfg.DataDirParent = tmp
 	cfg.FileLock = filepath.Join(tmp, "LOCK")
 	cfg.LayerDuration = 20 * time.Second
+	cfg.NetworkHRP = "test"
 
 	// is set to 0 to make sync start immediately when node starts
 	cfg.P2P.MinPeers = 0
@@ -1310,7 +1316,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = false
-	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).StringWithHRP(cfg.NetworkHRP)
 	cfg.SMESHING.Opts.DataDir = filepath.Join(tmp, "post")
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.Scrypt.N = 2
@@ -1337,7 +1343,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.FETCH.BatchTimeout = 5 * time.Second
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
-	cfg.Genesis = config.DefaultTestGenesisConfig()
+	cfg.Genesis = config.DefaultTestGenesisConfig(cfg.NetworkHRP)
 	cfg.POSTService = activation.DefaultTestPostServiceConfig()
 
 	return &cfg

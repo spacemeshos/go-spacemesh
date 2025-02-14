@@ -71,10 +71,6 @@ func GetSmeshingServiceCommand() *cobra.Command {
 			lg.Info(getAppInfo(conf.Genesis))
 			lg.Info("Welcome to Spacemesh. Spacemesh activation service is starting...")
 
-			app, err := NewSmeshingService(&conf, lg)
-			if err != nil {
-				return fmt.Errorf("creating smeshing service app: %w", err)
-			}
 			unlock, err := lock(conf.FileLock)
 			if err != nil {
 				return err
@@ -84,6 +80,11 @@ func GetSmeshingServiceCommand() *cobra.Command {
 					lg.Error("failed to unlock file", zap.String("path", conf.FileLock), zap.Error(err))
 				}
 			}()
+
+			app, err := NewSmeshingService(&conf, lg)
+			if err != nil {
+				return fmt.Errorf("creating smeshing service app: %w", err)
+			}
 
 			// os.Interrupt for all systems, especially windows, syscall.SIGTERM is mainly for docker.
 			ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

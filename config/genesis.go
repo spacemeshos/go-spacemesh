@@ -152,21 +152,21 @@ func DefaultGenesisConfig() GenesisConfig {
 	return GenesisConfig{
 		ExtraData:   "mainnet",
 		GenesisTime: Genesis(time.Now()),
-		Accounts:    generateGenesisAccounts(),
+		Accounts:    generateGenesisAccounts("sm"),
 	}
 }
 
 // DefaultTestGenesisConfig is the default test configuration for the node.
-func DefaultTestGenesisConfig() GenesisConfig {
+func DefaultTestGenesisConfig(hrp string) GenesisConfig {
 	// NOTE(dshulyak) keys in default config are used in some tests
 	return GenesisConfig{
 		ExtraData:   "testnet",
 		GenesisTime: Genesis(time.Now()),
-		Accounts:    generateGenesisAccounts(),
+		Accounts:    generateGenesisAccounts(hrp),
 	}
 }
 
-func generateGenesisAccounts() map[string]uint64 {
+func generateGenesisAccounts(hrp string) map[string]uint64 {
 	acc1Signer, err := signing.NewEdSigner(
 		signing.WithPrivateKey(util.FromHex(Account1Private)),
 	)
@@ -184,7 +184,7 @@ func generateGenesisAccounts() map[string]uint64 {
 	// we default to 10^8 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
 	return map[string]uint64{
-		types.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
-		types.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
+		types.GenerateAddress(acc1Signer.PublicKey().Bytes()).StringWithHRP(hrp): 100000000000000000,
+		types.GenerateAddress(acc2Signer.PublicKey().Bytes()).StringWithHRP(hrp): 100000000000000000,
 	}
 }
