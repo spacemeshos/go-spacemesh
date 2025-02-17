@@ -856,7 +856,7 @@ func IterateAtxsWithMalfeasance(
 ) error {
 	query := fieldsQuery + `, identities.received, malfeasance.received
 		FROM (
-				SELECT * FROM atxs WHERE epoch = ?1
+			SELECT * FROM atxs WHERE epoch = ?1
 		) AS atxs
 		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
 		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
@@ -882,7 +882,7 @@ func IterateAtxIdsWithMalfeasance(
 	query := `
 		SELECT id, identities.received, malfeasance.received
 		FROM (
-				SELECT * FROM atxs WHERE epoch = ?1
+			SELECT * FROM atxs WHERE epoch = ?1
 		) AS atxs
 		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
 		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey

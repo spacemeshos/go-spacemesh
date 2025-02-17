@@ -11,7 +11,6 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -286,29 +285,11 @@ func TestActiveSetGenerate(t *testing.T) {
 				require.NoError(t, atxs.Add(tester.db, atx, types.AtxBlob{}))
 				tester.atxsdata.AddFromAtx(atx, false)
 			}
-			for _, identity := range tc.legacyMalfeasant {
-				require.NoError(
-					t,
-					identities.SetMalicious(
-						tester.db,
-						identity.id,
-						codec.MustEncode(&identity.proof),
-						identity.received,
-					),
-				)
+			for _, iden := range tc.legacyMalfeasant {
+				require.NoError(t, identities.SetMalicious(tester.db, iden.id, []byte("bad"), iden.received))
 			}
-			for _, identity := range tc.malfeasant {
-				require.NoError(
-					t,
-					malfeasance.AddProof(
-						tester.db,
-						identity.id,
-						nil,
-						codec.MustEncode(&identity.proof),
-						1,
-						identity.received,
-					),
-				)
+			for _, iden := range tc.malfeasant {
+				require.NoError(t, malfeasance.AddProof(tester.db, iden.id, nil, []byte("bad"), 1, iden.received))
 			}
 			for _, block := range tc.blocks {
 				require.NoError(t, blocks.Add(tester.db, block))
