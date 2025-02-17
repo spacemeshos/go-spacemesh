@@ -246,7 +246,7 @@ func (s *NodeService) Proposal(ctx context.Context, layer types.LayerID, node ty
 	case http.StatusOK:
 	case http.StatusNoContent:
 		// special case - no error but also no proposal, means
-		// we're no eligible this epoch with this node ID
+		// we're not eligible this epoch with this node ID
 		return nil, 0, nil
 	default:
 		return nil, 0, fmt.Errorf("unexpected status: %q", resp.Status())
