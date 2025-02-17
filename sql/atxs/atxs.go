@@ -854,17 +854,21 @@ func IterateAtxsWithMalfeasance(
 	publish types.EpochID,
 	fn func(atx *types.ActivationTx, malicious bool) bool,
 ) error {
-	// TODO(mafa): this query is inefficient and incomplete (doesn't check malfeasance table)
-	query := fieldsQuery + `, iif(i.proof is null, 0, 1) as malicious
-	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
+	query := fieldsQuery + `, identities.received, malfeasance.received
+		FROM (
+				SELECT * FROM atxs WHERE epoch = ?1
+		) AS atxs
+		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
+		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+	`
 
 	_, err := db.Exec(
 		query,
-		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
-		func(s *sql.Statement) bool {
+		func(stmt *sql.Statement) { stmt.BindInt64(1, int64(publish)) },
+		func(stmt *sql.Statement) bool {
 			return decoder(func(atx *types.ActivationTx) bool {
-				return fn(atx, s.ColumnInt(14) != 0)
-			})(s)
+				return fn(atx, stmt.ColumnType(14) != sqlite.SQLITE_NULL || stmt.ColumnType(15) != sqlite.SQLITE_NULL)
+			})(stmt)
 		},
 	)
 	return err
@@ -875,17 +879,22 @@ func IterateAtxIdsWithMalfeasance(
 	publish types.EpochID,
 	fn func(id types.ATXID, malicious bool) bool,
 ) error {
-	// TODO(mafa): this query is inefficient and incomplete (doesn't check malfeasance table)
-	query := `select id, iif(i.proof is null, 0, 1) as malicious
-	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
+	query := `
+		SELECT id, identities.received, malfeasance.received
+		FROM (
+				SELECT * FROM atxs WHERE epoch = ?1
+		) AS atxs
+		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
+		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+	`
 
 	_, err := db.Exec(
 		query,
-		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
-		func(s *sql.Statement) bool {
+		func(stmt *sql.Statement) { stmt.BindInt64(1, int64(publish)) },
+		func(stmt *sql.Statement) bool {
 			var id types.ATXID
-			s.ColumnBytes(0, id[:])
-			return fn(id, s.ColumnInt(1) != 0)
+			stmt.ColumnBytes(0, id[:])
+			return fn(id, stmt.ColumnType(1) != sqlite.SQLITE_NULL || stmt.ColumnType(2) != sqlite.SQLITE_NULL)
 		},
 	)
 	return err
