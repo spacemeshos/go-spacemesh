@@ -811,23 +811,38 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 func IterateForGrading(
 	db sql.Executor,
 	epoch types.EpochID,
-	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
+	fn func(id types.ATXID, atxTime, proofTime int64, weight uint64) bool,
 ) error {
-	// TODO(mafa): this query is inefficient and incomplete (doesn't check malfeasance table)
 	if _, err := db.Exec(`
-		select atxs.id, atxs.received, identities.received, effective_num_units, tick_count from atxs
-		left join identities on atxs.pubkey = identities.pubkey
-		where atxs.epoch == ?1
+		SELECT atxs.id, atxs.received, effective_num_units, tick_count, identities.received, malfeasance.received
+		FROM (
+			SELECT * FROM atxs WHERE epoch = ?1
+		) AS atxs
+		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
+		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
 	`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
 	}, func(stmt *sql.Statement) bool {
 		id := types.ATXID{}
 		stmt.ColumnBytes(0, id[:])
-		atxtime := stmt.ColumnInt64(1)
-		prooftime := stmt.ColumnInt64(2)
-		units := uint64(stmt.ColumnInt64(3))
-		ticks := uint64(stmt.ColumnInt64(4))
-		return fn(id, atxtime, prooftime, units*ticks)
+		atxTime := stmt.ColumnInt64(1)
+		units := uint64(stmt.ColumnInt64(2))
+		ticks := uint64(stmt.ColumnInt64(3))
+		switch {
+		case stmt.ColumnType(4) == sqlite.SQLITE_NULL && stmt.ColumnType(5) == sqlite.SQLITE_NULL:
+			// no malfeasance
+			return fn(id, atxTime, 0, units*ticks)
+		case stmt.ColumnType(4) != sqlite.SQLITE_NULL && stmt.ColumnType(5) == sqlite.SQLITE_NULL:
+			// legacy malfeasance
+			return fn(id, atxTime, stmt.ColumnInt64(4), units*ticks)
+		case stmt.ColumnType(4) == sqlite.SQLITE_NULL && stmt.ColumnType(5) != sqlite.SQLITE_NULL:
+			// new malfeasance
+			return fn(id, atxTime, stmt.ColumnInt64(5), units*ticks)
+		default:
+			// both legacy and new malfeasance, take oldest one
+			proofTime := min(stmt.ColumnInt64(4), stmt.ColumnInt64(5))
+			return fn(id, atxTime, proofTime, units*ticks)
+		}
 	}); err != nil {
 		return fmt.Errorf("iterate for grading: %w", err)
 	}

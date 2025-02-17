@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/activeset"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -41,13 +42,14 @@ func expectSet(set []types.ATXID, weight uint64) *expect {
 }
 
 type test struct {
-	desc       string
-	atxs       []*types.ActivationTx
-	malfeasent []identity
-	blocks     []*types.Block
-	ballots    []*types.Ballot
-	activesets []*types.EpochActiveSet
-	fallbacks  []types.EpochActiveSet
+	desc             string
+	atxs             []*types.ActivationTx
+	legacyMalfeasant []identity
+	malfeasant       []identity
+	blocks           []*types.Block
+	ballots          []*types.Ballot
+	activesets       []*types.EpochActiveSet
+	fallbacks        []types.EpochActiveSet
 
 	networkDelay   time.Duration
 	goodAtxPercent int
@@ -161,13 +163,13 @@ func TestActiveSetGenerate(t *testing.T) {
 			expectErr:      "failed to generate activeset for epoch 3",
 		},
 		{
-			desc: "graded active set with malicious",
+			desc: "graded active set with legacy malicious",
 			atxs: []*types.ActivationTx{
 				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
 				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
 				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
-			malfeasent: []identity{
+			legacyMalfeasant: []identity{
 				testIdentity(types.NodeID{3}, time.Unix(29, 0)),
 			},
 			epochStart:     unixPtr(30, 0),
@@ -177,13 +179,45 @@ func TestActiveSetGenerate(t *testing.T) {
 			expect:         expectSet([]types.ATXID{{1}, {2}}, 4*ticks),
 		},
 		{
+			desc: "graded active set with malicious",
+			atxs: []*types.ActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
+			},
+			malfeasant: []identity{
+				testIdentity(types.NodeID{3}, time.Unix(29, 0)),
+			},
+			epochStart:     unixPtr(30, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 60,
+			target:         3,
+			expect:         expectSet([]types.ATXID{{1}, {2}}, 4*ticks),
+		},
+		{
+			desc: "graded active set with late legacy malicious",
+			atxs: []*types.ActivationTx{
+				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
+				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
+			},
+			legacyMalfeasant: []identity{
+				testIdentity(types.NodeID{3}, time.Unix(31, 0)),
+			},
+			epochStart:     unixPtr(30, 0),
+			networkDelay:   2 * time.Second,
+			goodAtxPercent: 60,
+			target:         3,
+			expect:         expectSet([]types.ATXID{{1}, {2}, {3}}, 6*ticks),
+		},
+		{
 			desc: "graded active set with late malicious",
 			atxs: []*types.ActivationTx{
 				gatx(types.ATXID{1}, 2, types.NodeID{1}, 2, genAtxWithReceived(time.Unix(20, 0))),
 				gatx(types.ATXID{2}, 2, types.NodeID{2}, 2, genAtxWithReceived(time.Unix(20, 0))),
 				gatx(types.ATXID{3}, 2, types.NodeID{3}, 2, genAtxWithReceived(time.Unix(20, 0))),
 			},
-			malfeasent: []identity{
+			malfeasant: []identity{
 				testIdentity(types.NodeID{3}, time.Unix(31, 0)),
 			},
 			epochStart:     unixPtr(30, 0),
@@ -252,13 +286,26 @@ func TestActiveSetGenerate(t *testing.T) {
 				require.NoError(t, atxs.Add(tester.db, atx, types.AtxBlob{}))
 				tester.atxsdata.AddFromAtx(atx, false)
 			}
-			for _, identity := range tc.malfeasent {
+			for _, identity := range tc.legacyMalfeasant {
 				require.NoError(
 					t,
 					identities.SetMalicious(
 						tester.db,
 						identity.id,
 						codec.MustEncode(&identity.proof),
+						identity.received,
+					),
+				)
+			}
+			for _, identity := range tc.malfeasant {
+				require.NoError(
+					t,
+					malfeasance.AddProof(
+						tester.db,
+						identity.id,
+						nil,
+						codec.MustEncode(&identity.proof),
+						1,
 						identity.received,
 					),
 				)

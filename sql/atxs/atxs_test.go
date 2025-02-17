@@ -383,6 +383,176 @@ func TestGetIDsByEpoch(t *testing.T) {
 	require.ElementsMatch(t, []types.ATXID{atx4.ID()}, ids3)
 }
 
+func Test_IterateAtxForGrading(t *testing.T) {
+	t.Run("no for epoch in DB", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+
+		var called bool
+		err := atxs.IterateForGrading(db, types.EpochID(1),
+			func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
+				called = true
+				return true
+			},
+		)
+		require.NoError(t, err)
+		require.False(t, called, "callback should not be called on empty result")
+	})
+	t.Run("only ATXs from good identities", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		received := time.Now().Add(-time.Hour)
+		atx1 := newAtx(t, sig, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+		atx2 := newAtx(t, sig, withPublishEpoch(2), withTicks(100), withNumUnits(4), withReceived(received))
+		atx3 := newAtx(t, sig, withPublishEpoch(3), withTicks(100), withNumUnits(4), withReceived(received))
+
+		for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
+			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		}
+
+		var ids []types.ATXID
+		err = atxs.IterateForGrading(db, types.EpochID(1),
+			func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
+				ids = append(ids, id)
+				require.Equal(t, atx1.Received().UnixNano(), atxtime)
+				require.Zero(t, prooftime)
+				require.Equal(t, uint64(atx1.NumUnits)*atx1.TickCount, weight)
+				return true
+			},
+		)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids)
+	})
+	t.Run("ATXs from good and legacy malicious identities", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+
+		sig1, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		sig2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		sig3, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		received := time.Now().Add(-time.Hour)
+		atx1 := newAtx(t, sig1, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+		atx2 := newAtx(t, sig2, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+		atx3 := newAtx(t, sig3, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+
+		for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
+			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		}
+
+		require.NoError(t, identities.SetMalicious(db, sig2.NodeID(), []byte("bad"), time.Now()))
+
+		var ids []types.ATXID
+		err = atxs.IterateForGrading(db, types.EpochID(1),
+			func(id types.ATXID, atxTime, proofTime int64, weight uint64) bool {
+				ids = append(ids, id)
+				if id == atx2.ID() {
+					require.NotZero(t, proofTime)
+				} else {
+					require.Zero(t, proofTime)
+				}
+				return true
+			},
+		)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID(), atx3.ID()}, ids)
+	})
+	t.Run("ATXs from good and malicious identities", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+
+		sig1, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		sig2, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		sig3, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		received := time.Now().Add(-time.Hour)
+		atx1 := newAtx(t, sig1, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+		atx2 := newAtx(t, sig2, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+		atx3 := newAtx(t, sig3, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+
+		for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
+			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		}
+
+		require.NoError(t, malfeasance.AddProof(db, sig2.NodeID(), nil, []byte("bad"), 1, time.Now()))
+
+		var ids []types.ATXID
+		err = atxs.IterateForGrading(db, types.EpochID(1),
+			func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
+				ids = append(ids, id)
+				if id == atx2.ID() {
+					require.NotZero(t, prooftime)
+				} else {
+					require.Zero(t, prooftime)
+				}
+				return true
+			},
+		)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx1.ID(), atx2.ID(), atx3.ID()}, ids)
+	})
+	t.Run("legacy and new malfeasance, legacy is older", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		received := time.Now().Add(-time.Hour)
+		atx1 := newAtx(t, sig, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+		require.NoError(t, atxs.Add(db, atx1, types.AtxBlob{}))
+
+		maliciousTime := time.Now()
+		require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), maliciousTime))
+		require.NoError(t, malfeasance.AddProof(db, sig.NodeID(), nil, []byte("bad"), 2, maliciousTime.Add(time.Hour)))
+
+		var ids []types.ATXID
+		err = atxs.IterateForGrading(db, types.EpochID(1),
+			func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
+				ids = append(ids, id)
+				require.Equal(t, maliciousTime.UnixNano(), prooftime)
+				return true
+			},
+		)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids)
+	})
+	t.Run("legacy and new malfeasance, new is older", func(t *testing.T) {
+		db := statesql.InMemoryTest(t)
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		received := time.Now().Add(-time.Hour)
+		atx1 := newAtx(t, sig, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
+		require.NoError(t, atxs.Add(db, atx1, types.AtxBlob{}))
+
+		maliciousTime := time.Now()
+		require.NoError(t, identities.SetMalicious(db, sig.NodeID(), []byte("bad"), maliciousTime.Add(time.Hour)))
+		require.NoError(t, malfeasance.AddProof(db, sig.NodeID(), nil, []byte("bad"), 2, maliciousTime))
+
+		var ids []types.ATXID
+		err = atxs.IterateForGrading(db, types.EpochID(1),
+			func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
+				ids = append(ids, id)
+				require.Equal(t, maliciousTime.UnixNano(), prooftime)
+				return true
+			},
+		)
+		require.NoError(t, err)
+		require.ElementsMatch(t, []types.ATXID{atx1.ID()}, ids)
+	})
+}
+
 func Test_IterateAtxsWithMalfeasance(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
@@ -759,6 +929,24 @@ func withNonce(nonce types.VRFPostIndex) createAtxOpt {
 func withCoinbase(addr types.Address) createAtxOpt {
 	return func(atx *types.ActivationTx) {
 		atx.Coinbase = addr
+	}
+}
+
+func withTicks(ticks uint64) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.TickCount = ticks
+	}
+}
+
+func withNumUnits(units uint32) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.NumUnits = units
+	}
+}
+
+func withReceived(received time.Time) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.SetReceived(received)
 	}
 }
 
