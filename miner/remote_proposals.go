@@ -188,7 +188,19 @@ func (pb *RemoteProposalBuilder) build(
 		if !ok {
 			slots, nonce, err := pb.proposalSvc.CalculateEligibilitySlotsFor(ctx, nodeId, epoch)
 			if err != nil {
-				pb.logger.Error("calculate eligibility slots error", zap.Error(err))
+				pb.logger.Error("calculate eligibility slots error",
+					log.ZContext(ctx),
+					zap.Stringer("node", nodeId),
+					zap.Error(err),
+				)
+				continue
+			}
+			if slots == 0 {
+				pb.logger.Info("node not eligible in this epoch, will try later",
+					log.ZContext(ctx),
+					zap.Stringer("node", nodeId),
+					zap.Uint32("epoch", epoch.Uint32()),
+				)
 				continue
 			}
 			proofs = calcEligibilityProofs(
@@ -210,7 +222,11 @@ func (pb *RemoteProposalBuilder) build(
 
 		proposal, _, err := pb.proposalSvc.Proposal(ctx, layer, nodeId)
 		if err != nil {
-			pb.logger.Error("get partial proposal", zap.Error(err))
+			pb.logger.Error("get partial proposal",
+				log.ZContext(ctx),
+				zap.Stringer("node", nodeId),
+				zap.Error(err),
+			)
 			pb.identityStates.Set(nodeId, &smesherIdentity.ProposalBuildFailed{
 				ErrorMsg: fmt.Sprintf("get partial proposal: %v", err),
 				Layer:    layer,
@@ -219,18 +235,28 @@ func (pb *RemoteProposalBuilder) build(
 		}
 		if proposal == nil {
 			// this node signer isn't eligible this epoch, continue
-			pb.logger.Info("node not eligible on this layer. will try later")
+			pb.logger.Info("node not eligible on this layer: no proposal received, will try later",
+				log.ZContext(ctx),
+				zap.Stringer("node", nodeId),
+				zap.Uint32("lid", layer.Uint32()),
+			)
 			continue
 		}
 
-		eligibilities, ok := proofs[layer]
+		// TODO(mafa): I don't think this belongs here, either do this check before requesting a proposal
+		// (client decides about eligibilities) or don't do it at all (server decides eligibilities)
+		eligProofs, ok := proofs[layer]
 		if !ok {
 			// not eligible in this layer, continue
-			pb.logger.Info("node not eligible in this layer, will try later")
+			pb.logger.Info("node not eligible in this layer, will try later",
+				log.ZContext(ctx),
+				zap.Stringer("node", nodeId),
+				zap.Uint32("lid", layer.Uint32()),
+			)
 			continue
 		}
 
-		proposal.EligibilityProofs = eligibilities
+		proposal.EligibilityProofs = eligProofs
 		proposal.Ballot.Signature = signer.signer.Sign(signing.BALLOT, proposal.Ballot.SignedBytes())
 		proposal.Signature = signer.signer.Sign(signing.PROPOSAL, proposal.SignedBytes())
 		err = proposal.Initialize()
