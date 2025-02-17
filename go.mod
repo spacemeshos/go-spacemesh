@@ -48,7 +48,7 @@ require (
 	github.com/spacemeshos/poet v0.10.10
 	github.com/spacemeshos/post v0.12.11
 	github.com/spf13/afero v1.12.0
-	github.com/spf13/cobra v1.8.1
+	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.19.0
 	github.com/stretchr/testify v1.10.0
