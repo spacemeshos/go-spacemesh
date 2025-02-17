@@ -90,7 +90,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
@@ -520,9 +519,6 @@ func (app *App) Initialize() error {
 			return errors.New("genesis config updated after node initialization")
 		}
 	}
-
-	// override default config in timesync since timesync is using TimeConfigValues
-	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
 	app.log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
