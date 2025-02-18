@@ -1364,7 +1364,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		return err
 	})
 	require.NoError(t, err)
-	require.True(t, !ballot.Layer.Before(last) && !ballot.Layer.After(last), "%s not in [%s,%s]", ballot.Layer, last, last)
+	require.Equal(t, last, ballot.Layer)
 
 	require.Len(t, votes.Against, len(unsupported))
 	for _, vote := range votes.Against {
