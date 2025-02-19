@@ -48,24 +48,31 @@ func NewServer(
 	var handler http.Handler = mux
 	if corsEverywhere {
 		logger.Info("enabling CORS on PROXY for all origins")
-		c := cors.New(cors.Options{
-			AllowedOrigins: []string{"*"},
-			AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
-			AllowedHeaders: []string{"*"},
-			ExposedHeaders: []string{
-				"Server",
-				"Date",
-				"Content-Type",
-				"Content-Length",
-				"Connection",
-				"Vary",
-				"X-Final-Url",
-				"Access-Control-Allow-Origin",
-			},
-			AllowCredentials: false,
-			MaxAge:           300,
+		handler = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Check if Access-Control-Allow-Origin is already set
+			if w.Header().Get("Access-Control-Allow-Origin") == "" {
+				c := cors.New(cors.Options{
+					AllowedOrigins: []string{"*"},
+					AllowedMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+					AllowedHeaders: []string{"*"},
+					ExposedHeaders: []string{
+						"Server",
+						"Date",
+						"Content-Type",
+						"Content-Length",
+						"Connection",
+						"Vary",
+						"X-Final-Url",
+						"Access-Control-Allow-Origin",
+					},
+					AllowCredentials: false,
+					MaxAge:           300,
+				})
+				c.Handler(mux).ServeHTTP(w, r)
+			} else {
+				mux.ServeHTTP(w, r)
+			}
 		})
-		handler = c.Handler(mux)
 	}
 
 	// Register GRPC services handled locally
