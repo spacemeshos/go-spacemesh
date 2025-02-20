@@ -2,10 +2,12 @@ package proxy
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
@@ -66,19 +68,30 @@ func NewServer(
 			MaxAge:           300,
 		})
 		handler = c.Handler(mux)
+
+		proxy.ModifyResponse = func(resp *http.Response) error {
+			// Remove CORS headers from the target response
+			for k := range resp.Header {
+				if strings.HasPrefix(k, "Access-Control-") {
+					delete(resp.Header, k)
+				}
+			}
+			return nil
+		}
 	}
 
 	// Register GRPC services handled locally
 	grpcMux := runtime.NewServeMux()
 	for _, svc := range local {
-		svc.RegisterHandlerService(grpcMux)
+		if err := svc.RegisterHandlerService(grpcMux); err != nil {
+			return nil, fmt.Errorf("registering local service %s: %w", svc.Path(), err)
+		}
 		mux.Handle(svc.Path(), grpcMux)
 	}
 
 	// The rest is proxied.
 	// HTTP handler to forward requests
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		r.Host = targetURL.Host
 		proxy.ServeHTTP(w, r)
 	})
 
