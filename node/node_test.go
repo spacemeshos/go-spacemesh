@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -192,34 +191,6 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(expected2, str)
 }
 
-func marshalProto(tb testing.TB, msg proto.Message) []byte {
-	buf, err := protojson.Marshal(msg)
-	require.NoError(tb, err)
-	return buf
-}
-
-func callEndpointPost(tb testing.TB, url string, payload []byte) ([]byte, int) {
-	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
-	require.NoError(tb, err)
-	require.Equal(tb, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := io.ReadAll(resp.Body)
-	require.NoError(tb, err)
-	require.NoError(tb, resp.Body.Close())
-
-	return buf, resp.StatusCode
-}
-
-func callEndpointGet(tb testing.TB, url string) ([]byte, int) {
-	resp, err := http.Get(url)
-	require.NoError(tb, err)
-	require.Equal(tb, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := io.ReadAll(resp.Body)
-	require.NoError(tb, err)
-	require.NoError(tb, resp.Body.Close())
-
-	return buf, resp.StatusCode
-}
-
 func TestSpacemeshApp_GrpcService(t *testing.T) {
 	// Use a unique port
 	listener := "127.0.0.1:1242"
@@ -300,7 +271,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
 
 	const message = "你好世界"
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	payload, err := protojson.Marshal(&pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	require.NoError(t, err)
 	listener := "127.0.0.1:0"
 
 	cfg := getTestDefaultConfig(t)
@@ -308,7 +280,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(cfg), WithLog(logtest.New(t)))
 
-	var err error
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
@@ -329,63 +300,80 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.NoError(err)
 	defer app.stopServices(context.Background())
 
-	var (
-		respBody   []byte
-		respStatus int
-	)
 	endpoint := fmt.Sprintf("http://%s/v1/node/echo", app.jsonAPIServer.BoundAddress)
+	var resp *http.Response
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpointPost(t, endpoint, payload)
-		return respStatus == http.StatusOK
+		resp, err = http.Post(endpoint, "application/json", bytes.NewReader(payload))
+		return err == nil && resp.StatusCode == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
+
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
 	var msg pb.EchoResponse
 	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
-	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 }
 
 func TestProxyingJsonService(t *testing.T) {
-	cfg := config.Config{
+	serverCfg := config.Config{
 		API: grpcserver.Config{
-			JSONListener:    "127.0.0.1:0",
-			PublicListener:  "127.0.0.1:0",
-			PublicServices:  []grpcserver.Service{grpcserver.Node},
-			PrivateServices: nil,
-			PostServices:    nil,
-			TLSServices:     nil,
+			JSONListener:       "127.0.0.1:0",
+			PublicListener:     "127.0.0.1:0",
+			JSONCorsEverywhere: true,
+			PublicServices:     []grpcserver.Service{grpcserver.Node},
 		},
 	}
 
 	// Start server
 	logger := logtest.New(t)
 	db := localsql.InMemoryTest(t)
-	serverApp := New(WithConfig(&cfg), WithLog(logger.Named("server")))
+	serverApp := New(WithConfig(&serverCfg), WithLog(logger.Named("server")))
 	err := serverApp.startAPIServices(context.Background())
 	require.NoError(t, err)
 	defer serverApp.stopServices(context.Background())
 
 	// Start client proxying to the server
-	cfg.API.ProxyApiV2Address = fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress)
-	cfg.API.NonProxiedServices = []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Beta1}
-	clientApp := New(WithConfig(&cfg), WithLog(logger.Named("client")))
+	clientCfg := config.Config{
+		API: grpcserver.Config{
+			JSONListener:       "127.0.0.1:0",
+			PublicListener:     "127.0.0.1:0",
+			JSONCorsEverywhere: true,
+			ProxyApiV2Address:  fmt.Sprintf("http://%s", serverApp.jsonAPIServer.BoundAddress),
+			NonProxiedServices: []grpcserver.Service{grpcserver.SmeshingIdentitiesV2Beta1},
+			PublicServices:     []grpcserver.Service{grpcserver.Node},
+		},
+	}
+	clientApp := New(WithConfig(&clientCfg), WithLog(logger.Named("client")))
 	clientApp.idStates = identity.NewIdentityStateStorage(db, logger.Named("idStates").Zap())
 
 	require.NoError(t, clientApp.startAPIServices(context.Background()))
 	defer clientApp.stopServices(context.Background())
 
-	var (
-		respBody   []byte
-		respStatus int
-	)
 	const message = "hello world"
 	endpoint := fmt.Sprintf("http://%s/v1/node/echo", clientApp.apiProxy.BoundAddress)
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	payload, err := protojson.Marshal(&pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	require.NoError(t, err)
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(payload))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "http://localhost")
+	var resp *http.Response
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpointPost(t, endpoint, payload)
-		return respStatus == http.StatusOK
+		resp, err = http.DefaultClient.Do(req)
+		return err == nil && resp.StatusCode == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
+
+	require.Equal(t, "*", resp.Header.Get("Access-Control-Allow-Origin"))
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
 	var msg pb.EchoResponse
 	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
@@ -398,12 +386,19 @@ func TestProxyingJsonService(t *testing.T) {
 
 	nodeID := types.RandomNodeID()
 	clientApp.idStates.Set(nodeID, &identity.ATXBroadcasted{AtxId: types.RandomATXID()})
-	respBody, status := callEndpointGet(t, endpoint)
-	require.Equal(t, http.StatusOK, status)
-	var resp pbV2.IdentityStatesResponse
-	require.NoError(t, protojson.Unmarshal(respBody, &resp))
-	require.Len(t, resp.States, 1)
-	require.Equal(t, nodeID.Bytes(), resp.States[0].Smesher)
+	resp, err = http.Get(endpoint)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+
+	respBody, err = io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	var msg2 pbV2.IdentityStatesResponse
+	require.NoError(t, protojson.Unmarshal(respBody, &msg2))
+	require.Len(t, msg2.States, 1)
+	require.Equal(t, nodeID.Bytes(), msg2.States[0].Smesher)
 }
 
 type noopHook struct{}
