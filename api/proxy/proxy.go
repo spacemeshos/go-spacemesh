@@ -92,6 +92,7 @@ func NewServer(
 	// The rest is proxied.
 	// HTTP handler to forward requests
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		r.Host = targetURL.Host
 		proxy.ServeHTTP(w, r)
 	})
 
