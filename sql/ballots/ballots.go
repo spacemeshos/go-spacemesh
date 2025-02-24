@@ -222,10 +222,7 @@ func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types
 		var bid types.BallotID
 		stmt.ColumnBytes(0, bid[:])
 		ballot, dErr = decodeBallot(bid, stmt.ColumnReader(1))
-		if dErr != nil {
-			return false
-		}
-		return ballot.EpochData == nil
+		return false
 	}
 	rows, err := db.Exec(`
 		select id, ballot from ballots
@@ -260,10 +257,7 @@ func LastInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.
 		var bid types.BallotID
 		stmt.ColumnBytes(0, bid[:])
 		ballot, dErr = decodeBallot(bid, stmt.ColumnReader(1))
-		if dErr != nil {
-			return false
-		}
-		return ballot.EpochData == nil
+		return false
 	}
 	rows, err := db.Exec(`
 		select id, ballot from ballots
