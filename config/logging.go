@@ -25,6 +25,7 @@ type LoggerConfig struct {
 	StateDbLoggerLevel           string `mapstructure:"stateDb"`
 	BeaconLoggerLevel            string `mapstructure:"beacon"`
 	CachedDBLoggerLevel          string `mapstructure:"cachedDb"`
+	PoetLoggerLevel              string `mapstructure:"poet"`
 	PoetDbLoggerLevel            string `mapstructure:"poetDb"`
 	TrtlLoggerLevel              string `mapstructure:"trtl"`
 	AtxHandlerLevel              string `mapstructure:"atxHandler"`

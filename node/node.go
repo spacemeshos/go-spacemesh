@@ -21,7 +21,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gofrs/flock"
 	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
@@ -118,6 +117,7 @@ const (
 	ApiStateDBLogger        = "apiStateDB"
 	BeaconLogger            = "beacon"
 	CachedDBLogger          = "cachedDB"
+	PoetLogger              = "poet"
 	PoetDbLogger            = "poetDb"
 	TrtlLogger              = "trtl"
 	ATXHandlerLogger        = "atxHandler"
@@ -179,16 +179,21 @@ func GetNodeServiceCommand() *cobra.Command {
 				return fmt.Errorf("ensure folders exist: %w", err)
 			}
 
-			if err := app.Lock(); err != nil {
+			unlock, err := lock(conf.FileLock)
+			if err != nil {
 				return fmt.Errorf("getting exclusive file lock: %w", err)
 			}
-			defer app.Unlock()
+			defer func() {
+				if err := unlock(); err != nil {
+					lg.Zap().Error("failed to unlock file", zap.String("path", conf.FileLock), zap.Error(err))
+				}
+			}()
 
 			if err := app.Initialize(); err != nil {
 				return fmt.Errorf("initializing app: %w", err)
 			}
 
-			err := app.LoadIdentities()
+			err = app.LoadIdentities()
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
 				app.log.Info("Identity file not found. Creating new identity...")
@@ -386,56 +391,53 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	fileLock              *flock.Flock
-	signers               []*signing.EdSigner
-	Config                *config.Config
-	db                    sql.StateDatabase
-	apiDB                 sql.StateDatabase
-	cachedDB              *datastore.CachedDB
-	dbMetrics             *dbmetrics.DBMetricsCollector
-	localDB               sql.LocalDatabase
-	grpcPublicServer      *grpcserver.Server
-	grpcPrivateServer     *grpcserver.Server
-	grpcPostServer        *grpcserver.Server
-	grpcTLSServer         *grpcserver.Server
-	jsonAPIServer         *grpcserver.JSONHTTPServer
-	nodeServiceServer     *http.Server
-	grpcServices          map[grpcserver.Service]grpcserver.ServiceAPI
-	pprofService          *http.Server
-	profilerService       *pyroscope.Profiler
-	syncer                *syncer.Syncer
-	remoteProposalBuilder *miner.RemoteProposalBuilder
-	proposalBuilder       *miner.ProposalBuilder
-	mesh                  *mesh.Mesh
-	atxsdata              *atxsdata.Data
-	clock                 *timesync.NodeClock
-	hare3                 *hare3.Hare
-	hare4                 *hare4.Hare
-	remoteHare            *hare3.RemoteHare
-	hareResultsChan       chan hare4.ConsensusOutput
-	activeSetCache        *eligibility.ActiveSetCache
-	blockGen              *blocks.Generator
-	certifier             *blocks.Certifier
-	atxBuilder            *activation.Builder
-	atxHandler            *activation.Handler
-	txHandler             *txs.TxHandler
-	validator             *activation.Validator
-	edVerifier            *signing.EdVerifier
-	beaconProtocol        *beacon.ProtocolDriver
-	log                   log.Log
-	syncLogger            log.Log
-	conState              *txs.ConservativeState
-	fetcher               *fetch.Fetch
-	ptimesync             *peersync.Sync
-	updater               *bootstrap.Updater
-	poetDb                *activation.PoetDb
-	postVerifier          activation.PostVerifier
-	postSupervisor        *activation.PostSupervisor
-	malfeasanceHandler    *malfeasance.Handler
-	malfeasance2Handler   *malfeasance2.Handler
-	idStates              *identity.StateStorage
-	apiProxy              *proxy.Server
-	poetClients           []activation.PoetService
+	signers             []*signing.EdSigner
+	Config              *config.Config
+	db                  sql.StateDatabase
+	apiDB               sql.StateDatabase
+	cachedDB            *datastore.CachedDB
+	dbMetrics           *dbmetrics.DBMetricsCollector
+	localDB             sql.LocalDatabase
+	grpcPublicServer    *grpcserver.Server
+	grpcPrivateServer   *grpcserver.Server
+	grpcPostServer      *grpcserver.Server
+	grpcTLSServer       *grpcserver.Server
+	jsonAPIServer       *grpcserver.JSONHTTPServer
+	nodeServiceServer   *http.Server
+	grpcServices        map[grpcserver.Service]grpcserver.ServiceAPI
+	pprofService        *http.Server
+	profilerService     *pyroscope.Profiler
+	syncer              *syncer.Syncer
+	proposalBuilder     *miner.ProposalBuilder
+	mesh                *mesh.Mesh
+	atxsdata            *atxsdata.Data
+	clock               *timesync.NodeClock
+	hare3               *hare3.Hare
+	hare4               *hare4.Hare
+	hareResultsChan     chan hare4.ConsensusOutput
+	activeSetCache      *eligibility.ActiveSetCache
+	blockGen            *blocks.Generator
+	certifier           *blocks.Certifier
+	atxBuilder          *activation.Builder
+	atxHandler          *activation.Handler
+	txHandler           *txs.TxHandler
+	validator           *activation.Validator
+	edVerifier          *signing.EdVerifier
+	beaconProtocol      *beacon.ProtocolDriver
+	log                 log.Log
+	syncLogger          log.Log
+	conState            *txs.ConservativeState
+	fetcher             *fetch.Fetch
+	ptimesync           *peersync.Sync
+	updater             *bootstrap.Updater
+	poetDb              *activation.PoetDb
+	postVerifier        activation.PostVerifier
+	postSupervisor      *activation.PostSupervisor
+	malfeasanceHandler  *malfeasance.Handler
+	malfeasance2Handler *malfeasance2.Handler
+	idStates            *identity.StateStorage
+	apiProxy            *proxy.Server
+	poetClients         []activation.PoetService
 
 	errCh chan error
 
@@ -470,67 +472,18 @@ func (app *App) Started() <-chan struct{} {
 	return app.started
 }
 
-// Lock locks the app for exclusive use. It returns an error if the app is already locked.
-func (app *App) Lock() error {
-	lockDir := filepath.Dir(app.Config.FileLock)
-	if _, err := os.Stat(lockDir); errors.Is(err, fs.ErrNotExist) {
-		err := os.Mkdir(lockDir, os.ModePerm)
-		if err != nil {
-			return fmt.Errorf("creating dir %s for lock %s: %w", lockDir, app.Config.FileLock, err)
-		}
-	}
-	fl := flock.New(app.Config.FileLock)
-	locked, err := fl.TryLock()
-	if err != nil {
-		return fmt.Errorf("flock %s: %w", app.Config.FileLock, err)
-	} else if !locked {
-		return fmt.Errorf("only one spacemesh instance should be running (locking file %s)", fl.Path())
-	}
-	app.fileLock = fl
-	return nil
-}
-
-// Unlock unlocks the app. It is a no-op if the app is not locked.
-func (app *App) Unlock() {
-	if app.fileLock == nil {
-		return
-	}
-	if err := app.fileLock.Unlock(); err != nil {
-		app.log.With().Error("failed to unlock file",
-			log.String("path", app.fileLock.Path()),
-			log.Err(err),
-		)
-	}
-}
-
 // Initialize parses and validates the node configuration and sets up logging.
 func (app *App) Initialize() error {
 	gpath := filepath.Join(app.Config.DataDir(), genesisFileName)
-	var existing config.GenesisConfig
-	if err := existing.LoadFromFile(gpath); err != nil {
-		if !errors.Is(err, fs.ErrNotExist) {
-			return fmt.Errorf("failed to load genesis config at %s: %w", gpath, err)
-		}
-		if err := app.Config.Genesis.Validate(); err != nil {
-			return err
-		}
-		if err := app.Config.Genesis.WriteToFile(gpath); err != nil {
-			return fmt.Errorf("failed to write genesis config to %s: %w", gpath, err)
-		}
-	} else {
-		diff := existing.Diff(&app.Config.Genesis)
-		if len(diff) > 0 {
-			app.log.Error("genesis config updated after node initialization, if this update is required delete config"+
-				" at %s.\ndiff:\n%s", gpath, diff,
-			)
-			return errors.New("genesis config updated after node initialization")
-		}
+	if err := applyGenesis(gpath, app.Config.Genesis); err != nil {
+		return err
 	}
 
 	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
-	app.setupLogging()
+	events.InitializeReporter()
+	app.log.Info("%s", getAppInfo(app.Config.Genesis))
 	app.log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 
 	public.Version.WithLabelValues(cmd.Version).Set(1)
@@ -539,13 +492,31 @@ func (app *App) Initialize() error {
 	return nil
 }
 
-// setupLogging configured the app logging system.
-func (app *App) setupLogging() {
-	app.log.Info("%s", app.getAppInfo())
-	events.InitializeReporter()
+func applyGenesis(gpath string, genesis config.GenesisConfig) error {
+	var existing config.GenesisConfig
+	if err := existing.LoadFromFile(gpath); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			return fmt.Errorf("loading genesis config at %s: %w", gpath, err)
+		}
+		if err := genesis.Validate(); err != nil {
+			return err
+		}
+		if err := genesis.WriteToFile(gpath); err != nil {
+			return fmt.Errorf("writing genesis config to %s: %w", gpath, err)
+		}
+		return nil
+	}
+	if diff := existing.Diff(&genesis); len(diff) > 0 {
+		return fmt.Errorf(
+			"genesis config updated after node initialization, "+
+				"if this update is required delete config "+
+				"at %s.\ndiff:\n%s", gpath, diff,
+		)
+	}
+	return nil
 }
 
-func (app *App) getAppInfo() string {
+func getAppInfo(genesis config.GenesisConfig) string {
 	return fmt.Sprintf(
 		"App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s . Genesis %s",
 		cmd.Version,
@@ -554,7 +525,7 @@ func (app *App) getAppInfo() string {
 		runtime.Version(),
 		runtime.GOOS,
 		runtime.GOARCH,
-		app.Config.Genesis.GenesisID().String(),
+		genesis.GenesisID().String(),
 	)
 }
 
@@ -583,7 +554,6 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	return logger.WithName(name)
 }
 
-// SetLogLevel updates the log level of an existing logger.
 func (app *App) SetLogLevel(name, loglevel string) error {
 	lvl, ok := app.loggers[name]
 	if !ok {
@@ -1548,11 +1518,6 @@ func (app *App) startServices(ctx context.Context) error {
 			return app.proposalBuilder.Run(ctx)
 		})
 	}
-	if app.remoteProposalBuilder != nil {
-		app.eg.Go(func() error {
-			return app.remoteProposalBuilder.Run(ctx)
-		})
-	}
 
 	if app.Config.SMESHING.CoinbaseAccount != "" {
 		coinbaseAddr, err := types.StringToAddress(app.Config.SMESHING.CoinbaseAccount)
@@ -2227,54 +2192,22 @@ func (app *App) stopServices(ctx context.Context) {
 }
 
 func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
-	dbPath := app.Config.DataDir()
-	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
-		return fmt.Errorf("failed to create %s: %w", dbPath, err)
-	}
 	dbLog := app.addLogger(StateDbLogger, lg).Zap()
-	schema, err := statemigrations.SchemaWithInCodeMigrations(*app.Config)
+	db, err := openStateDB(app.Config, dbLog)
 	if err != nil {
-		return fmt.Errorf("error loading db schema: %w", err)
+		return err
 	}
-	if len(app.Config.DatabaseSkipMigrations) > 0 {
-		schema.SkipMigrations(app.Config.DatabaseSkipMigrations...)
-	}
-	dbopts := []sql.Opt{
-		sql.WithLogger(dbLog),
-		sql.WithDatabaseSchema(schema),
-		sql.WithConnections(app.Config.DatabaseConnections),
-		sql.WithLatencyMetering(app.Config.DatabaseLatencyMetering),
-		sql.WithVacuumState(app.Config.DatabaseVacuumState),
-		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
-		sql.WithQueryCache(app.Config.DatabaseQueryCache),
-		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
-			atxs.CacheKindEpochATXs:           app.Config.DatabaseQueryCacheSizes.EpochATXs,
-			atxs.CacheKindATXBlob:             app.Config.DatabaseQueryCacheSizes.ATXBlob,
-			activesets.CacheKindActiveSetBlob: app.Config.DatabaseQueryCacheSizes.ActiveSetBlob,
-		}),
-		sql.WithConnIdleTimeout(app.Config.DatabaseConnIdleTimeout),
-		sql.WithDBName("state"),
-	}
-	sqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
-	if err != nil {
-		return fmt.Errorf("open sqlite db: %w", err)
-	}
-	app.db = sqlDB
-
-	apiDBLog := app.addLogger(ApiStateDBLogger, lg).Zap()
-	apiSqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile),
-		sql.WithReadOnly(),
-		sql.WithLogger(apiDBLog),
-		sql.WithConnections(app.Config.API.DatabaseConnections),
-		sql.WithNoCheckSchemaDrift(), // already checked above
-		sql.WithMigrationsDisabled(),
-		sql.WithConnIdleTimeout(app.Config.DatabaseConnIdleTimeout),
-		sql.WithDBName("state-api"),
+	app.db = db
+	app.cachedDB = datastore.NewCachedDB(db, app.addLogger(CachedDBLogger, lg).Zap(),
+		datastore.WithConfig(app.Config.Cache),
+		datastore.WithConsensusCache(app.atxsdata),
 	)
+
+	db, err = openApiStateDb(app.Config, app.addLogger(ApiStateDBLogger, lg).Zap())
 	if err != nil {
-		return fmt.Errorf("open sqlite db: %w", err)
+		return err
 	}
-	app.apiDB = apiSqlDB
+	app.apiDB = db
 
 	if app.Config.CollectMetrics && app.Config.DatabaseSizeMeteringInterval != 0 {
 		app.dbMetrics = dbmetrics.NewDBMetricsCollector(
@@ -2304,28 +2237,84 @@ func (app *App) setupDBs(ctx context.Context, lg log.Log) error {
 		app.atxsdata = data
 		app.log.With().Info("cache warmup", log.Duration("duration", time.Since(start)))
 	}
-	app.cachedDB = datastore.NewCachedDB(sqlDB, app.addLogger(CachedDBLogger, lg).Zap(),
-		datastore.WithConfig(app.Config.Cache),
-		datastore.WithConsensusCache(app.atxsdata),
-	)
 
+	localDB, err := openLocalDb(app.Config, dbLog)
+	if err != nil {
+		return err
+	}
+
+	app.localDB = localDB
+	return nil
+}
+
+func openStateDB(cfg *config.Config, logger *zap.Logger) (sql.StateDatabase, error) {
+	dbPath := cfg.DataDir()
+	if err := os.MkdirAll(dbPath, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("failed to create %s: %w", dbPath, err)
+	}
+	schema, err := statemigrations.SchemaWithInCodeMigrations(*cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error loading db schema: %w", err)
+	}
+	if len(cfg.DatabaseSkipMigrations) > 0 {
+		schema.SkipMigrations(cfg.DatabaseSkipMigrations...)
+	}
+	dbopts := []sql.Opt{
+		sql.WithLogger(logger),
+		sql.WithDatabaseSchema(schema),
+		sql.WithConnections(cfg.DatabaseConnections),
+		sql.WithLatencyMetering(cfg.DatabaseLatencyMetering),
+		sql.WithVacuumState(cfg.DatabaseVacuumState),
+		sql.WithAllowSchemaDrift(cfg.DatabaseSchemaAllowDrift),
+		sql.WithQueryCache(cfg.DatabaseQueryCache),
+		sql.WithQueryCacheSizes(map[sql.QueryCacheKind]int{
+			atxs.CacheKindEpochATXs:           cfg.DatabaseQueryCacheSizes.EpochATXs,
+			atxs.CacheKindATXBlob:             cfg.DatabaseQueryCacheSizes.ATXBlob,
+			activesets.CacheKindActiveSetBlob: cfg.DatabaseQueryCacheSizes.ActiveSetBlob,
+		}),
+		sql.WithConnIdleTimeout(cfg.DatabaseConnIdleTimeout),
+		sql.WithDBName("state"),
+	}
+	sqlDB, err := statesql.Open("file:"+filepath.Join(dbPath, dbFile), dbopts...)
+	if err != nil {
+		return nil, fmt.Errorf("open state sqlite db: %w", err)
+	}
+	return sqlDB, nil
+}
+
+func openApiStateDb(cfg *config.Config, logger *zap.Logger) (sql.StateDatabase, error) {
+	apiSqlDB, err := statesql.Open("file:"+filepath.Join(cfg.DataDir(), dbFile),
+		sql.WithReadOnly(),
+		sql.WithLogger(logger),
+		sql.WithConnections(cfg.API.DatabaseConnections),
+		sql.WithNoCheckSchemaDrift(),
+		sql.WithMigrationsDisabled(),
+		sql.WithConnIdleTimeout(cfg.DatabaseConnIdleTimeout),
+		sql.WithDBName("state-api"),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("open api-state sqlite db: %w", err)
+	}
+	return apiSqlDB, nil
+}
+
+func openLocalDb(cfg *config.Config, logger *zap.Logger) (sql.LocalDatabase, error) {
 	lSchema, err := localmigrations.SchemaWithInCodeMigrations()
 	if err != nil {
-		return fmt.Errorf("error loading db schema: %w", err)
+		return nil, fmt.Errorf("error loading db schema: %w", err)
 	}
-	localDB, err := localsql.Open("file:"+filepath.Join(dbPath, localDbFile),
-		sql.WithLogger(dbLog),
+	localDB, err := localsql.Open("file:"+filepath.Join(cfg.DataDir(), localDbFile),
+		sql.WithLogger(logger),
 		sql.WithDatabaseSchema(lSchema),
-		sql.WithConnections(app.Config.DatabaseConnections),
-		sql.WithAllowSchemaDrift(app.Config.DatabaseSchemaAllowDrift),
-		sql.WithConnIdleTimeout(app.Config.DatabaseConnIdleTimeout),
+		sql.WithConnections(cfg.DatabaseConnections),
+		sql.WithAllowSchemaDrift(cfg.DatabaseSchemaAllowDrift),
+		sql.WithConnIdleTimeout(cfg.DatabaseConnIdleTimeout),
 		sql.WithDBName("local"),
 	)
 	if err != nil {
-		return fmt.Errorf("open sqlite db: %w", err)
+		return nil, fmt.Errorf("open local sqlite db: %w", err)
 	}
-	app.localDB = localDB
-	return nil
+	return localDB, nil
 }
 
 // Start starts the Spacemesh node service and initializes all relevant

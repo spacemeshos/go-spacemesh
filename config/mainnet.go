@@ -247,3 +247,31 @@ func MainnetConfig() Config {
 		Certifier: activation.DefaultCertifierConfig(),
 	}
 }
+
+func MainnetSmeshingServiceConfig() Config {
+	cfg := MainnetConfig()
+
+	cfg.API = grpcserver.Config{
+		PublicServices: []grpcserver.Service{
+			grpcserver.SmeshingIdentitiesV2Beta1,
+			grpcserver.SmeshingV2Beta1,
+		},
+		PublicListener: "0.0.0.0:9092",
+		PrivateServices: []grpcserver.Service{
+			grpcserver.Smesher,
+		},
+		PrivateListener:        "127.0.0.1:9093",
+		PostServices:           []grpcserver.Service{grpcserver.Post, grpcserver.PostInfo},
+		PostListener:           "127.0.0.1:0",
+		TLSServices:            []grpcserver.Service{grpcserver.Post, grpcserver.PostInfo},
+		TLSListener:            "",
+		JSONListener:           "127.0.0.1:9094",
+		JSONCorsAllowedOrigins: []string{""},
+		JSONCorsEverywhere:     false,
+		GrpcSendMsgSize:        1024 * 1024 * 10,
+		GrpcRecvMsgSize:        1024 * 1024 * 10,
+		SmesherStreamInterval:  time.Second,
+		DatabaseConnections:    16,
+	}
+	return cfg
+}

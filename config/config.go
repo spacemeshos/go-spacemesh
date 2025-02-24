@@ -218,7 +218,7 @@ func DefaultConfig() Config {
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
-	conf.Genesis = DefaultTestGenesisConfig()
+	conf.Genesis = DefaultTestGenesisConfig(conf.NetworkHRP)
 	conf.P2P = p2p.DefaultConfig()
 	conf.API = grpcserver.DefaultTestConfig()
 	conf.POSTService = activation.DefaultTestPostServiceConfig()

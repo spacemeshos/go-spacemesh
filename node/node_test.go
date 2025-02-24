@@ -972,30 +972,6 @@ func TestGenesisConfig(t *testing.T) {
 	})
 }
 
-func TestFlock(t *testing.T) {
-	t.Run("sanity", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		app := New(WithConfig(cfg))
-
-		require.NoError(t, app.Lock())
-		t.Cleanup(app.Unlock)
-
-		app1 := *app
-		require.ErrorContains(t, app1.Lock(), "only one spacemesh instance")
-		app.Unlock()
-		require.NoError(t, app.Lock())
-	})
-
-	t.Run("dir doesn't exist", func(t *testing.T) {
-		cfg := getTestDefaultConfig(t)
-		cfg.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
-		app := New(WithConfig(cfg))
-
-		require.NoError(t, app.Lock())
-		t.Cleanup(app.Unlock)
-	})
-}
-
 func TestEmptyExtraData(t *testing.T) {
 	cfg := getTestDefaultConfig(t)
 	cfg.Genesis.ExtraData = ""
@@ -1309,13 +1285,11 @@ func launchPostSupervisor(
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg := config.MainnetConfig()
-	types.SetNetworkHRP(cfg.NetworkHRP)
-	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
-
 	tmp := tb.TempDir()
 	cfg.DataDirParent = tmp
 	cfg.FileLock = filepath.Join(tmp, "LOCK")
 	cfg.LayerDuration = 20 * time.Second
+	cfg.NetworkHRP = "test"
 
 	// is set to 0 to make sync start immediately when node starts
 	cfg.P2P.MinPeers = 0
@@ -1330,7 +1304,7 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 
 	cfg.SMESHING = config.DefaultSmeshingConfig()
 	cfg.SMESHING.Start = false
-	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).StringWithHRP(cfg.NetworkHRP)
 	cfg.SMESHING.Opts.DataDir = filepath.Join(tmp, "post")
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.Scrypt.N = 2
@@ -1357,8 +1331,12 @@ func getTestDefaultConfig(tb testing.TB) *config.Config {
 	cfg.FETCH.BatchTimeout = 5 * time.Second
 
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
-	cfg.Genesis = config.DefaultTestGenesisConfig()
+	cfg.Genesis = config.DefaultTestGenesisConfig(cfg.NetworkHRP)
 	cfg.POSTService = activation.DefaultTestPostServiceConfig()
+
+	// FIXME: unfortunately, many tests depend on globals being set.
+	types.SetNetworkHRP(cfg.NetworkHRP)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	return &cfg
 }
