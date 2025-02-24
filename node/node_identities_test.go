@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap/zaptest"
 	"go.uber.org/zap/zaptest/observer"
 
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -28,7 +27,7 @@ func setupAppWithKeys(tb testing.TB, data ...[]byte) (*App, *observer.ObservedLo
 			return zapcore.NewTee(core, observer)
 		},
 	)))
-	cfg := config.DefaultTestConfig(tb)
+	cfg := getTestConfig(tb)
 	app := New(WithLog(log.NewFromLog(logger)), WithConfig(&cfg))
 	app.Config.DataDirParent = tb.TempDir()
 	if len(data) == 0 {
