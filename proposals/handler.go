@@ -422,7 +422,6 @@ func (h *Handler) setProposalBeacon(p *types.Proposal) error {
 	if p.RefBallot == types.EmptyBallotID {
 		return errors.New("empty refballot")
 	}
-
 	refBallot, err := ballots.Get(h.db, p.RefBallot)
 	if err != nil {
 		return fmt.Errorf("cannot find refballot '%s' in DB: %w", p.RefBallot.String(), err)

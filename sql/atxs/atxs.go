@@ -147,9 +147,9 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 		where pubkey = ?1 and commitment_atx is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -213,9 +213,9 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 		where pubkey = ?1
 		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -236,9 +236,9 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -291,9 +291,9 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 		select id from atxs
 		where epoch = ?1 and pubkey = ?2
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -556,24 +556,21 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 
 	_, err := db.Exec(`
 		WITH max_epoch AS (SELECT MAX(epoch) AS max_epoch FROM atxs)
-		SELECT a.id, a.height, a.pubkey
-		FROM (
-			SELECT id, base_tick_height + tick_count AS height, pubkey, epoch
-			FROM atxs
-			WHERE epoch >= (SELECT max_epoch FROM max_epoch)-1
-		) a
-		WHERE NOT EXISTS (
-			SELECT 1 FROM identities i WHERE i.pubkey = a.pubkey
+		SELECT atxs.id, atxs.base_tick_height + atxs.tick_count AS height, atxs.pubkey
+		FROM atxs
+		WHERE atxs.epoch >= (SELECT max_epoch FROM max_epoch)-1
+		AND NOT EXISTS (
+			SELECT 1 FROM identities i WHERE i.pubkey = atxs.pubkey
 		) AND NOT EXISTS (
-		 	SELECT 1 FROM malfeasance m WHERE m.pubkey = a.pubkey
+		 	SELECT 1 FROM malfeasance m WHERE m.pubkey = atxs.pubkey
 		)
-		ORDER BY a.height DESC, a.epoch DESC
+		ORDER BY height DESC, atxs.epoch DESC
 	`, nil, dec)
 	switch {
 	case err != nil:
-		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", err)
+		return types.EmptyATXID, fmt.Errorf("selecting high-tick atx: %w", err)
 	case rst == types.EmptyATXID:
-		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
 	}
 
 	return rst, nil
