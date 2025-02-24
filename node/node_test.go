@@ -1288,15 +1288,7 @@ func launchPostSupervisor(
 }
 
 func getTestDefaultConfig(tb testing.TB) *config.Config {
-	cfg := testConfigFrom(tb, config.MainnetConfig())
-	// FIXME: unfortunately, many tests depend on globals being set.
-	types.SetNetworkHRP(cfg.NetworkHRP)
-	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
-
-	return cfg
-}
-
-func testConfigFrom(tb testing.TB, cfg config.Config) *config.Config {
+	cfg := config.MainnetConfig()
 	tmp := tb.TempDir()
 	cfg.DataDirParent = tmp
 	cfg.FileLock = filepath.Join(tmp, "LOCK")
@@ -1345,6 +1337,10 @@ func testConfigFrom(tb testing.TB, cfg config.Config) *config.Config {
 	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 	cfg.Genesis = config.DefaultTestGenesisConfig(cfg.NetworkHRP)
 	cfg.POSTService = activation.DefaultTestPostServiceConfig()
+
+	// FIXME: unfortunately, many tests depend on globals being set.
+	types.SetNetworkHRP(cfg.NetworkHRP)
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
 	return &cfg
 }

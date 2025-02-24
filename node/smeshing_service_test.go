@@ -10,6 +10,7 @@ import (
 	"time"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -17,19 +18,57 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 )
 
 func getSmeshingServiceTestConfig(tb testing.TB) *config.Config {
-	cfg := testConfigFrom(tb, config.MainnetSmeshingServiceConfig())
+	cfg := config.MainnetSmeshingServiceConfig()
+
+	tmp := tb.TempDir()
+	cfg.DataDirParent = tmp
+	cfg.FileLock = filepath.Join(tmp, "LOCK")
+	cfg.LayerDuration = 20 * time.Second
 
 	cfg.NodeServiceAddress = "stub address"
 	cfg.API.PublicListener = "127.0.0.1:0"
 	cfg.API.PrivateListener = "127.0.0.1:0"
 	cfg.API.JSONListener = "127.0.0.1:0"
 
-	return cfg
+	cfg.POST = activation.DefaultPostConfig()
+	cfg.POST.MinNumUnits = 2
+	cfg.POST.MaxNumUnits = 4
+	cfg.POST.LabelsPerUnit = 32
+	cfg.POST.K2 = 4
+
+	cfg.BaseConfig.PoetServers = nil
+
+	cfg.SMESHING = config.DefaultSmeshingConfig()
+	cfg.SMESHING.Start = false
+	cfg.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).StringWithHRP(cfg.NetworkHRP)
+	cfg.SMESHING.Opts.DataDir = filepath.Join(tmp, "post")
+	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.SMESHING.Opts.Scrypt.N = 2
+	cfg.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
+
+	cfg.HARE3.RoundDuration = 2
+	cfg.HARE3.PreroundDelay = 1
+
+	cfg.HARE4.RoundDuration = 2
+	cfg.HARE4.PreroundDelay = 1
+
+	cfg.LayerAvgSize = 5
+	cfg.LayersPerEpoch = 3
+	cfg.Tortoise.Zdist = 5
+
+	cfg.HareEligibility.ConfidenceParam = 1
+
+	cfg.Genesis = config.DefaultTestGenesisConfig(cfg.NetworkHRP)
+	cfg.POSTService = activation.DefaultTestPostServiceConfig()
+
+	return &cfg
 }
 
 func TestNewSmeshingService(t *testing.T) {
