@@ -60,10 +60,7 @@ func TestAdd(t *testing.T) {
 		nodeID := types.RandomNodeID()
 		ballot := types.NewExistingBallot(types.BallotID{1}, types.RandomEdSignature(), nodeID, types.LayerID(0))
 
-		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-			_, err := Get(tx, ballot.ID())
-			return err
-		})
+		_, err := Get(db, ballot.ID())
 		require.ErrorIs(t, err, sql.ErrNotFound)
 
 		require.NoError(t, Add(db, &ballot))
@@ -78,12 +75,7 @@ func TestAdd(t *testing.T) {
 
 		require.NoError(t, Add(db, &ballot))
 
-		var stored *types.Ballot
-		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-			var err error
-			stored, err = Get(tx, ballot.ID())
-			return err
-		})
+		stored, err := Get(db, ballot.ID())
 		require.NoError(t, err)
 		require.Equal(t, &ballot, stored)
 	})
@@ -98,12 +90,7 @@ func TestAdd(t *testing.T) {
 		require.NoError(t, Add(db, &ballot))
 		require.NoError(t, identities.SetMalicious(db, nodeID, []byte("proof"), time.Now()))
 
-		var stored *types.Ballot
-		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-			var err error
-			stored, err = Get(tx, ballot.ID())
-			return err
-		})
+		stored, err := Get(db, ballot.ID())
 		require.NoError(t, err)
 		require.True(t, stored.IsMalicious())
 	})
@@ -118,12 +105,7 @@ func TestAdd(t *testing.T) {
 		require.NoError(t, Add(db, &ballot))
 		require.NoError(t, malfeasance.AddProof(db, nodeID, nil, []byte("proof"), 1, time.Now()))
 
-		var stored *types.Ballot
-		err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-			var err error
-			stored, err = Get(tx, ballot.ID())
-			return err
-		})
+		stored, err := Get(db, ballot.ID())
 		require.NoError(t, err)
 		require.True(t, stored.IsMalicious())
 	})

@@ -73,9 +73,9 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, b *sql.Blob) erro
 }
 
 // Get ballot with id from database.
-func Get(tx sql.Transaction, id types.BallotID) (rst *types.Ballot, err error) {
+func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 	var dErr error
-	rows, err := tx.Exec("select ballot from ballots where id = ?1",
+	rows, err := db.Exec("select ballot from ballots where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
@@ -90,15 +90,14 @@ func Get(tx sql.Transaction, id types.BallotID) (rst *types.Ballot, err error) {
 		return nil, fmt.Errorf("decode ballot %s: %w", id, dErr)
 	}
 	if rows == 0 {
-		return nil, fmt.Errorf("%w ballot %s", sql.ErrNotFound, id)
+		return nil, fmt.Errorf("%w: ballot %s", sql.ErrNotFound, id)
 	}
 
 	// TODO(mafa): ideally there would be 2 types of ballots - one for persisting that maps to the db
 	// and one for the in-memory representation. The in-memory representation would have the information
-	// about the maliciousness of the smesher and is fetched via a service that fetches it via this function
-	// from the DB and then checks if the smesher is malicious. This is a temporary solution until we have
-	// a better way to handle this.
-	malicious, err := identities.IsMalicious(tx, rst.SmesherID)
+	// about the maliciousness of the smesher and is fetched via a service that adds malfeasance information
+	// either via DB query or from cached data. This is a temporary solution until we have a better way to handle this.
+	malicious, err := identities.IsMalicious(db, rst.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("check legacy malfeasance for ballot %s: %w", id, err)
 	}
@@ -106,7 +105,7 @@ func Get(tx sql.Transaction, id types.BallotID) (rst *types.Ballot, err error) {
 		rst.SetMalicious()
 		return rst, err
 	}
-	malicious, err = malfeasance.IsMalicious(tx, rst.SmesherID)
+	malicious, err = malfeasance.IsMalicious(db, rst.SmesherID)
 	if err != nil {
 		return nil, fmt.Errorf("check malfeasance for ballot %s: %w", id, err)
 	}

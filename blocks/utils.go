@@ -250,12 +250,7 @@ func rewardInfoAndHeight(
 		if p.Ballot.EpochData != nil {
 			count = p.Ballot.EpochData.EligibilityCount
 		} else {
-			var ref *types.Ballot
-			err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
-				var err error
-				ref, err = ballots.Get(tx, p.RefBallot)
-				return err
-			})
+			ref, err := ballots.Get(db, p.RefBallot)
 			if err != nil {
 				return 0, nil, fmt.Errorf("get ballot %s: %w", p.RefBallot.String(), err)
 			}

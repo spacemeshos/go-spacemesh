@@ -815,11 +815,10 @@ func IterateForGrading(
 ) error {
 	if _, err := db.Exec(`
 		SELECT atxs.id, atxs.received, effective_num_units, tick_count, identities.received, malfeasance.received
-		FROM (
-			SELECT * FROM atxs WHERE epoch = ?1
-		) AS atxs
+		FROM atxs
 		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
 		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+		WHERE atxs.epoch = ?1
 	`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(epoch))
 	}, func(stmt *sql.Statement) bool {
@@ -855,13 +854,11 @@ func IterateAtxsWithMalfeasance(
 	fn func(atx *types.ActivationTx, malicious bool) bool,
 ) error {
 	query := fieldsQuery + `, identities.received, malfeasance.received
-		FROM (
-			SELECT * FROM atxs WHERE epoch = ?1
-		) AS atxs
+		FROM atxs
 		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
 		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+		WHERE atxs.epoch = ?1
 	`
-
 	_, err := db.Exec(
 		query,
 		func(stmt *sql.Statement) { stmt.BindInt64(1, int64(publish)) },
@@ -880,14 +877,12 @@ func IterateAtxIdsWithMalfeasance(
 	fn func(id types.ATXID, malicious bool) bool,
 ) error {
 	query := `
-		SELECT id, identities.received, malfeasance.received
-		FROM (
-			SELECT * FROM atxs WHERE epoch = ?1
-		) AS atxs
+		SELECT atxs.id, identities.received, malfeasance.received
+		FROM atxs
 		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
 		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+		WHERE atxs.epoch = ?1
 	`
-
 	_, err := db.Exec(
 		query,
 		func(stmt *sql.Statement) { stmt.BindInt64(1, int64(publish)) },
