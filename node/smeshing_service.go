@@ -100,7 +100,7 @@ func GetSmeshingServiceCommand() *cobra.Command {
 			done := make(chan struct{}, 1)
 			// FIXME: per https://github.com/spacemeshos/go-spacemesh/issues/3830
 			go func() {
-				app.stopServices(cleanupCtx)
+				app.Close(cleanupCtx)
 				close(done)
 			}()
 			select {
@@ -160,6 +160,9 @@ type SmeshingService struct {
 	eg      errgroup.Group
 }
 
+// NewSmeshingService creates a new instance of the smeshing service
+//
+// NOTE: The user must call .Close() on the returned instance if err != nil.
 func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingService, error) {
 	loggers, err := newLoggers(&cfg.LOGGING)
 	if err != nil {
@@ -910,7 +913,7 @@ func setupDBs(cfg *config.Config, logger *zap.Logger) (sql.LocalDatabase, sql.St
 	return localDB, db, nil
 }
 
-func (app *SmeshingService) stopServices(ctx context.Context) {
+func (app *SmeshingService) Close(ctx context.Context) {
 	app.log.Info("app stopping services...")
 	defer app.log.Info("...finished stopping services")
 
