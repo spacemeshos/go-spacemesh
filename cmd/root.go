@@ -224,9 +224,6 @@ func AddCommonFlags(flagSet *pflag.FlagSet, cfg *config.Config) *string {
 	flagSet.BoolVar(&cfg.API.JSONCorsEverywhere, "json-cors-everywhere",
 		cfg.API.JSONCorsEverywhere, "(Optional) Enable CORS for all origins")
 
-	flagSet.StringVar(&cfg.NodeServiceAddress, "node-service-address",
-		cfg.NodeServiceAddress, "address of the Node Service to connect to")
-
 	flagSet.StringVar(&cfg.API.ProxyApiV2Address, "proxy-api-v2-address", "",
 		"address of the Node API V2 to connect to")
 
