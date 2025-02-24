@@ -7,10 +7,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"testing"
 	"time"
 
-	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -182,7 +180,7 @@ type SmeshingConfig struct {
 // DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
-		BaseConfig:      defaultBaseConfig(),
+		BaseConfig:      DefaultBaseConfig(),
 		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
@@ -208,52 +206,8 @@ func DefaultConfig() Config {
 	}
 }
 
-// DefaultTestConfig returns the default config for tests.
-func DefaultTestConfig(tb testing.TB) Config {
-	conf := DefaultConfig()
-	conf.BaseConfig = defaultTestConfig()
-	conf.DataDirParent = tb.TempDir()
-	conf.FileLock = filepath.Join(conf.DataDirParent, "spacemesh.lock") // allows multiple configs in one test
-	conf.LayerDuration = 2 * time.Second
-
-	conf.Genesis = DefaultTestGenesisConfig(tb)
-
-	conf.POST.MinNumUnits = 2
-	conf.POST.MaxNumUnits = 4
-	conf.POST.LabelsPerUnit = 32
-	conf.POST.K2 = 4
-
-	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
-	conf.SMESHING.Opts.DataDir = filepath.Join(conf.DataDirParent, "post")
-	conf.SMESHING.Opts.NumUnits = conf.POST.MinNumUnits + 1
-	conf.SMESHING.Opts.Scrypt.N = 2
-	conf.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
-
-	// is set to 0 to make sync start immediately when node starts
-	conf.P2P.MinPeers = 0
-
-	conf.Tortoise.Hdist = 5
-	conf.Tortoise.Zdist = 5
-
-	conf.API = grpcserver.DefaultTestConfig(tb)
-	conf.POSTService = activation.DefaultTestPostServiceConfig(tb)
-	conf.Beacon = beacon.NodeSimUnitTestConfig(tb)
-
-	conf.HARE3.PreroundDelay = 10 * time.Millisecond
-	conf.HARE3.RoundDuration = 20 * time.Millisecond
-	conf.HARE4.PreroundDelay = 10 * time.Millisecond
-	conf.HARE4.RoundDuration = 20 * time.Millisecond
-
-	conf.Sync.Interval = time.Second
-
-	conf.FETCH.RequestTimeout = 10 * time.Second
-	conf.FETCH.RequestHardTimeout = 20 * time.Second
-	conf.FETCH.BatchSize = 5
-	return conf
-}
-
 // DefaultBaseConfig returns a default configuration for spacemesh.
-func defaultBaseConfig() BaseConfig {
+func DefaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:                defaultDataDir,
 		FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
@@ -293,15 +247,6 @@ func DefaultSmeshingConfig() SmeshingConfig {
 		ProvingOpts:     activation.DefaultPostProvingOpts(),
 		VerifyingOpts:   activation.DefaultPostVerifyingOpts(),
 	}
-}
-
-func defaultTestConfig() BaseConfig {
-	conf := defaultBaseConfig()
-	conf.MetricsPort += 10000
-	conf.NetworkHRP = "stest"
-	types.SetNetworkHRP(conf.NetworkHRP)
-	types.SetLayersPerEpoch(conf.LayersPerEpoch)
-	return conf
 }
 
 // LoadConfig load the config file.

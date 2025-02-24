@@ -17,6 +17,7 @@ import (
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -37,6 +38,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -73,7 +75,7 @@ func newLogger(buf *bytes.Buffer) log.Log {
 func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r := require.New(t)
 
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 
 	var buf1, buf2 bytes.Buffer
@@ -131,7 +133,7 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	var buf bytes.Buffer
 	lg := newLogger(&buf)
 
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 
 	myLogger := "anton"
@@ -167,7 +169,7 @@ func cmdWithRun(run func(*cobra.Command, []string) error) *cobra.Command {
 func TestSpacemeshApp_Cmd(t *testing.T) {
 	r := require.New(t)
 
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 
 	expected := `unknown command "illegal" for "node"`
@@ -209,7 +211,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	listener := "127.0.0.1:1242"
 
 	r := require.New(t)
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	cfg.API.PublicListener = listener
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	err := app.NewIdentity()
@@ -255,7 +257,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 	r := require.New(t)
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	err := app.NewIdentity()
 	require.NoError(t, err)
@@ -287,7 +289,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	listener := "127.0.0.1:0"
 
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	cfg.API.JSONListener = listener
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
@@ -342,7 +344,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(events.EventHook()), zap.WithPanicHook(&noopHook{}))),
 	)
 
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	app := New(WithConfig(&cfg), WithLog(logger))
 
 	signer, err := signing.NewEdSigner()
@@ -457,7 +459,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 func TestSpacemeshApp_TransactionService(t *testing.T) {
 	listener := "127.0.0.1:14236"
 
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 
 	signer, err := signing.NewEdSigner()
@@ -846,7 +848,7 @@ func TestHRP(t *testing.T) {
 
 func TestGenesisConfig(t *testing.T) {
 	t.Run("config is written to a file", func(t *testing.T) {
-		cfg := config.DefaultTestConfig(t)
+		cfg := getTestConfig(t)
 		app := New(WithConfig(&cfg))
 
 		require.NoError(t, app.Initialize())
@@ -858,7 +860,7 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("no error if no diff", func(t *testing.T) {
-		cfg := config.DefaultTestConfig(t)
+		cfg := getTestConfig(t)
 		app := New(WithConfig(&cfg))
 
 		require.NoError(t, app.Initialize())
@@ -869,7 +871,7 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("fatal error on a diff", func(t *testing.T) {
-		cfg := config.DefaultTestConfig(t)
+		cfg := getTestConfig(t)
 		app := New(WithConfig(&cfg))
 
 		require.NoError(t, app.Initialize())
@@ -882,7 +884,7 @@ func TestGenesisConfig(t *testing.T) {
 	})
 
 	t.Run("long extra data", func(t *testing.T) {
-		cfg := config.DefaultTestConfig(t)
+		cfg := getTestConfig(t)
 		cfg.Genesis.ExtraData = string(make([]byte, 256))
 		app := New(WithConfig(&cfg))
 
@@ -892,7 +894,7 @@ func TestGenesisConfig(t *testing.T) {
 
 func TestFlock(t *testing.T) {
 	t.Run("sanity", func(t *testing.T) {
-		cfg := config.DefaultTestConfig(t)
+		cfg := getTestConfig(t)
 		app := New(WithConfig(&cfg))
 
 		require.NoError(t, app.Lock())
@@ -905,7 +907,7 @@ func TestFlock(t *testing.T) {
 	})
 
 	t.Run("dir doesn't exist", func(t *testing.T) {
-		cfg := config.DefaultTestConfig(t)
+		cfg := getTestConfig(t)
 		cfg.FileLock = filepath.Join(t.TempDir(), "newdir", "LOCK")
 		app := New(WithConfig(&cfg))
 
@@ -915,7 +917,7 @@ func TestFlock(t *testing.T) {
 }
 
 func TestEmptyExtraData(t *testing.T) {
-	cfg := config.DefaultTestConfig(t)
+	cfg := getTestConfig(t)
 	cfg.Genesis.ExtraData = ""
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 	require.Error(t, app.Initialize())
@@ -1223,4 +1225,54 @@ func launchPostSupervisor(
 	ps := activation.NewPostSupervisor(log, postCfg, provingOpts, mgr, builder)
 	require.NoError(tb, ps.Start(cmdCfg, postOpts, sig))
 	return func() { assert.NoError(tb, ps.Stop(false)) }
+}
+
+// getTestConfig returns the default config for tests.
+func getTestConfig(tb testing.TB) config.Config {
+	conf := config.DefaultConfig()
+	conf.MetricsPort += 10000
+	conf.NetworkHRP = "stest"
+
+	types.SetNetworkHRP(conf.NetworkHRP)
+	types.SetLayersPerEpoch(conf.LayersPerEpoch)
+
+	conf.DataDirParent = tb.TempDir()
+	conf.FileLock = filepath.Join(conf.DataDirParent, "spacemesh.lock") // allows multiple configs in one test
+	conf.LayerDuration = 2 * time.Second
+
+	conf.Genesis.ExtraData = "testnet"
+	conf.Genesis.Accounts = map[string]uint64{}
+
+	conf.POST.MinNumUnits = 2
+	conf.POST.MaxNumUnits = 4
+	conf.POST.LabelsPerUnit = 32
+	conf.POST.K2 = 4
+
+	conf.SMESHING.CoinbaseAccount = types.GenerateAddress([]byte{1}).String()
+	conf.SMESHING.Opts.DataDir = filepath.Join(conf.DataDirParent, "post")
+	conf.SMESHING.Opts.NumUnits = conf.POST.MinNumUnits + 1
+	conf.SMESHING.Opts.Scrypt.N = 2
+	conf.SMESHING.Opts.ProviderID.SetUint32(initialization.CPUProviderID())
+
+	// is set to 0 to make sync start immediately when node starts
+	conf.P2P.MinPeers = 0
+
+	conf.Tortoise.Hdist = 5
+	conf.Tortoise.Zdist = 5
+
+	conf.API = grpcserver.DefaultTestConfig(tb)
+	conf.POSTService = activation.DefaultTestPostServiceConfig(tb)
+	conf.Beacon = beacon.NodeSimUnitTestConfig(tb)
+
+	conf.HARE3.PreroundDelay = 10 * time.Millisecond
+	conf.HARE3.RoundDuration = 20 * time.Millisecond
+	conf.HARE4.PreroundDelay = 10 * time.Millisecond
+	conf.HARE4.RoundDuration = 20 * time.Millisecond
+
+	conf.Sync.Interval = time.Second
+
+	conf.FETCH.RequestTimeout = 10 * time.Second
+	conf.FETCH.RequestHardTimeout = 20 * time.Second
+	conf.FETCH.BatchSize = 5
+	return conf
 }
