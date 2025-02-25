@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
@@ -189,23 +188,6 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(expected2, str)
 }
 
-func marshalProto(tb testing.TB, msg proto.Message) []byte {
-	buf, err := protojson.Marshal(msg)
-	require.NoError(tb, err)
-	return buf
-}
-
-func callEndpoint(tb testing.TB, url string, payload []byte) ([]byte, int) {
-	resp, err := http.Post(url, "application/json", bytes.NewReader(payload))
-	require.NoError(tb, err)
-	require.Equal(tb, "application/json", resp.Header.Get("Content-Type"))
-	buf, err := io.ReadAll(resp.Body)
-	require.NoError(tb, err)
-	require.NoError(tb, resp.Body.Close())
-
-	return buf, resp.StatusCode
-}
-
 func TestSpacemeshApp_GrpcService(t *testing.T) {
 	// Use a unique port
 	listener := "127.0.0.1:1242"
@@ -286,7 +268,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
 
 	const message = "你好世界"
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	payload, err := protojson.Marshal(&pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	require.NoError(t, err)
 	listener := "127.0.0.1:0"
 
 	cfg := getTestConfig(t)
@@ -294,7 +277,6 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	cfg.API.PrivateServices = nil
 	app := New(WithConfig(&cfg), WithLog(logtest.New(t)))
 
-	var err error
 	app.clock, err = timesync.NewClock(
 		timesync.WithLayerDuration(cfg.LayerDuration),
 		timesync.WithTickInterval(1*time.Second),
@@ -315,19 +297,19 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.NoError(err)
 	defer app.stopServices(context.Background())
 
-	var (
-		respBody   []byte
-		respStatus int
-	)
 	endpoint := fmt.Sprintf("http://%s/v1/node/echo", app.jsonAPIServer.BoundAddress)
+	var resp *http.Response
 	require.Eventually(t, func() bool {
-		respBody, respStatus = callEndpoint(t, endpoint, payload)
-		return respStatus == http.StatusOK
+		resp, err = http.Post(endpoint, "application/json", bytes.NewReader(payload))
+		return err == nil && resp.StatusCode == http.StatusOK
 	}, 2*time.Second, 100*time.Millisecond)
+
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	respBody, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
 	var msg pb.EchoResponse
-	require.NoError(t, protojson.Unmarshal(respBody, &msg))
-	require.Equal(t, message, msg.Msg.Value)
-	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, protojson.Unmarshal(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 }

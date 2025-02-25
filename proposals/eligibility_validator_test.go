@@ -579,7 +579,7 @@ func TestEligibilityValidator(t *testing.T) {
 			totalWeight, _ := c.WeightForSet(tc.executed.Layer.GetEpoch(), tc.actives)
 			err := tv.CheckEligibility(context.Background(), &tc.executed, totalWeight)
 			if len(tc.err) == 0 {
-				assert.Empty(t, err)
+				assert.NoError(t, err)
 			} else {
 				assert.ErrorContains(t, err, tc.err)
 			}
