@@ -370,8 +370,9 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		}
 		stream, err := client.Stream(context.Background(), request)
 		require.NoError(t, err)
-		_, err = stream.Header()
+		md, err := stream.Header()
 		require.NoError(t, err)
+		require.Equal(t, []string{"application/grpc"}, md.Get("content-type"))
 
 		expect := make([]types.NodeID, 0, len(request.SmesherId))
 		for _, rst := range streamed {
