@@ -362,6 +362,7 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 	grpcPostService.AllowConnections(isCoinbaseSet)
 	grpcServices[grpcserver.Post] = grpcPostService
 
+	postStates := activation.NewPostStates(loggers.add(PostLogger, logger))
 	nipostBuilder, err := activation.NewNIPostBuilder(
 		localDB,
 		grpcPostService,
@@ -370,6 +371,7 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 		clock,
 		validator,
 		activation.NipostbuilderWithIdentityStates(idStates),
+		activation.NipostbuilderWithPostStates(postStates),
 		activation.WithPoetServices(poetClients...),
 	)
 	if err != nil {
@@ -395,6 +397,7 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 		activation.WithPoetConfig(cfg.POET),
 		// TODO(dshulyak) makes no sense. how we ended using it?
 		activation.WithPoetRetryInterval(cfg.HARE3.PreroundDelay),
+		activation.WithPostStates(postStates),
 		activation.WithIdentityStates(idStates),
 		activation.WithPoets(poetClients...),
 		activation.BuilderAtxVersions(cfg.AtxVersions),
