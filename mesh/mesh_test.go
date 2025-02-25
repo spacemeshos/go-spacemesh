@@ -22,7 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/certificates"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -383,10 +382,6 @@ func TestMesh_MaliciousBallots(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, malProof)
 	require.False(t, blts[0].IsMalicious())
-
-	malicious, err := identities.IsMalicious(tm.cdb, sig.NodeID())
-	require.NoError(t, err)
-	require.False(t, malicious)
 
 	// second one will create a MalfeasanceProof
 	tm.mockTortoise.EXPECT().OnMalfeasance(sig.NodeID())

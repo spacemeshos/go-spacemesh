@@ -147,9 +147,9 @@ func CommitmentATX(db sql.Executor, nodeID types.NodeID) (id types.ATXID, err er
 		where pubkey = ?1 and commitment_atx is not null
 		order by epoch desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -213,9 +213,9 @@ func GetFirstIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, e
 		where pubkey = ?1
 		order by epoch asc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -236,9 +236,9 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 		where pubkey = ?1
 		order by epoch desc, received desc
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -291,9 +291,9 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 		select id from atxs
 		where epoch = ?1 and pubkey = ?2
 		limit 1;`, enc, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %v: %w", nodeID, err)
 	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("exec nodeID %s: %w", nodeID, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -555,15 +555,22 @@ func GetIDWithMaxHeight(db sql.Executor, pref types.NodeID, filter Filter) (type
 	}
 
 	_, err := db.Exec(`
-	SELECT id, base_tick_height + tick_count AS height, pubkey
-	FROM atxs LEFT JOIN identities using(pubkey)
-	WHERE identities.pubkey is null and epoch >= (select max(epoch) from atxs)-1
-	ORDER BY height DESC, epoch DESC;`, nil, dec)
+		WITH max_epoch AS (SELECT MAX(epoch) AS max_epoch FROM atxs)
+		SELECT atxs.id, atxs.base_tick_height + atxs.tick_count AS height, atxs.pubkey
+		FROM atxs
+		WHERE atxs.epoch >= (SELECT max_epoch FROM max_epoch)-1
+		AND NOT EXISTS (
+			SELECT 1 FROM identities i WHERE i.pubkey = atxs.pubkey
+		) AND NOT EXISTS (
+		 	SELECT 1 FROM malfeasance m WHERE m.pubkey = atxs.pubkey
+		)
+		ORDER BY height DESC, atxs.epoch DESC
+	`, nil, dec)
 	switch {
 	case err != nil:
-		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", err)
+		return types.EmptyATXID, fmt.Errorf("selecting high-tick atx: %w", err)
 	case rst == types.EmptyATXID:
-		return types.ATXID{}, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
+		return types.EmptyATXID, fmt.Errorf("selecting high-tick atx: %w", sql.ErrNotFound)
 	}
 
 	return rst, nil
@@ -797,23 +804,38 @@ func CountAtxsByOps(db sql.Executor, operations builder.Operations) (count uint3
 func IterateForGrading(
 	db sql.Executor,
 	epoch types.EpochID,
-	fn func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool,
+	fn func(id types.ATXID, atxTime, proofTime int64, weight uint64) bool,
 ) error {
 	if _, err := db.Exec(`
-		select atxs.id, atxs.received, identities.received, effective_num_units, tick_count from atxs
-		left join identities on atxs.pubkey = identities.pubkey
-		where atxs.epoch == ?1;`,
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(epoch))
-		}, func(stmt *sql.Statement) bool {
-			id := types.ATXID{}
-			stmt.ColumnBytes(0, id[:])
-			atxtime := stmt.ColumnInt64(1)
-			prooftime := stmt.ColumnInt64(2)
-			units := uint64(stmt.ColumnInt64(3))
-			ticks := uint64(stmt.ColumnInt64(4))
-			return fn(id, atxtime, prooftime, units*ticks)
-		}); err != nil {
+		SELECT atxs.id, atxs.received, effective_num_units, tick_count, identities.received, malfeasance.received
+		FROM atxs
+		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
+		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+		WHERE atxs.epoch = ?1
+	`, func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(epoch))
+	}, func(stmt *sql.Statement) bool {
+		id := types.ATXID{}
+		stmt.ColumnBytes(0, id[:])
+		atxTime := stmt.ColumnInt64(1)
+		units := uint64(stmt.ColumnInt64(2))
+		ticks := uint64(stmt.ColumnInt64(3))
+		switch {
+		case stmt.ColumnType(4) == sqlite.SQLITE_NULL && stmt.ColumnType(5) == sqlite.SQLITE_NULL:
+			// no malfeasance
+			return fn(id, atxTime, 0, units*ticks)
+		case stmt.ColumnType(4) != sqlite.SQLITE_NULL && stmt.ColumnType(5) == sqlite.SQLITE_NULL:
+			// legacy malfeasance
+			return fn(id, atxTime, stmt.ColumnInt64(4), units*ticks)
+		case stmt.ColumnType(4) == sqlite.SQLITE_NULL && stmt.ColumnType(5) != sqlite.SQLITE_NULL:
+			// new malfeasance
+			return fn(id, atxTime, stmt.ColumnInt64(5), units*ticks)
+		default:
+			// both legacy and new malfeasance, take oldest one
+			proofTime := min(stmt.ColumnInt64(4), stmt.ColumnInt64(5))
+			return fn(id, atxTime, proofTime, units*ticks)
+		}
+	}); err != nil {
 		return fmt.Errorf("iterate for grading: %w", err)
 	}
 	return nil
@@ -824,16 +846,19 @@ func IterateAtxsWithMalfeasance(
 	publish types.EpochID,
 	fn func(atx *types.ActivationTx, malicious bool) bool,
 ) error {
-	query := fieldsQuery + `, iif(i.proof is null, 0, 1) as malicious
-	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
-
+	query := fieldsQuery + `, identities.received, malfeasance.received
+		FROM atxs
+		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
+		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+		WHERE atxs.epoch = ?1
+	`
 	_, err := db.Exec(
 		query,
-		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
-		func(s *sql.Statement) bool {
+		func(stmt *sql.Statement) { stmt.BindInt64(1, int64(publish)) },
+		func(stmt *sql.Statement) bool {
 			return decoder(func(atx *types.ActivationTx) bool {
-				return fn(atx, s.ColumnInt(14) != 0)
-			})(s)
+				return fn(atx, stmt.ColumnType(14) != sqlite.SQLITE_NULL || stmt.ColumnType(15) != sqlite.SQLITE_NULL)
+			})(stmt)
 		},
 	)
 	return err
@@ -844,16 +869,20 @@ func IterateAtxIdsWithMalfeasance(
 	publish types.EpochID,
 	fn func(id types.ATXID, malicious bool) bool,
 ) error {
-	query := `select id, iif(i.proof is null, 0, 1) as malicious
-	FROM atxs left join identities i on atxs.pubkey = i.pubkey WHERE atxs.epoch = $1`
-
+	query := `
+		SELECT atxs.id, identities.received, malfeasance.received
+		FROM atxs
+		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
+		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
+		WHERE atxs.epoch = ?1
+	`
 	_, err := db.Exec(
 		query,
-		func(s *sql.Statement) { s.BindInt64(1, int64(publish)) },
-		func(s *sql.Statement) bool {
+		func(stmt *sql.Statement) { stmt.BindInt64(1, int64(publish)) },
+		func(stmt *sql.Statement) bool {
 			var id types.ATXID
-			s.ColumnBytes(0, id[:])
-			return fn(id, s.ColumnInt(1) != 0)
+			stmt.ColumnBytes(0, id[:])
+			return fn(id, stmt.ColumnType(1) != sqlite.SQLITE_NULL || stmt.ColumnType(2) != sqlite.SQLITE_NULL)
 		},
 	)
 	return err

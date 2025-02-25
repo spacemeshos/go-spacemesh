@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.15
+
+### Improvements
+
+* [#6732](https://github.com/spacemeshos/go-spacemesh/pull/6732) Fixed malfeasance V2 proofs not preventing malicious
+  identities from receiving rewards.
+
 ## v1.7.14
 
 ### Improvements

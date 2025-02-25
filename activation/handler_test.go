@@ -31,7 +31,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -248,10 +247,6 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
-
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
@@ -294,10 +289,6 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		atxHdlr := newTestHandler(t, goldenATXID)
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
-
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
 
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
@@ -446,10 +437,6 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(t.Context(), p2p.NoPeer, codec.MustEncode(atx1)))
 
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
-
 		atx2 := newInitialATXv1(t, goldenATXID, func(a *wire.ActivationTxV1) {
 			a.NumUnits = atx1.NumUnits + 1
 		})
@@ -483,10 +470,6 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(t.Context(), p2p.NoPeer, codec.MustEncode(atx1)))
-
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
 
 		atx2 := newInitialATXv1(t, goldenATXID, func(a *wire.ActivationTxV1) {
 			a.NumUnits = atx1.NumUnits + 1

@@ -21,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -36,6 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -198,19 +198,13 @@ func expectProposal(
 
 func testIdentity(id types.NodeID, received time.Time) identity {
 	return identity{
-		id: id,
-		// kind of proof is irrelevant for this test, we want to avoid validation failing
-		proof: wire.MalfeasanceProof{Proof: wire.Proof{
-			Type: wire.HareEquivocation,
-			Data: &wire.HareProof{},
-		}},
+		id:       id,
 		received: received,
 	}
 }
 
 type identity struct {
 	id       types.NodeID
-	proof    wire.MalfeasanceProof
 	received time.Time
 }
 
@@ -220,15 +214,16 @@ type aggHash struct {
 }
 
 type step struct {
-	lid        types.LayerID
-	beacon     types.Beacon
-	atxs       []*types.ActivationTx
-	ballots    []*types.Ballot
-	activeset  types.ATXIDList
-	identities []identity
-	blocks     []*types.Block
-	hare       []types.LayerID
-	aggHashes  []aggHash
+	lid              types.LayerID
+	beacon           types.Beacon
+	atxs             []*types.ActivationTx
+	ballots          []*types.Ballot
+	activeset        types.ATXIDList
+	legacyIdentities []identity
+	identities       []identity
+	blocks           []*types.Block
+	hare             []types.LayerID
+	aggHashes        []aggHash
 
 	fallbackActiveSets []struct {
 		epoch types.EpochID
@@ -621,6 +616,35 @@ func TestBuild(t *testing.T) {
 			},
 		},
 		{
+			desc: "legacy malicious is not added to activeset",
+			steps: []step{
+				{
+					lid:    16,
+					beacon: types.Beacon{1},
+					atxs: []*types.ActivationTx{
+						gatx(types.ATXID{1}, 2, signer.NodeID(), 1, genAtxWithNonce(777)),
+						gatx(types.ATXID{2}, 2, types.NodeID{2}, 1),
+					},
+					legacyIdentities: []identity{{
+						id: types.NodeID{2},
+					}},
+					opinion:        &types.Opinion{Hash: types.Hash32{1}},
+					txs:            []types.TransactionID{},
+					latestComplete: 15,
+					expectProposal: expectProposal(
+						signer, 16, types.ATXID{1}, types.Opinion{Hash: types.Hash32{1}},
+						expectEpochData(
+							gactiveset(types.ATXID{1}),
+							50,
+							types.Beacon{1},
+						),
+						expectCounters(signer, 3, types.Beacon{1}, 777,
+							2, 5, 11, 19, 22, 24, 28, 30, 33, 36),
+					),
+				},
+			},
+		},
+		{
 			desc: "malicious is not added to activeset",
 			steps: []step{
 				{
@@ -632,10 +656,6 @@ func TestBuild(t *testing.T) {
 					},
 					identities: []identity{{
 						id: types.NodeID{2},
-						proof: wire.MalfeasanceProof{Proof: wire.Proof{
-							Type: wire.HareEquivocation,
-							Data: &wire.HareProof{},
-						}},
 					}},
 					opinion:        &types.Opinion{Hash: types.Hash32{1}},
 					txs:            []types.TransactionID{},
@@ -933,16 +953,11 @@ func TestBuild(t *testing.T) {
 					if step.beacon != types.EmptyBeacon {
 						require.NoError(t, beacons.Add(db, step.lid.GetEpoch(), step.beacon))
 					}
+					for _, iden := range step.legacyIdentities {
+						require.NoError(t, identities.SetMalicious(db, iden.id, []byte("bad"), iden.received))
+					}
 					for _, iden := range step.identities {
-						require.NoError(
-							t,
-							identities.SetMalicious(
-								db,
-								iden.id,
-								codec.MustEncode(&iden.proof),
-								iden.received,
-							),
-						)
+						require.NoError(t, malfeasance.AddProof(db, iden.id, nil, []byte("bad"), 1, iden.received))
 					}
 					for _, atx := range step.atxs {
 						require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
