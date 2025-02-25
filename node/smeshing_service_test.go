@@ -74,7 +74,6 @@ func getSmeshingServiceTestConfig(tb testing.TB) *config.Config {
 }
 
 func TestNewSmeshingService(t *testing.T) {
-	t.Parallel()
 	t.Run("creates new service with valid config", func(t *testing.T) {
 		cfg := getSmeshingServiceTestConfig(t)
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
@@ -104,7 +103,6 @@ func TestNewSmeshingService(t *testing.T) {
 }
 
 func TestSmeshingService_Start(t *testing.T) {
-	t.Parallel()
 	t.Run("starts API services", func(t *testing.T) {
 		cfg := getSmeshingServiceTestConfig(t)
 		cfg.API.PublicServices = []grpcserver.Service{grpcserver.Debug}
@@ -146,7 +144,6 @@ func TestSmeshingService_Start(t *testing.T) {
 }
 
 func TestSmeshingService_StartSmeshing(t *testing.T) {
-	t.Parallel()
 	t.Run("starts smeshing with valid coinbase", func(t *testing.T) {
 		cfg := getSmeshingServiceTestConfig(t)
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
@@ -178,7 +175,6 @@ func TestSmeshingService_StartSmeshing(t *testing.T) {
 }
 
 func TestSmeshingService_GRPCServices(t *testing.T) {
-	t.Parallel()
 	t.Run("initializes all grpc services", func(t *testing.T) {
 		cfg := getSmeshingServiceTestConfig(t)
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
@@ -212,7 +208,6 @@ func TestSmeshingService_GRPCServices(t *testing.T) {
 }
 
 func TestSmeshingService_NonProxiedServices(t *testing.T) {
-	t.Parallel()
 	cfg := getSmeshingServiceTestConfig(t)
 	cfg.API.ProxyApiV2Address = "http://127.0.0.1:10000"
 	cfg.API.NonProxiedServices = []grpcserver.Service{
@@ -274,7 +269,6 @@ func TestSmeshingService_NonProxiedServices(t *testing.T) {
 }
 
 func TestSmeshingService_PprofServer(t *testing.T) {
-	t.Parallel()
 	cfg := getSmeshingServiceTestConfig(t)
 	cfg.PprofHTTPServer = true
 	cfg.PprofHTTPServerListener = ":0"
