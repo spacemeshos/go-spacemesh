@@ -20,6 +20,10 @@ type SmeshingServiceDebugService struct {
 	loggers map[string]*zap.AtomicLevel
 }
 
+func (s *SmeshingServiceDebugService) Path() string {
+	return "/spacemesh.v1.DebugService/"
+}
+
 // RegisterService registers this service with a grpc server instance.
 func (d *SmeshingServiceDebugService) RegisterService(server *grpc.Server) {
 	pb.RegisterDebugServiceServer(server, d)
