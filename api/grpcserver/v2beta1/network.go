@@ -11,19 +11,23 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 )
 
 const (
 	Network = "network_v2beta1"
 )
 
-func NewNetworkService(genesisTime time.Time, config *config.Config) *NetworkService {
+func NewNetworkService(
+	genesisTime time.Time,
+	genesisID types.Hash20,
+	layerDuration time.Duration,
+	labelsPerUnit uint64,
+) *NetworkService {
 	return &NetworkService{
 		genesisTime:   genesisTime,
-		genesisID:     config.Genesis.GenesisID(),
-		layerDuration: config.LayerDuration,
-		labelsPerUnit: config.POST.LabelsPerUnit,
+		genesisID:     genesisID,
+		layerDuration: layerDuration,
+		labelsPerUnit: labelsPerUnit,
 	}
 }
 

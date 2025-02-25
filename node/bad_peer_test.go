@@ -16,7 +16,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	ps "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -29,7 +28,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	l := logtest.New(t)
 
 	// Make 2 node instances
-	conf1 := config.DefaultTestConfig(t)
+	conf1 := getTestConfig(t)
 	conf1.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	conf1.P2P.IP4Blocklist = nil
 	// We setup the api to listen on an OS assigned port, which avoids the second instance getting stuck when
@@ -40,7 +39,7 @@ func TestPeerDisconnectForMessageResultValidationReject(t *testing.T) {
 	// We need to copy the genesis config to ensure that both nodes share the
 	// same genesis ID, otherwise they will not be able to connect to each
 	// other.
-	conf2 := config.DefaultTestConfig(t)
+	conf2 := getTestConfig(t)
 	conf2.Genesis = conf1.Genesis
 	conf2.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")
 	conf2.P2P.IP4Blocklist = nil

@@ -8,15 +8,19 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 )
 
 func TestNetworkService_Info(t *testing.T) {
 	ctx := t.Context()
 	genesis := time.Unix(genTimeUnix, 0)
-	c := config.DefaultTestConfig(t)
+	genesisID := types.Hash20{1, 2, 3}
+	layerDuration := 10 * time.Second
+	labelsPerUnit := uint64(10)
+	types.SetNetworkHRP("spacemesh")
+	types.SetEffectiveGenesis(20)
+	types.SetLayersPerEpoch(100)
 
-	svc := NewNetworkService(genesis, &c)
+	svc := NewNetworkService(genesis, genesisID, layerDuration, labelsPerUnit)
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -28,11 +32,11 @@ func TestNetworkService_Info(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Equal(t, genesis.UTC(), info.GenesisTime.AsTime().UTC())
-		require.Equal(t, c.LayerDuration, info.LayerDuration.AsDuration())
-		require.Equal(t, c.Genesis.GenesisID().Bytes(), info.GenesisId)
+		require.Equal(t, layerDuration, info.LayerDuration.AsDuration())
+		require.Equal(t, genesisID.Bytes(), info.GenesisId)
 		require.Equal(t, types.NetworkHRP(), info.Hrp)
 		require.Equal(t, types.GetEffectiveGenesis().Uint32(), info.EffectiveGenesisLayer)
 		require.Equal(t, types.GetLayersPerEpoch(), info.LayersPerEpoch)
-		require.Equal(t, c.POST.LabelsPerUnit, info.LabelsPerUnit)
+		require.Equal(t, labelsPerUnit, info.LabelsPerUnit)
 	})
 }

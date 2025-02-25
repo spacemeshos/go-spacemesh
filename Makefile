@@ -39,7 +39,7 @@ else
 	ULIMIT := ulimit -n 4096;
 endif
 
-UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v genvm/cmd)
+UNIT_TESTS ?= $(shell go list ./...  | grep -v systest/tests | grep -v hare4)
 
 export CGO_ENABLED := 1
 export CGO_CFLAGS := $(CGO_CFLAGS) -DSQLITE_ENABLE_DBSTAT_VTAB=1

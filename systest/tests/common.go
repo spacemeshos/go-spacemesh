@@ -238,6 +238,11 @@ BACKOFF:
 	if err != nil {
 		return err
 	}
+	defer proofs.CloseSend()
+	_, err = proofs.Header()
+	if err != nil {
+		return fmt.Errorf("malfeasance stream header: %w", err)
+	}
 	for {
 		proof, err := proofs.Recv()
 		s, ok := status.FromError(err)
@@ -258,6 +263,7 @@ BACKOFF:
 			if retries == attempts {
 				return errors.New("malfeasance stream unavailable")
 			}
+			proofs.CloseSend()
 			retries++
 			time.Sleep(retryBackoff)
 			goto BACKOFF
