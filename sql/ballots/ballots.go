@@ -10,9 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 )
 
-func decodeBallot(id types.BallotID, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
+func decodeBallot(id types.BallotID, body *bytes.Reader) (*types.Ballot, error) {
 	ballot := types.Ballot{}
 	if n, err := codec.DecodeFrom(body, &ballot); err != nil {
 		if err != io.EOF {
@@ -22,9 +24,6 @@ func decodeBallot(id types.BallotID, body *bytes.Reader, malicious bool) (*types
 		return nil, errors.New("ballot data missing")
 	}
 	ballot.SetID(id)
-	if malicious {
-		ballot.SetMalicious()
-	}
 	return &ballot, nil
 }
 
@@ -75,71 +74,65 @@ func LoadBlob(ctx context.Context, db sql.Executor, id []byte, b *sql.Blob) erro
 
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
-	if rows, err := db.Exec(`select ballot, length(identities.proof)
-	from ballots left join identities using(pubkey)
-	where id = ?1;`,
+	var dErr error
+	rows, err := db.Exec("select ballot from ballots where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
-			rst, err = decodeBallot(id,
-				stmt.ColumnReader(0),
-				stmt.ColumnInt(1) > 0,
-			)
+			rst, dErr = decodeBallot(id, stmt.ColumnReader(0))
 			return true
-		}); err != nil {
+		},
+	)
+	if err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
-	} else if rows == 0 {
-		return nil, fmt.Errorf("%w ballot %s", sql.ErrNotFound, id)
+	}
+	if dErr != nil {
+		return nil, fmt.Errorf("decode ballot %s: %w", id, dErr)
+	}
+	if rows == 0 {
+		return nil, fmt.Errorf("%w: ballot %s", sql.ErrNotFound, id)
+	}
+
+	// TODO(mafa): ideally there would be 2 types of ballots - one for persisting that maps to the db
+	// and one for the in-memory representation. The in-memory representation would have the information
+	// about the maliciousness of the smesher and is fetched via a service that adds malfeasance information
+	// either via DB query or from cached data. This is a temporary solution until we have a better way to handle this.
+	malicious, err := identities.IsMalicious(db, rst.SmesherID)
+	if err != nil {
+		return nil, fmt.Errorf("check legacy malfeasance for ballot %s: %w", id, err)
+	}
+	if malicious {
+		rst.SetMalicious()
+		return rst, err
+	}
+	malicious, err = malfeasance.IsMalicious(db, rst.SmesherID)
+	if err != nil {
+		return nil, fmt.Errorf("check malfeasance for ballot %s: %w", id, err)
+	}
+	if malicious {
+		rst.SetMalicious()
 	}
 	return rst, nil
 }
 
 // Layer returns full body ballot for layer.
+// NOTE: this function does not mark the ballot as malicious, if the smesher that published the ATX is!
 func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	if _, err = db.Exec(`select id, ballot, length(identities.proof)
-		from ballots left join identities using(pubkey)
-		where layer = ?1;`, func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid))
-	}, func(stmt *sql.Statement) bool {
-		id := types.BallotID{}
-		stmt.ColumnBytes(0, id[:])
-		var ballot *types.Ballot
-		ballot, err = decodeBallot(id,
-			stmt.ColumnReader(1),
-			stmt.ColumnInt(2) > 0,
-		)
-		if err != nil {
-			return false
-		}
-		rst = append(rst, ballot)
-		return true
-	}); err != nil {
-		return nil, fmt.Errorf("ballots for layer %s: %w", lid, err)
-	}
-	return rst, err
-}
-
-// LayerNoMalicious returns full ballot without joining malicious identities.
-func LayerNoMalicious(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	var derr error
-	if _, err = db.Exec(`select id, ballot from ballots where layer = ?1;`,
+	if _, err = db.Exec("select id, ballot from ballots where layer = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid))
 		}, func(stmt *sql.Statement) bool {
 			id := types.BallotID{}
 			stmt.ColumnBytes(0, id[:])
-			var ballot types.Ballot
-			_, derr = codec.DecodeFrom(stmt.ColumnReader(1), &ballot)
-			if derr != nil {
+			var ballot *types.Ballot
+			ballot, err = decodeBallot(id, stmt.ColumnReader(1))
+			if err != nil {
 				return false
 			}
-			ballot.SetID(id)
-			rst = append(rst, &ballot)
+			rst = append(rst, ballot)
 			return true
 		}); err != nil {
-		return nil, fmt.Errorf("selecting %d: %w", lid, err)
-	} else if derr != nil {
-		return nil, fmt.Errorf("decoding %d: %w", lid, err)
+		return nil, fmt.Errorf("ballots for layer %s: %w", lid, err)
 	}
 	return rst, err
 }
@@ -213,21 +206,12 @@ func LatestLayer(db sql.Executor) (types.LayerID, error) {
 	return lid, nil
 }
 
+// FirstInEpoch returns the first ballot referencing the specified ATX in the epoch.
+// NOTE: it does not mark the ballot as malicious, if the smesher that published the ATX is!
 func FirstInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
-	return inEpoch(db, atx, epoch, "asc")
-}
-
-func LastInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
-	return inEpoch(db, atx, epoch, "desc")
-}
-
-func inEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID, order string) (*types.Ballot, error) {
 	var (
-		bid     types.BallotID
-		ballot  types.Ballot
-		nodeID  types.NodeID
-		rows, n int
-		err     error
+		ballot *types.Ballot
+		dErr   error
 	)
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.Bytes())
@@ -235,40 +219,61 @@ func inEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID, order string
 		stmt.BindInt64(3, int64((epoch+1).FirstLayer()-1))
 	}
 	dec := func(stmt *sql.Statement) bool {
+		var bid types.BallotID
 		stmt.ColumnBytes(0, bid[:])
-		stmt.ColumnBytes(1, nodeID[:])
-		if n, err = codec.DecodeFrom(stmt.ColumnReader(2), &ballot); err != nil {
-			if err != io.EOF {
-				err = fmt.Errorf("ballot by atx %s: %w", atx, err)
-				return false
-			}
-		} else if n == 0 {
-			err = fmt.Errorf("ballot by atx missing data %s", atx)
-			return false
-		}
-		ballot.SetID(bid)
-		ballot.SmesherID = nodeID
-		if stmt.ColumnInt(3) > 0 {
-			ballot.SetMalicious()
-		}
-		// only ref ballot has valid EpochData
-		if ballot.EpochData != nil {
-			return false
-		}
-		return true
+		ballot, dErr = decodeBallot(bid, stmt.ColumnReader(1))
+		return false
 	}
-	rows, err = db.Exec(fmt.Sprintf(`
-		select id, pubkey, ballot, length(identities.proof) from ballots
-	    left join identities using(pubkey)
+	rows, err := db.Exec(`
+		select id, ballot from ballots
 		where atx = ?1 and layer between ?2 and ?3
-		order by layer %s limit 1;`, order), enc, dec)
+		order by layer asc limit 1
+	`, enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("ballot by atx %s: %w", atx, err)
+	}
+	if dErr != nil {
+		return nil, fmt.Errorf("decode ballot by atx %s: %w", atx, err)
 	}
 	if rows == 0 {
 		return nil, sql.ErrNotFound
 	}
-	return &ballot, err
+	return ballot, err
+}
+
+// LastInEpoch returns the last ballot referencing the specified ATX in the epoch.
+// NOTE: it does not mark the ballot as malicious, if the smesher that published the ATX is!
+func LastInEpoch(db sql.Executor, atx types.ATXID, epoch types.EpochID) (*types.Ballot, error) {
+	var (
+		ballot *types.Ballot
+		dErr   error
+	)
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, atx.Bytes())
+		stmt.BindInt64(2, int64(epoch.FirstLayer()))
+		stmt.BindInt64(3, int64((epoch+1).FirstLayer()-1))
+	}
+	dec := func(stmt *sql.Statement) bool {
+		var bid types.BallotID
+		stmt.ColumnBytes(0, bid[:])
+		ballot, dErr = decodeBallot(bid, stmt.ColumnReader(1))
+		return false
+	}
+	rows, err := db.Exec(`
+		select id, ballot from ballots
+		where atx = ?1 and layer between ?2 and ?3
+		order by layer desc limit 1
+	`, enc, dec)
+	if err != nil {
+		return nil, fmt.Errorf("ballot by atx %s: %w", atx, err)
+	}
+	if dErr != nil {
+		return nil, fmt.Errorf("decode ballot by atx %s: %w", atx, err)
+	}
+	if rows == 0 {
+		return nil, sql.ErrNotFound
+	}
+	return ballot, err
 }
 
 func AllFirstInEpoch(db sql.Executor, epoch types.EpochID) ([]*types.Ballot, error) {

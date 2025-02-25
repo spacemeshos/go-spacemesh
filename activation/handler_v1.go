@@ -313,8 +313,8 @@ func (h *HandlerV1) validateNonInitialAtx(
 }
 
 // cacheAtx caches the atx in the atxsdata cache.
-// Returns true if the atx was cached, false otherwise.
-func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, malicious bool) *atxsdata.ATX {
+// Returns the cached ATX or nil if the epoch was already evicted.
+func (h *HandlerV1) cacheAtx(atx *types.ActivationTx, malicious bool) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		return h.atxsdata.AddFromAtx(atx, malicious)
 	}
@@ -529,7 +529,7 @@ func (h *HandlerV1) storeAtx(
 	}
 
 	h.beacon.OnAtx(atx)
-	if added := h.cacheAtx(ctx, atx, malicious); added != nil {
+	if added := h.cacheAtx(atx, malicious); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 

@@ -236,9 +236,9 @@ func activeSetFromGrades(
 		set       []types.ATXID
 		total     int
 	)
-	if err := atxs.IterateForGrading(db, target-1, func(id types.ATXID, atxtime, prooftime int64, weight uint64) bool {
+	if err := atxs.IterateForGrading(db, target-1, func(id types.ATXID, atxTime, proofTime int64, weight uint64) bool {
 		total++
-		if gradeAtx(epochStart, networkDelay, atxtime, prooftime) == good {
+		if gradeAtx(epochStart, networkDelay, atxTime, proofTime) == good {
 			set = append(set, id)
 			setWeight += weight
 		}
@@ -285,8 +285,8 @@ func gradeAtx(epochStart time.Time, networkDelay time.Duration, atxNsec, proofNs
 	proof := time.Unix(0, proofNsec)
 	if atx.Before(epochStart.Add(-4*networkDelay)) && (proofNsec == 0 || !proof.Before(epochStart)) {
 		return good
-	} else if atx.Before(epochStart.Add(-3*networkDelay)) &&
-		(proofNsec == 0 || !proof.Before(epochStart.Add(-networkDelay))) {
+	}
+	if atx.Before(epochStart.Add(-3*networkDelay)) && (proofNsec == 0 || !proof.Before(epochStart.Add(-networkDelay))) {
 		return acceptable
 	}
 	return evil

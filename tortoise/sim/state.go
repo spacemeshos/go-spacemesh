@@ -52,8 +52,8 @@ func (s *State) OnActivationTx(atx *types.ActivationTx) {
 
 // OnBallot callback to store ballot.
 func (s *State) OnBallot(ballot *types.Ballot) {
-	exist, _ := ballots.Get(s.DB, ballot.ID())
-	if exist != nil {
+	exist, _ := ballots.Has(s.DB, ballot.ID())
+	if exist {
 		return
 	}
 	if err := ballots.Add(s.DB, ballot); err != nil {
