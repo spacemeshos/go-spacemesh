@@ -25,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
@@ -379,7 +380,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		require.ErrorIs(t, err, errMaliciousATX)
 	})
 
-	t.Run("invalid NIPoST of known malfeasant", func(t *testing.T) {
+	t.Run("invalid NIPoST of known legacy malfeasant", func(t *testing.T) {
 		t.Parallel()
 		atxHdlr, prevATX, postAtx := setup(t)
 
@@ -387,6 +388,29 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		watx.Sign(sig)
 
 		require.NoError(t, identities.SetMalicious(atxHdlr.cdb, watx.SmesherID, []byte("proof"), time.Now()))
+
+		atxHdlr.mClock.EXPECT().CurrentLayer().Return(watx.PublishEpoch.FirstLayer())
+		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), watx))
+
+		atxHdlr.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), watx.SmesherID)
+		atxHdlr.mValidator.EXPECT().PositioningAtx(watx.PositioningATXID, gomock.Any(), goldenATXID, watx.PublishEpoch)
+		atxHdlr.mValidator.EXPECT().
+			NIPost(gomock.Any(), watx.SmesherID, goldenATXID, gomock.Any(), gomock.Any(), watx.NumUnits, gomock.Any()).
+			Return(0, &verifying.ErrInvalidIndex{Index: 2})
+
+		received := time.Now()
+		_, err := atxHdlr.syntacticallyValidateDeps(context.Background(), watx, received)
+		require.EqualError(t, err, fmt.Sprintf("smesher %s is known malfeasant", watx.SmesherID.ShortString()))
+	})
+
+	t.Run("invalid NIPoST of known malfeasant", func(t *testing.T) {
+		t.Parallel()
+		atxHdlr, prevATX, postAtx := setup(t)
+
+		watx := newChainedActivationTxV1(t, prevATX, postAtx.ID())
+		watx.Sign(sig)
+
+		require.NoError(t, malfeasance.AddProof(atxHdlr.cdb, watx.SmesherID, nil, []byte("proof"), 1, time.Now()))
 
 		atxHdlr.mClock.EXPECT().CurrentLayer().Return(watx.PublishEpoch.FirstLayer())
 		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), watx))
@@ -610,12 +634,35 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		require.NoError(t, atxHdlr.storeAtx(context.Background(), atx, watx, p2p.Peer("other")))
 	})
 
-	t.Run("stores ATX of malicious identity", func(t *testing.T) {
+	t.Run("stores ATX of legacy malicious identity", func(t *testing.T) {
 		atxHdlr := newV1TestHandler(t, goldenATXID)
 
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 		require.NoError(t, identities.SetMalicious(atxHdlr.cdb, sig.NodeID(), types.RandomBytes(10), time.Now()))
+
+		watx := newInitialATXv1(t, goldenATXID)
+		watx.Sign(sig)
+		atx := toAtx(t, watx)
+
+		atxHdlr.mBeacon.EXPECT().OnAtx(gomock.Cond(func(atx *types.ActivationTx) bool {
+			return atx.ID() == watx.ID()
+		}))
+		atxHdlr.mTortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
+		require.NoError(t, atxHdlr.storeAtx(context.Background(), atx, watx, p2p.Peer("other")))
+
+		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
+		require.NoError(t, err)
+		atx.SetReceived(time.Unix(0, atx.Received().UnixNano()))
+		require.Equal(t, atx, atxFromDb)
+	})
+
+	t.Run("stores ATX of malicious identity", func(t *testing.T) {
+		atxHdlr := newV1TestHandler(t, goldenATXID)
+
+		sig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+		require.NoError(t, malfeasance.AddProof(atxHdlr.cdb, sig.NodeID(), nil, types.RandomBytes(10), 1, time.Now()))
 
 		watx := newInitialATXv1(t, goldenATXID)
 		watx.Sign(sig)
