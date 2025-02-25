@@ -234,7 +234,11 @@ func TestSmeshingService_NonProxiedServices(t *testing.T) {
 	t.Run("can reach debug service", func(t *testing.T) {
 		require.Eventually(t, func() bool {
 			url := baseUrl + "/spacemesh.v1.DebugService/ChangeLogLevel"
-			resp, err := http.Post(url, "application/json", bytes.NewBuffer([]byte(`{"module":"grpc", "level":"debug"}`)))
+			resp, err := http.Post(
+				url,
+				"application/json",
+				bytes.NewBuffer([]byte(`{"module":"grpc", "level":"debug"}`)),
+			)
 			require.NoError(t, err, url)
 			body, err := io.ReadAll(resp.Body)
 			require.NoError(t, err, url)
