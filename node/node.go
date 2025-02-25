@@ -1605,7 +1605,9 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 	case v2alpha1.Network:
 		service := v2alpha1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config,
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration,
+			app.Config.POST.LabelsPerUnit,
 		)
 		app.grpcServices[svc] = service
 		return service, nil
@@ -1661,7 +1663,9 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 	case v2beta1.Network:
 		service := v2beta1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config,
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration,
+			app.Config.POST.LabelsPerUnit,
 		)
 		app.grpcServices[svc] = service
 		return service, nil

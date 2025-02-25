@@ -160,7 +160,7 @@ func (s *MalfeasanceStreamService) Stream(
 		case errors.Is(err, io.EOF):
 			return nil
 		case err != nil:
-			return status.Error(codes.Internal, err.Error())
+			return err
 		}
 	}
 
@@ -179,7 +179,7 @@ func (s *MalfeasanceStreamService) Stream(
 		case errors.Is(err, io.EOF):
 			return nil
 		case err != nil:
-			return status.Error(codes.Internal, err.Error())
+			return err
 		}
 	}
 
@@ -197,9 +197,10 @@ func (s *MalfeasanceStreamService) Stream(
 	eventsFull := sub.Full()
 
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
-		return status.Errorf(codes.Unavailable, "can't send header")
+		ctxzap.Debug(stream.Context(), "failed to send stream header",
+			zap.Error(err),
+		)
 	}
-
 	for {
 		select {
 		// process pending events first
@@ -221,7 +222,7 @@ func (s *MalfeasanceStreamService) Stream(
 			case errors.Is(err, io.EOF):
 				return nil
 			case err != nil:
-				return status.Error(codes.Internal, err.Error())
+				return err
 			}
 		default:
 			select {
@@ -243,7 +244,7 @@ func (s *MalfeasanceStreamService) Stream(
 				case errors.Is(err, io.EOF):
 					return nil
 				case err != nil:
-					return status.Error(codes.Internal, err.Error())
+					return err
 				}
 			case <-eventsFull:
 				return status.Error(codes.Canceled, "buffer overflow")
