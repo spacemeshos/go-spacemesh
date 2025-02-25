@@ -1,8 +1,10 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -202,6 +204,67 @@ func TestSmeshingService_GRPCServices(t *testing.T) {
 		api, err := service.grpcService("unknown", zaptest.NewLogger(t))
 		require.Error(t, err)
 		require.Nil(t, api)
+	})
+}
+
+func TestSmeshingService_NonProxiedServices(t *testing.T) {
+	cfg := getSmeshingServiceTestConfig(t)
+	cfg.API.ProxyApiV2Address = "http://127.0.0.1:10000"
+	cfg.API.NonProxiedServices = []grpcserver.Service{
+		grpcserver.SmeshingV2Beta1,
+		grpcserver.SmeshingIdentitiesV2Beta1,
+		grpcserver.Debug,
+	}
+
+	service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
+	require.NoError(t, err)
+	defer service.Close(context.Background())
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, service.start(ctx))
+
+	baseUrl := fmt.Sprintf("http://%s", service.apiProxy.BoundAddress)
+
+	t.Run("can reach debug service", func(t *testing.T) {
+		require.Eventually(t, func() bool {
+			url := baseUrl + "/spacemesh.v1.DebugService/ChangeLogLevel"
+			resp, err := http.Post(
+				url,
+				"application/json",
+				bytes.NewBuffer([]byte(`{"module":"grpc", "level":"debug"}`)),
+			)
+			require.NoError(t, err, url)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err, url)
+			t.Logf("status: %s, body: '%s'", resp.Status, body)
+			resp.Body.Close()
+			return http.StatusOK == resp.StatusCode
+		}, time.Second*10, time.Millisecond*100)
+	})
+	t.Run("can reach smeshing service", func(t *testing.T) {
+		require.Eventually(t, func() bool {
+			url := baseUrl + "/spacemesh.v2beta1.SmeshingService/Version"
+			resp, err := http.Get(url)
+			require.NoError(t, err, url)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err, url)
+			t.Logf("status: %s, body: '%s'", resp.Status, body)
+			resp.Body.Close()
+			return http.StatusOK == resp.StatusCode
+		}, time.Second*10, time.Millisecond*100)
+	})
+	t.Run("can reach smeshing identities service", func(t *testing.T) {
+		require.Eventually(t, func() bool {
+			url := baseUrl + "/spacemesh.v2beta1.SmeshingIdentitiesService/PoetInfo"
+			resp, err := http.Get(url)
+			require.NoError(t, err, url)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err, url)
+			t.Logf("status: %s, body: '%s'", resp.Status, body)
+			resp.Body.Close()
+			return http.StatusOK == resp.StatusCode
+		}, time.Second*10, time.Millisecond*100)
 	})
 }
 
