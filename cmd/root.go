@@ -13,6 +13,9 @@ import (
 
 func AddNodeServiceFlags(flagSet *pflag.FlagSet, cfg *config.Config) *string {
 	configPath := AddCommonFlags(flagSet, cfg)
+
+	flagSet.StringVar(&cfg.API.NodeServiceListener, "node-service-listener",
+		cfg.API.NodeServiceListener, "Listener for the node service")
 	return configPath
 }
 
