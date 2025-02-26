@@ -145,6 +145,20 @@ func (s *MalfeasanceStreamService) Stream(
 	request *spacemeshv2beta1.MalfeasanceStreamRequest,
 	stream spacemeshv2beta1.MalfeasanceStreamService_StreamServer,
 ) error {
+	var sub *events.BufferedSubscription[events.EventMalfeasance]
+	if request.Watch {
+		matcher := malfeasanceMatcher{request}
+		var err error
+		sub, err = events.SubscribeMatched(matcher.match)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
+		if err := stream.SendHeader(metadata.MD{}); err != nil {
+			return err
+		}
+	}
+
 	legacyProofs, err := fetchLegacyFromDB(
 		stream.Context(),
 		s.db,
@@ -187,20 +201,9 @@ func (s *MalfeasanceStreamService) Stream(
 		return nil
 	}
 
-	matcher := malfeasanceMatcher{request}
-	sub, err := events.SubscribeMatched(matcher.match)
-	if err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	defer sub.Close()
 	eventsOut := sub.Out()
 	eventsFull := sub.Full()
 
-	if err := stream.SendHeader(metadata.MD{}); err != nil {
-		ctxzap.Debug(stream.Context(), "failed to send stream header",
-			zap.Error(err),
-		)
-	}
 	for {
 		select {
 		// process pending events first
