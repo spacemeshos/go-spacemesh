@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -684,6 +685,9 @@ func (s *Syncer) DownloadLoop(parent context.Context, malSyncStart types.EpochID
 	eg.Go(func() error {
 		return s.downloadLegacy(ctx, false)
 	})
+	if malSyncStart == math.MaxUint32 { // if we don't have a malSyncStart epoch, just start legacy sync
+		return eg.Wait()
+	}
 	eg.Go(func() error {
 		select {
 		case <-ctx.Done():

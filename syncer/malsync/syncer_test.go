@@ -3,6 +3,7 @@ package malsync
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"testing"
 	"time"
@@ -392,6 +393,29 @@ func TestSyncer(t *testing.T) {
 		ch <- tester.peers
 		ch <- tester.peers
 		tester.mClock.BlockUntilContext(context.Background(), 2)
+		cancel()
+		eg.Wait()
+	})
+	t.Run("mal2 disabled", func(t *testing.T) {
+		tester := newTester(t, DefaultConfig())
+		ctx, cancel := context.WithCancel(context.Background())
+		ch := make(chan []p2p.Peer)
+		tester.mFetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).
+			DoAndReturn(func(int) []p2p.Peer {
+				return <-ch
+			}).AnyTimes()
+		var eg errgroup.Group
+		eg.Go(func() error {
+			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, math.MaxUint32), context.Canceled)
+			return nil
+		})
+		tester.mClock.BlockUntilContext(context.Background(), 1)
+		tester.mClock.Advance(tester.cfg.IDRequestInterval)
+
+		tester.expectLegacyMaliciousIDs()
+		tester.expectLegacyProofs(nil)
+		ch <- tester.peers
+		tester.mClock.BlockUntilContext(context.Background(), 1)
 		cancel()
 		eg.Wait()
 	})
