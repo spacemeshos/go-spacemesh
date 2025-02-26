@@ -691,7 +691,7 @@ func (s *Syncer) ensureMalfeasanceInSync(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			case <-s.awaitATXSyncedCh:
-				err := s.malsyncer.DownloadLoop(ctx, current.GetEpoch() >= s.malSyncStartEpoch)
+				err := s.malsyncer.DownloadLoop(ctx, s.malSyncStartEpoch)
 				if err != nil && !errors.Is(err, context.Canceled) {
 					s.logger.Error("malfeasance sync failed", log.ZContext(ctx), zap.Error(err))
 				}

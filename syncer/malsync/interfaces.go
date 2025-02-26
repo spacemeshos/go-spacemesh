@@ -16,3 +16,7 @@ type fetcher interface {
 	LegacyMalfeasanceProofs(context.Context, []types.NodeID) error
 	MalfeasanceProofs(context.Context, []types.NodeID) error
 }
+
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) <-chan struct{}
+}
