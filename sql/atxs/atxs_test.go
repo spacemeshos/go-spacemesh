@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"os"
-	"slices"
 	"testing"
 	"time"
 
@@ -1727,10 +1726,10 @@ func Test_Previous(t *testing.T) {
 		for range 10 {
 			previousAtxs = append(previousAtxs, types.RandomATXID())
 		}
-		// used by 50 IDs randomly
-		for range 50 {
-			prev := previousAtxs[rand.IntN(len(previousAtxs))]
-			index := slices.Index(previousAtxs, prev)
+		// used by 100 IDs randomly
+		for range 100 {
+			index := rand.IntN(len(previousAtxs))
+			prev := previousAtxs[index]
 			require.NoError(t, atxs.SetPost(db, atx, prev, index, types.RandomNodeID(), 10, 0))
 		}
 
