@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -175,6 +176,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		db sql.Executor,
 		info *MockmalfeasanceInfo,
 		legacyInfo *MockmalfeasanceInfo,
+		opts ...malStreamOpts,
 	) spacemeshv2beta1.MalfeasanceStreamServiceClient {
 		proofs := make([]malInfo, 90)
 		// first 20 are legacy proofs
@@ -251,7 +253,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			require.NoError(t, malfeasance.SetMalicious(db, proofs[i].ID, id, time.Now()))
 		}
 
-		svc := NewMalfeasanceStreamService(db, info, legacyInfo)
+		svc := NewMalfeasanceStreamService(db, info, legacyInfo, opts...)
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
@@ -260,9 +262,6 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 	}
 
 	t.Run("all", func(t *testing.T) {
-		events.InitializeReporter()
-		t.Cleanup(events.CloseEventReporter)
-
 		db := statesql.InMemoryTest(t)
 		ctrl := gomock.NewController(t)
 		info := NewMockmalfeasanceInfo(ctrl)
@@ -284,14 +283,12 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 	})
 
 	t.Run("watch", func(t *testing.T) {
-		events.InitializeReporter()
-		t.Cleanup(events.CloseEventReporter)
-
 		db := statesql.InMemoryTest(t)
 		ctrl := gomock.NewController(t)
 		info := NewMockmalfeasanceInfo(ctrl)
 		legacyInfo := NewMockmalfeasanceInfo(ctrl)
-		client := setup(t, db, info, legacyInfo)
+		eventsMock := NewMockeventProvider(ctrl)
+		client := setup(t, db, info, legacyInfo, withEventProvider(eventsMock))
 
 		const (
 			nLegacy     = 5
@@ -310,8 +307,8 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 				"type":                  strconv.FormatUint(uint64(i%4+1), 10),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(nil, sql.ErrNotFound).AnyTimes()
-			legacyInfo.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(
+			info.EXPECT().Info(gomock.Any(), smesher).Return(nil, sql.ErrNotFound).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), smesher).DoAndReturn(
 				func(_ context.Context, id types.NodeID) (map[string]string, error) {
 					return maps.Clone(properties), nil
 				}).AnyTimes()
@@ -327,11 +324,11 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 				"type":                  fmt.Sprintf("Type %d", i%4+1),
 				fmt.Sprintf("key%d", i): fmt.Sprintf("value%d", i),
 			}
-			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(
+			info.EXPECT().Info(gomock.Any(), smesher).DoAndReturn(
 				func(_ context.Context, id types.NodeID) (map[string]string, error) {
 					return maps.Clone(properties), nil
 				}).AnyTimes()
-			legacyInfo.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(nil, sql.ErrNotFound).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), smesher).Return(nil, sql.ErrNotFound).AnyTimes()
 		}
 
 		id, err := marriage.NewID(db)
@@ -347,15 +344,15 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 				"type":   "Type Marry",
 				"key":    "value",
 			}
-			info.EXPECT().Info(gomock.Any(), streamed[i].Smesher).DoAndReturn(
+			info.EXPECT().Info(gomock.Any(), smesher).DoAndReturn(
 				func(_ context.Context, id types.NodeID) (map[string]string, error) {
 					return maps.Clone(properties), nil
 				}).AnyTimes()
-			legacyInfo.EXPECT().Info(gomock.Any(), streamed[i].Smesher).Return(nil, sql.ErrNotFound).AnyTimes()
+			legacyInfo.EXPECT().Info(gomock.Any(), smesher).Return(nil, sql.ErrNotFound).AnyTimes()
 
 			err := marriage.Add(db, marriage.Info{
 				ID:            id,
-				NodeID:        streamed[i].Smesher,
+				NodeID:        smesher,
 				ATX:           marriageATX,
 				MarriageIndex: i%nLegacy + nIndividual,
 				Target:        streamed[nLegacy+nIndividual].Smesher,
@@ -368,23 +365,36 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			SmesherId: [][]byte{streamed[3].Smesher.Bytes(), streamed[7].Smesher.Bytes(), streamed[12].Smesher.Bytes()},
 			Watch:     true,
 		}
-		stream, err := client.Stream(context.Background(), request)
-		require.NoError(t, err)
 
-		time.Sleep(100 * time.Millisecond) // wait for the stream handler to subscribe to events before sending them
 		expect := make([]types.NodeID, 0, len(request.SmesherId))
 		for _, rst := range streamed {
-			events.ReportMalfeasance(rst.Smesher)
 			matcher := malfeasanceMatcher{request}
 			if matcher.match(rst) {
 				expect = append(expect, rst.Smesher)
 			}
 		}
+		sub := NewMocksubscription(ctrl)
+		eventsMock.EXPECT().SubscribeMatched(gomock.Any()).Return(sub, nil)
+		subCh := make(chan events.EventMalfeasance)
+		sub.EXPECT().Out().Return(subCh)
+		sub.EXPECT().Full().Return(make(chan struct{}))
+		sub.EXPECT().Close()
+		var eg errgroup.Group
+		eg.Go(func() error {
+			for _, rst := range expect {
+				subCh <- events.EventMalfeasance{Smesher: rst}
+			}
+			return nil
+		})
+
+		stream, err := client.Stream(context.Background(), request)
+		require.NoError(t, err)
 
 		for _, rst := range expect {
 			received, err := stream.Recv()
 			require.NoError(t, err)
 			require.Equal(t, rst.Bytes(), received.Smesher)
 		}
+		require.NoError(t, eg.Wait())
 	})
 }
