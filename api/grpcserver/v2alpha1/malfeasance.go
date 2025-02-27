@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -145,20 +144,6 @@ func (s *MalfeasanceStreamService) Stream(
 	request *spacemeshv2alpha1.MalfeasanceStreamRequest,
 	stream spacemeshv2alpha1.MalfeasanceStreamService_StreamServer,
 ) error {
-	var sub *events.BufferedSubscription[events.EventMalfeasance]
-	if request.Watch {
-		matcher := malfeasanceMatcher{request}
-		var err error
-		sub, err = events.SubscribeMatched(matcher.match)
-		if err != nil {
-			return status.Error(codes.Internal, err.Error())
-		}
-		defer sub.Close()
-		if err := stream.SendHeader(metadata.MD{}); err != nil {
-			return err
-		}
-	}
-
 	legacyProofs, err := fetchLegacyFromDB(
 		stream.Context(),
 		s.db,
@@ -201,6 +186,12 @@ func (s *MalfeasanceStreamService) Stream(
 		return nil
 	}
 
+	matcher := malfeasanceMatcher{request}
+	sub, err := events.SubscribeMatched(matcher.match)
+	if err != nil {
+		return status.Error(codes.Internal, err.Error())
+	}
+	defer sub.Close()
 	eventsOut := sub.Out()
 	eventsFull := sub.Full()
 

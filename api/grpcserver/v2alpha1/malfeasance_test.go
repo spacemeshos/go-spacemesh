@@ -370,10 +370,8 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		}
 		stream, err := client.Stream(context.Background(), request)
 		require.NoError(t, err)
-		md, err := stream.Header()
-		require.NoError(t, err)
-		require.Equal(t, []string{"application/grpc"}, md.Get("content-type"))
 
+		time.Sleep(100 * time.Millisecond) // wait for the stream handler to subscribe to events before sending them
 		expect := make([]types.NodeID, 0, len(request.SmesherId))
 		for _, rst := range streamed {
 			events.ReportMalfeasance(rst.Smesher)
