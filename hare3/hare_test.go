@@ -606,12 +606,10 @@ func (t *testTracer) OnActive(el []*types.HareEligibility) {
 					} else {
 						ae.AppendString("nil")
 					}
-
 				}
 				return nil
 			})),
 		)
-
 	}
 
 	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
