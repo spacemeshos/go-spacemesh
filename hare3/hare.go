@@ -330,7 +330,7 @@ func (h *Hare) Handler(ctx context.Context, _ p2p.Peer, buf []byte) error {
 		malicious: malicious,
 		atxgrade:  g,
 	}
-	h.log.Debug("on message", zap.Inline(input), zap.Stringer("round", session.Round))
+	h.log.Debug("on message", zap.Inline(input))
 	gossip, equivocation := session.OnInput(input)
 	h.log.Debug("after on message", log.ZShortStringer("hash", input.msgHash), zap.Bool("gossip", gossip))
 	submitLatency.Observe(time.Since(start).Seconds())
