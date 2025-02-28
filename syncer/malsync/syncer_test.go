@@ -3,6 +3,7 @@ package malsync
 import (
 	"context"
 	"errors"
+	"math"
 	"slices"
 	"testing"
 	"time"
@@ -142,6 +143,7 @@ type tester struct {
 	db       sql.StateDatabase
 	cfg      Config
 	mFetcher *mocks.Mockfetcher
+	mTicker  *mocks.MocklayerClock
 	mClock   *clockwork.FakeClock
 
 	peers          []p2p.Peer
@@ -157,9 +159,10 @@ func newTester(tb testing.TB, cfg Config) *tester {
 	db := statesql.InMemoryTest(tb)
 	ctrl := gomock.NewController(tb)
 	fetcher := mocks.NewMockfetcher(ctrl)
+	ticker := mocks.NewMocklayerClock(ctrl)
 	clock := clockwork.NewFakeClock()
 	peerErrCount := &fakeCounter{}
-	syncer := New(fetcher, db, localDB,
+	syncer := New(fetcher, db, localDB, ticker,
 		WithConfig(cfg),
 		WithLogger(zaptest.NewLogger(tb)),
 		WithPeerErrMetric(peerErrCount),
@@ -171,6 +174,7 @@ func newTester(tb testing.TB, cfg Config) *tester {
 		db:             db,
 		cfg:            cfg,
 		mFetcher:       fetcher,
+		mTicker:        ticker,
 		mClock:         clock,
 		receivedLegacy: make(map[types.NodeID]bool),
 		attemptsLegacy: make(map[types.NodeID]int),
@@ -346,7 +350,14 @@ func TestSyncer(t *testing.T) {
 		tester.mFetcher.EXPECT().
 			MalfeasanceProofs(gomock.Any(), gomock.Any()).
 			Return(errors.New("no atxs")).AnyTimes()
-		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, true), context.Canceled)
+		tester.mTicker.EXPECT().AwaitLayer(types.EpochID(10).FirstLayer()).DoAndReturn(
+			func(_ types.LayerID) <-chan struct{} {
+				ch := make(chan struct{})
+				close(ch)
+				return ch
+			},
+		)
+		require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, types.EpochID(10)), context.Canceled)
 	})
 	t.Run("retries on no peers", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
@@ -356,9 +367,16 @@ func TestSyncer(t *testing.T) {
 			DoAndReturn(func(int) []p2p.Peer {
 				return <-ch
 			}).AnyTimes()
+		tester.mTicker.EXPECT().AwaitLayer(types.EpochID(10).FirstLayer()).DoAndReturn(
+			func(_ types.LayerID) <-chan struct{} {
+				ch := make(chan struct{})
+				close(ch)
+				return ch
+			},
+		)
 		var eg errgroup.Group
 		eg.Go(func() error {
-			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, true), context.Canceled)
+			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, types.EpochID(10)), context.Canceled)
 			return nil
 		})
 		tester.mClock.BlockUntilContext(context.Background(), 2)
@@ -375,6 +393,29 @@ func TestSyncer(t *testing.T) {
 		ch <- tester.peers
 		ch <- tester.peers
 		tester.mClock.BlockUntilContext(context.Background(), 2)
+		cancel()
+		eg.Wait()
+	})
+	t.Run("mal2 disabled", func(t *testing.T) {
+		tester := newTester(t, DefaultConfig())
+		ctx, cancel := context.WithCancel(context.Background())
+		ch := make(chan []p2p.Peer)
+		tester.mFetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).
+			DoAndReturn(func(int) []p2p.Peer {
+				return <-ch
+			}).AnyTimes()
+		var eg errgroup.Group
+		eg.Go(func() error {
+			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, math.MaxUint32), context.Canceled)
+			return nil
+		})
+		tester.mClock.BlockUntilContext(context.Background(), 1)
+		tester.mClock.Advance(tester.cfg.IDRequestInterval)
+
+		tester.expectLegacyMaliciousIDs()
+		tester.expectLegacyProofs(nil)
+		ch <- tester.peers
+		tester.mClock.BlockUntilContext(context.Background(), 1)
 		cancel()
 		eg.Wait()
 	})

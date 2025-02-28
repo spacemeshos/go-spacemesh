@@ -239,10 +239,6 @@ BACKOFF:
 		return err
 	}
 	defer proofs.CloseSend()
-	_, err = proofs.Header()
-	if err != nil {
-		return fmt.Errorf("malfeasance stream header: %w", err)
-	}
 	for {
 		proof, err := proofs.Recv()
 		s, ok := status.FromError(err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jonboulle/clockwork"
@@ -211,10 +212,11 @@ type Syncer struct {
 	db            sql.Executor
 	localDB       sql.LocalDatabase
 	clock         clockwork.Clock
+	layerClock    layerClock
 	peerErrMetric counter
 }
 
-func New(fetcher fetcher, db sql.Executor, localDB sql.LocalDatabase, opts ...Opt) *Syncer {
+func New(fetcher fetcher, db sql.Executor, localDB sql.LocalDatabase, layerClock layerClock, opts ...Opt) *Syncer {
 	s := &Syncer{
 		logger:        zap.NewNop(),
 		cfg:           DefaultConfig(),
@@ -222,6 +224,7 @@ func New(fetcher fetcher, db sql.Executor, localDB sql.LocalDatabase, opts ...Op
 		db:            db,
 		localDB:       localDB,
 		clock:         clockwork.NewRealClock(),
+		layerClock:    layerClock,
 		peerErrMetric: noCounter{},
 	}
 	for _, opt := range opts {
@@ -677,16 +680,22 @@ func (s *Syncer) EnsureInSync(ctx context.Context, epochStart, epochEnd time.Tim
 	return s.download(ctx, true)
 }
 
-func (s *Syncer) DownloadLoop(parent context.Context, malSyncEnabled bool) error {
+func (s *Syncer) DownloadLoop(parent context.Context, malSyncStart types.EpochID) error {
 	eg, ctx := errgroup.WithContext(parent)
 	eg.Go(func() error {
 		return s.downloadLegacy(ctx, false)
 	})
-	if malSyncEnabled {
-		eg.Go(func() error {
-			return s.download(ctx, false)
-		})
+	if malSyncStart == math.MaxUint32 { // if we don't have a malSyncStart epoch, just start legacy sync
+		return eg.Wait()
 	}
+	eg.Go(func() error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-s.layerClock.AwaitLayer(malSyncStart.FirstLayer()): // wait until first mal2 epoch
+		}
+		return s.download(ctx, false)
+	})
 	return eg.Wait()
 }
 
