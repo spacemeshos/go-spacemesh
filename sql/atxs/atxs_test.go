@@ -3,12 +3,10 @@ package atxs_test
 import (
 	"fmt"
 	"os"
-	"slices"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"golang.org/x/exp/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -1726,10 +1724,10 @@ func Test_Previous(t *testing.T) {
 		for range 10 {
 			previousAtxs = append(previousAtxs, types.RandomATXID())
 		}
-		// used by 50 IDs randomly
-		for range 50 {
-			prev := previousAtxs[rand.Intn(len(previousAtxs))]
-			index := slices.Index(previousAtxs, prev)
+		// used by 50 IDs
+		for i := range 50 {
+			index := i % len(previousAtxs)
+			prev := previousAtxs[index]
 			require.NoError(t, atxs.SetPost(db, atx, prev, index, types.RandomNodeID(), 10, 0))
 		}
 

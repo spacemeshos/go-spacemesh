@@ -3,7 +3,10 @@ package v2beta1
 import (
 	"context"
 
+	spacemeshv2beta1 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 )
 
 //go:generate mockgen -typed -package=v2beta1 -destination=./mocks.go -source=./interface.go
@@ -15,4 +18,14 @@ type malfeasanceInfo interface {
 // syncer is an API to get sync status.
 type syncer interface {
 	IsSynced(context.Context) bool
+}
+
+type subscription interface {
+	Out() <-chan events.EventMalfeasance
+	Full() <-chan struct{}
+	Close()
+}
+
+type eventProvider interface {
+	SubscribeMatched(request *spacemeshv2beta1.MalfeasanceStreamRequest) (subscription, error)
 }

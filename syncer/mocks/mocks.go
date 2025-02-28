@@ -703,17 +703,17 @@ func (m *MockmalSyncer) EXPECT() *MockmalSyncerMockRecorder {
 }
 
 // DownloadLoop mocks base method.
-func (m *MockmalSyncer) DownloadLoop(parent context.Context, malSyncEnabled bool) error {
+func (m *MockmalSyncer) DownloadLoop(parent context.Context, malSyncStart types.EpochID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DownloadLoop", parent, malSyncEnabled)
+	ret := m.ctrl.Call(m, "DownloadLoop", parent, malSyncStart)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DownloadLoop indicates an expected call of DownloadLoop.
-func (mr *MockmalSyncerMockRecorder) DownloadLoop(parent, malSyncEnabled any) *MockmalSyncerDownloadLoopCall {
+func (mr *MockmalSyncerMockRecorder) DownloadLoop(parent, malSyncStart any) *MockmalSyncerDownloadLoopCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DownloadLoop", reflect.TypeOf((*MockmalSyncer)(nil).DownloadLoop), parent, malSyncEnabled)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DownloadLoop", reflect.TypeOf((*MockmalSyncer)(nil).DownloadLoop), parent, malSyncStart)
 	return &MockmalSyncerDownloadLoopCall{Call: call}
 }
 
@@ -729,13 +729,13 @@ func (c *MockmalSyncerDownloadLoopCall) Return(arg0 error) *MockmalSyncerDownloa
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockmalSyncerDownloadLoopCall) Do(f func(context.Context, bool) error) *MockmalSyncerDownloadLoopCall {
+func (c *MockmalSyncerDownloadLoopCall) Do(f func(context.Context, types.EpochID) error) *MockmalSyncerDownloadLoopCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmalSyncerDownloadLoopCall) DoAndReturn(f func(context.Context, bool) error) *MockmalSyncerDownloadLoopCall {
+func (c *MockmalSyncerDownloadLoopCall) DoAndReturn(f func(context.Context, types.EpochID) error) *MockmalSyncerDownloadLoopCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
