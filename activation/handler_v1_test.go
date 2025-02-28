@@ -413,7 +413,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		require.NoError(t, malfeasance.AddProof(atxHdlr.cdb, watx.SmesherID, nil, []byte("proof"), 1, time.Now()))
 
 		atxHdlr.mClock.EXPECT().CurrentLayer().Return(watx.PublishEpoch.FirstLayer())
-		require.NoError(t, atxHdlr.syntacticallyValidate(context.Background(), watx))
+		require.NoError(t, atxHdlr.syntacticallyValidate(t.Context(), watx))
 
 		atxHdlr.mValidator.EXPECT().NIPostChallengeV1(gomock.Any(), gomock.Any(), watx.SmesherID)
 		atxHdlr.mValidator.EXPECT().PositioningAtx(watx.PositioningATXID, gomock.Any(), goldenATXID, watx.PublishEpoch)
@@ -422,7 +422,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 			Return(0, &verifying.ErrInvalidIndex{Index: 2})
 
 		received := time.Now()
-		_, err := atxHdlr.syntacticallyValidateDeps(context.Background(), watx, received)
+		_, err := atxHdlr.syntacticallyValidateDeps(t.Context(), watx, received)
 		require.EqualError(t, err, fmt.Sprintf("smesher %s is known malfeasant", watx.SmesherID.ShortString()))
 	})
 
@@ -672,7 +672,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 			return atx.ID() == watx.ID()
 		}))
 		atxHdlr.mTortoise.EXPECT().OnAtx(watx.PublishEpoch+1, watx.ID(), gomock.Any())
-		require.NoError(t, atxHdlr.storeAtx(context.Background(), atx, watx, p2p.Peer("other")))
+		require.NoError(t, atxHdlr.storeAtx(t.Context(), atx, watx, p2p.Peer("other")))
 
 		atxFromDb, err := atxs.Get(atxHdlr.cdb, atx.ID())
 		require.NoError(t, err)

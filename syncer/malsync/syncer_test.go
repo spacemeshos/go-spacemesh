@@ -398,7 +398,7 @@ func TestSyncer(t *testing.T) {
 	})
 	t.Run("mal2 disabled", func(t *testing.T) {
 		tester := newTester(t, DefaultConfig())
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		ch := make(chan []p2p.Peer)
 		tester.mFetcher.EXPECT().SelectBestShuffled(tester.cfg.MalfeasanceIDPeers).
 			DoAndReturn(func(int) []p2p.Peer {
@@ -409,13 +409,13 @@ func TestSyncer(t *testing.T) {
 			require.ErrorIs(t, tester.syncer.DownloadLoop(ctx, math.MaxUint32), context.Canceled)
 			return nil
 		})
-		tester.mClock.BlockUntilContext(context.Background(), 1)
+		tester.mClock.BlockUntilContext(t.Context(), 1)
 		tester.mClock.Advance(tester.cfg.IDRequestInterval)
 
 		tester.expectLegacyMaliciousIDs()
 		tester.expectLegacyProofs(nil)
 		ch <- tester.peers
-		tester.mClock.BlockUntilContext(context.Background(), 1)
+		tester.mClock.BlockUntilContext(t.Context(), 1)
 		cancel()
 		eg.Wait()
 	})

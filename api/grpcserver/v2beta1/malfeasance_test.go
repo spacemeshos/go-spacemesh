@@ -387,7 +387,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			return nil
 		})
 
-		stream, err := client.Stream(context.Background(), request)
+		stream, err := client.Stream(t.Context(), request)
 		require.NoError(t, err)
 
 		for _, rst := range expect {

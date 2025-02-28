@@ -23,6 +23,7 @@ import (
 type MockmalfeasanceInfo struct {
 	ctrl     *gomock.Controller
 	recorder *MockmalfeasanceInfoMockRecorder
+	isgomock struct{}
 }
 
 // MockmalfeasanceInfoMockRecorder is the mock recorder for MockmalfeasanceInfo.
@@ -85,6 +86,7 @@ func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func(context.Context, types.
 type Mocksyncer struct {
 	ctrl     *gomock.Controller
 	recorder *MocksyncerMockRecorder
+	isgomock struct{}
 }
 
 // MocksyncerMockRecorder is the mock recorder for Mocksyncer.
@@ -146,6 +148,7 @@ func (c *MocksyncerIsSyncedCall) DoAndReturn(f func(context.Context) bool) *Mock
 type Mocksubscription struct {
 	ctrl     *gomock.Controller
 	recorder *MocksubscriptionMockRecorder
+	isgomock struct{}
 }
 
 // MocksubscriptionMockRecorder is the mock recorder for Mocksubscription.
@@ -281,6 +284,7 @@ func (c *MocksubscriptionOutCall) DoAndReturn(f func() <-chan events.EventMalfea
 type MockeventProvider struct {
 	ctrl     *gomock.Controller
 	recorder *MockeventProviderMockRecorder
+	isgomock struct{}
 }
 
 // MockeventProviderMockRecorder is the mock recorder for MockeventProvider.
