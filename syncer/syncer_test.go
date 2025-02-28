@@ -1134,7 +1134,7 @@ func TestSyncer_setATXSyncedTwice_NoError(t *testing.T) {
 func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 	dlCh := ts.expectMalDownloadLoop()
-	current := types.GetEffectiveGenesis().Add(types.GetLayersPerEpoch() * 5)
+	current := types.GetEffectiveGenesis().Add(types.GetLayersPerEpoch() * 11)
 	// recover from a checkpoint
 	types.SetEffectiveGenesis(current.Uint32())
 	ts.mTicker.advanceToLayer(current)
