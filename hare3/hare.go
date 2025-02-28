@@ -137,7 +137,6 @@ func WithWallClock(clock clockwork.Clock) Opt {
 
 func WithConfig(cfg Config) Opt {
 	return func(hr *Hare) {
-		hr.log.Info("hare config", zap.Inline(&cfg))
 		hr.config = cfg
 		hr.oracle.config = cfg
 	}
