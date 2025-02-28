@@ -137,6 +137,7 @@ func WithWallClock(clock clockwork.Clock) Opt {
 
 func WithConfig(cfg Config) Opt {
 	return func(hr *Hare) {
+		hr.log.Info("hare config", zap.Inline(&cfg))
 		hr.config = cfg
 		hr.oracle.config = cfg
 	}
@@ -330,7 +331,7 @@ func (h *Hare) Handler(ctx context.Context, _ p2p.Peer, buf []byte) error {
 		malicious: malicious,
 		atxgrade:  g,
 	}
-	h.log.Debug("on message", zap.Inline(input))
+	h.log.Debug("on message", zap.Inline(input), zap.Stringer("round", session.Round))
 	gossip, equivocation := session.OnInput(input)
 	h.log.Debug("after on message", log.ZShortStringer("hash", input.msgHash), zap.Bool("gossip", gossip))
 	submitLatency.Observe(time.Since(start).Seconds())
@@ -378,7 +379,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		beacon:  beacon,
 		signers: maps.Values(h.signers),
 		vrfs:    make([]*types.HareEligibility, len(h.signers)),
-		proto:   newProtocol(h.config.CommitteeFor(layer)/2 + 1),
+		proto:   newProtocol(h.config.CommitteeFor(layer)/2+1, h.log.Named("proto")),
 	}
 	h.sessions[layer] = s.proto
 	h.mu.Unlock()
@@ -388,18 +389,13 @@ func (h *Hare) onLayer(layer types.LayerID) {
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
 		if err := h.run(s); err != nil {
-			h.log.Warn("failed",
-				zap.Uint32("lid", layer.Uint32()),
-				zap.Error(err),
-			)
+			h.log.Warn("failed", zap.Uint32("lid", layer.Uint32()), zap.Error(err))
 			exitErrors.Inc()
 			// if terminated successfully it will notify block generator
 			// and it will have to CompleteHare
 			h.patrol.CompleteHare(layer)
 		} else {
-			h.log.Debug("terminated",
-				zap.Uint32("lid", layer.Uint32()),
-			)
+			h.log.Debug("terminated", zap.Uint32("lid", layer.Uint32()))
 		}
 		h.mu.Lock()
 		delete(h.sessions, layer)
