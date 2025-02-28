@@ -5,7 +5,7 @@ go 1.23.4
 require (
 	cloud.google.com/go/storage v1.50.0
 	github.com/ALTree/bigfloat v0.2.0
-	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20250214121804-2c02680ea621
+	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20250226130904-30f23375aaec
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
 	github.com/gofrs/flock v0.12.1
@@ -17,11 +17,11 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/ipfs/go-ds-leveldb v0.5.0
+	github.com/ipfs/go-ds-leveldb v0.5.1
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/jonboulle/clockwork v0.5.0
-	github.com/libp2p/go-libp2p v0.40.0
-	github.com/libp2p/go-libp2p-kad-dht v0.29.1
+	github.com/libp2p/go-libp2p v0.41.0
+	github.com/libp2p/go-libp2p-kad-dht v0.29.2
 	github.com/libp2p/go-libp2p-pubsub v0.13.0
 	github.com/libp2p/go-libp2p-record v0.3.1
 	github.com/libp2p/go-msgio v0.3.0
@@ -60,7 +60,7 @@ require (
 	golang.org/x/exp v0.0.0-20250218142911-aa4b98e5adaa
 	golang.org/x/sync v0.11.0
 	golang.org/x/time v0.10.0
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250224174004-546df14abb99
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250227231956-55c901821b1e
 	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.5
 	k8s.io/api v0.32.2
@@ -139,17 +139,16 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/boxo v0.27.4 // indirect
 	github.com/ipfs/go-cid v0.5.0 // indirect
-	github.com/ipfs/go-datastore v0.7.0 // indirect
+	github.com/ipfs/go-datastore v0.8.0 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipld/go-ipld-prime v0.21.0 // indirect
 	github.com/jackpal/go-nat-pmp v1.0.2 // indirect
 	github.com/jbenet/go-temp-err-catcher v0.1.0 // indirect
-	github.com/jbenet/goprocess v0.1.4 // indirect
 	github.com/jessevdk/go-flags v1.6.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.17.11 // indirect
-	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
+	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/koron/go-ssdp v0.0.5 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/libp2p/go-buffer-pool v0.1.0 // indirect
@@ -158,7 +157,6 @@ require (
 	github.com/libp2p/go-libp2p-asn-util v0.4.1 // indirect
 	github.com/libp2p/go-libp2p-kbucket v0.6.5 // indirect
 	github.com/libp2p/go-libp2p-routing-helpers v0.7.4 // indirect
-	github.com/libp2p/go-nat v0.2.0 // indirect
 	github.com/libp2p/go-netroute v0.2.2 // indirect
 	github.com/libp2p/go-reuseport v0.4.0 // indirect
 	github.com/libp2p/go-yamux/v5 v5.0.0 // indirect
@@ -198,7 +196,7 @@ require (
 	github.com/pion/randutil v0.1.0 // indirect
 	github.com/pion/rtcp v1.2.15 // indirect
 	github.com/pion/rtp v1.8.11 // indirect
-	github.com/pion/sctp v1.8.35 // indirect
+	github.com/pion/sctp v1.8.36 // indirect
 	github.com/pion/sdp/v3 v3.0.10 // indirect
 	github.com/pion/srtp/v3 v3.0.4 // indirect
 	github.com/pion/stun v0.6.1 // indirect
@@ -206,7 +204,7 @@ require (
 	github.com/pion/transport/v2 v2.2.10 // indirect
 	github.com/pion/transport/v3 v3.0.7 // indirect
 	github.com/pion/turn/v4 v4.0.0 // indirect
-	github.com/pion/webrtc/v4 v4.0.9 // indirect
+	github.com/pion/webrtc/v4 v4.0.10 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
@@ -238,7 +236,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/dig v1.18.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 	golang.org/x/mod v0.23.0 // indirect
 	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/oauth2 v0.26.0 // indirect
@@ -260,7 +258,7 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
-	lukechampine.com/blake3 v1.3.0 // indirect
+	lukechampine.com/blake3 v1.4.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
