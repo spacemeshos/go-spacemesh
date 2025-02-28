@@ -593,24 +593,19 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
-	count := len(el)
-	if count == 0 {
-		t.logger.Info("no active eligibilities")
-	} else {
-		t.logger.Info(
-			"active eligibilities",
-			zap.Array("per signer", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
-				for _, elig := range el {
-					if elig != nil {
-						ae.AppendUint16(elig.Count)
-					} else {
-						ae.AppendString("nil")
-					}
+	t.logger.Info(
+		"active eligibilities",
+		zap.Array("per signer", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
+			for _, elig := range el {
+				if elig != nil {
+					ae.AppendUint16(elig.Count)
+				} else {
+					ae.AppendString("nil")
 				}
-				return nil
-			})),
-		)
-	}
+			}
+			return nil
+		})),
+	)
 
 	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
 }
