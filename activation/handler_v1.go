@@ -324,11 +324,11 @@ func (h *HandlerV1) cacheAtx(atx *types.ActivationTx, malicious bool) *atxsdata.
 // checkDoublePublish verifies if a node has already published an ATX in the same epoch.
 func (h *HandlerV1) checkDoublePublish(
 	ctx context.Context,
-	tx sql.Executor,
+	db sql.Executor,
 	atx *wire.ActivationTxV1,
 	peer peer.ID,
 ) (bool, error) {
-	prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
+	prev, err := atxs.GetByEpochAndNodeID(db, atx.PublishEpoch, atx.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return false, err
 	}
@@ -353,7 +353,7 @@ func (h *HandlerV1) checkDoublePublish(
 		zap.Stringer("previous", prev),
 		zap.Stringer("current", atx.ID()),
 	)
-	prevSignature, err := atxSignature(ctx, tx, prev)
+	prevSignature, err := atxSignature(ctx, db, prev)
 	if err != nil {
 		return false, fmt.Errorf("extracting signature for malfeasance proof: %w", err)
 	}
@@ -388,11 +388,11 @@ func (h *HandlerV1) checkDoublePublish(
 // checkWrongPrevAtx verifies if the previous ATX referenced in the ATX is correct.
 func (h *HandlerV1) checkWrongPrevAtx(
 	ctx context.Context,
-	tx sql.Executor,
+	db sql.Executor,
 	atx *wire.ActivationTxV1,
 	peer peer.ID,
 ) (bool, error) {
-	expectedPrevID, err := atxs.PrevIDByNodeID(tx, atx.ID(), atx.SmesherID, atx.PublishEpoch)
+	expectedPrevID, err := atxs.PrevIDByNodeID(db, atx.ID(), atx.SmesherID, atx.PublishEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return false, fmt.Errorf("get last atx by node id: %w", err)
 	}
@@ -419,7 +419,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		log.ZShortStringer("actual", atx.PrevATXID),
 		log.ZShortStringer("expected", expectedPrevID),
 	)
-	atx2ID, err := atxs.AtxWithPrevious(tx, atx.PrevATXID, atx.SmesherID)
+	atx2ID, err := atxs.AtxWithPrevious(db, atx.PrevATXID, atx.SmesherID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
 		return false, nil
@@ -434,7 +434,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	}
 
 	var blob sql.Blob
-	v, err := atxs.LoadBlob(ctx, tx, atx2ID.Bytes(), &blob)
+	v, err := atxs.LoadBlob(ctx, db, atx2ID.Bytes(), &blob)
 	if err != nil {
 		return false, err
 	}
@@ -443,7 +443,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 		if err := codec.Decode(blob.Bytes, &watx2); err != nil {
 			return false, fmt.Errorf("decoding previous atx: %w", err)
 		}
-		proof, err := wire.NewInvalidPrevAtxProofV1(tx, &watx2, atx, atx.SmesherID)
+		proof, err := wire.NewInvalidPrevAtxProofV1(db, &watx2, atx, atx.SmesherID)
 		if err != nil {
 			return false, fmt.Errorf("creating invalid previous ATX proof: %w", err)
 		}
@@ -470,18 +470,18 @@ func (h *HandlerV1) checkWrongPrevAtx(
 
 func (h *HandlerV1) checkMalicious(
 	ctx context.Context,
-	tx sql.Transaction,
+	db sql.Executor,
 	watx *wire.ActivationTxV1,
 	peer peer.ID,
 ) (bool, error) {
-	malicious, err := h.checkDoublePublish(ctx, tx, watx, peer)
+	malicious, err := h.checkDoublePublish(ctx, db, watx, peer)
 	if err != nil {
 		return malicious, fmt.Errorf("check double publish: %w", err)
 	}
 	if malicious {
 		return true, nil
 	}
-	malicious, err = h.checkWrongPrevAtx(ctx, tx, watx, peer)
+	malicious, err = h.checkWrongPrevAtx(ctx, db, watx, peer)
 	if err != nil {
 		return malicious, fmt.Errorf("check wrong prev atx: %w", err)
 	}
@@ -496,24 +496,23 @@ func (h *HandlerV1) storeAtx(
 	peer peer.ID,
 ) error {
 	var malicious bool
+	var err error
+	malicious, err = identities.IsMalicious(h.cdb, atx.SmesherID)
+	if err != nil {
+		return fmt.Errorf("check if node is malicious: %w", err)
+	}
+	malicious2, err := malfeasance.IsMalicious(h.cdb, atx.SmesherID)
+	if err != nil {
+		return fmt.Errorf("check if node is malicious: %w", err)
+	}
+	malicious = malicious || malicious2
+	if !malicious {
+		malicious, err = h.checkMalicious(ctx, h.cdb, watx, peer)
+		if err != nil {
+			return fmt.Errorf("check malicious: %w", err)
+		}
+	}
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
-		var err error
-		malicious, err = identities.IsMalicious(tx, atx.SmesherID)
-		if err != nil {
-			return fmt.Errorf("check if node is malicious: %w", err)
-		}
-		malicious2, err := malfeasance.IsMalicious(tx, atx.SmesherID)
-		if err != nil {
-			return fmt.Errorf("check if node is malicious: %w", err)
-		}
-		malicious = malicious || malicious2
-		if !malicious {
-			malicious, err = h.checkMalicious(ctx, tx, watx, peer)
-			if err != nil {
-				return fmt.Errorf("check malicious: %w", err)
-			}
-		}
-
 		err = atxs.Add(tx, atx, watx.Blob())
 		if err != nil && !errors.Is(err, sql.ErrObjectExists) {
 			return fmt.Errorf("add atx to db: %w", err)
