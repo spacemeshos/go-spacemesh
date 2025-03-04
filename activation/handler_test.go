@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -266,12 +265,20 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
 				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
 
-				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
-				postVerifier.EXPECT().
-					Verify(context.Background(), (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).
+				validator := NewMocknipostValidator(atxHdlr.ctrl)
+				validator.EXPECT().
+					Post(
+						context.Background(),
+						gomock.Any(),
+						gomock.Any(),
+						wire.PostFromWireV1(atx.NIPost.Post),
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).
 					Return(&verifying.ErrInvalidIndex{Index: 2})
 
-				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, validator)
 				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
@@ -309,12 +316,20 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
 				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
 
-				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
-				postVerifier.EXPECT().
-					Verify(context.Background(), (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).
+				validator := NewMocknipostValidator(atxHdlr.ctrl)
+				validator.EXPECT().
+					Post(
+						context.Background(),
+						gomock.Any(),
+						gomock.Any(),
+						wire.PostFromWireV1(atx.NIPost.Post),
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).
 					Return(&verifying.ErrInvalidIndex{Index: 2})
 
-				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, validator)
 				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
