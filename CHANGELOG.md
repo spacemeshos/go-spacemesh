@@ -2,6 +2,20 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.7.17
+
+### Improvements
+
+- [#6756](https://github.com/spacemeshos/go-spacemesh/pull/6756) Fixed possible deadlock in ATX handler which
+  sometimes results in sync from genesis getting stuck.
+
+## v1.7.16
+
+### Improvements
+
+- [#6746](https://github.com/spacemeshos/go-spacemesh/pull/6746) Fixed malfeasance sync not starting in
+  the first ATX V2 epoch.
+
 ## v1.7.15
 
 ### Improvements
