@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,6 +22,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
@@ -362,12 +362,32 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
 				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
 
-				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
-				postVerifier.EXPECT().
-					Verify(t.Context(), (*shared.Proof)(watx.NIPost.Post), gomock.Any(), gomock.Any()).
+				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+					mal, err := identities.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+
+					mal, err = malfeasance.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+					return nil
+				}))
+
+				validator := NewMocknipostValidator(atxHdlr.ctrl)
+				validator.EXPECT().
+					Post(
+						t.Context(),
+						gomock.Any(),
+						gomock.Any(),
+						wire.PostFromWireV1(watx.NIPost.Post),
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).
 					Return(&verifying.ErrInvalidIndex{Index: 2})
 
-				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, validator)
 				nodeID, err := mh.Validate(t.Context(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
@@ -707,6 +727,18 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
 				require.Equal(t, mwire.MultipleATXs, mp.Proof.Type)
 
+				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+					mal, err := identities.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+
+					mal, err = malfeasance.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+					return nil
+				}))
+
 				mh := NewMalfeasanceHandler(atxHdlr.cdb, atxHdlr.logger, atxHdlr.edVerifier)
 				nodeID, err := mh.Validate(t.Context(), mp.Proof.Data)
 				require.NoError(t, err)
@@ -715,6 +747,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 			},
 		)
 		require.NoError(t, atxHdlr.storeAtx(t.Context(), atx1, watx1, p2p.Peer("other")))
+		require.True(t, atxHdlr.atxsdata.IsMalicious(atx1.SmesherID))
 	})
 
 	t.Run("another atx for the same epoch for registered ID doesn't create a malfeasance proof", func(t *testing.T) {
@@ -790,6 +823,18 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
 				require.Equal(t, mwire.InvalidPrevATX, mp.Proof.Type)
 
+				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+					mal, err := identities.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+
+					mal, err = malfeasance.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+					return nil
+				}))
+
 				mh := NewInvalidPrevATXHandler(atxHdlr.cdb, atxHdlr.edVerifier)
 				nodeID, err := mh.Validate(t.Context(), mp.Proof.Data)
 				require.NoError(t, err)
@@ -799,6 +844,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		)
 
 		require.NoError(t, atxHdlr.storeAtx(t.Context(), atx3, watx3, p2p.Peer("other")))
+		require.True(t, atxHdlr.atxsdata.IsMalicious(atx3.SmesherID))
 	})
 
 	t.Run("another atx of v2 with the same prevatx is considered malicious", func(t *testing.T) {
@@ -851,6 +897,18 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 
 		atxHdlr.mMalPublish.EXPECT().Publish(t.Context(), sig.NodeID(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
+				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+					mal, err := identities.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+
+					mal, err = malfeasance.IsMalicious(tx, sig.NodeID())
+					require.NoError(t, err)
+					require.False(t, mal)
+					return nil
+				}))
+
 				malProof := proof.(*wire.ProofInvalidPrevAtxV1)
 				nId, err := malProof.Valid(t.Context(), verifier)
 				require.NoError(t, err)
@@ -860,6 +918,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		)
 
 		require.NoError(t, atxHdlr.v1.storeAtx(t.Context(), atx3, watx3, p2p.Peer("other")))
+		require.True(t, atxHdlr.v1.atxsdata.IsMalicious(atx3.SmesherID))
 	})
 
 	t.Run("another atx with the same prevatx when publishing doesn't create a malfeasance proof", func(t *testing.T) {

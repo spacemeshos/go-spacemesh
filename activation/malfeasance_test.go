@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap"
@@ -234,20 +233,20 @@ func TestMalfeasanceHandler_Validate(t *testing.T) {
 type testInvalidPostIndexHandler struct {
 	*InvalidPostIndexHandler
 
-	mockPostVerifier *MockPostVerifier
+	mocknipostValidator *MocknipostValidator
 }
 
 func newTestInvalidPostIndexHandler(tb testing.TB) *testInvalidPostIndexHandler {
 	db := statesql.InMemoryTest(tb)
 
 	ctrl := gomock.NewController(tb)
-	postVerifier := NewMockPostVerifier(ctrl)
+	postVerifier := NewMocknipostValidator(ctrl)
 
 	h := NewInvalidPostIndexHandler(db, signing.NewEdVerifier(), postVerifier)
 	return &testInvalidPostIndexHandler{
 		InvalidPostIndexHandler: h,
 
-		mockPostVerifier: postVerifier,
+		mocknipostValidator: postVerifier,
 	}
 }
 
@@ -288,22 +287,22 @@ func TestInvalidPostIndexHandler_Validate(t *testing.T) {
 			InvalidIdx: 7,
 		}
 
-		postProof := &shared.Proof{
+		postProof := &types.Post{
 			Nonce:   atx.NIPost.Post.Nonce,
 			Indices: atx.NIPost.Post.Indices,
 			Pow:     atx.NIPost.Post.Pow,
 		}
-		meta := &shared.ProofMetadata{
-			NodeId:          atx.SmesherID.Bytes(),
-			CommitmentAtxId: atx.NIPostChallengeV1.CommitmentATXID.Bytes(),
-
+		meta := &types.PostMetadata{
 			Challenge:     atx.NIPost.PostMetadata.Challenge,
-			NumUnits:      atx.NumUnits,
 			LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
 		}
-		h.mockPostVerifier.EXPECT().Verify(gomock.Any(),
+		h.mocknipostValidator.EXPECT().Post(
+			gomock.Any(),
+			atx.SmesherID,
+			*atx.NIPostChallengeV1.CommitmentATXID,
 			postProof,
 			meta,
+			atx.NumUnits,
 			gomock.Any(),
 		).Return(errors.New("invalid post"))
 		nodeID, err := h.Validate(t.Context(), proof)
@@ -347,22 +346,22 @@ func TestInvalidPostIndexHandler_Validate(t *testing.T) {
 			InvalidIdx: 7,
 		}
 
-		postProof := &shared.Proof{
+		postProof := &types.Post{
 			Nonce:   atx.NIPost.Post.Nonce,
 			Indices: atx.NIPost.Post.Indices,
 			Pow:     atx.NIPost.Post.Pow,
 		}
-		meta := &shared.ProofMetadata{
-			NodeId:          atx.SmesherID.Bytes(),
-			CommitmentAtxId: atx.NIPostChallengeV1.CommitmentATXID.Bytes(),
-
+		meta := &types.PostMetadata{
 			Challenge:     atx.NIPost.PostMetadata.Challenge,
-			NumUnits:      atx.NumUnits,
 			LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
 		}
-		h.mockPostVerifier.EXPECT().Verify(gomock.Any(),
+		h.mocknipostValidator.EXPECT().Post(
+			gomock.Any(),
+			atx.SmesherID,
+			*atx.NIPostChallengeV1.CommitmentATXID,
 			postProof,
 			meta,
+			atx.NumUnits,
 			gomock.Any(),
 		).Return(nil)
 		nodeID, err := h.Validate(t.Context(), proof)
