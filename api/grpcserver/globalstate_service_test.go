@@ -213,17 +213,7 @@ func TestGlobalStateService(t *testing.T) {
 		checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
 		checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
 	})
-	t.Run("AppEventStream", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupGlobalStateService(t)
 
-		stream, err := c.AppEventStream(ctx, &pb.AppEventStreamRequest{})
-		// We expect to be able to open the stream but for it to fail upon the first request
-		require.NoError(t, err)
-		_, err = stream.Recv()
-		statusCode := status.Code(err)
-		require.Equal(t, codes.Unimplemented, statusCode)
-	})
 	t.Run("AccountDataStream_emptyAddress", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)

@@ -37,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -971,13 +972,14 @@ func TestProposals(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	for _, tc := range []struct {
-		desc      string
-		atxs      []types.ActivationTx
-		proposals []*types.Proposal
-		malicious []types.NodeID
-		layer     types.LayerID
-		beacon    types.Beacon
-		expect    []types.ProposalID
+		desc            string
+		atxs            []types.ActivationTx
+		proposals       []*types.Proposal
+		legacyMalicious []types.NodeID
+		malicious       []types.NodeID
+		layer           types.LayerID
+		beacon          types.Beacon
+		expect          []types.ProposalID
 	}{
 		{
 			desc:   "sanity",
@@ -1040,6 +1042,22 @@ func TestProposals(t *testing.T) {
 			expect: []types.ProposalID{pids[1]},
 		},
 		{
+			desc:   "legacy malicious",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.ActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
+			},
+			proposals: []*types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
+			},
+			legacyMalicious: []types.NodeID{ids[0]},
+			expect:          []types.ProposalID{pids[1]},
+		},
+		{
 			desc:   "malicious",
 			layer:  layer,
 			beacon: goodBeacon,
@@ -1080,8 +1098,12 @@ func TestProposals(t *testing.T) {
 			for _, proposal := range tc.proposals {
 				require.NoError(t, proposals.Add(proposal))
 			}
+			for _, id := range tc.legacyMalicious {
+				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Now()))
+				atxsdata.SetMalicious(id)
+			}
 			for _, id := range tc.malicious {
-				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
+				require.NoError(t, malfeasance.AddProof(db, id, nil, []byte("non empty"), 1, time.Now()))
 				atxsdata.SetMalicious(id)
 			}
 			require.ElementsMatch(t, tc.expect, hare.selectProposals(&session{
@@ -1189,12 +1211,12 @@ func TestHare_ReconstructForward(t *testing.T) {
 					for j := 1; j < numNodes; j++ {
 						other := (n.i + j) % numNodes               // other iterates over the other nodes
 						sender := (other - 1 + numNodes) % numNodes // sender is the previous node
-						require.Eventually(t, func() bool {
+						require.Eventuallyf(t, func() bool {
 							cluster.nodes[other].hare.mu.Lock()
 							defer cluster.nodes[other].hare.mu.Unlock()
 							_, registered := cluster.nodes[other].hare.sessions[m.Layer]
 							return registered
-						}, 5*time.Second, 50*time.Millisecond, fmt.Sprintf("node %d did not register in time", other))
+						}, 5*time.Second, 50*time.Millisecond, "node %d did not register in time", other)
 
 						require.NoError(t, cluster.nodes[other].hare.Handler(ctx, cluster.nodes[sender].peerId(), msg))
 					}

@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
@@ -14,16 +13,12 @@ import (
 
 func TestUpgradeToV15(t *testing.T) {
 	t.Run("fresh installation - no local DB file", func(t *testing.T) {
-		cfg := config.DefaultTestConfig()
-		cfg.DataDirParent = t.TempDir()
-
+		cfg := getTestConfig(t)
 		require.NoError(t, verifyLocalDbMigrations(&cfg))
 	})
 
 	t.Run("migrated DB passes", func(t *testing.T) {
-		cfg := config.DefaultTestConfig()
-		cfg.DataDirParent = t.TempDir()
-
+		cfg := getTestConfig(t)
 		uri := path.Join(cfg.DataDir(), localDbFile)
 		localDb, err := localsql.Open(uri)
 		require.NoError(t, err)
@@ -33,9 +28,7 @@ func TestUpgradeToV15(t *testing.T) {
 	})
 
 	t.Run("not fully migrated DB fails", func(t *testing.T) {
-		cfg := config.DefaultTestConfig()
-		cfg.DataDirParent = t.TempDir()
-
+		cfg := getTestConfig(t)
 		uri := path.Join(cfg.DataDir(), localDbFile)
 
 		schema, err := statesql.Schema()

@@ -1092,7 +1092,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 	}
 
 	h.beacon.OnAtx(atx)
-	if added := h.atxsdata.AddFromAtx(atx, malicious || proof != nil); added != nil {
+	if added := h.cacheAtx(atx, malicious || proof != nil); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 
@@ -1102,5 +1102,14 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 		zap.Uint32("publish", atx.PublishEpoch.Uint32()),
 	)
 
+	return nil
+}
+
+// cacheAtx caches the atx in the atxsdata cache.
+// Returns the cached ATX or nil if the epoch was already evicted.
+func (h *HandlerV2) cacheAtx(atx *types.ActivationTx, malicious bool) *atxsdata.ATX {
+	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
+		return h.atxsdata.AddFromAtx(atx, malicious)
+	}
 	return nil
 }

@@ -191,9 +191,6 @@ func (s *MeshService) AccountMeshDataQuery(
 	res.TotalResults = uint32(len(res.Data))
 
 	// Skip to offset, don't send more than max results
-	// TODO: Optimize this. Obviously, we could do much smarter things than re-loading all
-	// of the data from scratch, then figuring out which data to return here. We could cache
-	// query results and/or figure out which data to load before loading it.
 	offset := in.Offset
 
 	// If the offset is too high there is nothing to return (this is not an error)
@@ -280,7 +277,7 @@ func (s *MeshService) readLayer(
 
 	// read the canonical block for this layer
 	block, err := s.mesh.GetLayerVerified(layerID)
-	// TODO: Be careful with how we handle missing layers here.
+	// Be careful with how we handle missing layers here.
 	// A layer that's newer than the currentLayer (defined above)
 	// is clearly an input error. A missing layer that's older than
 	// lastValidLayer is clearly an internal error. A missing layer
@@ -295,8 +292,6 @@ func (s *MeshService) readLayer(
 	}
 
 	mtxs, missing := s.conState.GetMeshTransactions(block.TxIDs)
-	// TODO: Do we ever expect txs to be missing here?
-	// E.g., if this node has not synced/received them yet.
 	if len(missing) != 0 {
 		ctxzap.Error(ctx, "could not find transactions from layer",
 			zap.String("missing", fmt.Sprint(missing)),
@@ -370,7 +365,7 @@ func (s *MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest
 		}
 
 		layer, err := s.mesh.GetLayer(l)
-		// TODO: Be careful with how we handle missing layers here.
+		// Be careful with how we handle missing layers here.
 		// A layer that's newer than the currentLayer (defined above)
 		// is clearly an input error. A missing layer that's older than
 		// lastValidLayer is clearly an internal error. A missing layer
@@ -495,8 +490,6 @@ func (s *MeshService) AccountMeshDataStream(
 			ctxzap.Info(stream.Context(), "AccountMeshDataStream closing stream, client disconnected")
 			return nil
 		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
 	}
 }
 
@@ -537,8 +530,6 @@ func (s *MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshServic
 			ctxzap.Info(stream.Context(), "LayerStream closing stream, client disconnected")
 			return nil
 		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
 	}
 }
 

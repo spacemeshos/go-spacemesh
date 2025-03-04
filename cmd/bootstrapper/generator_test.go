@@ -7,7 +7,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -27,11 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
-
-func TestMain(m *testing.M) {
-	types.SetLayersPerEpoch(epochLayers)
-	os.Exit(m.Run())
-}
 
 const (
 	epochLayers    = 3
@@ -61,7 +55,7 @@ func createAtxs(tb testing.TB, db sql.Executor, epoch types.EpochID, atxids []ty
 }
 
 func launchServer(tb testing.TB, db sql.StateDatabase) (grpcserver.Config, func()) {
-	cfg := grpcserver.DefaultTestConfig()
+	cfg := grpcserver.DefaultTestConfig(tb)
 	grpcService := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)
 	jsonService := grpcserver.NewJSONHTTPServer(zaptest.NewLogger(tb).Named("grpc.JSON"), "127.0.0.1:0",
 		[]string{}, false, false)

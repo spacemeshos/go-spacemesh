@@ -92,7 +92,7 @@ func launchPostSupervisor(
 	postCfg activation.PostConfig,
 	postOpts activation.PostSetupOpts,
 ) func() {
-	cmdCfg := activation.DefaultTestPostServiceConfig()
+	cmdCfg := activation.DefaultTestPostServiceConfig(tb)
 	cmdCfg.NodeAddress = fmt.Sprintf("http://%s", cfg.PublicListener)
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
@@ -105,7 +105,7 @@ func launchPostSupervisor(
 }
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
-	cfg := grpcserver.DefaultTestConfig()
+	cfg := grpcserver.DefaultTestConfig(tb)
 
 	// run on random ports
 	server := grpcserver.New("127.0.0.1:0", zaptest.NewLogger(tb).Named("grpc"), cfg)

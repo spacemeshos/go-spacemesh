@@ -60,6 +60,7 @@ type ProofType byte
 
 const (
 	// TODO(mafa): legacy types for future migration to new malfeasance proofs.
+	// https://github.com/spacemeshos/go-spacemesh/issues/6690
 	LegacyDoublePublish  ProofType = 0x01
 	LegacyInvalidPost    ProofType = 0x02
 	LegacyInvalidPrevATX ProofType = 0x03
@@ -73,6 +74,7 @@ const (
 
 var proofTypes = map[ProofType]func() Proof{
 	// TODO(mafa): legacy proofs
+	// https://github.com/spacemeshos/go-spacemesh/issues/6690
 
 	DoubleMarry:       func() Proof { return &ProofDoubleMarry{} },
 	DoubleMerge:       func() Proof { return &ProofDoubleMerge{} },

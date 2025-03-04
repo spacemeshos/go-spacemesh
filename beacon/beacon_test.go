@@ -31,6 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -180,7 +181,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
-	cfg := NodeSimUnitTestConfig()
+	cfg := NodeSimUnitTestConfig(t)
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
@@ -246,7 +247,7 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
-	cfg := NodeSimUnitTestConfig()
+	cfg := NodeSimUnitTestConfig(t)
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	now := time.Now()
 	for i := 0; i < numNodes; i++ {
@@ -268,9 +269,14 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 		for _, db := range dbs {
 			for _, s := range node.signers {
 				createATX(t, db, atxPublishLid, s, 1, time.Now().Add(-1*time.Second))
-				if i != 0 {
-					require.NoError(t, identities.SetMalicious(db, s.NodeID(), []byte("bad"), time.Now()))
+				if i == 0 {
+					continue
 				}
+				if i%2 == 0 {
+					require.NoError(t, identities.SetMalicious(db, s.NodeID(), []byte("bad"), time.Now()))
+					continue
+				}
+				require.NoError(t, malfeasance.AddProof(db, s.NodeID(), nil, []byte("bad"), 1, time.Now()))
 			}
 		}
 	}
@@ -300,7 +306,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	atxPublishLid := types.LayerID(types.GetLayersPerEpoch()*2 - 1)
 	current := atxPublishLid.Add(1)
 	dbs := make([]*datastore.CachedDB, 0, numNodes)
-	cfg := NodeSimUnitTestConfig()
+	cfg := NodeSimUnitTestConfig(t)
 	now := time.Now()
 	bootstrap := types.Beacon{1, 2, 3, 4}
 	for i := 0; i < numNodes; i++ {

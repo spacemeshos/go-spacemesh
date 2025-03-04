@@ -9,12 +9,14 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 
@@ -33,6 +35,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
+	"github.com/spacemeshos/go-spacemesh/sql/malfeasance"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -222,7 +225,7 @@ func (n *node) withHare() *node {
 		genesis:       n.t.start,
 		layerDuration: n.t.layerDuration,
 	}
-	tracer := newTestTracer(n.t)
+	tracer := newTestTracer(n.t, logger)
 	n.tracer = tracer
 	n.patrol = layerpatrol.New()
 	n.hare = New(
@@ -295,7 +298,7 @@ func withSigners(n int) clusterOpt {
 
 func newLockstepCluster(t *tester, opts ...clusterOpt) *lockstepCluster {
 	t.Helper()
-	cluster := &lockstepCluster{t: t}
+	cluster := &lockstepCluster{t: t, logger: zaptest.NewLogger(t).Named("cluster")}
 	cluster.units.min = 10
 	cluster.units.max = 10
 	cluster.proposals.fraction = 1
@@ -310,6 +313,7 @@ func newLockstepCluster(t *tester, opts ...clusterOpt) *lockstepCluster {
 // as no peer will be able to start around until test allows it.
 type lockstepCluster struct {
 	t       *tester
+	logger  *zap.Logger
 	nodes   []*node
 	signers []*node // nodes that active on consensus but don't run hare instance
 
@@ -458,7 +462,15 @@ func (cl *lockstepCluster) setup() {
 			Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 			Do(func(ctx context.Context, _ string, msg []byte) error {
 				for _, other := range cl.nodes {
-					other.hare.Handler(ctx, n.peerId(), msg)
+					cl.logger.Debug("passing gosspied msg", zap.Int("from", n.i), zap.Int("to", other.i))
+					err := other.hare.Handler(ctx, n.peerId(), msg)
+					if err != nil {
+						// This is 'allowed' error as it happens in some tests
+						require.ErrorContains(cl.t, err, "dropped by graded gossip", "from = %d, to = %d", n.i, other.i)
+					} else {
+						require.NoError(cl.t, err, "from = %d, to = %d", n.i, other.i)
+					}
+					cl.logger.Debug("done gosspied msg", zap.Int("from", n.i), zap.Int("to", other.i))
 				}
 				return nil
 			}).
@@ -467,11 +479,29 @@ func (cl *lockstepCluster) setup() {
 }
 
 func (cl *lockstepCluster) movePreround(layer types.LayerID) {
+	// NOTE: The order of things is important here.
+	// 1. Move the layer. Hares are notified about the new layer and need to do some initial work.
+	// 2. Wait until all Hares finish setting up for the new layer. This is communicated using the
+	//    tracers OnStart() method, which advances the atomic layer counter.
+	//    This needed because otherwise the Hares that aren't ready will drop preround messages.
+	// 3. Advance the clock. This unblocks Hares which are active in preround and
+	//    they start sending messages.
+	for _, n := range cl.nodes {
+		n.nclock.StartLayer(layer)
+	}
+	for _, n := range cl.nodes {
+		require.Eventually(
+			cl.t,
+			func() bool { return n.tracer.started.Load() == layer.Uint32() },
+			time.Second*5,
+			time.Millisecond*10,
+		)
+	}
+
 	cl.timestamp = cl.t.start.
 		Add(cl.t.layerDuration * time.Duration(layer)).
 		Add(cl.t.cfg.PreroundDelay)
 	for _, n := range cl.nodes {
-		n.nclock.StartLayer(layer)
 		n.clock.Advance(cl.timestamp.Sub(n.clock.Now()))
 	}
 	for _, n := range cl.nodes {
@@ -501,20 +531,23 @@ func (cl *lockstepCluster) waitStopped() {
 	}
 }
 
-func newTestTracer(tb testing.TB) *testTracer {
+func newTestTracer(tb testing.TB, logger *zap.Logger) *testTracer {
 	return &testTracer{
 		TB:          tb,
 		stopped:     make(chan types.LayerID, 100),
 		eligibility: make(chan []*types.HareEligibility),
 		sent:        make(chan *Message),
+		logger:      logger.Named("tracer"),
 	}
 }
 
 type testTracer struct {
 	testing.TB
+	started     atomic.Uint32
 	stopped     chan types.LayerID
 	eligibility chan []*types.HareEligibility
 	sent        chan *Message
+	logger      *zap.Logger
 }
 
 func waitForChan[T any](tb testing.TB, ch <-chan T, timeout time.Duration, failureMsg string) T {
@@ -551,9 +584,13 @@ func (t *testTracer) waitSent() *Message {
 	return waitForChan(t.TB, t.sent, 10*time.Second, "no message")
 }
 
-func (*testTracer) OnStart(types.LayerID) {}
+func (t *testTracer) OnStart(l types.LayerID) {
+	t.started.Store(l.Uint32())
+	t.logger.Info("started", zap.Uint32("layer", l.Uint32()))
+}
 
 func (t *testTracer) OnStop(lid types.LayerID) {
+	t.logger.Info("stopped", zap.Uint32("layer", lid.Uint32()))
 	select {
 	case t.stopped <- lid:
 	default:
@@ -561,14 +598,31 @@ func (t *testTracer) OnStop(lid types.LayerID) {
 }
 
 func (t *testTracer) OnActive(el []*types.HareEligibility) {
+	t.logger.Info(
+		"active eligibilities",
+		zap.Array("per signer", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
+			for _, elig := range el {
+				if elig != nil {
+					ae.AppendUint16(elig.Count)
+				} else {
+					ae.AppendString("nil")
+				}
+			}
+			return nil
+		})),
+	)
+
 	sendWithTimeout(t.TB, el, t.eligibility, 10*time.Second, "eligibility can't be sent")
 }
 
 func (t *testTracer) OnMessageSent(m *Message) {
+	t.logger.Debug("sent message", zap.Inline(m))
 	sendWithTimeout(t.TB, m, t.sent, 10*time.Second, "message can't be sent")
 }
 
-func (*testTracer) OnMessageReceived(*Message) {}
+func (t *testTracer) OnMessageReceived(msg *Message) {
+	t.logger.Debug("message received", zap.Inline(msg))
+}
 
 func testHare(t *testing.T, active, inactive, equivocators int, opts ...clusterOpt) {
 	t.Helper()
@@ -816,13 +870,14 @@ func TestProposals(t *testing.T) {
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	for _, tc := range []struct {
-		desc      string
-		atxs      []types.ActivationTx
-		proposals []*types.Proposal
-		malicious []types.NodeID
-		layer     types.LayerID
-		beacon    types.Beacon
-		expect    []types.ProposalID
+		desc            string
+		atxs            []types.ActivationTx
+		proposals       []*types.Proposal
+		legacyMalicious []types.NodeID
+		malicious       []types.NodeID
+		layer           types.LayerID
+		beacon          types.Beacon
+		expect          []types.ProposalID
 	}{
 		{
 			desc:   "sanity",
@@ -885,6 +940,22 @@ func TestProposals(t *testing.T) {
 			expect: []types.ProposalID{pids[1]},
 		},
 		{
+			desc:   "legacy malicious",
+			layer:  layer,
+			beacon: goodBeacon,
+			atxs: []types.ActivationTx{
+				gatx(atxids[0], publish, ids[0], 10, 100),
+				gatx(atxids[1], publish, ids[1], 10, 100),
+				gatx(atxids[2], publish, signer.NodeID(), 10, 100),
+			},
+			proposals: []*types.Proposal{
+				gproposal(pids[0], atxids[0], ids[0], layer, goodBeacon),
+				gproposal(pids[1], atxids[1], ids[1], layer, goodBeacon),
+			},
+			legacyMalicious: []types.NodeID{ids[0]},
+			expect:          []types.ProposalID{pids[1]},
+		},
+		{
 			desc:   "malicious",
 			layer:  layer,
 			beacon: goodBeacon,
@@ -924,8 +995,12 @@ func TestProposals(t *testing.T) {
 			for _, proposal := range tc.proposals {
 				require.NoError(t, proposals.Add(proposal))
 			}
+			for _, id := range tc.legacyMalicious {
+				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Now()))
+				atxsdata.SetMalicious(id)
+			}
 			for _, id := range tc.malicious {
-				require.NoError(t, identities.SetMalicious(db, id, []byte("non empty"), time.Time{}))
+				require.NoError(t, malfeasance.AddProof(db, id, nil, []byte("non empty"), 1, time.Now()))
 				atxsdata.SetMalicious(id)
 			}
 			require.ElementsMatch(t, tc.expect, hare.selectProposals(&session{

@@ -177,9 +177,7 @@ func RecoverLayer(
 	trtl.OnRecoveredBlocks(lid, results, hareResult)
 	// tortoise votes according to the hare only within hdist (protocol parameter).
 	// also node is free to prune certificates outside hdist to minimize space usage.
-
-	// NOTE(dshulyak) we loaded information about malicious identities earlier.
-	ballotsrst, err := ballots.LayerNoMalicious(db, lid)
+	ballotsrst, err := ballots.Layer(db, lid)
 	if err != nil {
 		return err
 	}

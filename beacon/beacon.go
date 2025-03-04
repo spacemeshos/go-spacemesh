@@ -599,8 +599,8 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger *zap.Logger, target 
 		// w1 is the weight units at δ before the end of the previous epoch, used to calculate `thresholdStrict`
 		// w2 is the weight units at the end of the previous epoch, used to calculate `threshold`
 		w1, w2 int
-		ontime = pd.clock.LayerToTime(target.FirstLayer())
-		early  = ontime.Add(-1 * pd.config.GracePeriodDuration)
+		onTime = pd.clock.LayerToTime(target.FirstLayer())
+		early  = onTime.Add(-1 * pd.config.GracePeriodDuration)
 	)
 	err := atxs.IterateAtxsWithMalfeasance(pd.cdb, target-1, func(atx *types.ActivationTx, malicious bool) bool {
 		if !malicious {
@@ -615,7 +615,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger *zap.Logger, target 
 			}
 			if atx.Received().Before(early) {
 				w1++
-			} else if atx.Received().Before(ontime) {
+			} else if atx.Received().Before(onTime) {
 				w2++
 			}
 		} else {

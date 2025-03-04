@@ -2,6 +2,7 @@
 package grpcserver
 
 import (
+	"testing"
 	"time"
 )
 
@@ -83,9 +84,12 @@ const (
 func DefaultConfig() Config {
 	return Config{
 		PublicServices: []Service{
-			GlobalState, Mesh, Transaction, Node, Activation, ActivationV2Alpha1,
-			RewardV2Alpha1, NetworkV2Alpha1, NodeV2Alpha1, LayerV2Alpha1, TransactionV2Alpha1,
-			AccountV2Alpha1, MalfeasanceV2Alpha1,
+			// v1
+			GlobalState, Mesh, Transaction, Node, Activation,
+
+			// v2alpha1
+			ActivationV2Alpha1, RewardV2Alpha1, NetworkV2Alpha1, NodeV2Alpha1,
+			LayerV2Alpha1, TransactionV2Alpha1, AccountV2Alpha1, MalfeasanceV2Alpha1,
 
 			// v2beta1
 			ActivationV2Beta1, RewardV2Beta1, NetworkV2Beta1, NodeV2Beta1,
@@ -94,9 +98,12 @@ func DefaultConfig() Config {
 		},
 		PublicListener: "0.0.0.0:9092",
 		PrivateServices: []Service{
-			Admin, Smesher, Debug, ActivationStreamV2Alpha1,
-			RewardStreamV2Alpha1, LayerStreamV2Alpha1, TransactionStreamV2Alpha1,
-			MalfeasanceStreamV2Alpha1,
+			// v1
+			Admin, Smesher, Debug,
+
+			// v2alpha1
+			ActivationStreamV2Alpha1, RewardStreamV2Alpha1, LayerStreamV2Alpha1,
+			TransactionStreamV2Alpha1, MalfeasanceStreamV2Alpha1,
 
 			// v2beta1
 			ActivationStreamV2Beta1, RewardStreamV2Beta1, LayerStreamV2Beta1,
@@ -118,7 +125,7 @@ func DefaultConfig() Config {
 }
 
 // DefaultTestConfig returns the default config for tests.
-func DefaultTestConfig() Config {
+func DefaultTestConfig(tb testing.TB) Config {
 	conf := DefaultConfig()
 	conf.PublicListener = "127.0.0.1:0"
 	conf.PrivateListener = "127.0.0.1:0"

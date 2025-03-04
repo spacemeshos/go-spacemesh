@@ -384,7 +384,7 @@ func (h *Hare) onLayer(layer types.LayerID) {
 		beacon:  beacon,
 		signers: maps.Values(h.signers),
 		vrfs:    make([]*types.HareEligibility, len(h.signers)),
-		proto:   newProtocol(h.config.CommitteeFor(layer)/2 + 1),
+		proto:   newProtocol(h.config.CommitteeFor(layer)/2+1, h.log.Named("proto")),
 	}
 	h.sessions[layer] = s.proto
 	h.mu.Unlock()
@@ -394,18 +394,13 @@ func (h *Hare) onLayer(layer types.LayerID) {
 	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
 		if err := h.run(s); err != nil {
-			h.log.Warn("failed",
-				zap.Uint32("lid", layer.Uint32()),
-				zap.Error(err),
-			)
+			h.log.Warn("failed", zap.Uint32("lid", layer.Uint32()), zap.Error(err))
 			exitErrors.Inc()
 			// if terminated successfully it will notify block generator
 			// and it will have to CompleteHare
 			h.patrol.CompleteHare(layer)
 		} else {
-			h.log.Debug("terminated",
-				zap.Uint32("lid", layer.Uint32()),
-			)
+			h.log.Debug("terminated", zap.Uint32("lid", layer.Uint32()))
 		}
 		h.mu.Lock()
 		delete(h.sessions, layer)

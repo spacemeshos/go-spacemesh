@@ -15,7 +15,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -107,22 +106,46 @@ func (s *MalfeasanceService) List(
 	return result, nil
 }
 
+type defaultEventProvider struct{}
+
+func (defaultEventProvider) SubscribeMatched(
+	request *spacemeshv2alpha1.MalfeasanceStreamRequest,
+) (subscription, error) {
+	matcher := malfeasanceMatcher{request}
+	return events.SubscribeMatched(matcher.match)
+}
+
+type malStreamOpts func(*MalfeasanceStreamService)
+
+func withEventProvider(provider eventProvider) malStreamOpts {
+	return func(s *MalfeasanceStreamService) {
+		s.events = provider
+	}
+}
+
 func NewMalfeasanceStreamService(
 	db sql.Executor,
 	malfeasanceHandler,
 	legacyHandler malfeasanceInfo,
+	opts ...malStreamOpts,
 ) *MalfeasanceStreamService {
-	return &MalfeasanceStreamService{
+	service := &MalfeasanceStreamService{
 		db:         db,
 		info:       malfeasanceHandler,
 		infoLegacy: legacyHandler,
+		events:     defaultEventProvider{},
 	}
+	for _, opt := range opts {
+		opt(service)
+	}
+	return service
 }
 
 type MalfeasanceStreamService struct {
 	db         sql.Executor
 	info       malfeasanceInfo
 	infoLegacy malfeasanceInfo
+	events     eventProvider
 }
 
 func (s *MalfeasanceStreamService) RegisterService(server *grpc.Server) {
@@ -152,7 +175,7 @@ func (s *MalfeasanceStreamService) Stream(
 		case errors.Is(err, io.EOF):
 			return nil
 		case err != nil:
-			return status.Error(codes.Internal, err.Error())
+			return err
 		}
 	}
 
@@ -171,7 +194,7 @@ func (s *MalfeasanceStreamService) Stream(
 		case errors.Is(err, io.EOF):
 			return nil
 		case err != nil:
-			return status.Error(codes.Internal, err.Error())
+			return err
 		}
 	}
 
@@ -179,18 +202,13 @@ func (s *MalfeasanceStreamService) Stream(
 		return nil
 	}
 
-	matcher := malfeasanceMatcher{request}
-	sub, err := events.SubscribeMatched(matcher.match)
+	sub, err := s.events.SubscribeMatched(request)
 	if err != nil {
 		return status.Error(codes.Internal, err.Error())
 	}
 	defer sub.Close()
 	eventsOut := sub.Out()
 	eventsFull := sub.Full()
-
-	if err := stream.SendHeader(metadata.MD{}); err != nil {
-		return status.Errorf(codes.Unavailable, "can't send header")
-	}
 
 	for {
 		select {
@@ -213,7 +231,7 @@ func (s *MalfeasanceStreamService) Stream(
 			case errors.Is(err, io.EOF):
 				return nil
 			case err != nil:
-				return status.Error(codes.Internal, err.Error())
+				return err
 			}
 		default:
 			select {
@@ -235,7 +253,7 @@ func (s *MalfeasanceStreamService) Stream(
 				case errors.Is(err, io.EOF):
 					return nil
 				case err != nil:
-					return status.Error(codes.Internal, err.Error())
+					return err
 				}
 			case <-eventsFull:
 				return status.Error(codes.Canceled, "buffer overflow")

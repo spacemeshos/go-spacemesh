@@ -66,7 +66,7 @@ func newPostManager(tb testing.TB, cfg PostConfig, opts PostSetupOpts) *PostSetu
 func Test_PostSupervisor_ErrorOnMissingBinary(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	cmdCfg.PostServiceCmd = "missing"
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
@@ -93,7 +93,7 @@ func Test_PostSupervisor_StopWithoutStart(t *testing.T) {
 func Test_PostSupervisor_Start_FailPrepare(t *testing.T) {
 	log := zaptest.NewLogger(t).WithOptions(zap.WithFatalHook(calledFatal(t)))
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	postOpts.DataDir = t.TempDir()
@@ -129,7 +129,7 @@ func calledFatal(tb testing.TB) zapcore.CheckWriteHook {
 func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 	log := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WithFatalHook(calledFatal(t))))
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	postCfg := DefaultPostConfig()
 	postOpts := DefaultPostSetupOpts()
 	postOpts.DataDir = t.TempDir()
@@ -151,7 +151,7 @@ func Test_PostSupervisor_Start_FailStartSession(t *testing.T) {
 func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	postCfg := DefaultPostConfig()
 	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
@@ -188,7 +188,7 @@ func Test_PostSupervisor_StartsServiceCmd(t *testing.T) {
 func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	postCfg := DefaultPostConfig()
 	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
@@ -219,7 +219,7 @@ func Test_PostSupervisor_Restart_Possible(t *testing.T) {
 func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 	log := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WithFatalHook(calledFatal(t))))
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	postCfg := DefaultPostConfig()
 	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()
@@ -250,7 +250,7 @@ func Test_PostSupervisor_LogFatalOnCrash(t *testing.T) {
 func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 	log := zaptest.NewLogger(t, zaptest.WrapOptions(zap.WithFatalHook(calledFatal(t))))
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	cmdCfg.NodeAddress = "http://127.0.0.1:9099" // wrong port
 	cmdCfg.MaxRetries = 1                        // speedup test, will fail on 2nd retry (~ 5s)
 	postCfg := DefaultPostConfig()
@@ -282,7 +282,7 @@ func Test_PostSupervisor_LogFatalOnInvalidConfig(t *testing.T) {
 func Test_PostSupervisor_StopOnError(t *testing.T) {
 	log := zaptest.NewLogger(t)
 
-	cmdCfg := DefaultTestPostServiceConfig()
+	cmdCfg := DefaultTestPostServiceConfig(t)
 	postCfg := DefaultPostConfig()
 	postOpts := testSetupOpts(t)
 	provingOpts := DefaultPostProvingOpts()

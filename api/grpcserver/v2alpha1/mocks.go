@@ -13,7 +13,9 @@ import (
 	context "context"
 	reflect "reflect"
 
+	spacemeshv2alpha1 "github.com/spacemeshos/api/release/go/spacemesh/v2alpha1"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	events "github.com/spacemeshos/go-spacemesh/events"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -76,6 +78,205 @@ func (c *MockmalfeasanceInfoInfoCall) Do(f func(context.Context, types.NodeID) (
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
 func (c *MockmalfeasanceInfoInfoCall) DoAndReturn(f func(context.Context, types.NodeID) (map[string]string, error)) *MockmalfeasanceInfoInfoCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Mocksubscription is a mock of subscription interface.
+type Mocksubscription struct {
+	ctrl     *gomock.Controller
+	recorder *MocksubscriptionMockRecorder
+	isgomock struct{}
+}
+
+// MocksubscriptionMockRecorder is the mock recorder for Mocksubscription.
+type MocksubscriptionMockRecorder struct {
+	mock *Mocksubscription
+}
+
+// NewMocksubscription creates a new mock instance.
+func NewMocksubscription(ctrl *gomock.Controller) *Mocksubscription {
+	mock := &Mocksubscription{ctrl: ctrl}
+	mock.recorder = &MocksubscriptionMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mocksubscription) EXPECT() *MocksubscriptionMockRecorder {
+	return m.recorder
+}
+
+// Close mocks base method.
+func (m *Mocksubscription) Close() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Close")
+}
+
+// Close indicates an expected call of Close.
+func (mr *MocksubscriptionMockRecorder) Close() *MocksubscriptionCloseCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mocksubscription)(nil).Close))
+	return &MocksubscriptionCloseCall{Call: call}
+}
+
+// MocksubscriptionCloseCall wrap *gomock.Call
+type MocksubscriptionCloseCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocksubscriptionCloseCall) Return() *MocksubscriptionCloseCall {
+	c.Call = c.Call.Return()
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocksubscriptionCloseCall) Do(f func()) *MocksubscriptionCloseCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocksubscriptionCloseCall) DoAndReturn(f func()) *MocksubscriptionCloseCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Full mocks base method.
+func (m *Mocksubscription) Full() <-chan struct{} {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Full")
+	ret0, _ := ret[0].(<-chan struct{})
+	return ret0
+}
+
+// Full indicates an expected call of Full.
+func (mr *MocksubscriptionMockRecorder) Full() *MocksubscriptionFullCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Full", reflect.TypeOf((*Mocksubscription)(nil).Full))
+	return &MocksubscriptionFullCall{Call: call}
+}
+
+// MocksubscriptionFullCall wrap *gomock.Call
+type MocksubscriptionFullCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocksubscriptionFullCall) Return(arg0 <-chan struct{}) *MocksubscriptionFullCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocksubscriptionFullCall) Do(f func() <-chan struct{}) *MocksubscriptionFullCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocksubscriptionFullCall) DoAndReturn(f func() <-chan struct{}) *MocksubscriptionFullCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// Out mocks base method.
+func (m *Mocksubscription) Out() <-chan events.EventMalfeasance {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Out")
+	ret0, _ := ret[0].(<-chan events.EventMalfeasance)
+	return ret0
+}
+
+// Out indicates an expected call of Out.
+func (mr *MocksubscriptionMockRecorder) Out() *MocksubscriptionOutCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Out", reflect.TypeOf((*Mocksubscription)(nil).Out))
+	return &MocksubscriptionOutCall{Call: call}
+}
+
+// MocksubscriptionOutCall wrap *gomock.Call
+type MocksubscriptionOutCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MocksubscriptionOutCall) Return(arg0 <-chan events.EventMalfeasance) *MocksubscriptionOutCall {
+	c.Call = c.Call.Return(arg0)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MocksubscriptionOutCall) Do(f func() <-chan events.EventMalfeasance) *MocksubscriptionOutCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MocksubscriptionOutCall) DoAndReturn(f func() <-chan events.EventMalfeasance) *MocksubscriptionOutCall {
+	c.Call = c.Call.DoAndReturn(f)
+	return c
+}
+
+// MockeventProvider is a mock of eventProvider interface.
+type MockeventProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockeventProviderMockRecorder
+	isgomock struct{}
+}
+
+// MockeventProviderMockRecorder is the mock recorder for MockeventProvider.
+type MockeventProviderMockRecorder struct {
+	mock *MockeventProvider
+}
+
+// NewMockeventProvider creates a new mock instance.
+func NewMockeventProvider(ctrl *gomock.Controller) *MockeventProvider {
+	mock := &MockeventProvider{ctrl: ctrl}
+	mock.recorder = &MockeventProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockeventProvider) EXPECT() *MockeventProviderMockRecorder {
+	return m.recorder
+}
+
+// SubscribeMatched mocks base method.
+func (m *MockeventProvider) SubscribeMatched(request *spacemeshv2alpha1.MalfeasanceStreamRequest) (subscription, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SubscribeMatched", request)
+	ret0, _ := ret[0].(subscription)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SubscribeMatched indicates an expected call of SubscribeMatched.
+func (mr *MockeventProviderMockRecorder) SubscribeMatched(request any) *MockeventProviderSubscribeMatchedCall {
+	mr.mock.ctrl.T.Helper()
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribeMatched", reflect.TypeOf((*MockeventProvider)(nil).SubscribeMatched), request)
+	return &MockeventProviderSubscribeMatchedCall{Call: call}
+}
+
+// MockeventProviderSubscribeMatchedCall wrap *gomock.Call
+type MockeventProviderSubscribeMatchedCall struct {
+	*gomock.Call
+}
+
+// Return rewrite *gomock.Call.Return
+func (c *MockeventProviderSubscribeMatchedCall) Return(arg0 subscription, arg1 error) *MockeventProviderSubscribeMatchedCall {
+	c.Call = c.Call.Return(arg0, arg1)
+	return c
+}
+
+// Do rewrite *gomock.Call.Do
+func (c *MockeventProviderSubscribeMatchedCall) Do(f func(*spacemeshv2alpha1.MalfeasanceStreamRequest) (subscription, error)) *MockeventProviderSubscribeMatchedCall {
+	c.Call = c.Call.Do(f)
+	return c
+}
+
+// DoAndReturn rewrite *gomock.Call.DoAndReturn
+func (c *MockeventProviderSubscribeMatchedCall) DoAndReturn(f func(*spacemeshv2alpha1.MalfeasanceStreamRequest) (subscription, error)) *MockeventProviderSubscribeMatchedCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

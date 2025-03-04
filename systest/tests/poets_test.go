@@ -133,9 +133,9 @@ func TestNodesUsingDifferentPoets(t *testing.T) {
 	}
 
 	cl := cluster.New(tctx, cluster.WithKeys(tctx.ClusterSize))
+	require.NoError(t, cl.AddPoets(tctx))
 	require.NoError(t, cl.AddBootnodes(tctx, 2))
 	require.NoError(t, cl.AddBootstrappers(tctx))
-	require.NoError(t, cl.AddPoets(tctx))
 
 	for i := 0; i < tctx.ClusterSize-2; i++ {
 		poetId := i % tctx.PoetSize
@@ -217,15 +217,12 @@ func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
 	tctx := testcontext.New(t)
 
 	cl := cluster.New(tctx, cluster.WithKeys(10))
-	require.NoError(t, cl.AddBootnodes(tctx, 2))
-	require.NoError(t, cl.AddBootstrappers(tctx))
 
-	pubkey, privkey, err := ed25519.GenerateKey(nil)
-	require.NoError(t, err)
-	require.NoError(t, cl.AddCertifier(tctx, base64.StdEncoding.EncodeToString(privkey.Seed())))
 	// First poet supports PoW only (legacy)
 	require.NoError(t, cl.AddPoet(tctx))
 	// Second poet supports certs
+	pubkey, privkey, err := ed25519.GenerateKey(nil)
+	require.NoError(t, err)
 	require.NoError(
 		t,
 		cl.AddPoet(
@@ -234,6 +231,10 @@ func TestRegisteringInPoetWithPowAndCert(t *testing.T) {
 			cluster.PoetCertifierPubkey(base64.StdEncoding.EncodeToString(pubkey)),
 		),
 	)
+
+	require.NoError(t, cl.AddBootnodes(tctx, 2))
+	require.NoError(t, cl.AddBootstrappers(tctx))
+	require.NoError(t, cl.AddCertifier(tctx, base64.StdEncoding.EncodeToString(privkey.Seed())))
 	require.NoError(t, cl.AddSmeshers(tctx, tctx.ClusterSize-2))
 	require.NoError(t, cl.WaitAll(tctx))
 

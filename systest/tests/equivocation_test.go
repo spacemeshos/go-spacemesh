@@ -29,9 +29,9 @@ func TestEquivocation(t *testing.T) {
 
 	const bootnodes = 2
 	cl := cluster.New(cctx, cluster.WithKeys(cctx.ClusterSize))
+	require.NoError(t, cl.AddPoets(cctx))
 	require.NoError(t, cl.AddBootnodes(cctx, bootnodes))
 	require.NoError(t, cl.AddBootstrappers(cctx))
-	require.NoError(t, cl.AddPoets(cctx))
 
 	smeshers := cctx.ClusterSize - cl.Total()
 	honest := int(float64(smeshers) * 0.6)

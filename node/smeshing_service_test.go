@@ -67,8 +67,8 @@ func getSmeshingServiceTestConfig(tb testing.TB) *config.Config {
 
 	cfg.HareEligibility.ConfidenceParam = 1
 
-	cfg.Genesis = config.DefaultTestGenesisConfig(cfg.NetworkHRP)
-	cfg.POSTService = activation.DefaultTestPostServiceConfig()
+	cfg.Genesis = config.DefaultGenesisConfig()
+	cfg.POSTService = activation.DefaultTestPostServiceConfig(tb)
 
 	return &cfg
 }

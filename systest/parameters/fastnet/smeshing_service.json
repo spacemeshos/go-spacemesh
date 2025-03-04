@@ -19,7 +19,7 @@
     "hare3": {
         "committeeupgrade": {
             "layer": 16,
-            "size": 15
+            "size": 50
         }
     },
     "smeshing": {
