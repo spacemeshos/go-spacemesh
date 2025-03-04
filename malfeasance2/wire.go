@@ -8,6 +8,9 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 type ProofDomain byte
 
 const (
+	// TODO(mafa): add handlers and publishers for domains other than activation
+	//
+	// https://github.com/spacemeshos/go-spacemesh/issues/6690
 	InvalidActivation ProofDomain = 0x01
 	InvalidBallot     ProofDomain = 0x02
 	InvalidHareMsg    ProofDomain = 0x03

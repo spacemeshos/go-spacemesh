@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/post/verifying"
 	"go.uber.org/zap"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -98,20 +96,20 @@ func (mh *MalfeasanceHandler) ReportLabel() string {
 type InvalidPostIndexHandler struct {
 	db sql.Executor
 
-	edVerifier   *signing.EdVerifier
-	postVerifier PostVerifier
+	edVerifier *signing.EdVerifier
+	validator  nipostValidatorV1
 }
 
 func NewInvalidPostIndexHandler(
 	db sql.Executor,
 	edVerifier *signing.EdVerifier,
-	postVerifier PostVerifier,
+	validator nipostValidatorV1,
 ) *InvalidPostIndexHandler {
 	return &InvalidPostIndexHandler{
 		db: db,
 
-		edVerifier:   edVerifier,
-		postVerifier: postVerifier,
+		edVerifier: edVerifier,
+		validator:  validator,
 	}
 }
 
@@ -145,19 +143,18 @@ func (mh *InvalidPostIndexHandler) Validate(ctx context.Context, data wire.Proof
 		}
 		commitmentAtx = &atx
 	}
-	post := (*shared.Proof)(atx.NIPost.Post)
-	meta := &shared.ProofMetadata{
-		NodeId:          atx.SmesherID.Bytes(),
-		CommitmentAtxId: commitmentAtx.Bytes(),
-		NumUnits:        atx.NumUnits,
-		Challenge:       atx.NIPost.PostMetadata.Challenge,
-		LabelsPerUnit:   atx.NIPost.PostMetadata.LabelsPerUnit,
+	meta := &types.PostMetadata{
+		Challenge:     atx.NIPost.PostMetadata.Challenge,
+		LabelsPerUnit: atx.NIPost.PostMetadata.LabelsPerUnit,
 	}
-	if err := mh.postVerifier.Verify(
+	if err := mh.validator.Post(
 		ctx,
-		post,
+		atx.SmesherID,
+		*commitmentAtx,
+		(*types.Post)(atx.NIPost.Post),
 		meta,
-		WithVerifierOptions(verifying.SelectedIndex(int(proof.InvalidIdx))),
+		atx.NumUnits,
+		PostIndex(int(proof.InvalidIdx)),
 	); err != nil {
 		return atx.SmesherID, nil
 	}

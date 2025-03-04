@@ -177,17 +177,6 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 		zap.Int("remote", cctx.RemoteSize),
 	)
 
-	keys := make([]ed25519.PrivateKey, cctx.ClusterSize)
-	for i := range keys {
-		keys[i] = cl.Account(i).PrivateKey
-	}
-
-	if err := cl.AddBootnodes(cctx, cctx.BootnodeSize); err != nil {
-		return nil, err
-	}
-	if err := cl.AddBootstrappers(cctx); err != nil {
-		return nil, err
-	}
 	pubkey, privkey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		return nil, fmt.Errorf("generating keys for certifier: %w", err)
@@ -199,6 +188,18 @@ func Default(cctx *testcontext.Context, opts ...Opt) (*Cluster, error) {
 	cl.addPoetFlag(PoetCertifierPubkey(base64.StdEncoding.EncodeToString(pubkey)))
 
 	if err := cl.AddPoets(cctx); err != nil {
+		return nil, err
+	}
+
+	keys := make([]ed25519.PrivateKey, cctx.ClusterSize)
+	for i := range keys {
+		keys[i] = cl.Account(i).PrivateKey
+	}
+
+	if err := cl.AddBootnodes(cctx, cctx.BootnodeSize); err != nil {
+		return nil, err
+	}
+	if err := cl.AddBootstrappers(cctx); err != nil {
 		return nil, err
 	}
 

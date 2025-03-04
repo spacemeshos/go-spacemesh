@@ -75,12 +75,13 @@ func TestPostMalfeasanceProof(t *testing.T) {
 
 	// Prepare cluster
 	ctx.PoetSize = 1 // one poet guarantees everybody gets the same proof
-	ctx.ClusterSize = 8
+	ctx.ClusterSize = 4
 	cl := cluster.New(ctx, cluster.WithKeys(10))
+	require.NoError(t, cl.AddPoets(ctx))
 	require.NoError(t, cl.AddBootnodes(ctx, 1))
 	require.NoError(t, cl.AddBootstrappers(ctx))
-	require.NoError(t, cl.AddPoets(ctx))
-	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(1))))
+	// a k3 of 3 with 4 smeshers should find the malicious post in ~ 99.6% of all test runs
+	require.NoError(t, cl.AddSmeshers(ctx, ctx.ClusterSize-cl.Total(), cluster.WithFlags(cluster.PostK3(3))))
 
 	logger := ctx.Log.Desugar().WithOptions(zap.IncreaseLevel(zap.InfoLevel), zap.WithCaller(false))
 	cfg := getConfig(t, logger, cl, ctx)
@@ -332,16 +333,22 @@ func testPostMalfeasance(
 	// 2.2 Create ATX with invalid POST
 	logger.Info("invalidating PoST")
 	invalidPost := false
+	meta := &shared.ProofMetadata{
+		NodeId:          signer.NodeID().Bytes(),
+		CommitmentAtxId: nipostChallenge.CommitmentATX.Bytes(),
+		NumUnits:        nipost.NumUnits,
+		Challenge:       nipost.PostMetadata.Challenge,
+		LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
+	}
+	verifierOpts := activation.WithVerifierOptions(
+		verifying.WithLabelScryptParams(cfg.SMESHING.Opts.Scrypt),
+	)
+	err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), meta, verifierOpts) // sanity check
+	require.NoError(t, err, "expected valid POST")
 	for i := range nipost.Post.Indices {
 		for range 256 {
 			nipost.Post.Indices[i] += 1
-			err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), &shared.ProofMetadata{
-				NodeId:          signer.NodeID().Bytes(),
-				CommitmentAtxId: nipostChallenge.CommitmentATX.Bytes(),
-				NumUnits:        nipost.NumUnits,
-				Challenge:       nipost.PostMetadata.Challenge,
-				LabelsPerUnit:   nipost.PostMetadata.LabelsPerUnit,
-			})
+			err = verifier.Verify(ctx, (*shared.Proof)(nipost.Post), meta, verifierOpts)
 			var invalidIdxError *verifying.ErrInvalidIndex
 			if errors.As(err, &invalidIdxError) {
 				invalidPost = true

@@ -27,7 +27,8 @@ func setupAppWithKeys(tb testing.TB, data ...[]byte) (*App, *observer.ObservedLo
 			return zapcore.NewTee(core, observer)
 		},
 	)))
-	app := New(WithLog(log.NewFromLog(logger)))
+	cfg := getTestConfig(tb)
+	app := New(WithLog(log.NewFromLog(logger)), WithConfig(&cfg))
 	app.Config.DataDirParent = tb.TempDir()
 	if len(data) == 0 {
 		return app, observedLogs

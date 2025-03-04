@@ -400,7 +400,7 @@ func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *typ
 }
 
 func launchServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
-	cfg := DefaultTestConfig()
+	cfg := DefaultTestConfig(tb)
 	grpcService, err := NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 
@@ -432,7 +432,7 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := getFreePort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"), DefaultTestConfig())
+	grpcService := New(fmt.Sprintf(":%d", port1), zaptest.NewLogger(t).Named("grpc"), DefaultTestConfig(t))
 	jsonService := NewJSONHTTPServer(zaptest.NewLogger(t).Named("grpc.JSON"), fmt.Sprintf(":%d", port2),
 		[]string{}, false, false)
 
@@ -483,7 +483,7 @@ func TestNewLocalServer(t *testing.T) {
 			genTime := NewMockgenesisTimeAPI(ctrl)
 			syncer := NewMocksyncer(ctrl)
 
-			cfg := DefaultTestConfig()
+			cfg := DefaultTestConfig(t)
 			cfg.PostListener = tc.listener
 			svc := NewNodeService(peerCounter, meshApi, genTime, syncer, "v0.0.0", "cafebabe")
 			grpcService, err := NewWithServices(cfg.PostListener, logger, cfg, []ServiceAPI{svc})
@@ -523,7 +523,7 @@ func setupSmesherService(tb testing.TB, sig *signing.EdSigner) (*smesherServiceC
 		activation.DefaultPostSetupOpts(),
 		sig,
 	)
-	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig())
+	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig(tb))
 	cfg, cleanup := launchServer(tb, svc)
 	tb.Cleanup(cleanup)
 
@@ -666,22 +666,6 @@ func TestSmesherService(t *testing.T) {
 		addr, err := types.StringToAddress(res.AccountId.Address)
 		require.NoError(t, err)
 		require.Equal(t, addr1, addr)
-	})
-
-	t.Run("MinGas", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
-		_, err := c.MinGas(ctx, &emptypb.Empty{})
-		require.Error(t, err)
-		require.Equal(t, codes.Unimplemented, status.Code(err))
-	})
-
-	t.Run("SetMinGas", func(t *testing.T) {
-		t.Parallel()
-		c, ctx := setupSmesherService(t, nil)
-		_, err := c.SetMinGas(ctx, &pb.SetMinGasRequest{})
-		require.Error(t, err)
-		require.Equal(t, codes.Unimplemented, status.Code(err))
 	})
 
 	t.Run("PostSetupComputeProviders", func(t *testing.T) {
@@ -1567,8 +1551,6 @@ func TestTransactionService(t *testing.T) {
 			// Give the server-side time to subscribe to events
 			time.Sleep(time.Millisecond * 50)
 
-			// TODO send header after stream has subscribed
-
 			require.NoError(t, events.ReportNewTx(0, globalTx))
 
 			for _, stream := range streams {
@@ -2356,7 +2338,6 @@ func TestTransactionsRewards(t *testing.T) {
 		reward := data.Datum.GetReward()
 		req.Equal(address.String(), reward.Coinbase.Address)
 		req.EqualValues(17, reward.Layer.GetNumber())
-		// TODO check reward.Total and reward.LayerReward
 	})
 	t.Run("Get rewards from GlobalStateStream", func(t *testing.T) {
 		t.Parallel()
@@ -2377,7 +2358,6 @@ func TestTransactionsRewards(t *testing.T) {
 		reward := data.Datum.GetReward()
 		req.Equal(address.String(), reward.Coinbase.Address)
 		req.EqualValues(17, reward.Layer.GetNumber())
-		// TODO check reward.Total and reward.LayerReward
 	})
 }
 

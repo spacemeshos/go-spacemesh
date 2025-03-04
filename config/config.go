@@ -188,7 +188,7 @@ type SmeshingConfig struct {
 // DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
-		BaseConfig:      defaultBaseConfig(),
+		BaseConfig:      DefaultBaseConfig(),
 		Genesis:         DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
@@ -214,21 +214,8 @@ func DefaultConfig() Config {
 	}
 }
 
-// DefaultTestConfig returns the default config for tests.
-func DefaultTestConfig() Config {
-	conf := DefaultConfig()
-	conf.BaseConfig = defaultTestConfig()
-	conf.Genesis = DefaultTestGenesisConfig(conf.NetworkHRP)
-	conf.P2P = p2p.DefaultConfig()
-	conf.API = grpcserver.DefaultTestConfig()
-	conf.POSTService = activation.DefaultTestPostServiceConfig()
-	conf.HARE3.PreroundDelay = 1 * time.Second
-	conf.HARE3.RoundDuration = 1 * time.Second
-	return conf
-}
-
 // DefaultBaseConfig returns a default configuration for spacemesh.
-func defaultBaseConfig() BaseConfig {
+func DefaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:                defaultDataDir,
 		FileLock:                     filepath.Join(os.TempDir(), "spacemesh.lock"),
@@ -236,6 +223,7 @@ func defaultBaseConfig() BaseConfig {
 		MetricsPort:                  1010,
 		ProfilerName:                 "go-spacemesh",
 		LayerDuration:                30 * time.Second,
+		LayerAvgSize:                 5,
 		LayersPerEpoch:               3,
 		TxsPerProposal:               100,
 		BlockGasLimit:                math.MaxUint64,
@@ -269,14 +257,6 @@ func DefaultSmeshingConfig() SmeshingConfig {
 		ProvingOpts:     activation.DefaultPostProvingOpts(),
 		VerifyingOpts:   activation.DefaultPostVerifyingOpts(),
 	}
-}
-
-func defaultTestConfig() BaseConfig {
-	conf := defaultBaseConfig()
-	conf.MetricsPort += 10000
-	conf.NetworkHRP = "stest"
-	types.SetNetworkHRP(conf.NetworkHRP)
-	return conf
 }
 
 // LoadConfig load the config file.

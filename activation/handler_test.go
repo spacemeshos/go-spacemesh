@@ -12,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/merkle-tree"
 	poetShared "github.com/spacemeshos/poet/shared"
-	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +30,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/atxs"
-	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql/nipost"
 	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -248,10 +246,6 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
-
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
@@ -271,12 +265,20 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
 				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
 
-				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
-				postVerifier.EXPECT().
-					Verify(context.Background(), (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).
+				validator := NewMocknipostValidator(atxHdlr.ctrl)
+				validator.EXPECT().
+					Post(
+						context.Background(),
+						gomock.Any(),
+						gomock.Any(),
+						wire.PostFromWireV1(atx.NIPost.Post),
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).
 					Return(&verifying.ErrInvalidIndex{Index: 2})
 
-				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, validator)
 				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
@@ -295,10 +297,6 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 		sig, err := signing.NewEdSigner()
 		require.NoError(t, err)
 
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
-
 		atx := newInitialATXv1(t, goldenATXID)
 		atx.Sign(sig)
 
@@ -318,12 +316,20 @@ func TestHandler_PostMalfeasanceProofs(t *testing.T) {
 			func(ctx context.Context, _ types.NodeID, mp *mwire.MalfeasanceProof) error {
 				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
 
-				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
-				postVerifier.EXPECT().
-					Verify(context.Background(), (*shared.Proof)(atx.NIPost.Post), gomock.Any(), gomock.Any()).
+				validator := NewMocknipostValidator(atxHdlr.ctrl)
+				validator.EXPECT().
+					Post(
+						context.Background(),
+						gomock.Any(),
+						gomock.Any(),
+						wire.PostFromWireV1(atx.NIPost.Post),
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).
 					Return(&verifying.ErrInvalidIndex{Index: 2})
 
-				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, validator)
 				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)
@@ -446,10 +452,6 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx1)))
 
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
-
 		atx2 := newInitialATXv1(t, goldenATXID, func(a *wire.ActivationTxV1) {
 			a.NumUnits = atx1.NumUnits + 1
 		})
@@ -483,10 +485,6 @@ func TestHandler_HandleMaliciousAtx(t *testing.T) {
 		atx1.Sign(sig)
 		atxHdlr.expectAtxV1(atx1, sig.NodeID())
 		require.NoError(t, atxHdlr.HandleGossipAtx(context.Background(), p2p.NoPeer, codec.MustEncode(atx1)))
-
-		malicious, err := identities.IsMalicious(atxHdlr.cdb, sig.NodeID())
-		require.NoError(t, err)
-		require.False(t, malicious)
 
 		atx2 := newInitialATXv1(t, goldenATXID, func(a *wire.ActivationTxV1) {
 			a.NumUnits = atx1.NumUnits + 1

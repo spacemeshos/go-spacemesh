@@ -19,7 +19,7 @@ const (
 )
 
 func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
-	cfg := grpcserver.DefaultTestConfig()
+	cfg := grpcserver.DefaultTestConfig(tb)
 	grpc, err := grpcserver.NewWithServices(cfg.PublicListener, zaptest.NewLogger(tb).Named("grpc"), cfg, services)
 	require.NoError(tb, err)
 

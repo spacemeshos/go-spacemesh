@@ -132,10 +132,6 @@ func (s *GlobalStateService) AccountDataQuery(
 	}
 	res := &pb.AccountDataQueryResponse{}
 
-	// TODO: Implement this. The node does not implement tx receipts yet.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2072
-	// if filterTxReceipt {}
-
 	if filterReward {
 		dbRewards, err := s.mesh.GetRewardsByCoinbase(addr)
 		if err != nil {
@@ -173,10 +169,6 @@ func (s *GlobalStateService) AccountDataQuery(
 	res.TotalResults = uint32(len(res.AccountItem))
 
 	// Skip to offset, don't send more than max results
-	// TODO: Optimize this. Obviously, we could do much smarter things than re-loading all
-	// of the data from scratch, then figuring out which data to return here. We could cache
-	// query results and/or figure out which data to load before loading it.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2073
 	offset := in.Offset
 
 	// If the offset is too high there is nothing to return (this is not an error)
@@ -192,14 +184,6 @@ func (s *GlobalStateService) AccountDataQuery(
 	}
 	res.AccountItem = res.AccountItem[offset : offset+maxResults]
 	return res, nil
-}
-
-// SmesherDataQuery returns historical info on smesher rewards.
-func (s *GlobalStateService) SmesherDataQuery(
-	_ context.Context,
-	in *pb.SmesherDataQueryRequest,
-) (*pb.SmesherDataQueryResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "DEPRECATED")
 }
 
 // STREAMS
@@ -324,29 +308,7 @@ func (s *GlobalStateService) AccountDataStream(
 			ctxzap.Info(stream.Context(), "AccountDataStream closing stream, client disconnected")
 			return nil
 		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
-		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
 	}
-}
-
-// SmesherRewardStream exposes a stream of smesher rewards.
-func (s *GlobalStateService) SmesherRewardStream(
-	in *pb.SmesherRewardStreamRequest,
-	stream pb.GlobalStateService_SmesherRewardStreamServer,
-) error {
-	return status.Errorf(codes.Unimplemented, "DEPRECATED")
-}
-
-// AppEventStream exposes a stream of emitted app events.
-func (s *GlobalStateService) AppEventStream(
-	*pb.AppEventStreamRequest,
-	pb.GlobalStateService_AppEventStreamServer,
-) error {
-	// TODO: implement me! We don't currently have any app events
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2074
-
-	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash.
@@ -463,8 +425,5 @@ func (s *GlobalStateService) GlobalStateStream(
 			ctxzap.Info(stream.Context(), "AccountDataStream closing stream, client disconnected")
 			return nil
 		}
-		// TODO: do we need an additional case here for a context to indicate
-		// that the service needs to shut down?
-		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
 	}
 }

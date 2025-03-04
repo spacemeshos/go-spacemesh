@@ -16,6 +16,42 @@ pointing to the running `node` service.
 
 * [#6625](https://github.com/spacemeshos/go-spacemesh/pull/6625) Add command for starting services
 
+## v1.7.15
+
+### Improvements
+
+* [#6732](https://github.com/spacemeshos/go-spacemesh/pull/6732) Fixed malfeasance V2 proofs not preventing malicious
+  identities from receiving rewards.
+
+## v1.7.14
+
+### Improvements
+
+* [#6708](https://github.com/spacemeshos/go-spacemesh/pull/6708) Long deprecated or unimplemented endpoints for GRPC
+  v1 have been removed.
+
+* [#6712](https://github.com/spacemeshos/go-spacemesh/pull/6712) Added additional checks to prevent publishing ATXs
+  that would mark the identity that created them as malicious. Instead the publication will fail and the node will
+  log an error.
+
+* [#6715](https://github.com/spacemeshos/go-spacemesh/pull/6715) The new malfeasance protocol is disabled until ATXv2
+  goes live. This prevents nodes getting stuck on syncing when upgrading without ATXv2 enabled.
+
+## v1.7.13
+
+### Highlights
+
+With this release the implementation of ATXv2 is complete. We are now actively testing before enabling the feature on
+mainnet.
+
+### Improvements
+
+* [#6652](https://github.com/spacemeshos/go-spacemesh/pull/6652) Finalize implementation of malfeasance v2, new proofs
+  can now be synced between nodes.
+
+* [#6673](https://github.com/spacemeshos/go-spacemesh/pull/6673) Don't log ERROR when sync fails against a peer. Only
+  if sync against multiple peers fail the node will log an error.
+
 ## v1.7.12
 
 Sync v2 is now enabled by default for all nodes. Nodes will sync faster and use less resources. At the moment only ATXs

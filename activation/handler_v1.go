@@ -313,8 +313,8 @@ func (h *HandlerV1) validateNonInitialAtx(
 }
 
 // cacheAtx caches the atx in the atxsdata cache.
-// Returns true if the atx was cached, false otherwise.
-func (h *HandlerV1) cacheAtx(ctx context.Context, atx *types.ActivationTx, malicious bool) *atxsdata.ATX {
+// Returns the cached ATX or nil if the epoch was already evicted.
+func (h *HandlerV1) cacheAtx(atx *types.ActivationTx, malicious bool) *atxsdata.ATX {
 	if !h.atxsdata.IsEvicted(atx.TargetEpoch()) {
 		return h.atxsdata.AddFromAtx(atx, malicious)
 	}
@@ -327,20 +327,20 @@ func (h *HandlerV1) checkDoublePublish(
 	tx sql.Executor,
 	atx *wire.ActivationTxV1,
 	peer peer.ID,
-) (bool, error) {
+) (*mwire.MalfeasanceProof, error) {
 	prev, err := atxs.GetByEpochAndNodeID(tx, atx.PublishEpoch, atx.SmesherID)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return false, err
+		return nil, err
 	}
 	if prev == types.EmptyATXID || prev == atx.ID() {
 		// no ATX previously published for this epoch, or we are handling the same ATX again
-		return false, nil
+		return nil, nil
 	}
 
 	if peer == h.local {
 		// if we land here we tried to publish 2 ATXs in the same epoch
 		// don't punish ourselves but fail validation and thereby the handling of the incoming ATX
-		return false, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"%s already published an ATX in epoch %d",
 			atx.SmesherID.ShortString(),
 			atx.PublishEpoch,
@@ -355,7 +355,7 @@ func (h *HandlerV1) checkDoublePublish(
 	)
 	prevSignature, err := atxSignature(ctx, tx, prev)
 	if err != nil {
-		return false, fmt.Errorf("extracting signature for malfeasance proof: %w", err)
+		return nil, fmt.Errorf("extracting signature for malfeasance proof: %w", err)
 	}
 
 	atxProof := mwire.AtxProof{
@@ -382,7 +382,7 @@ func (h *HandlerV1) checkDoublePublish(
 			Data: &atxProof,
 		},
 	}
-	return true, h.malPublisher.PublishProof(ctx, atx.SmesherID, proof)
+	return proof, nil
 }
 
 // checkWrongPrevAtx verifies if the previous ATX referenced in the ATX is correct.
@@ -391,13 +391,13 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	tx sql.Executor,
 	atx *wire.ActivationTxV1,
 	peer peer.ID,
-) (bool, error) {
+) (*mwire.MalfeasanceProof, wire.Proof, error) {
 	expectedPrevID, err := atxs.PrevIDByNodeID(tx, atx.ID(), atx.SmesherID, atx.PublishEpoch)
 	if err != nil && !errors.Is(err, sql.ErrNotFound) {
-		return false, fmt.Errorf("get last atx by node id: %w", err)
+		return nil, nil, fmt.Errorf("get last atx by node id: %w", err)
 	}
 	if expectedPrevID == atx.PrevATXID {
-		return false, nil
+		return nil, nil, nil
 	}
 
 	if peer == h.local {
@@ -410,7 +410,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 			log.ZShortStringer("expected", expectedPrevID),
 			log.ZShortStringer("actual", atx.PrevATXID),
 		)
-		return false, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
+		return nil, nil, fmt.Errorf("%s referenced incorrect previous ATX", atx.SmesherID.ShortString())
 	}
 
 	h.logger.Debug("smesher referenced the wrong previous in published ATX",
@@ -422,37 +422,37 @@ func (h *HandlerV1) checkWrongPrevAtx(
 	atx2ID, err := atxs.AtxWithPrevious(tx, atx.PrevATXID, atx.SmesherID)
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
-		return false, nil
+		return nil, nil, nil
 	case err != nil:
-		return false, fmt.Errorf("fetching atx with previous %s: %w", atx.PrevATXID, err)
+		return nil, nil, fmt.Errorf("fetching atx with previous %s: %w", atx.PrevATXID, err)
 	case atx2ID == atx.ID():
 		// We retrieved the same ATX, which means this ATX is already in the DB.
 		// We don't need to look for a different ATX with the same previous ATX
 		// because if there are already 2 with the same previous ATX, the
 		// malfeasance proof was already generated.
-		return false, nil
+		return nil, nil, nil
 	}
 
 	var blob sql.Blob
 	v, err := atxs.LoadBlob(ctx, tx, atx2ID.Bytes(), &blob)
 	if err != nil {
-		return false, err
+		return nil, nil, err
 	}
 	if v != types.AtxV1 {
 		var watx2 wire.ActivationTxV2
 		if err := codec.Decode(blob.Bytes, &watx2); err != nil {
-			return false, fmt.Errorf("decoding previous atx: %w", err)
+			return nil, nil, fmt.Errorf("decoding previous atx: %w", err)
 		}
 		proof, err := wire.NewInvalidPrevAtxProofV1(tx, &watx2, atx, atx.SmesherID)
 		if err != nil {
-			return false, fmt.Errorf("creating invalid previous ATX proof: %w", err)
+			return nil, nil, fmt.Errorf("creating invalid previous ATX proof: %w", err)
 		}
-		return true, h.malPublisher2.Publish(ctx, atx.SmesherID, proof)
+		return nil, proof, nil
 	}
 
 	var watx2 wire.ActivationTxV1
 	if err := codec.Decode(blob.Bytes, &watx2); err != nil {
-		return false, fmt.Errorf("decoding previous atx: %w", err)
+		return nil, nil, fmt.Errorf("decoding previous atx: %w", err)
 	}
 
 	proof := &mwire.MalfeasanceProof{
@@ -465,7 +465,7 @@ func (h *HandlerV1) checkWrongPrevAtx(
 			},
 		},
 	}
-	return true, h.malPublisher.PublishProof(ctx, atx.SmesherID, proof)
+	return proof, nil, nil
 }
 
 func (h *HandlerV1) checkMalicious(
@@ -473,19 +473,19 @@ func (h *HandlerV1) checkMalicious(
 	tx sql.Transaction,
 	watx *wire.ActivationTxV1,
 	peer peer.ID,
-) (bool, error) {
-	malicious, err := h.checkDoublePublish(ctx, tx, watx, peer)
+) (*mwire.MalfeasanceProof, wire.Proof, error) {
+	proof, err := h.checkDoublePublish(ctx, tx, watx, peer)
 	if err != nil {
-		return malicious, fmt.Errorf("check double publish: %w", err)
+		return proof, nil, fmt.Errorf("check double publish: %w", err)
 	}
-	if malicious {
-		return true, nil
+	if proof != nil {
+		return proof, nil, nil
 	}
-	malicious, err = h.checkWrongPrevAtx(ctx, tx, watx, peer)
+	proof, proof2, err := h.checkWrongPrevAtx(ctx, tx, watx, peer)
 	if err != nil {
-		return malicious, fmt.Errorf("check wrong prev atx: %w", err)
+		return proof, nil, fmt.Errorf("check wrong prev atx: %w", err)
 	}
-	return malicious, nil
+	return proof, proof2, nil
 }
 
 // storeAtx stores an ATX and notifies subscribers of the ATXID.
@@ -495,7 +495,9 @@ func (h *HandlerV1) storeAtx(
 	watx *wire.ActivationTxV1,
 	peer peer.ID,
 ) error {
-	var malicious bool
+	malicious := false
+	var proof *mwire.MalfeasanceProof // legacy malfeasance proofs
+	var proof2 wire.Proof             // new malfeasance proofs
 	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
 		var err error
 		malicious, err = identities.IsMalicious(tx, atx.SmesherID)
@@ -508,7 +510,7 @@ func (h *HandlerV1) storeAtx(
 		}
 		malicious = malicious || malicious2
 		if !malicious {
-			malicious, err = h.checkMalicious(ctx, tx, watx, peer)
+			proof, proof2, err = h.checkMalicious(ctx, tx, watx, peer)
 			if err != nil {
 				return fmt.Errorf("check malicious: %w", err)
 			}
@@ -528,8 +530,29 @@ func (h *HandlerV1) storeAtx(
 		return fmt.Errorf("store atx: %w", err)
 	}
 
+	switch {
+	case proof != nil:
+		// new legacy malfeasance proof for identity created, publish proof (= persist and gossip)
+		if err := h.malPublisher.PublishProof(ctx, atx.SmesherID, proof); err != nil {
+			h.logger.Error("failed to publish malfeasance proof",
+				zap.Stringer("atx_id", atx.ID()),
+				zap.Stringer("smesher_id", atx.SmesherID),
+				zap.Error(err),
+			)
+		}
+	case proof2 != nil:
+		// new malfeasance proof for identity created, publish proof (= persist and gossip)
+		if err := h.malPublisher2.Publish(ctx, atx.SmesherID, proof2); err != nil {
+			h.logger.Error("failed to publish malfeasance proof",
+				zap.Stringer("atx_id", atx.ID()),
+				zap.Stringer("smesher_id", atx.SmesherID),
+				zap.Error(err),
+			)
+		}
+	}
+
 	h.beacon.OnAtx(atx)
-	if added := h.cacheAtx(ctx, atx, malicious); added != nil {
+	if added := h.cacheAtx(atx, malicious || proof != nil || proof2 != nil); added != nil {
 		h.tortoise.OnAtx(atx.TargetEpoch(), atx.ID(), added)
 	}
 

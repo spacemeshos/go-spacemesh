@@ -532,7 +532,7 @@ func TestProtocol(t *testing.T) {
 				}
 				switch casted := step.(type) {
 				case *setup:
-					proto = newProtocol(casted.threshold)
+					proto = newProtocol(casted.threshold, logger.Named("proto"))
 					proto.OnInitial(casted.proposals)
 				case *tinput:
 					logger.Debug("input", zap.Int("i", i), zap.Inline(casted))

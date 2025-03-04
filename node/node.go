@@ -92,7 +92,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer/malsync"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/txs"
@@ -209,6 +208,12 @@ func GetNodeServiceCommand() *cobra.Command {
 
 			// This blocks until the context is finished or until an error is produced
 			err = app.Start(ctx)
+			if err != nil {
+				app.log.With().Error("app failed", log.Err(err))
+			} else {
+				app.log.With().Info("app stopped", log.Err(ctx.Err()))
+			}
+
 			cleanupCtx, cleanupCancel := context.WithTimeout(
 				context.Background(),
 				30*time.Second,
@@ -478,9 +483,6 @@ func (app *App) Initialize() error {
 	if err := applyGenesis(gpath, app.Config.Genesis); err != nil {
 		return err
 	}
-
-	// override default config in timesync since timesync is using TimeConfigValues
-	timeCfg.TimeConfigValues = app.Config.TIME
 
 	events.InitializeReporter()
 	app.log.Info("%s", getAppInfo(app.Config.Genesis))
@@ -869,13 +871,14 @@ func (app *App) initServices(ctx context.Context) error {
 			atxsync.WithConfig(app.Config.Sync.AtxSync),
 			atxsync.WithLogger(app.syncLogger.Zap()),
 		),
-		malsync.New(fetcher, app.db, app.localDB,
+		malsync.New(fetcher, app.db, app.localDB, app.clock,
 			malsync.WithConfig(app.Config.Sync.MalSync),
 			malsync.WithLogger(app.syncLogger.Zap()),
 			malsync.WithPeerErrMetric(syncer.MalPeerError),
 		),
 		syncer.WithConfig(syncerConf),
 		syncer.WithLogger(app.syncLogger.Zap()),
+		syncer.WithAtxVersions(app.Config.AtxVersions),
 		syncer.WithAtxVersions(app.Config.AtxVersions),
 	)
 	if err != nil {
@@ -1172,7 +1175,7 @@ func (app *App) initServices(ctx context.Context) error {
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
 		app.edVerifier,
-		app.postVerifier,
+		validator,
 	)
 	invalidPrevMH := activation.NewInvalidPrevATXHandler(app.cachedDB, app.edVerifier)
 
@@ -1661,7 +1664,9 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 	case v2alpha1.Network:
 		service := v2alpha1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config,
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration,
+			app.Config.POST.LabelsPerUnit,
 		)
 		app.grpcServices[svc] = service
 		return service, nil
@@ -1717,7 +1722,9 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 	case v2beta1.Network:
 		service := v2beta1.NewNetworkService(
 			app.clock.GenesisTime(),
-			app.Config,
+			app.Config.Genesis.GenesisID(),
+			app.Config.LayerDuration,
+			app.Config.POST.LabelsPerUnit,
 		)
 		app.grpcServices[svc] = service
 		return service, nil

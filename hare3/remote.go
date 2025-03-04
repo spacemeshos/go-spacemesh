@@ -114,7 +114,7 @@ func (h *RemoteHare) onLayer(ctx context.Context, layer types.LayerID) {
 		beacon:  beacon,
 		signers: maps.Values(h.signers),
 		vrfs:    make([]*types.HareEligibility, len(h.signers)),
-		proto:   newProtocol(h.config.CommitteeFor(layer)/2 + 1),
+		proto:   newProtocol(h.config.CommitteeFor(layer)/2+1, h.log.Named("proto")),
 	}
 	h.sessions[layer] = s.proto
 	h.mu.Unlock()

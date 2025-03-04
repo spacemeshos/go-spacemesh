@@ -12,13 +12,12 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 func TestPeerInfoApi(t *testing.T) {
-	cfg := config.DefaultTestConfig()
+	cfg := getTestConfig(t)
 	cfg.Genesis.Accounts = nil
 	cfg.P2P.DisableNatPort = true
 	cfg.P2P.Listen = p2p.MustParseAddresses("/ip4/127.0.0.1/tcp/0")

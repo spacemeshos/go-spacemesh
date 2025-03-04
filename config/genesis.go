@@ -156,16 +156,6 @@ func DefaultGenesisConfig() GenesisConfig {
 	}
 }
 
-// DefaultTestGenesisConfig is the default test configuration for the node.
-func DefaultTestGenesisConfig(hrp string) GenesisConfig {
-	// NOTE(dshulyak) keys in default config are used in some tests
-	return GenesisConfig{
-		ExtraData:   "testnet",
-		GenesisTime: Genesis(time.Now()),
-		Accounts:    generateGenesisAccounts(hrp),
-	}
-}
-
 func generateGenesisAccounts(hrp string) map[string]uint64 {
 	acc1Signer, err := signing.NewEdSigner(
 		signing.WithPrivateKey(util.FromHex(Account1Private)),
