@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -375,12 +374,20 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 					return nil
 				}))
 
-				postVerifier := NewMockPostVerifier(atxHdlr.ctrl)
-				postVerifier.EXPECT().
-					Verify(context.Background(), (*shared.Proof)(watx.NIPost.Post), gomock.Any(), gomock.Any()).
+				validator := NewMocknipostValidator(atxHdlr.ctrl)
+				validator.EXPECT().
+					Post(
+						context.Background(),
+						gomock.Any(),
+						gomock.Any(),
+						wire.PostFromWireV1(watx.NIPost.Post),
+						gomock.Any(),
+						gomock.Any(),
+						gomock.Any(),
+					).
 					Return(&verifying.ErrInvalidIndex{Index: 2})
 
-				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, postVerifier)
+				mh := NewInvalidPostIndexHandler(atxHdlr.cdb, atxHdlr.edVerifier, validator)
 				nodeID, err := mh.Validate(context.Background(), mp.Proof.Data)
 				require.NoError(t, err)
 				require.Equal(t, sig.NodeID(), nodeID)

@@ -36,11 +36,24 @@ func TestCheckDBValidity(t *testing.T) {
 	edVerifier := signing.NewEdVerifier(
 		signing.WithVerifierPrefix(cfg.Genesis.GenesisID().Bytes()),
 	)
+	poetDb, err := activation.NewPoetDb(
+		db,
+		logger.Named("poet_db"),
+		activation.WithCacheSize(cfg.POET.PoetProofsCache),
+	)
+	require.NoError(t, err)
 	postVerifier, err := activation.NewPostVerifier(
 		cfg.POST,
 		logger.Named("post_verifier"),
 	)
 	require.NoError(t, err)
+	validator := activation.NewValidator(
+		db,
+		poetDb,
+		cfg.POST,
+		cfg.SMESHING.Opts.Scrypt,
+		postVerifier,
+	)
 
 	malfeasanceLogger := logger.Named("malfeasance")
 	activationMH := activation.NewMalfeasanceHandler(
@@ -61,7 +74,7 @@ func TestCheckDBValidity(t *testing.T) {
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		db,
 		edVerifier,
-		postVerifier,
+		validator,
 	)
 	invalidPrevMH := activation.NewInvalidPrevATXHandler(db, edVerifier)
 
