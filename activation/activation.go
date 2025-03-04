@@ -531,7 +531,7 @@ func (b *Builder) BuildNIPostChallenge(ctx context.Context, nodeID types.NodeID)
 		currentEpochId = max(currentEpochId, prevAtx.PublishEpoch)
 	case errors.Is(err, sql.ErrNotFound):
 		// no previous ATX
-	case err != nil:
+	default: // other errors
 		return nil, fmt.Errorf("get last ATX: %w", err)
 	}
 

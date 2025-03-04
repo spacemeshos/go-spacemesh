@@ -541,7 +541,7 @@ func TestNoNewUpdate(t *testing.T) {
 	require.NotEmpty(t, got.Persisted)
 	data, err := afero.ReadFile(fs, got.Persisted)
 	require.NoError(t, err)
-	require.Equal(t, []byte(update1), data)
+	require.JSONEq(t, update1, string(data))
 
 	// no new update
 	require.NoError(t, updater.DoIt(context.Background()))
