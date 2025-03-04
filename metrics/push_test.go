@@ -27,7 +27,7 @@ func TestStartPushMetrics(t *testing.T) {
 	var response []byte
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		response, _ = io.ReadAll(r.Body)
-		w.WriteHeader(202)
+		w.WriteHeader(http.StatusAccepted)
 	}))
 	defer ts.Close()
 

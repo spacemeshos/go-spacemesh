@@ -783,7 +783,7 @@ func (h *Hare) selectProposals(session *session) []types.ProposalID {
 			return []types.ProposalID{}
 		default:
 			own := h.atxsdata.Get(target, atxid)
-			if min == nil || (min != nil && own != nil && own.Height < min.Height) {
+			if min == nil || (own != nil && own.Height < min.Height) {
 				min = own
 			}
 		}
