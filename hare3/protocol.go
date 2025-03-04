@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 
+	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/exp/maps"
 
@@ -89,10 +90,11 @@ func (o *output) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
 	return nil
 }
 
-func newProtocol(threshold uint16) *protocol {
+func newProtocol(threshold uint16, logger *zap.Logger) *protocol {
 	return &protocol{
 		validProposals: map[types.Hash32][]types.ProposalID{},
 		gossip:         gossip{threshold: threshold, state: map[messageKey]*gossipInput{}},
+		logger:         logger,
 	}
 }
 
@@ -107,6 +109,7 @@ type protocol struct {
 	hardLocked     bool
 	validProposals map[types.Hash32][]types.ProposalID // Ti
 	gossip         gossip
+	logger         *zap.Logger
 }
 
 func (p *protocol) OnInitial(proposals []types.ProposalID) {
@@ -131,7 +134,7 @@ func (p *protocol) OnInput(msg *input) (bool, *wire.HareProof) {
 }
 
 func (p *protocol) thresholdProposals(ir IterRound, grade grade) (*types.Hash32, []types.ProposalID) {
-	for _, ref := range p.gossip.thresholdGossipRef(ir, grade) {
+	for _, ref := range p.gossip.thresholdGossipRef(ir, grade, p.logger) {
 		valid, exist := p.validProposals[ref]
 		if exist {
 			return &ref, valid
@@ -141,7 +144,7 @@ func (p *protocol) thresholdProposals(ir IterRound, grade grade) (*types.Hash32,
 }
 
 func (p *protocol) commitExists(iter uint8, match types.Hash32, grade grade) bool {
-	for _, ref := range p.gossip.thresholdGossipRef(IterRound{Iter: iter, Round: commit}, grade) {
+	for _, ref := range p.gossip.thresholdGossipRef(IterRound{Iter: iter, Round: commit}, grade, p.logger) {
 		if ref == match {
 			return true
 		}
@@ -188,7 +191,7 @@ func (p *protocol) execution(out *output) {
 			}
 		}
 	case propose:
-		values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade4)
+		values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade4, p.logger)
 		if p.Iter > 0 {
 			ref, overwrite := p.thresholdProposals(IterRound{Iter: p.Iter - 1, Round: commit}, grade2)
 			if ref != nil {
@@ -202,7 +205,7 @@ func (p *protocol) execution(out *output) {
 	case commit:
 		// condition (d) is realized by ordering proposals by vrf
 		proposed := p.gossip.gradecast(IterRound{Iter: p.Iter, Round: propose})
-		g2values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade2)
+		g2values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade2, p.logger)
 		for _, graded := range proposed {
 			// condition (a) and (b)
 			// grade0 proposals are not added to the set
@@ -217,8 +220,8 @@ func (p *protocol) execution(out *output) {
 				Value:     Value{Reference: p.locked},
 			}}
 		} else {
-			g3values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade3)
-			g5values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade5)
+			g3values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade3, p.logger)
+			g5values := p.gossip.thresholdGossip(IterRound{Round: preround}, grade5, p.logger)
 			for _, graded := range proposed {
 				id := toHash(graded.values)
 				// condition (c)
@@ -436,8 +439,8 @@ func tallyProposals(all map[types.ProposalID]proposalTally, inp *gossipInput) {
 // Protocol 3. Thresh-gossip. Page 15.
 // Output returns union of sorted proposals received
 // in the given round with minimal specified grade.
-func (g *gossip) thresholdGossip(filter IterRound, grade grade) []types.ProposalID {
-	rst := thresholdGossip(thresholdTallies(g.state, filter, grade, tallyProposals), g.threshold)
+func (g *gossip) thresholdGossip(filter IterRound, grade grade, logger *zap.Logger) []types.ProposalID {
+	rst := thresholdGossip(thresholdTallies(g.state, filter, grade, tallyProposals), g.threshold, logger)
 	slices.SortFunc(rst, func(i, j types.ProposalID) int {
 		return bytes.Compare(i.Bytes(), j.Bytes())
 	})
@@ -457,15 +460,15 @@ func tallyRefs(all map[types.Hash32]refTally, inp *gossipInput) {
 }
 
 // thresholdGossipRef returns all references to proposals in the given round with minimal grade.
-func (g *gossip) thresholdGossipRef(filter IterRound, grade grade) []types.Hash32 {
-	return thresholdGossip(thresholdTallies(g.state, filter, grade, tallyRefs), g.threshold)
+func (g *gossip) thresholdGossipRef(filter IterRound, grade grade, logger *zap.Logger) []types.Hash32 {
+	return thresholdGossip(thresholdTallies(g.state, filter, grade, tallyRefs), g.threshold, logger)
 }
 
 func thresholdGossip[T interface {
 	comparable
 	fmt.Stringer
 }](
-	tallies map[T]tallyStats[T], threshold uint16,
+	tallies map[T]tallyStats[T], threshold uint16, logger *zap.Logger,
 ) []T {
 	rst := []T{}
 	for _, item := range tallies {
@@ -473,6 +476,8 @@ func thresholdGossip[T interface {
 		// atleast one non-equivocating vote and crossed committee/2 + 1
 		if item.total >= threshold && item.valid > 0 {
 			rst = append(rst, item.id)
+		} else {
+			logger.Debug("gossip threshold: dropping item", zap.Inline(&item), zap.Uint16("threshold", threshold))
 		}
 	}
 	return rst

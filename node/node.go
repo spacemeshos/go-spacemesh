@@ -1176,7 +1176,7 @@ func (app *App) initServices(ctx context.Context) error {
 	invalidPostMH := activation.NewInvalidPostIndexHandler(
 		app.cachedDB,
 		app.edVerifier,
-		app.postVerifier,
+		validator,
 	)
 	invalidPrevMH := activation.NewInvalidPrevATXHandler(app.cachedDB, app.edVerifier)
 

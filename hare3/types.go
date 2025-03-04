@@ -152,6 +152,9 @@ func (m *Message) Validate() error {
 }
 
 func (m *Message) MarshalLogObject(encoder zapcore.ObjectEncoder) error {
+	if m == nil {
+		return nil
+	}
 	encoder.AddUint32("lid", m.Layer.Uint32())
 	encoder.AddUint8("iter", m.Iter)
 	encoder.AddString("round", m.Round.String())
