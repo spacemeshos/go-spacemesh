@@ -118,16 +118,6 @@ func TestStartSmeshing_ErrorOnMissingPostServiceConfig(t *testing.T) {
 	)
 
 	providerID := uint32(7)
-	opts := activation.PostSetupOpts{
-		DataDir:          "data-dir",
-		NumUnits:         1,
-		MaxFileSize:      1024,
-		Throttle:         true,
-		Scrypt:           config.DefaultLabelParams(),
-		ComputeBatchSize: config.DefaultComputeBatchSize,
-	}
-	opts.ProviderID.SetUint32(providerID)
-
 	_, err = svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
 		Opts: &pb.PostSetupOpts{
@@ -159,16 +149,6 @@ func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 
 	types.SetNetworkHRP("stest")
 	providerID := uint32(7)
-	opts := activation.PostSetupOpts{
-		DataDir:          "data-dir",
-		NumUnits:         1,
-		MaxFileSize:      1024,
-		Throttle:         true,
-		Scrypt:           config.DefaultLabelParams(),
-		ComputeBatchSize: config.DefaultComputeBatchSize,
-	}
-	opts.ProviderID.SetUint32(providerID)
-
 	_, err := svc.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},
 		Opts: &pb.PostSetupOpts{
