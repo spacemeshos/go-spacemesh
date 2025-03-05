@@ -1,4 +1,4 @@
-package grpcserver
+package v1
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/genvm/sdk/wallet"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type globalStateServiceConn struct {
@@ -41,6 +43,11 @@ func setupGlobalStateService(tb testing.TB) (*globalStateServiceConn, context.Co
 }
 
 func TestGlobalStateService(t *testing.T) {
+	signer1, err := signing.NewEdSigner()
+	require.NoError(t, err)
+
+	addr1 := wallet.Address(signer1.PublicKey().Bytes())
+
 	t.Run("GlobalStateHash", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
@@ -58,6 +65,11 @@ func TestGlobalStateService(t *testing.T) {
 	t.Run("Account", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
+
+		const (
+			accountBalance = 8675301
+			accountCounter = 0
+		)
 
 		c.conStateAPI.EXPECT().GetBalance(addr1).Return(accountBalance, nil)
 		c.conStateAPI.EXPECT().GetNonce(addr1).Return(accountCounter, nil)
@@ -97,9 +109,15 @@ func TestGlobalStateService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
+		const (
+			accountBalance = 8675301
+			accountCounter = 0
+			rewardAmount   = 5551234
+		)
+
 		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
-				Layer:       layerFirst,
+				Layer:       types.LayerID(0),
 				TotalReward: rewardAmount,
 				LayerReward: rewardAmount,
 				Coinbase:    addr1,
@@ -127,9 +145,15 @@ func TestGlobalStateService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
+		const (
+			accountBalance = 8675301
+			accountCounter = 0
+			rewardAmount   = 5551234
+		)
+
 		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
-				Layer:       layerFirst,
+				Layer:       types.LayerID(0),
 				TotalReward: rewardAmount,
 				LayerReward: rewardAmount,
 				Coinbase:    addr1,
@@ -156,9 +180,16 @@ func TestGlobalStateService(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
+		const (
+			accountBalance = 8675301
+			accountCounter = 0
+			rewardAmount   = 5551234
+		)
+		rewardSmesherID := types.RandomNodeID()
+
 		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
-				Layer:       layerFirst,
+				Layer:       types.LayerID(0),
 				TotalReward: rewardAmount,
 				LayerReward: rewardAmount,
 				Coinbase:    addr1,
@@ -180,15 +211,29 @@ func TestGlobalStateService(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint32(2), res.TotalResults)
 		require.Len(t, res.AccountItem, 1)
-		checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
+
+		require.IsType(t, &pb.AccountData_Reward{}, res.AccountItem[0].Datum)
+		x := res.AccountItem[0].Datum.(*pb.AccountData_Reward)
+		require.Equal(t, uint32(0), x.Reward.Layer.Number)
+		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+		require.Equal(t, uint64(rewardAmount), x.Reward.LayerReward.Value)
+		require.Equal(t, addr1.String(), x.Reward.Coinbase.Address)
+		require.Equal(t, rewardSmesherID.Bytes(), x.Reward.Smesher.Id)
 	})
 	t.Run("AccountDataQuery", func(t *testing.T) {
 		t.Parallel()
 		c, ctx := setupGlobalStateService(t)
 
+		const (
+			accountBalance = 8675301
+			accountCounter = 0
+			rewardAmount   = 5551234
+		)
+		rewardSmesherID := types.RandomNodeID()
+
 		c.meshAPI.EXPECT().GetRewardsByCoinbase(addr1).Return([]*types.Reward{
 			{
-				Layer:       layerFirst,
+				Layer:       types.LayerID(0),
 				TotalReward: rewardAmount,
 				LayerReward: rewardAmount,
 				Coinbase:    addr1,
@@ -210,8 +255,27 @@ func TestGlobalStateService(t *testing.T) {
 		require.Equal(t, uint32(2), res.TotalResults)
 		require.Len(t, res.AccountItem, 2)
 
-		checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
-		checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
+		require.IsType(t, &pb.AccountData_Reward{}, res.AccountItem[0].Datum)
+		rewardAccountData := res.AccountItem[0].Datum.(*pb.AccountData_Reward)
+		require.Equal(t, uint32(0), rewardAccountData.Reward.Layer.Number)
+		require.Equal(t, uint64(rewardAmount), rewardAccountData.Reward.Total.Value)
+		require.Equal(t, uint64(rewardAmount), rewardAccountData.Reward.LayerReward.Value)
+		require.Equal(t, addr1.String(), rewardAccountData.Reward.Coinbase.Address)
+		require.Equal(t, rewardSmesherID.Bytes(), rewardAccountData.Reward.Smesher.Id)
+
+		require.IsType(t, &pb.AccountData_AccountWrapper{}, res.AccountItem[1].Datum)
+		accountDataWrapper := res.AccountItem[1].Datum.(*pb.AccountData_AccountWrapper)
+		// Check the account, nonce, and balance
+		require.Equal(t, addr1.String(), accountDataWrapper.AccountWrapper.AccountId.Address,
+			"inner account has bad address")
+		require.Equal(t, uint64(accountCounter), accountDataWrapper.AccountWrapper.StateCurrent.Counter,
+			"inner account has bad current counter")
+		require.Equal(t, uint64(accountBalance), accountDataWrapper.AccountWrapper.StateCurrent.Balance.Value,
+			"inner account has bad current balance")
+		require.Equal(t, uint64(accountCounter+1), accountDataWrapper.AccountWrapper.StateProjected.Counter,
+			"inner account has bad projected counter")
+		require.Equal(t, uint64(accountBalance+1), accountDataWrapper.AccountWrapper.StateProjected.Balance.Value,
+			"inner account has bad projected balance")
 	})
 
 	t.Run("AccountDataStream_emptyAddress", func(t *testing.T) {

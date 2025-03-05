@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -208,9 +209,9 @@ func testPostMalfeasance(
 	defer postSupervisor.Stop(false)
 
 	// 2. create ATX with invalid POST labels
-	grpcPostService := grpcserver.NewPostService(
+	grpcPostService := v1.NewPostService(
 		logger.Named("grpc-post-service"),
-		grpcserver.PostServiceQueryInterval(500*time.Millisecond),
+		v1.PostServiceQueryInterval(500*time.Millisecond),
 	)
 	grpcPostService.AllowConnections(true)
 

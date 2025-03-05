@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap/zaptest"
 
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
@@ -61,8 +62,11 @@ func launchServer(tb testing.TB, db sql.StateDatabase) (grpcserver.Config, func(
 		[]string{}, false)
 	cdb := datastore.NewCachedDB(db, zaptest.NewLogger(tb))
 	tb.Cleanup(func() { assert.NoError(tb, cdb.Close()) })
-	s := grpcserver.NewMeshService(cdb, grpcserver.NewMockmeshAPI(gomock.NewController(tb)), nil, nil,
-		0, types.Hash20{}, 0, 0, 0)
+	s := v1.NewMeshService(
+		cdb,
+		v1.NewMockmeshAPI(gomock.NewController(tb)),
+		nil, nil, 0, types.Hash20{}, 0, 0, 0,
+	)
 
 	pb.RegisterMeshServiceServer(grpcService.GrpcServer, s)
 	// start gRPC and json servers

@@ -1,4 +1,4 @@
-package grpcserver
+package v1
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -29,7 +30,7 @@ import (
 func launchPostSupervisor(
 	tb testing.TB,
 	log *zap.Logger,
-	cfg Config,
+	cfg grpcserver.Config,
 	serviceCfg activation.PostSupervisorConfig,
 	postOpts activation.PostSetupOpts,
 ) (types.NodeID, func()) {
@@ -69,7 +70,7 @@ func launchPostSupervisor(
 func launchPostSupervisorTLS(
 	tb testing.TB,
 	log *zap.Logger,
-	cfg Config,
+	cfg grpcserver.Config,
 	serviceCfg activation.PostSupervisorConfig,
 	postOpts activation.PostSetupOpts,
 ) (types.NodeID, func()) {

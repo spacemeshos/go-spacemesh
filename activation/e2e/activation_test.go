@@ -20,7 +20,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -64,7 +64,7 @@ func Test_BuilderWithMultipleClients(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 	localDB := localsql.InMemoryTest(t)
 
-	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc := v1.NewPostService(logger, v1.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 
 	grpcCfg, cleanup := launchServer(t, svc)
