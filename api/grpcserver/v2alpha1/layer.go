@@ -50,7 +50,7 @@ func (s *LayerStreamService) Stream(
 		}
 		defer sub.Close()
 		if err := stream.SendHeader(metadata.MD{}); err != nil {
-			return status.Errorf(codes.Unavailable, "can't send header")
+			return err
 		}
 	}
 
@@ -73,40 +73,36 @@ func (s *LayerStreamService) Stream(
 	for {
 		select {
 		case rst := <-eventsOut:
-			var derr error
-			if layer, err := layers.Get(s.db, rst.LayerID); err == nil {
-				l := toLayer(layer)
-				l.Status = convertEventStatus(rst.Status)
-
-				derr = stream.Send(l)
-			} else {
-				return status.Error(codes.Internal, derr.Error())
+			layer, err := layers.Get(s.db, rst.LayerID)
+			if err != nil {
+				return status.Error(codes.Internal, err.Error())
 			}
 
+			l := toLayer(layer)
+			l.Status = convertEventStatus(rst.Status)
+			err = stream.Send(l)
 			switch {
-			case errors.Is(derr, io.EOF):
+			case errors.Is(err, io.EOF):
 				return nil
-			case derr != nil:
-				return status.Error(codes.Internal, derr.Error())
+			case err != nil:
+				return err
 			}
 		default:
 			select {
 			case rst := <-eventsOut:
-				var derr error
-				if layer, err := layers.Get(s.db, rst.LayerID); err == nil {
-					l := toLayer(layer)
-					l.Status = convertEventStatus(rst.Status)
-
-					derr = stream.Send(l)
-				} else {
-					return status.Error(codes.Internal, derr.Error())
+				layer, err := layers.Get(s.db, rst.LayerID)
+				if err != nil {
+					return status.Error(codes.Internal, err.Error())
 				}
 
+				l := toLayer(layer)
+				l.Status = convertEventStatus(rst.Status)
+				err = stream.Send(l)
 				switch {
-				case errors.Is(derr, io.EOF):
+				case errors.Is(err, io.EOF):
 					return nil
-				case derr != nil:
-					return status.Error(codes.Internal, derr.Error())
+				case err != nil:
+					return err
 				}
 			case <-eventsFull:
 				return status.Error(codes.Canceled, "buffer overflow")
@@ -123,7 +119,7 @@ func (s *LayerStreamService) Stream(
 				case errors.Is(err, io.EOF):
 					return nil
 				case err != nil:
-					return status.Error(codes.Internal, err.Error())
+					return err
 				}
 			case err := <-errChan:
 				return err

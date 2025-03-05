@@ -38,11 +38,6 @@ func launchPostSupervisor(
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
 
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = tb.TempDir()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
-
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)
 	goldenATXID := types.RandomATXID()
@@ -82,11 +77,6 @@ func launchPostSupervisorTLS(
 	postCfg := activation.DefaultPostConfig()
 	provingOpts := activation.DefaultPostProvingOpts()
 	provingOpts.RandomXMode = activation.PostRandomXModeLight
-
-	opts := activation.DefaultPostSetupOpts()
-	opts.DataDir = tb.TempDir()
-	opts.ProviderID.SetUint32(initialization.CPUProviderID())
-	opts.Scrypt.N = 2 // Speedup initialization in tests.
 
 	sig, err := signing.NewEdSigner()
 	require.NoError(tb, err)

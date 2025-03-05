@@ -39,7 +39,7 @@ func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 }
 
 func callEndpoint(ctx context.Context, tb testing.TB, url string, body []byte) ([]byte, int) {
-	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	require.NoError(tb, err)
 	req.Header.Set("Content-Type", "application/json")
 
