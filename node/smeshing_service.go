@@ -29,6 +29,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver/v2beta1"
 	"github.com/spacemeshos/go-spacemesh/api/node/client"
 	nodeclient "github.com/spacemeshos/go-spacemesh/api/node/client"
@@ -354,7 +355,7 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 	}
 	grpcServices := make(map[grpcserver.Service]grpcserver.ServiceAPI)
 
-	grpcPostService := grpcserver.NewPostService(loggers.add(PostServiceLogger, logger))
+	grpcPostService := v1.NewPostService(loggers.add(PostServiceLogger, logger))
 	isCoinbaseSet := cfg.SMESHING.CoinbaseAccount != ""
 	if !isCoinbaseSet {
 		logger.Warn("coinbase account is not set, connections from remote post services will be rejected")
@@ -579,7 +580,7 @@ func (app *SmeshingService) grpcService(svc grpcserver.Service, logger *zap.Logg
 
 	switch svc {
 	case grpcserver.Debug:
-		service := grpcserver.NewSmeshingServiceDebugService(app.loggers.levels)
+		service := v1.NewSmeshingServiceDebugService(app.loggers.levels)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Smesher:
@@ -592,10 +593,10 @@ func (app *SmeshingService) grpcService(svc grpcserver.Service, logger *zap.Logg
 		if err != nil {
 			return nil, err
 		}
-		service := grpcserver.NewSmesherService(
+		service := v1.NewSmesherService(
 			app.atxBuilder,
 			app.postSupervisor,
-			postService.(*grpcserver.PostService),
+			postService.(*v1.PostService),
 			app.config.API.SmesherStreamInterval,
 			app.config.SMESHING.Opts,
 			sig,
@@ -603,7 +604,7 @@ func (app *SmeshingService) grpcService(svc grpcserver.Service, logger *zap.Logg
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.Post:
-		service := grpcserver.NewPostService(app.loggers.add(PostServiceLogger, logger))
+		service := v1.NewPostService(app.loggers.add(PostServiceLogger, logger))
 		isCoinbaseSet := app.config.SMESHING.CoinbaseAccount != ""
 		if !isCoinbaseSet {
 			app.log.Warn("coinbase account is not set, connections from remote post services will be rejected")
@@ -612,7 +613,7 @@ func (app *SmeshingService) grpcService(svc grpcserver.Service, logger *zap.Logg
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.PostInfo:
-		service := grpcserver.NewPostInfoService(app.atxBuilder)
+		service := v1.NewPostInfoService(app.atxBuilder)
 		app.grpcServices[svc] = service
 		return service, nil
 	case v2beta1.SmeshingIdentities:
@@ -778,7 +779,7 @@ func (app *SmeshingService) startAPIServices(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		svc.(*grpcserver.SmesherService).SetPostServiceConfig(app.config.POSTService)
+		svc.(*v1.SmesherService).SetPostServiceConfig(app.config.POSTService)
 		if app.config.SMESHING.Start {
 			if app.config.SMESHING.CoinbaseAccount == "" {
 				return errors.New("smeshing enabled but no coinbase account provided")

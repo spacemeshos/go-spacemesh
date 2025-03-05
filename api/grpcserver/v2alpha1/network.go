@@ -13,10 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-const (
-	Network = "network_v2alpha1"
-)
-
 func NewNetworkService(
 	genesisTime time.Time,
 	genesisID types.Hash20,

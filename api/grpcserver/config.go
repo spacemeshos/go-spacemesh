@@ -38,16 +38,19 @@ type Config struct {
 type Service = string
 
 const (
-	Admin                     Service = "admin"
-	Debug                     Service = "debug"
-	GlobalState               Service = "global"
-	Mesh                      Service = "mesh"
-	Transaction               Service = "transaction"
-	Activation                Service = "activation"
-	Smesher                   Service = "smesher"
-	Post                      Service = "post"
-	PostInfo                  Service = "postInfo"
-	Node                      Service = "node"
+	// v1.
+	Admin       Service = "admin"
+	Debug       Service = "debug"
+	GlobalState Service = "global"
+	Mesh        Service = "mesh"
+	Transaction Service = "transaction"
+	Activation  Service = "activation"
+	Smesher     Service = "smesher"
+	Post        Service = "post"
+	PostInfo    Service = "postInfo"
+	Node        Service = "node"
+
+	// v2alpha1.
 	ActivationV2Alpha1        Service = "activation_v2alpha1"
 	ActivationStreamV2Alpha1  Service = "activation_stream_v2alpha1"
 	RewardV2Alpha1            Service = "reward_v2alpha1"

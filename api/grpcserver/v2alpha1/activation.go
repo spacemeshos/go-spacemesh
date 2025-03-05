@@ -24,11 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/builder"
 )
 
-const (
-	Activation       = "activation_v2alpha1"
-	ActivationStream = "activation_stream_v2alpha1"
-)
-
 func NewActivationStreamService(db sql.Executor) *ActivationStreamService {
 	return &ActivationStreamService{db: db}
 }

@@ -21,11 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
-const (
-	Reward       = "reward_v2beta1"
-	RewardStream = "reward_stream_v2beta1"
-)
-
 func NewRewardStreamService(db sql.Executor) *RewardStreamService {
 	return &RewardStreamService{db: db}
 }
