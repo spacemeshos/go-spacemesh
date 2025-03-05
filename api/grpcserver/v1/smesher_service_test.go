@@ -1,4 +1,4 @@
-package grpcserver_test
+package v1_test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -23,9 +23,9 @@ import (
 func TestPostConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
-	svc := grpcserver.NewSmesherService(
+	postSupervisor := v1.NewMockpostSupervisor(ctrl)
+	grpcPostService := v1.NewMockgrpcPostService(ctrl)
+	svc := v1.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		grpcPostService,
@@ -56,12 +56,12 @@ func TestPostConfig(t *testing.T) {
 func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
+	postSupervisor := v1.NewMockpostSupervisor(ctrl)
+	grpcPostService := v1.NewMockgrpcPostService(ctrl)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
 	cmdCfg := activation.DefaultTestPostServiceConfig(t)
-	svc := grpcserver.NewSmesherService(
+	svc := v1.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		grpcPostService,
@@ -104,11 +104,11 @@ func TestStartSmeshingPassesCorrectSmeshingOpts(t *testing.T) {
 func TestStartSmeshing_ErrorOnMissingPostServiceConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
+	postSupervisor := v1.NewMockpostSupervisor(ctrl)
+	grpcPostService := v1.NewMockgrpcPostService(ctrl)
 	sig, err := signing.NewEdSigner()
 	require.NoError(t, err)
-	svc := grpcserver.NewSmesherService(
+	svc := v1.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		grpcPostService,
@@ -135,9 +135,9 @@ func TestStartSmeshing_ErrorOnMissingPostServiceConfig(t *testing.T) {
 func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
-	svc := grpcserver.NewSmesherService(
+	postSupervisor := v1.NewMockpostSupervisor(ctrl)
+	grpcPostService := v1.NewMockgrpcPostService(ctrl)
+	svc := v1.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		grpcPostService,
@@ -166,9 +166,9 @@ func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 func TestSmesherService_PostSetupProviders(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-	postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-	grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
-	svc := grpcserver.NewSmesherService(
+	postSupervisor := v1.NewMockpostSupervisor(ctrl)
+	grpcPostService := v1.NewMockgrpcPostService(ctrl)
+	svc := v1.NewSmesherService(
 		smeshingProvider,
 		postSupervisor,
 		grpcPostService,
@@ -215,9 +215,9 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 	t.Run("completed", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-		postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-		grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
-		svc := grpcserver.NewSmesherService(
+		postSupervisor := v1.NewMockpostSupervisor(ctrl)
+		grpcPostService := v1.NewMockgrpcPostService(ctrl)
+		svc := v1.NewSmesherService(
 			smeshingProvider,
 			postSupervisor,
 			grpcPostService,
@@ -241,9 +241,9 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 	t.Run("completed with last Opts", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-		postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-		grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
-		svc := grpcserver.NewSmesherService(
+		postSupervisor := v1.NewMockpostSupervisor(ctrl)
+		grpcPostService := v1.NewMockgrpcPostService(ctrl)
+		svc := v1.NewSmesherService(
 			smeshingProvider,
 			postSupervisor,
 			grpcPostService,
@@ -280,9 +280,9 @@ func TestSmesherService_PostSetupStatus(t *testing.T) {
 	t.Run("in progress", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		smeshingProvider := activation.NewMockSmeshingProvider(ctrl)
-		postSupervisor := grpcserver.NewMockpostSupervisor(ctrl)
-		grpcPostService := grpcserver.NewMockgrpcPostService(ctrl)
-		svc := grpcserver.NewSmesherService(
+		postSupervisor := v1.NewMockpostSupervisor(ctrl)
+		grpcPostService := v1.NewMockgrpcPostService(ctrl)
+		svc := v1.NewSmesherService(
 			smeshingProvider,
 			postSupervisor,
 			grpcPostService,

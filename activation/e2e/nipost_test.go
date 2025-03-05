@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -130,7 +131,7 @@ func initPost(
 	sig *signing.EdSigner,
 	golden types.ATXID,
 	grpcCfg grpcserver.Config,
-	svc *grpcserver.PostService,
+	svc *v1.PostService,
 ) {
 	tb.Helper()
 
@@ -161,7 +162,7 @@ func TestNIPostBuilderWithClients(t *testing.T) {
 	localDb := localsql.InMemoryTest(t)
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc := v1.NewPostService(logger, v1.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
@@ -247,7 +248,7 @@ func Test_NIPostBuilderWithMultipleClients(t *testing.T) {
 	db := statesql.InMemoryTest(t)
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc := v1.NewPostService(logger, v1.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
