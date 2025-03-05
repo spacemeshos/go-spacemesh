@@ -328,7 +328,8 @@ func New(t *testing.T, opts ...Opt) *Context {
 	generic, err := client.New(config, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithTimeout(t.Context(), *testTimeout)
+	// nolint: usetesting
+	ctx, cancel := context.WithTimeout(context.Background(), *testTimeout)
 	t.Cleanup(cancel)
 
 	podns, err := os.ReadFile(nsfile)
