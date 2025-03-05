@@ -18,7 +18,7 @@ jobs:
             outname_sufix: "linux-arm64"
           - os: macos-13
             outname_sufix: "mac-amd64"
-          - os: [self-hosted, macOS, ARM64, go-spacemesh]
+          - os: [self-hosted, macOS, ARM64, smapp]
             outname_sufix: "mac-arm64"
           - os: windows-2022
             outname_sufix: "win-amd64"
