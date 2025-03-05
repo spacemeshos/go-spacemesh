@@ -1151,9 +1151,6 @@ func (app *App) initServices(ctx context.Context) error {
 		postSetupMgr,
 		atxBuilder,
 	)
-	if err != nil {
-		return fmt.Errorf("init post service: %w", err)
-	}
 
 	legacyMalfeasanceLogger := app.addLogger(MalfeasanceLogger, lg).Zap()
 	malfeasanceLogger := app.addLogger(Malfeasance2Logger, lg).Zap()
