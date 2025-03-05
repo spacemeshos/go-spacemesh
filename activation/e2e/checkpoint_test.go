@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
 	"github.com/spacemeshos/go-spacemesh/activation/wire"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/checkpoint"
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -51,7 +51,7 @@ func TestCheckpoint_PublishingSoloATXs(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, cdb.Close()) })
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc := v1.NewPostService(logger, v1.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)

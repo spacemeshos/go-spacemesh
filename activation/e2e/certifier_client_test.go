@@ -19,7 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -38,7 +38,7 @@ func TestCertification(t *testing.T) {
 
 	opts := testPostSetupOpts(t)
 	logger := zaptest.NewLogger(t)
-	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc := v1.NewPostService(logger, v1.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 
 	grpcCfg, cleanup := launchServer(t, svc)

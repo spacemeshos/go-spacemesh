@@ -1,4 +1,4 @@
-package grpcserver
+package v1
 
 import (
 	"context"
@@ -100,7 +100,7 @@ func TestNodeService(t *testing.T) {
 		// During genesis all layers should be set to current layer
 		layerLatest := types.LayerID(10)
 		c.meshAPI.EXPECT().LatestLayer().Return(layerLatest)
-		layerCurrent := types.LayerID(layersPerEpoch) // end of first epoch
+		layerCurrent := types.LayerID(types.GetLayersPerEpoch()) // end of first epoch
 		c.genTime.EXPECT().CurrentLayer().Return(layerCurrent)
 		c.peerCounter.EXPECT().PeerCount().Return(0)
 		c.syncer.EXPECT().IsSynced(gomock.Any()).Return(false)
@@ -120,7 +120,7 @@ func TestNodeService(t *testing.T) {
 		// Now do a mock check post-genesis
 		layerLatest := types.LayerID(10)
 		c.meshAPI.EXPECT().LatestLayer().Return(layerLatest)
-		layerCurrent = types.LayerID(12)
+		layerCurrent := types.LayerID(12)
 		c.genTime.EXPECT().CurrentLayer().Return(layerCurrent)
 		layerVerified := types.LayerID(8)
 		c.meshAPI.EXPECT().LatestLayerInState().Return(layerVerified)

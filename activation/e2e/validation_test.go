@@ -12,7 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	ae2e "github.com/spacemeshos/go-spacemesh/activation/e2e"
-	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	v1 "github.com/spacemeshos/go-spacemesh/api/grpcserver/v1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql/localsql"
@@ -33,7 +33,7 @@ func TestValidator_Validate(t *testing.T) {
 	validator := activation.NewMocknipostValidator(gomock.NewController(t))
 
 	opts := testPostSetupOpts(t)
-	svc := grpcserver.NewPostService(logger, grpcserver.PostServiceQueryInterval(100*time.Millisecond))
+	svc := v1.NewPostService(logger, v1.PostServiceQueryInterval(100*time.Millisecond))
 	svc.AllowConnections(true)
 	grpcCfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)

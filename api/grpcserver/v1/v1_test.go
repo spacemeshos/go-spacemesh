@@ -1,4 +1,4 @@
-package grpcserver
+package v1
 
 import (
 	"crypto/rand"
@@ -14,9 +14,14 @@ import (
 	"testing"
 	"time"
 
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 )
 
 const (
@@ -27,6 +32,25 @@ const (
 	clientCertName = "client.crt"
 	clientKeyName  = "client.key"
 )
+
+func launchServer(tb testing.TB, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
+	cfg := grpcserver.DefaultTestConfig(tb)
+	grpcService, err := grpcserver.NewWithServices(
+		cfg.PublicListener,
+		zaptest.NewLogger(tb).Named("grpc"),
+		cfg,
+		services,
+	)
+	require.NoError(tb, err)
+
+	// start gRPC server
+	require.NoError(tb, grpcService.Start())
+
+	// update config with bound addresses
+	cfg.PublicListener = grpcService.BoundAddress
+
+	return cfg, func() { assert.NoError(tb, grpcService.Close()) }
+}
 
 func genPrivateKey(tb testing.TB, path string) *rsa.PrivateKey {
 	caKey, err := rsa.GenerateKey(rand.Reader, 4096)
@@ -142,18 +166,18 @@ func genKeys(tb testing.TB) string {
 	return dir
 }
 
-func launchTLSServer(tb testing.TB, certDir string, services ...ServiceAPI) (Config, func()) {
+func launchTLSServer(tb testing.TB, certDir string, services ...grpcserver.ServiceAPI) (grpcserver.Config, func()) {
 	caCert := filepath.Join(certDir, caCertName)
 	serverCert := filepath.Join(certDir, serverCertName)
 	serverKey := filepath.Join(certDir, serverKeyName)
 
-	cfg := DefaultTestConfig(tb)
+	cfg := grpcserver.DefaultTestConfig(tb)
 	cfg.TLSListener = "127.0.0.1:0"
 	cfg.TLSCACert = caCert
 	cfg.TLSCert = serverCert
 	cfg.TLSKey = serverKey
 
-	grpcService, err := NewTLS(zaptest.NewLogger(tb).Named("grpc.TLS"), cfg, services)
+	grpcService, err := grpcserver.NewTLS(zaptest.NewLogger(tb).Named("grpc.TLS"), cfg, services)
 	require.NoError(tb, err)
 
 	// start gRPC server
@@ -163,4 +187,23 @@ func launchTLSServer(tb testing.TB, certDir string, services ...ServiceAPI) (Con
 	cfg.TLSListener = grpcService.BoundAddress
 
 	return cfg, func() { assert.NoError(tb, grpcService.Close()) }
+}
+
+func dialGrpc(tb testing.TB, cfg grpcserver.Config) *grpc.ClientConn {
+	tb.Helper()
+	conn, err := grpc.NewClient(
+		cfg.PublicListener,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	require.NoError(tb, err)
+	tb.Cleanup(func() { require.NoError(tb, conn.Close()) })
+	return conn
+}
+
+func mustParseMultiaddr(s string) ma.Multiaddr {
+	maddr, err := ma.NewMultiaddr(s)
+	if err != nil {
+		panic("can't parse multiaddr: " + err.Error())
+	}
+	return maddr
 }
