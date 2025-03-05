@@ -422,9 +422,6 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 		postSetupMgr,
 		atxBuilder,
 	)
-	if err != nil {
-		return nil, fmt.Errorf("init post service: %w", err)
-	}
 
 	return &SmeshingService{
 		db:           stateDB,
