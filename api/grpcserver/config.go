@@ -43,7 +43,7 @@ const (
 	PostInfo    Service = "postInfo"
 	Node        Service = "node"
 
-	// v1alpha1.
+	// v2alpha1.
 	ActivationV2Alpha1        Service = "activation_v2alpha1"
 	ActivationStreamV2Alpha1  Service = "activation_stream_v2alpha1"
 	RewardV2Alpha1            Service = "reward_v2alpha1"
