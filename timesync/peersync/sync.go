@@ -90,14 +90,6 @@ func WithTime(t Time) Option {
 	}
 }
 
-// WithContext modifies parent context that is used for all operations in Sync.
-func WithContext(ctx context.Context) Option {
-	return func(s *Sync) {
-		// TODO(mafa): fix this
-		s.ctx = ctx // nolint:fatcontext
-	}
-}
-
 // WithLog modifies Log used in Sync.
 func WithLog(lg *zap.Logger) Option {
 	return func(s *Sync) {
@@ -116,7 +108,6 @@ func WithConfig(config Config) Option {
 func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 	sync := &Sync{
 		log:    zap.NewNop(),
-		ctx:    context.Background(),
 		time:   systemTime{},
 		h:      h,
 		config: DefaultConfig(),
@@ -125,8 +116,6 @@ func New(h host.Host, peers getPeers, opts ...Option) *Sync {
 	for _, opt := range opts {
 		opt(sync)
 	}
-	// TODO(mafa): fix this
-	sync.ctx, sync.cancel = context.WithCancel(sync.ctx) // nolint:fatcontext
 	h.SetStreamHandler(protocolName, sync.streamHandler)
 	return sync
 }
@@ -139,9 +128,10 @@ type Sync struct {
 	h      host.Host
 	peers  getPeers
 
-	eg     errgroup.Group
-	ctx    context.Context
-	cancel func()
+	eg errgroup.Group
+
+	cancelMtx sync.Mutex
+	cancel    context.CancelFunc
 }
 
 func (s *Sync) streamHandler(stream network.Stream) {
@@ -164,14 +154,31 @@ func (s *Sync) streamHandler(stream network.Stream) {
 
 // Start background workers.
 func (s *Sync) Start() {
+	s.cancelMtx.Lock()
+	defer s.cancelMtx.Unlock()
+	if s.cancel != nil {
+		// already started
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	s.cancel = cancel
 	s.eg.Go(func() error {
-		return s.run()
+		return s.run(ctx)
 	})
 }
 
 // Stop background workers.
 func (s *Sync) Stop() {
+	s.cancelMtx.Lock()
+	defer s.cancelMtx.Unlock()
+	if s.cancel == nil {
+		// already stopped
+		return
+	}
+
 	s.cancel()
+	s.cancel = nil
 	s.Wait()
 }
 
@@ -185,7 +192,7 @@ func (s *Sync) Wait() error {
 	return fmt.Errorf("taskgroup: %w", err)
 }
 
-func (s *Sync) run() error {
+func (s *Sync) run(ctx context.Context) error {
 	var (
 		timer    *time.Timer
 		round    uint64
@@ -202,7 +209,7 @@ func (s *Sync) run() error {
 				zap.Int("peers_count", len(prs)),
 				zap.Int("errors_count", failures),
 			)
-			ctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
+			ctx, cancel := context.WithTimeout(ctx, s.config.RoundTimeout)
 			offset, err := s.GetOffset(ctx, round, prs)
 			cancel()
 			if err == nil {
@@ -238,8 +245,8 @@ func (s *Sync) run() error {
 			timer.Reset(timeout)
 		}
 		select {
-		case <-s.ctx.Done():
-			return fmt.Errorf("context done: %w", s.ctx.Err())
+		case <-ctx.Done():
+			return fmt.Errorf("context done: %w", ctx.Err())
 		case <-timer.C:
 		}
 	}

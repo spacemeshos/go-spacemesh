@@ -20,6 +20,7 @@ func TestCacheGetCopies(t *testing.T) {
 	accountCopy, err := ss.Get(address)
 	require.NoError(t, err)
 	require.Empty(t, accountCopy.Balance)
+	require.Equal(t, uint64(100), account.Balance)
 }
 
 func TestCacheUpdatePreserveOrder(t *testing.T) {

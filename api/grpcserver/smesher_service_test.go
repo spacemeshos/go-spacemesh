@@ -147,7 +147,6 @@ func TestStartSmeshing_ErrorOnMultiSmeshingSetup(t *testing.T) {
 	svc.SetPostServiceConfig(activation.DefaultTestPostServiceConfig(t))
 
 	types.SetNetworkHRP("stest")
-
 	providerID := uint32(7)
 	_, err := svc.StartSmeshing(t.Context(), &pb.StartSmeshingRequest{
 		Coinbase: &pb.AccountId{Address: "stest1qqqqqqrs60l66w5uksxzmaznwq6xnhqfv56c28qlkm4a5"},

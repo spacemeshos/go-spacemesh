@@ -596,7 +596,6 @@ type CheckpointAtx struct {
 // LatestN returns the latest N ATXs per smesher.
 func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 	var rst []CheckpointAtx
-
 	enc := func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(n))
 	}
@@ -643,7 +642,6 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 		}
 		rst[i].Units = units
 	}
-
 	return rst, nil
 }
 

@@ -168,12 +168,8 @@ func TestBeacon_votingThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			pd := ProtocolDriver{
-				config: Config{},
-				theta:  new(big.Float).SetRat(tc.theta),
-			}
-
-			threshold := votingThreshold(pd.theta, tc.weight)
+			theta := new(big.Float).SetRat(tc.theta)
+			threshold := votingThreshold(theta, tc.weight)
 			r.EqualValues(tc.threshold, threshold)
 		})
 	}

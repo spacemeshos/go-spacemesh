@@ -329,11 +329,11 @@ func IterateLayersWithBlockOps(
 	fn func(layer *Layer) bool,
 ) error {
 	var derr error
-	_, err := db.Exec(
-		`SELECT l.id, l.weak_coin, l.processed, l.applied_block, l.state_hash, l.aggregated_hash,
-       		b.validity, b.block FROM layers l
-       		    LEFT JOIN blocks b ON l.id = b.layer`+
-			builder.FilterFrom(operations),
+	_, err := db.Exec(`
+		SELECT l.id, l.weak_coin, l.processed, l.applied_block, l.state_hash, l.aggregated_hash, b.validity, b.block
+		FROM layers l
+		LEFT JOIN blocks b ON l.id = b.layer`+
+		builder.FilterFrom(operations),
 		builder.BindingsFrom(operations),
 		func(stmt *sql.Statement) bool {
 			l := &Layer{

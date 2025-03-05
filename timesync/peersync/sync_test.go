@@ -118,16 +118,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	sync.Start()
 	t.Cleanup(sync.Stop)
-	errors := make(chan error, 1)
-	go func() {
-		errors <- sync.Wait()
-	}()
-	select {
-	case err := <-errors:
-		require.ErrorIs(t, err, errPeersNotSynced)
-	case <-time.After(100 * time.Millisecond):
-		require.FailNow(t, "timed out waiting for sync to fail")
-	}
+	require.ErrorIs(t, sync.Wait(), errPeersNotSynced)
 }
 
 func TestSyncSimulateMultiple(t *testing.T) {
@@ -168,16 +159,7 @@ func TestSyncSimulateMultiple(t *testing.T) {
 		if errors[i] == nil {
 			continue
 		}
-		wait := make(chan error, 1)
-		go func() {
-			wait <- inst.Wait()
-		}()
-		select {
-		case err := <-wait:
-			require.ErrorIs(t, err, errors[i])
-		case <-time.After(1000 * time.Millisecond):
-			require.FailNowf(t, "timed out waiting for an error", "node %d", i)
-		}
+		require.ErrorIs(t, inst.Wait(), errors[i])
 	}
 }
 

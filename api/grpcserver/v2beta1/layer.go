@@ -55,7 +55,7 @@ func (s *LayerStreamService) Stream(
 		}
 		defer sub.Close()
 		if err := stream.SendHeader(metadata.MD{}); err != nil {
-			return status.Errorf(codes.Unavailable, "can't send header")
+			return err
 		}
 	}
 
@@ -86,12 +86,11 @@ func (s *LayerStreamService) Stream(
 			l := toLayer(layer)
 			l.Status = convertEventStatus(rst.Status)
 			err = stream.Send(l)
-
 			switch {
 			case errors.Is(err, io.EOF):
 				return nil
 			case err != nil:
-				return status.Error(codes.Internal, err.Error())
+				return err
 			}
 		default:
 			select {
@@ -104,12 +103,11 @@ func (s *LayerStreamService) Stream(
 				l := toLayer(layer)
 				l.Status = convertEventStatus(rst.Status)
 				err = stream.Send(l)
-
 				switch {
 				case errors.Is(err, io.EOF):
 					return nil
 				case err != nil:
-					return status.Error(codes.Internal, err.Error())
+					return err
 				}
 			case <-eventsFull:
 				return status.Error(codes.Canceled, "buffer overflow")
@@ -126,7 +124,7 @@ func (s *LayerStreamService) Stream(
 				case errors.Is(err, io.EOF):
 					return nil
 				case err != nil:
-					return status.Error(codes.Internal, err.Error())
+					return err
 				}
 			case err := <-errChan:
 				return err
