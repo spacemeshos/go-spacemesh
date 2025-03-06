@@ -617,16 +617,6 @@ func (msh *Mesh) GetRewardsByCoinbase(coinbase types.Address) ([]*types.Reward, 
 	return rewards.ListByCoinbase(msh.cdb, coinbase)
 }
 
-// GetRewardsBySmesherId retrieves account's rewards by the smesher ID.
-func (msh *Mesh) GetRewardsBySmesherId(smesherID types.NodeID) ([]*types.Reward, error) {
-	return rewards.ListBySmesherId(msh.cdb, smesherID)
-}
-
-// LastVerified returns the latest layer verified by tortoise.
-func (msh *Mesh) LastVerified() types.LayerID {
-	return msh.trtl.LatestComplete()
-}
-
 type MissingBlocksError struct {
 	Blocks []types.BlockID
 }

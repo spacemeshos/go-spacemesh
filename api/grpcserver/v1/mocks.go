@@ -1851,45 +1851,6 @@ func (c *MockmeshAPIGetRewardsByCoinbaseCall) DoAndReturn(f func(types.Address) 
 	return c
 }
 
-// GetRewardsBySmesherId mocks base method.
-func (m *MockmeshAPI) GetRewardsBySmesherId(id types.NodeID) ([]*types.Reward, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetRewardsBySmesherId", id)
-	ret0, _ := ret[0].([]*types.Reward)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetRewardsBySmesherId indicates an expected call of GetRewardsBySmesherId.
-func (mr *MockmeshAPIMockRecorder) GetRewardsBySmesherId(id any) *MockmeshAPIGetRewardsBySmesherIdCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRewardsBySmesherId", reflect.TypeOf((*MockmeshAPI)(nil).GetRewardsBySmesherId), id)
-	return &MockmeshAPIGetRewardsBySmesherIdCall{Call: call}
-}
-
-// MockmeshAPIGetRewardsBySmesherIdCall wrap *gomock.Call
-type MockmeshAPIGetRewardsBySmesherIdCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockmeshAPIGetRewardsBySmesherIdCall) Return(arg0 []*types.Reward, arg1 error) *MockmeshAPIGetRewardsBySmesherIdCall {
-	c.Call = c.Call.Return(arg0, arg1)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockmeshAPIGetRewardsBySmesherIdCall) Do(f func(types.NodeID) ([]*types.Reward, error)) *MockmeshAPIGetRewardsBySmesherIdCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockmeshAPIGetRewardsBySmesherIdCall) DoAndReturn(f func(types.NodeID) ([]*types.Reward, error)) *MockmeshAPIGetRewardsBySmesherIdCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // LatestLayer mocks base method.
 func (m *MockmeshAPI) LatestLayer() types.LayerID {
 	m.ctrl.T.Helper()
