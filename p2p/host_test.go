@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"context"
 	"net"
 	"testing"
 
@@ -66,13 +65,13 @@ func TestPrologue(t *testing.T) {
 			require.NoError(t, h3.Start())
 			t.Cleanup(func() { h3.Stop() })
 
-			err = h1.Connect(context.Background(), peer.AddrInfo{
+			err = h1.Connect(t.Context(), peer.AddrInfo{
 				ID:    h2.ID(),
 				Addrs: h2.Addrs(),
 			})
 			require.ErrorContains(t, err, tc.errStr)
 
-			err = h1.Connect(context.Background(), peer.AddrInfo{
+			err = h1.Connect(t.Context(), peer.AddrInfo{
 				ID:    h3.ID(),
 				Addrs: h3.Addrs(),
 			})
@@ -157,7 +156,7 @@ func TestBlocklist(t *testing.T) {
 			require.NoError(t, h2.Start())
 			t.Cleanup(func() { h2.Stop() })
 
-			err = h1.Connect(context.Background(), peer.AddrInfo{
+			err = h1.Connect(t.Context(), peer.AddrInfo{
 				ID:    h2.ID(),
 				Addrs: h2.Addrs(),
 			})

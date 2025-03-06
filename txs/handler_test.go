@@ -33,14 +33,14 @@ func Test_WrongHash(t *testing.T) {
 	require.NoError(t, err)
 	tx := newTx(t, 3, 10, 1, signer)
 	cstate.EXPECT().HasTx(tx.ID).Return(false, nil)
-	err = th.HandleBlockTransaction(context.Background(), types.RandomHash(), p2p.NoPeer, tx.Raw)
+	err = th.HandleBlockTransaction(t.Context(), types.RandomHash(), p2p.NoPeer, tx.Raw)
 	require.ErrorIs(t, err, errWrongHash)
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	cstate.EXPECT().GetMeshTransaction(tx.ID).Return(nil, nil)
 	req := smocks.NewMockValidationRequest(ctrl)
 	req.EXPECT().Parse().Times(1).Return(tx.TxHeader, nil)
 	cstate.EXPECT().Validation(tx.RawTx).Times(1).Return(req)
-	err = th.HandleProposalTransaction(context.Background(), types.RandomHash(), p2p.NoPeer, tx.Raw)
+	err = th.HandleProposalTransaction(t.Context(), types.RandomHash(), p2p.NoPeer, tx.Raw)
 	require.ErrorIs(t, err, errWrongHash)
 	require.ErrorIs(t, err, pubsub.ErrValidationReject)
 }
@@ -109,7 +109,7 @@ func Test_HandleBlock(t *testing.T) {
 					cstate.EXPECT().AddToDB(&types.Transaction{RawTx: tx.RawTx}).Return(tc.addErr)
 				}
 			}
-			err = th.HandleBlockTransaction(context.Background(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
+			err = th.HandleBlockTransaction(t.Context(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
 			if tc.failed {
 				require.Error(t, err)
 			} else {
@@ -237,7 +237,7 @@ func Test_HandleGossip(t *testing.T) {
 			)
 
 			require.True(t,
-				tc.expect(th.HandleGossipTransaction(context.Background(), p2p.NoPeer, tx.Raw)),
+				tc.expect(th.HandleGossipTransaction(t.Context(), p2p.NoPeer, tx.Raw)),
 			)
 		})
 	}
@@ -257,7 +257,7 @@ func Test_HandleOwnGossip(t *testing.T) {
 	require.NoError(t, err)
 	tx := newTx(t, 3, 10, 1, signer)
 
-	require.NoError(t, th.HandleGossipTransaction(context.Background(), id, tx.Raw))
+	require.NoError(t, th.HandleGossipTransaction(t.Context(), id, tx.Raw))
 }
 
 func Test_HandleProposal(t *testing.T) {
@@ -320,7 +320,7 @@ func Test_HandleProposal(t *testing.T) {
 				tc.hasErr, tc.parseErr, tc.addErr,
 				tc.has, tc.verify, tc.noHeader,
 			)
-			err := th.HandleProposalTransaction(context.Background(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
+			err := th.HandleProposalTransaction(t.Context(), tx.ID.Hash32(), p2p.NoPeer, tx.Raw)
 			if tc.fail {
 				require.Error(t, err)
 			} else {

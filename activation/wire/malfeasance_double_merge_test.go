@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -97,7 +96,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 
 		proof, err := NewDoubleMergeProof(db, atx1, atx2)
 		require.NoError(t, err)
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -133,7 +132,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 
 		proof, err := NewDoubleMergeProof(db, atx1, atx2)
 		require.NoError(t, err)
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorIs(t, err, ErrUnknownIdentity)
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -169,7 +168,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 
 		proof, err := NewDoubleMergeProof(db, atx1, atx2)
 		require.NoError(t, err)
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorIs(t, err, ErrUnknownIdentity)
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -202,7 +201,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 			ATXID1: atx1.ID(),
 			ATXID2: atx1.ID(),
 		}
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATXs have the same ID")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -315,7 +314,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid marriage ATX ID
 		marriageAtxID := proof.MarriageATX
 		proof.MarriageATX = types.RandomATXID()
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid marriage ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.MarriageATX = marriageAtxID
@@ -323,7 +322,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid marriage ATX smesher ID
 		smesherID := proof.MarriageATXSmesherID
 		proof.MarriageATXSmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid marriage ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.MarriageATXSmesherID = smesherID
@@ -331,7 +330,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid ATX1 ID
 		id1 := proof.ATXID1
 		proof.ATXID1 = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXID1 = id1
@@ -339,7 +338,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid ATX2 ID
 		id2 := proof.ATXID2
 		proof.ATXID2 = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 2 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXID2 = id2
@@ -347,7 +346,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid ATX1 smesher ID
 		smesherID1 := proof.SmesherID1
 		proof.SmesherID1 = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.SmesherID1 = smesherID1
@@ -355,7 +354,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid ATX2 smesher ID
 		smesherID2 := proof.SmesherID2
 		proof.SmesherID2 = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 2 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.SmesherID2 = smesherID2
@@ -363,7 +362,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid ATX1 signature
 		signature1 := proof.Signature1
 		proof.Signature1 = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Signature1 = signature1
@@ -371,7 +370,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid ATX2 signature
 		signature2 := proof.Signature2
 		proof.Signature2 = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 2 invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Signature2 = signature2
@@ -379,7 +378,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid publish epoch proof 1
 		hash := proof.PublishEpochProof1[0]
 		proof.PublishEpochProof1[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid publish epoch proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.PublishEpochProof1[0] = hash
@@ -387,7 +386,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid publish epoch proof 2
 		hash = proof.PublishEpochProof2[0]
 		proof.PublishEpochProof2[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 2 invalid publish epoch proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.PublishEpochProof2[0] = hash
@@ -395,7 +394,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid marriage ATX proof 1
 		hash = proof.MarriageATXProof1[0]
 		proof.MarriageATXProof1[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 1 invalid marriage ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.MarriageATXProof1[0] = hash
@@ -403,7 +402,7 @@ func Test_DoubleMergeProof(t *testing.T) {
 		// invalid marriage ATX proof 2
 		hash = proof.MarriageATXProof2[0]
 		proof.MarriageATXProof2[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "ATX 2 invalid marriage ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.MarriageATXProof2[0] = hash

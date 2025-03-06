@@ -1,7 +1,6 @@
 package blocks
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -192,7 +191,7 @@ func Test_getProposalMetadata(t *testing.T) {
 
 	// only 5 / 10 proposals has the same state
 	// eligibility wise 40 / 55 has the same state
-	md, err := getProposalMetadata(context.Background(), lg, db, data, cfg, lid, props)
+	md, err := getProposalMetadata(t.Context(), lg, db, data, cfg, lid, props)
 	require.NoError(t, err)
 	require.True(t, md.optFilter)
 }

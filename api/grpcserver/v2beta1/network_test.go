@@ -1,7 +1,6 @@
 package v2beta1
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -12,7 +11,7 @@ import (
 )
 
 func TestNetworkService_Info(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	genesis := time.Unix(genTimeUnix, 0)
 	genesisID := types.Hash20{1, 2, 3}
 	layerDuration := 10 * time.Second

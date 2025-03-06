@@ -1,7 +1,6 @@
 package v2beta1
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 )
 
 func TestNodeService_Status(t *testing.T) {
-	ctrl, ctx := gomock.WithContext(context.Background(), t)
+	ctrl, ctx := gomock.WithContext(t.Context(), t)
 	peerCounter := NewMocknodePeerCounter(ctrl)
 	meshAPI := NewMocknodeMeshAPI(ctrl)
 	syncer := NewMocknodeSyncer(ctrl)

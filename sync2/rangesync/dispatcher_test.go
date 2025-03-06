@@ -62,7 +62,7 @@ func TestDispatcher(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			require.NoError(t, c.StreamRequest(
-				context.Background(), srvPeerID, []byte(tt.name),
+				t.Context(), srvPeerID, []byte(tt.name),
 				func(ctx context.Context, stream io.ReadWriter) error {
 					c := rangesync.StartWireConduit(ctx, stream, rangesync.DefaultConfig())
 					defer c.End()

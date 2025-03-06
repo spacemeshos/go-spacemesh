@@ -35,7 +35,8 @@ func NewTestNetwork(tb testing.TB, conf config.Config, l log.Log, size int) []*T
 
 	// This context is used to call Start on a node and canceling it will
 	// shutdown the node. (Hence no timeout has been set).
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(tb.Context())
+	defer cancel()
 	g, grpContext := errgroup.WithContext(ctx)
 	var apps []*TestApp
 
@@ -77,10 +78,11 @@ func NewTestNetwork(tb testing.TB, conf config.Config, l log.Log, size int) []*T
 	// we ensure that the apps have been shut-down before attempting to delete
 	// the temp dirs.
 	tb.Cleanup(func() {
-		cancel()
 		// Wait for nodes to shutdown
 		g.Wait()
 
+		// we are in a cleanup function and `tb.Context()` is already canceled
+		// nolint:usetesting
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 		defer cancel()
 		for _, a := range apps {
@@ -91,7 +93,7 @@ func NewTestNetwork(tb testing.TB, conf config.Config, l log.Log, size int) []*T
 	// Connect all nodes to each other
 	for i := 0; i < size; i++ {
 		for j := i + 1; j < size; j++ {
-			err := apps[i].Host().Connect(context.Background(), peer.AddrInfo{
+			err := apps[i].Host().Connect(tb.Context(), peer.AddrInfo{
 				ID:    apps[j].Host().ID(),
 				Addrs: apps[j].Host().Addrs(),
 			})

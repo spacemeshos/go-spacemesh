@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"testing"
@@ -128,7 +127,7 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
 
 		// verify the proof
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -163,7 +162,7 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(false, nil).AnyTimes()
 
 		// verify the proof
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorIs(t, err, ErrUnknownIdentity)
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -197,7 +196,7 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		verifier.EXPECT().IdentityExists(sig.NodeID()).Return(true, nil).AnyTimes()
 
 		// verify the proof
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -364,60 +363,60 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 
 		// same ATX ID
 		proof.Proofs[0].ATXID = atx2.ID()
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proofs have the same ATX ID")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].ATXID = atx1.ID()
 
 		// invalid prev ATX
 		proof.PrevATXID = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.PrevATXID = prevATXID
 
 		// invalid node ID
 		proof.NodeID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "missing marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.NodeID = sig.NodeID()
 
 		// invalid ATX ID
 		proof.Proofs[0].ATXID = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].ATXID = atx1.ID()
 
 		proof.Proofs[1].ATXID = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].ATXID = atx2.ID()
 
 		// invalid SmesherID
 		proof.Proofs[0].SmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].SmesherID = sig.NodeID()
 
 		proof.Proofs[1].SmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].SmesherID = sig.NodeID()
 
 		// invalid signature
 		proof.Proofs[0].Signature = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].Signature = atx1.Signature
 
 		proof.Proofs[1].Signature = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].Signature = atx2.Signature
@@ -425,14 +424,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid NIPosts root
 		nipostsRoot := proof.Proofs[0].NIPostsRoot
 		proof.Proofs[0].NIPostsRoot = NIPostsRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid NIPosts root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].NIPostsRoot = nipostsRoot
 
 		nipostsRoot = proof.Proofs[1].NIPostsRoot
 		proof.Proofs[1].NIPostsRoot = NIPostsRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid NIPosts root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].NIPostsRoot = nipostsRoot
@@ -440,14 +439,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid NIPosts root proof
 		hash := proof.Proofs[0].NIPostsRootProof[0]
 		proof.Proofs[0].NIPostsRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid NIPosts root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].NIPostsRootProof[0] = hash
 
 		hash = proof.Proofs[1].NIPostsRootProof[0]
 		proof.Proofs[1].NIPostsRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid NIPosts root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].NIPostsRootProof[0] = hash
@@ -455,14 +454,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid NIPost root
 		nipostRoot := proof.Proofs[0].NIPostRoot
 		proof.Proofs[0].NIPostRoot = NIPostRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].NIPostRoot = nipostRoot
 
 		nipostRoot = proof.Proofs[1].NIPostRoot
 		proof.Proofs[1].NIPostRoot = NIPostRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].NIPostRoot = nipostRoot
@@ -470,27 +469,27 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid NIPost root proof
 		hash = proof.Proofs[0].NIPostRootProof[0]
 		proof.Proofs[0].NIPostRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].NIPostRootProof[0] = hash
 
 		hash = proof.Proofs[1].NIPostRootProof[0]
 		proof.Proofs[1].NIPostRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].NIPostRootProof[0] = hash
 
 		// invalid NIPost index
 		proof.Proofs[0].NIPostIndex++
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].NIPostIndex--
 
 		proof.Proofs[1].NIPostIndex++
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].NIPostIndex--
@@ -498,14 +497,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid sub posts root
 		subPostsRoot := proof.Proofs[0].SubPostsRoot
 		proof.Proofs[0].SubPostsRoot = SubPostsRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid sub PoSTs root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].SubPostsRoot = subPostsRoot
 
 		subPostsRoot = proof.Proofs[1].SubPostsRoot
 		proof.Proofs[1].SubPostsRoot = SubPostsRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid sub PoSTs root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].SubPostsRoot = subPostsRoot
@@ -513,14 +512,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid sub posts root proof
 		hash = proof.Proofs[0].SubPostsRootProof[0]
 		proof.Proofs[0].SubPostsRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid sub PoSTs root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].SubPostsRootProof[0] = hash
 
 		hash = proof.Proofs[1].SubPostsRootProof[0]
 		proof.Proofs[1].SubPostsRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid sub PoSTs root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].SubPostsRootProof[0] = hash
@@ -528,14 +527,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid sub post root
 		subPostRoot := proof.Proofs[0].SubPostRoot
 		proof.Proofs[0].SubPostRoot = SubPostRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].SubPostRoot = subPostRoot
 
 		subPostRoot = proof.Proofs[1].SubPostRoot
 		proof.Proofs[1].SubPostRoot = SubPostRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].SubPostRoot = subPostRoot
@@ -543,27 +542,27 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid sub post root proof
 		hash = proof.Proofs[0].SubPostRootProof[0]
 		proof.Proofs[0].SubPostRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].SubPostRootProof[0] = hash
 
 		hash = proof.Proofs[1].SubPostRootProof[0]
 		proof.Proofs[1].SubPostRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].SubPostRootProof[0] = hash
 
 		// invalid sub post index
 		proof.Proofs[0].SubPostRootIndex++
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].SubPostRootIndex--
 
 		proof.Proofs[1].SubPostRootIndex++
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].SubPostRootIndex--
@@ -571,14 +570,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid prev atx proof
 		hash = proof.Proofs[0].PrevATXProof[0]
 		proof.Proofs[0].PrevATXProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].PrevATXProof[0] = hash
 
 		hash = proof.Proofs[1].PrevATXProof[0]
 		proof.Proofs[1].PrevATXProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].PrevATXProof[0] = hash
@@ -613,46 +612,46 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 
 		// invalid node ID
 		proof.NodeID = types.RandomNodeID()
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "missing marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.NodeID = sig.NodeID()
 
 		// invalid ATX ID
 		proof.Proofs[0].ATXID = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].ATXID = atx1.ID()
 
 		proof.Proofs[1].ATXID = types.RandomATXID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].ATXID = atx2.ID()
 
 		// invalid SmesherID
 		proof.Proofs[0].SmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].SmesherID = sig.NodeID()
 
 		proof.Proofs[1].SmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].SmesherID = pubSig.NodeID()
 
 		// invalid signature
 		proof.Proofs[0].Signature = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].Signature = atx1.Signature
 
 		proof.Proofs[1].Signature = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].Signature = atx2.Signature
@@ -660,7 +659,7 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// missing marriage proof
 		marriageProof := proof.Proofs[1].MarriageProof
 		proof.Proofs[1].MarriageProof = nil
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "missing marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].MarriageProof = marriageProof
@@ -668,7 +667,7 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid marriage index proof
 		hash := proof.Proofs[1].MarriageIndexProof[0]
 		proof.Proofs[1].MarriageIndexProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid marriage index proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].MarriageIndexProof[0] = hash
@@ -676,14 +675,14 @@ func Test_InvalidPrevAtxProofV2(t *testing.T) {
 		// invalid prev atx proof
 		hash = proof.Proofs[0].PrevATXProof[0]
 		proof.Proofs[0].PrevATXProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 1 is invalid: invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[0].PrevATXProof[0] = hash
 
 		hash = proof.Proofs[1].PrevATXProof[0]
 		proof.Proofs[1].PrevATXProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "proof 2 is invalid: invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Proofs[1].PrevATXProof[0] = hash
@@ -806,7 +805,7 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 			}).AnyTimes()
 
 		// verify the proof
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -840,7 +839,7 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 			}).AnyTimes()
 
 		// verify the proof
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -998,28 +997,28 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 
 		// invalid PrevATX
 		proof.PrevATXID = types.RandomATXID()
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid previous ATX proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.PrevATXID = prevATX
 
 		// invalid SmesherID for atxv1
 		proof.ATXv1.SmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXv1.SmesherID = sig.NodeID()
 
 		// invalid signature for atxv1
 		proof.ATXv1.Signature = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid ATX signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXv1.Signature = atxv1.Signature
 
 		// signer of atxv1 does not match
 		proof.ATXv1.Sign(pubSig)
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "ATXv1 has not been signed by the same identity")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXv1.Sign(sig)
@@ -1027,7 +1026,7 @@ func Test_InvalidPrevAtxProofV1(t *testing.T) {
 		// prevATX of atxv1 does not match
 		proof.ATXv1.PrevATXID = types.RandomATXID()
 		proof.ATXv1.Sign(sig)
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "ATXv1 references a different previous ATX")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXv1.PrevATXID = prevATX

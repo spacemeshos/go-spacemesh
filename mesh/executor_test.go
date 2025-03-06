@@ -91,11 +91,11 @@ func TestExecutor_Execute(t *testing.T) {
 	require.NoError(t, layers.SetApplied(te.db, lid, types.EmptyBlockID))
 
 	t.Run("layer already applied", func(t *testing.T) {
-		require.ErrorIs(t, te.exec.Execute(context.Background(), lid, nil), mesh.ErrLayerApplied)
+		require.ErrorIs(t, te.exec.Execute(t.Context(), lid, nil), mesh.ErrLayerApplied)
 	})
 
 	t.Run("layer out of order", func(t *testing.T) {
-		require.ErrorIs(t, te.exec.Execute(context.Background(), lid.Add(2), nil), mesh.ErrLayerNotInOrder)
+		require.ErrorIs(t, te.exec.Execute(t.Context(), lid.Add(2), nil), mesh.ErrLayerNotInOrder)
 	})
 
 	lid = lid.Add(1)
@@ -104,14 +104,14 @@ func TestExecutor_Execute(t *testing.T) {
 			LayerIndex: lid,
 			TxIDs:      types.RandomTXSet(10),
 		})
-		require.ErrorIs(t, te.exec.Execute(context.Background(), block.LayerIndex, block), sql.ErrNotFound)
+		require.ErrorIs(t, te.exec.Execute(t.Context(), block.LayerIndex, block), sql.ErrNotFound)
 	})
 
 	t.Run("empty layer", func(t *testing.T) {
 		te.mvm.EXPECT().Apply(lid, nil, nil)
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), lid, types.EmptyBlockID, nil, nil)
 		te.mvm.EXPECT().GetStateRoot()
-		require.NoError(t, te.exec.Execute(context.Background(), lid, nil))
+		require.NoError(t, te.exec.Execute(t.Context(), lid, nil))
 		require.NoError(t, layers.SetApplied(te.db, lid, types.EmptyBlockID))
 	})
 
@@ -123,7 +123,7 @@ func TestExecutor_Execute(t *testing.T) {
 		te.mvm.EXPECT().Apply(lid, []types.Transaction{}, []types.CoinbaseReward{})
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), lid, block.ID(), nil, nil)
 		te.mvm.EXPECT().GetStateRoot()
-		require.NoError(t, te.exec.Execute(context.Background(), block.LayerIndex, block))
+		require.NoError(t, te.exec.Execute(t.Context(), block.LayerIndex, block))
 		require.NoError(t, layers.SetApplied(te.db, lid, block.ID()))
 	})
 
@@ -177,7 +177,7 @@ func TestExecutor_Execute(t *testing.T) {
 				require.Equal(t, block.TxIDs, tids)
 				return nil, nil, errTest
 			})
-		require.ErrorIs(t, te.exec.Execute(context.Background(), block.LayerIndex, block), errTest)
+		require.ErrorIs(t, te.exec.Execute(t.Context(), block.LayerIndex, block), errTest)
 	})
 
 	var executed []types.TransactionWithResult
@@ -214,7 +214,7 @@ func TestExecutor_Execute(t *testing.T) {
 				}
 				return errTest
 			})
-		require.ErrorIs(t, te.exec.Execute(context.Background(), block.LayerIndex, block), errTest)
+		require.ErrorIs(t, te.exec.Execute(t.Context(), block.LayerIndex, block), errTest)
 	})
 
 	t.Run("applied block", func(t *testing.T) {
@@ -249,7 +249,7 @@ func TestExecutor_Execute(t *testing.T) {
 				return nil
 			})
 		te.mvm.EXPECT().GetStateRoot()
-		require.NoError(t, te.exec.Execute(context.Background(), block.LayerIndex, block))
+		require.NoError(t, te.exec.Execute(t.Context(), block.LayerIndex, block))
 		require.NoError(t, layers.SetApplied(te.db, lid, block.ID()))
 	})
 }
@@ -291,20 +291,20 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 	require.NoError(t, layers.SetApplied(te.db, lid, types.EmptyBlockID))
 
 	t.Run("layer already applied", func(t *testing.T) {
-		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, tids)
+		block, err := te.exec.ExecuteOptimistic(t.Context(), lid, tickHeight, rewards, tids)
 		require.ErrorIs(t, err, mesh.ErrLayerApplied)
 		require.Nil(t, block)
 	})
 
 	t.Run("layer out of order", func(t *testing.T) {
-		block, err := te.exec.ExecuteOptimistic(context.Background(), lid.Add(2), tickHeight, rewards, tids)
+		block, err := te.exec.ExecuteOptimistic(t.Context(), lid.Add(2), tickHeight, rewards, tids)
 		require.ErrorIs(t, err, mesh.ErrLayerNotInOrder)
 		require.Nil(t, block)
 	})
 
 	lid = lid.Add(1)
 	t.Run("txs missing", func(t *testing.T) {
-		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, types.RandomTXSet(100))
+		block, err := te.exec.ExecuteOptimistic(t.Context(), lid, tickHeight, rewards, types.RandomTXSet(100))
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, block)
 	})
@@ -324,7 +324,7 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 				require.Equal(t, tids, gotTids)
 				return nil, nil, errTest
 			})
-		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, tids)
+		block, err := te.exec.ExecuteOptimistic(t.Context(), lid, tickHeight, rewards, tids)
 		require.ErrorIs(t, err, errTest)
 		require.Nil(t, block)
 	})
@@ -372,7 +372,7 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 				}
 				return errTest
 			})
-		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, tids)
+		block, err := te.exec.ExecuteOptimistic(t.Context(), lid, tickHeight, rewards, tids)
 		require.ErrorIs(t, err, errTest)
 		require.Nil(t, block)
 	})
@@ -421,7 +421,7 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 					return nil
 				})
 		te.mvm.EXPECT().GetStateRoot()
-		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, tids)
+		block, err := te.exec.ExecuteOptimistic(t.Context(), lid, tickHeight, rewards, tids)
 		require.NoError(t, err)
 		require.Equal(t, expBlock, block)
 		require.NoError(t, layers.SetApplied(te.db, lid, block.ID()))
@@ -440,7 +440,7 @@ func TestExecutor_ExecuteOptimistic(t *testing.T) {
 		expBlock.Initialize()
 		te.mcs.EXPECT().UpdateCache(gomock.Any(), lid, expBlock.ID(), nil, nil)
 		te.mvm.EXPECT().GetStateRoot()
-		block, err := te.exec.ExecuteOptimistic(context.Background(), lid, tickHeight, rewards, nil)
+		block, err := te.exec.ExecuteOptimistic(t.Context(), lid, tickHeight, rewards, nil)
 		require.NoError(t, err)
 		require.Equal(t, expBlock, block)
 		require.NoError(t, layers.SetApplied(te.db, lid, block.ID()))
@@ -455,19 +455,19 @@ func TestExecutor_Revert(t *testing.T) {
 	errInconceivable := errors.New("inconceivable")
 	t.Run("vm failure", func(t *testing.T) {
 		te.mvm.EXPECT().Revert(lid).Return(errInconceivable)
-		require.ErrorIs(t, te.exec.Revert(context.Background(), lid), errInconceivable)
+		require.ErrorIs(t, te.exec.Revert(t.Context(), lid), errInconceivable)
 	})
 
 	t.Run("conservative state failure", func(t *testing.T) {
 		te.mvm.EXPECT().Revert(lid)
 		te.mcs.EXPECT().RevertCache(lid).Return(errInconceivable)
-		require.ErrorIs(t, te.exec.Revert(context.Background(), lid), errInconceivable)
+		require.ErrorIs(t, te.exec.Revert(t.Context(), lid), errInconceivable)
 	})
 
 	t.Run("revert success", func(t *testing.T) {
 		te.mvm.EXPECT().Revert(lid)
 		te.mcs.EXPECT().RevertCache(lid)
 		te.mvm.EXPECT().GetStateRoot()
-		require.NoError(t, te.exec.Revert(context.Background(), lid))
+		require.NoError(t, te.exec.Revert(t.Context(), lid))
 	})
 }

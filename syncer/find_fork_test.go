@@ -131,7 +131,7 @@ func TestForkFinder_FindFork_Permutation(t *testing.T) {
 				return serveHashReq(t, req)
 			}).AnyTimes()
 
-		fork, err := tf.FindFork(context.Background(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
+		fork, err := tf.FindFork(t.Context(), peer, types.LayerID(uint32(lid)), layerHash(lid, true))
 		require.NoErrorf(t, err, "lid: %v", lid)
 		require.Equal(t, expected, int(fork))
 	}
@@ -158,7 +158,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 				return mh, nil
 			})
 
-		_, err := tf.FindFork(context.Background(), peer, types.LayerID(37), types.RandomHash())
+		_, err := tf.FindFork(t.Context(), peer, types.LayerID(37), types.RandomHash())
 		require.ErrorIs(t, err, syncer.ErrPeerMeshChangedMidSession)
 		require.Equal(t, 1, tf.NumPeersCached())
 	})
@@ -185,7 +185,7 @@ func TestForkFinder_MeshChangedMidSession(t *testing.T) {
 				return mh, nil
 			})
 
-		_, err := tf.FindFork(context.Background(), peer, lastDiffLid, lastDiffHash)
+		_, err := tf.FindFork(t.Context(), peer, lastDiffLid, lastDiffHash)
 		require.ErrorIs(t, err, syncer.ErrNodeMeshChangedMidSession)
 		require.Equal(t, 0, tf.NumPeersCached())
 	})
@@ -237,7 +237,7 @@ func TestForkFinder_FindFork_Edges(t *testing.T) {
 				}).Times(tc.expReqs)
 
 			fork, err := tf.FindFork(
-				context.Background(),
+				t.Context(),
 				peer,
 				types.LayerID(uint32(tc.lastDiff)),
 				layerHash(tc.lastDiff, true),

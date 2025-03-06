@@ -328,7 +328,7 @@ func TestActiveSetEnsure(t *testing.T) {
 		tries  = 10
 		target = 3
 	)
-	ctx := context.Background()
+	ctx := t.Context()
 	tester := newTesterActiveSetGenerator(t, config{
 		activeSet: ActiveSetPreparation{
 			RetryInterval: time.Second,
@@ -347,7 +347,7 @@ func TestActiveSetEnsure(t *testing.T) {
 	}()
 	go func() {
 		for i := 0; i < tries; i++ {
-			tester.wallclock.BlockUntilContext(context.Background(), 1)
+			tester.wallclock.BlockUntilContext(t.Context(), 1)
 			tester.wallclock.Advance(tester.gen.cfg.activeSet.RetryInterval)
 		}
 	}()

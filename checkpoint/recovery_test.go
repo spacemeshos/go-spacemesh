@@ -171,7 +171,7 @@ func TestRecover(t *testing.T) {
 			require.NoError(t, fs.MkdirAll(bsdir, 0o700))
 			db := statesql.InMemoryTest(t)
 			localDB := localsql.InMemoryTest(t)
-			data, err := checkpoint.RecoverWithDb(context.Background(), zaptest.NewLogger(t), db, localDB, fs, cfg)
+			data, err := checkpoint.RecoverWithDb(t.Context(), zaptest.NewLogger(t), db, localDB, fs, cfg)
 			if tc.expErr != nil {
 				require.ErrorIs(t, err, tc.expErr)
 				return
@@ -196,7 +196,7 @@ func TestRecover(t *testing.T) {
 func TestRecover_SameRecoveryInfo(t *testing.T) {
 	t.Parallel()
 	url := checkpointServer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	fs := afero.NewMemMapFs()
@@ -226,7 +226,7 @@ func TestRecover_SameRecoveryInfo(t *testing.T) {
 func TestRecover_URIMustBeSet(t *testing.T) {
 	t.Parallel()
 	cfg := &checkpoint.RecoverConfig{}
-	d, err := checkpoint.Recover(context.Background(), zaptest.NewLogger(t), afero.NewMemMapFs(), cfg)
+	d, err := checkpoint.Recover(t.Context(), zaptest.NewLogger(t), afero.NewMemMapFs(), cfg)
 	require.ErrorContains(t, err, "uri not set")
 	require.Nil(t, d)
 }
@@ -236,7 +236,7 @@ func TestRecover_RestoreLayerCannotBeZero(t *testing.T) {
 	cfg := &checkpoint.RecoverConfig{
 		Uri: "http://nowhere/snapshot-15",
 	}
-	_, err := checkpoint.Recover(context.Background(), zaptest.NewLogger(t), afero.NewMemMapFs(), cfg)
+	_, err := checkpoint.Recover(t.Context(), zaptest.NewLogger(t), afero.NewMemMapFs(), cfg)
 	require.ErrorContains(t, err, "restore layer not set")
 }
 
@@ -316,7 +316,7 @@ func validateAndPreserveData(
 		mValidator.EXPECT().IsVerifyingFullPost().AnyTimes().Return(true)
 		mBeacon.EXPECT().OnAtx(gomock.Any())
 		mTortoise.EXPECT().OnAtx(gomock.Any(), gomock.Any(), gomock.Any())
-		require.NoError(tb, atxHandler.HandleSyncedAtx(context.Background(), atx.ID().Hash32(), "self", dep.Blob))
+		require.NoError(tb, atxHandler.HandleSyncedAtx(tb.Context(), atx.ID().Hash32(), "self", dep.Blob))
 	}
 }
 
@@ -481,7 +481,7 @@ func proofRefs(proofs []*types.PoetProofMessage) []types.PoetProofRef {
 func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 	t.Parallel()
 	url := checkpointServer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	sig1, err := signing.NewEdSigner()
@@ -569,7 +569,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve(t *testing.T) {
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 	t.Parallel()
 	url := checkpointServer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	sig1, err := signing.NewEdSigner()
@@ -683,7 +683,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_IncludePending(t *testing.T) {
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T) {
 	t.Parallel()
 	url := checkpointServer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	sig1, err := signing.NewEdSigner()
@@ -778,7 +778,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_Still_Initializing(t *testing.T)
 func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 	t.Parallel()
 	url := checkpointServer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	sig, err := signing.NewEdSigner()
@@ -856,7 +856,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 	t.Parallel()
 	url := checkpointServer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	sig, err := signing.NewEdSigner()
@@ -917,7 +917,7 @@ func TestRecover_OwnAtxNotInCheckpoint_DontPreserve(t *testing.T) {
 func TestRecover_OwnAtxInCheckpoint(t *testing.T) {
 	t.Parallel()
 	url := checkpointServer(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	nid, err := hex.DecodeString("0230c5d75d42b84f98800eceb47bc9cc4d803058900a50346a09ff61d56b6582")

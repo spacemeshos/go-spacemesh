@@ -24,7 +24,7 @@ type nodeServiceConn struct {
 }
 
 func setupNodeService(tb testing.TB) (*nodeServiceConn, context.Context) {
-	ctrl, mockCtx := gomock.WithContext(context.Background(), tb)
+	ctrl, mockCtx := gomock.WithContext(tb.Context(), tb)
 	peerCounter := NewMockpeerCounter(ctrl)
 	meshAPI := NewMockmeshAPI(ctrl)
 	genTime := NewMockgenesisTimeAPI(ctrl)

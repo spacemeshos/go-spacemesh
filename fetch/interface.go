@@ -38,10 +38,6 @@ type SyncValidator interface {
 	HandleMessage(context.Context, types.Hash32, p2p.Peer, []byte) error
 }
 
-type PoetValidator interface {
-	ValidateAndStoreMsg(context.Context, types.Hash32, p2p.Peer, []byte) error
-}
-
 type host interface {
 	ID() p2p.Peer
 }

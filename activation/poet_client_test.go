@@ -76,7 +76,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = client.Submit(
-		context.Background(),
+		t.Context(),
 		time.Time{},
 		nil,
 		nil,
@@ -89,7 +89,7 @@ func Test_HTTPPoetClient_Submit(t *testing.T) {
 
 func Test_HTTPPoetClient_SubmitTillCtxCanceled(t *testing.T) {
 	t.Parallel()
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	tries := 0
 	mux := http.NewServeMux()
@@ -181,7 +181,7 @@ func Test_HTTPPoetClient_Proof(t *testing.T) {
 	}, withCustomHttpClient(ts.Client()))
 	require.NoError(t, err)
 
-	_, _, err = client.Proof(context.Background(), "1")
+	_, _, err = client.Proof(t.Context(), "1")
 	require.NoError(t, err)
 }
 
@@ -204,7 +204,7 @@ func TestPoetClient_CachesProof(t *testing.T) {
 		Address: ts.URL,
 		Pubkey:  types.NewBase64Enc([]byte("pubkey")),
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	db := NewMockpoetDbAPI(gomock.NewController(t))
 	db.EXPECT().ValidateAndStore(ctx, gomock.Any())
 	db.EXPECT().ProofForRound(server.Pubkey.Bytes(), "1").Times(19)
@@ -253,7 +253,7 @@ func TestPoetClient_QueryProofTimeout(t *testing.T) {
 	var eg errgroup.Group
 	for range 50 {
 		eg.Go(func() error {
-			_, _, err := poet.Proof(context.Background(), "1")
+			_, _, err := poet.Proof(t.Context(), "1")
 			require.ErrorIs(t, err, context.DeadlineExceeded)
 			return nil
 		})
@@ -306,7 +306,7 @@ func TestPoetClient_Certify(t *testing.T) {
 		poet := NewPoetServiceWithClient(
 			nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
-		got, err := poet.Certify(context.Background(), sig.NodeID())
+		got, err := poet.Certify(t.Context(), sig.NodeID())
 		require.NoError(t, err)
 		require.Equal(t, cert, *got)
 	})
@@ -335,7 +335,7 @@ func TestPoetClient_Certify(t *testing.T) {
 
 		poet := NewPoetServiceWithClient(
 			nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
-		_, err = poet.Certify(context.Background(), sig.NodeID())
+		_, err = poet.Certify(t.Context(), sig.NodeID())
 		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
 	t.Run("poet does not support certificate (empty certifier URL)", func(t *testing.T) {
@@ -354,7 +354,7 @@ func TestPoetClient_Certify(t *testing.T) {
 
 		logger := zaptest.NewLogger(t)
 		poet := NewPoetServiceWithClient(nil, client, cfg, logger, testTickSize, WithCertifier(mCertifier))
-		_, err = poet.Certify(context.Background(), sig.NodeID())
+		_, err = poet.Certify(t.Context(), sig.NodeID())
 		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
 	t.Run("poet does not support certificate (empty certifier pubkey)", func(t *testing.T) {
@@ -374,7 +374,7 @@ func TestPoetClient_Certify(t *testing.T) {
 
 		logger := zaptest.NewLogger(t)
 		poet := NewPoetServiceWithClient(nil, client, cfg, logger, testTickSize, WithCertifier(mCertifier))
-		_, err = poet.Certify(context.Background(), sig.NodeID())
+		_, err = poet.Certify(t.Context(), sig.NodeID())
 		require.ErrorIs(t, err, errCertificatesNotSupported)
 	})
 }
@@ -418,7 +418,7 @@ func TestPoetClient_ObtainsCertOnSubmit(t *testing.T) {
 	require.NoError(t, err)
 	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
-	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+	_, err = poet.Submit(t.Context(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
 }
 
@@ -481,7 +481,7 @@ func TestPoetClient_RecertifiesOnAuthFailure(t *testing.T) {
 	require.NoError(t, err)
 	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
-	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+	_, err = poet.Submit(t.Context(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, 2, submitCount)
 	require.EqualValues(t, "first", <-certs)
@@ -556,7 +556,7 @@ func TestPoetClient_FallbacksToPowWhenCannotRecertify(t *testing.T) {
 
 	poet := NewPoetServiceWithClient(nil, client, cfg, zaptest.NewLogger(t), testTickSize, WithCertifier(mCertifier))
 
-	_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+	_, err = poet.Submit(t.Context(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 	require.NoError(t, err)
 	require.Equal(t, 2, submitCount)
 }
@@ -593,7 +593,7 @@ func TestPoetService_CachesCertifierInfo(t *testing.T) {
 			}
 
 			for range 5 {
-				info, err := poet.getInfo(context.Background())
+				info, err := poet.getInfo(t.Context())
 				require.NoError(t, err)
 				require.Equal(t, url, info.Certifier.Url)
 				require.Equal(t, pubkey, info.Certifier.Pubkey)
@@ -631,7 +631,7 @@ func TestPoetService_CachesPowParams(t *testing.T) {
 				exp.Times(5)
 			}
 			for range 5 {
-				got, err := poet.powParams(context.Background())
+				got, err := poet.powParams(t.Context())
 				require.NoError(t, err)
 				require.Equal(t, params, *got)
 			}
@@ -705,7 +705,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 					gomock.Any(), gomock.Any(), gomock.Any()).
 				Return(&types.PoetRound{}, nil)
 
-			_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+			_, err = poet.Submit(t.Context(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 			require.NoError(t, err)
 		})
 
@@ -725,7 +725,7 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 			expectedErr := errors.New("some error")
 			client.EXPECT().Info(gomock.Any()).Return(nil, expectedErr)
 
-			_, err = poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+			_, err = poet.Submit(t.Context(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 			require.ErrorIs(t, err, expectedErr)
 		})
 
@@ -747,6 +747,6 @@ func TestPoetService_FetchPoetPhaseShift(t *testing.T) {
 				PhaseShift: phaseShift * 2,
 			}, nil)
 
-			poet.Submit(context.Background(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
+			poet.Submit(t.Context(), time.Time{}, nil, nil, types.RandomEdSignature(), sig.NodeID())
 		})
 }

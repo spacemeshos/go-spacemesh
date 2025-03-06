@@ -1,7 +1,6 @@
 package wire
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -155,7 +154,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			}).AnyTimes()
 
 		verifier.EXPECT().PostIndex(
-			context.Background(),
+			t.Context(),
 			sig.NodeID(),
 			commitmentATX,
 			PostFromWireV1(&post),
@@ -165,7 +164,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		).Return(nil)
 
 		verifier.EXPECT().PostIndex(
-			context.Background(),
+			t.Context(),
 			sig.NodeID(),
 			commitmentATX,
 			PostFromWireV1(&post),
@@ -174,7 +173,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			invalidPostIndex,
 		).Return(errors.New("invalid post"))
 
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -206,7 +205,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			}).AnyTimes()
 
 		verifier.EXPECT().PostIndex(
-			context.Background(),
+			t.Context(),
 			sig.NodeID(),
 			commitmentATX,
 			PostFromWireV1(&post),
@@ -216,7 +215,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		).Return(errors.New("invalid post"))
 
 		verifier.EXPECT().PostIndex(
-			context.Background(),
+			t.Context(),
 			sig.NodeID(),
 			commitmentATX,
 			PostFromWireV1(&post),
@@ -225,7 +224,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			validPostIndex,
 		).Return(nil)
 
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -257,7 +256,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			}).AnyTimes()
 
 		verifier.EXPECT().PostIndex(
-			context.Background(),
+			t.Context(),
 			sig.NodeID(),
 			commitmentAtx,
 			PostFromWireV1(&post),
@@ -267,7 +266,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		).Return(nil)
 
 		verifier.EXPECT().PostIndex(
-			context.Background(),
+			t.Context(),
 			sig.NodeID(),
 			commitmentAtx,
 			PostFromWireV1(&post),
@@ -276,7 +275,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			invalidPostIndex,
 		).Return(nil)
 
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid invalid post proof: PoST is valid")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -307,7 +306,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			}).AnyTimes()
 
 		verifier.EXPECT().PostIndex(
-			context.Background(),
+			t.Context(),
 			sig.NodeID(),
 			commitmentAtx,
 			PostFromWireV1(&post),
@@ -316,7 +315,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			validPostIndex,
 		).Return(errors.New("invalid post"))
 
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid invalid post proof: commitment ATX is not valid")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -440,28 +439,28 @@ func Test_InvalidPostProof(t *testing.T) {
 
 		// invalid ATXID
 		proof.ATXID = types.RandomATXID()
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXID = atx.ID()
 
 		// invalid smesher ID
 		proof.SmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.SmesherID = atx.SmesherID
 
 		// invalid signature
 		proof.Signature = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Signature = atx.Signature
 
 		// invalid node ID
 		proof.NodeID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "missing marriage proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.NodeID = sig.NodeID()
@@ -469,7 +468,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid niposts root
 		nipostsRoot := proof.InvalidPostProof.NIPostsRoot
 		proof.InvalidPostProof.NIPostsRoot = NIPostsRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid NIPosts root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NIPostsRoot = nipostsRoot
@@ -477,7 +476,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid niposts root proof
 		hash := proof.InvalidPostProof.NIPostsRootProof[0]
 		proof.InvalidPostProof.NIPostsRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid NIPosts root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NIPostsRootProof[0] = hash
@@ -485,7 +484,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid nipost root
 		nipostRoot := proof.InvalidPostProof.NIPostRoot
 		proof.InvalidPostProof.NIPostRoot = NIPostRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NIPostRoot = nipostRoot
@@ -493,14 +492,14 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid nipost root proof
 		hash = proof.InvalidPostProof.NIPostRootProof[0]
 		proof.InvalidPostProof.NIPostRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NIPostRootProof[0] = hash
 
 		// invalid nipost index
 		proof.InvalidPostProof.NIPostIndex = 1
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid NIPoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NIPostIndex = 0
@@ -508,7 +507,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid challenge
 		challenge := proof.InvalidPostProof.Challenge
 		proof.InvalidPostProof.Challenge = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid challenge proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.Challenge = challenge
@@ -516,7 +515,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid challenge proof
 		hash = proof.InvalidPostProof.ChallengeProof[0]
 		proof.InvalidPostProof.ChallengeProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid challenge proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.ChallengeProof[0] = hash
@@ -524,7 +523,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid subposts root
 		subPostsRoot := proof.InvalidPostProof.SubPostsRoot
 		proof.InvalidPostProof.SubPostsRoot = SubPostsRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid sub PoSTs root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.SubPostsRoot = subPostsRoot
@@ -532,7 +531,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid subposts root proof
 		hash = proof.InvalidPostProof.SubPostsRootProof[0]
 		proof.InvalidPostProof.SubPostsRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid sub PoSTs root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.SubPostsRootProof[0] = hash
@@ -540,7 +539,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid subpost root
 		subPostRoot := proof.InvalidPostProof.SubPostRoot
 		proof.InvalidPostProof.SubPostRoot = SubPostRoot(types.RandomHash())
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.SubPostRoot = subPostRoot
@@ -548,14 +547,14 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid subpost root proof
 		hash = proof.InvalidPostProof.SubPostRootProof[0]
 		proof.InvalidPostProof.SubPostRootProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.SubPostRootProof[0] = hash
 
 		// invalid subpost root index
 		proof.InvalidPostProof.SubPostRootIndex++
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid sub PoST root proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.SubPostRootIndex--
@@ -567,7 +566,7 @@ func Test_InvalidPostProof(t *testing.T) {
 			Indices: types.RandomBytes(11),
 			Pow:     rand.Uint64(),
 		}
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid post proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.Post = post
@@ -575,14 +574,14 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid post proof
 		hash = proof.InvalidPostProof.PostProof[0]
 		proof.InvalidPostProof.PostProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid post proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.PostProof[0] = hash
 
 		// invalid numunits
 		proof.InvalidPostProof.NumUnits++
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid post proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NumUnits--
@@ -590,7 +589,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid numunits proof
 		hash = proof.InvalidPostProof.NumUnitsProof[0]
 		proof.InvalidPostProof.NumUnitsProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid post proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NumUnitsProof[0] = hash
@@ -624,28 +623,28 @@ func Test_InvalidPostProof(t *testing.T) {
 
 		// invalid ATXID
 		proof.ATXID = types.RandomATXID()
-		id, err := proof.Valid(context.Background(), verifier)
+		id, err := proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.ATXID = atx.ID()
 
 		// invalid smesher ID
 		proof.SmesherID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.SmesherID = atx.SmesherID
 
 		// invalid signature
 		proof.Signature = types.RandomEdSignature()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.EqualError(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.Signature = atx.Signature
 
 		// invalid node ID
 		proof.NodeID = types.RandomNodeID()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid marriage proof for NodeID")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.NodeID = sig.NodeID()
@@ -653,7 +652,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid marriage index proof
 		hash := proof.InvalidPostProof.MarriageIndexProof[0]
 		proof.InvalidPostProof.MarriageIndexProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid marriage index proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.MarriageIndexProof[0] = hash
@@ -661,7 +660,7 @@ func Test_InvalidPostProof(t *testing.T) {
 		// invalid numunits proof
 		hash = proof.InvalidPostProof.NumUnitsProof[0]
 		proof.InvalidPostProof.NumUnitsProof[0] = types.RandomHash()
-		id, err = proof.Valid(context.Background(), verifier)
+		id, err = proof.Valid(t.Context(), verifier)
 		require.ErrorContains(t, err, "invalid post proof")
 		require.Equal(t, types.EmptyNodeID, id)
 		proof.InvalidPostProof.NumUnitsProof[0] = hash

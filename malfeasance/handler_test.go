@@ -73,7 +73,7 @@ func TestHandler_HandleMalfeasanceProof(t *testing.T) {
 	t.Run("malformed data", func(t *testing.T) {
 		h := newHandler(t)
 
-		err := h.HandleGossip(context.Background(), "peer", []byte{0x01})
+		err := h.HandleGossip(t.Context(), "peer", []byte{0x01})
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -98,7 +98,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 			},
 		}
 
-		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(t.Context(), "peer", codec.MustEncode(gossip))
 		require.ErrorIs(t, err, errUnknownProof)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -134,7 +134,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 			},
 		}
 
-		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(t.Context(), "peer", codec.MustEncode(gossip))
 		require.ErrorContains(t, err, "invalid proof")
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -173,11 +173,11 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		}
 
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(t.Context(), "peer", codec.MustEncode(gossip))
 		require.NoError(t, err)
 
 		var blob sql.Blob
-		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), h.db, nodeID.Bytes(), &blob))
 		require.Equal(t, codec.MustEncode(&gossip.MalfeasanceProof), blob.Bytes)
 
 		expected := `
@@ -221,11 +221,11 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 			},
 		}
 
-		err := h.HandleGossip(context.Background(), "peer", codec.MustEncode(gossip))
+		err := h.HandleGossip(t.Context(), "peer", codec.MustEncode(gossip))
 		require.NoError(t, err)
 
 		var blob sql.Blob
-		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), h.db, nodeID.Bytes(), &blob))
 		require.Equal(t, codec.MustEncode(proof), blob.Bytes)
 	})
 }
@@ -235,7 +235,7 @@ func TestHandler_HandleSyncedMalfeasanceProof(t *testing.T) {
 		h := newHandler(t)
 
 		err := h.HandleSynced(
-			context.Background(),
+			t.Context(),
 			types.RandomHash(),
 			"peer",
 			[]byte{0x01},
@@ -263,7 +263,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 		}
 
 		err := h.HandleSynced(
-			context.Background(),
+			t.Context(),
 			types.RandomHash(),
 			"peer",
 			codec.MustEncode(proof),
@@ -305,7 +305,7 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 		expectedHash := types.RandomHash()
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		err := h.HandleSynced(
-			context.Background(),
+			t.Context(),
 			expectedHash,
 			"peer",
 			codec.MustEncode(proof),
@@ -352,7 +352,7 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 		}
 
 		err := h.HandleSynced(
-			context.Background(),
+			t.Context(),
 			types.Hash32(nodeID),
 			"peer",
 			codec.MustEncode(proof),
@@ -394,11 +394,11 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		proofBytes := codec.MustEncode(proof)
 
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", proofBytes)
+		err := h.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", proofBytes)
 		require.NoError(t, err)
 
 		var blob sql.Blob
-		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), h.db, nodeID.Bytes(), &blob))
 		require.Equal(t, proofBytes, blob.Bytes)
 
 		expected := `
@@ -443,11 +443,11 @@ spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 		newProofBytes := codec.MustEncode(newProof)
 		require.NotEqual(t, proofBytes, newProofBytes)
 
-		err := h.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", newProofBytes)
+		err := h.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", newProofBytes)
 		require.NoError(t, err)
 
 		var blob sql.Blob
-		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), h.db, nodeID.Bytes(), &blob))
+		require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), h.db, nodeID.Bytes(), &blob))
 		require.Equal(t, proofBytes, blob.Bytes)
 	})
 }
@@ -456,7 +456,7 @@ func TestHandler_Info(t *testing.T) {
 	t.Run("unknown identity", func(t *testing.T) {
 		h := newHandler(t)
 
-		info, err := h.Info(context.Background(), types.RandomNodeID())
+		info, err := h.Info(t.Context(), types.RandomNodeID())
 		require.ErrorContains(t, err, "load malfeasance proof:")
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, info)
@@ -476,7 +476,7 @@ func TestHandler_Info(t *testing.T) {
 		proofBytes := codec.MustEncode(proof)
 		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
 
-		info, err := h.Info(context.Background(), nodeID)
+		info, err := h.Info(t.Context(), nodeID)
 		require.ErrorContains(t, err, fmt.Sprintf("unknown malfeasance type %d", wire.MultipleATXs))
 		require.Nil(t, info)
 	})
@@ -500,7 +500,7 @@ func TestHandler_Info(t *testing.T) {
 		proofBytes := codec.MustEncode(proof)
 		require.NoError(t, identities.SetMalicious(h.db, nodeID, proofBytes, time.Now()))
 
-		info, err := h.Info(context.Background(), nodeID)
+		info, err := h.Info(t.Context(), nodeID)
 		require.ErrorContains(t, err, "invalid proof")
 		require.Nil(t, info)
 	})
@@ -536,7 +536,7 @@ func TestHandler_Info(t *testing.T) {
 			expectedProperties[k] = v
 		}
 
-		info, err := h.Info(context.Background(), nodeID)
+		info, err := h.Info(t.Context(), nodeID)
 		require.NoError(t, err)
 		require.Equal(t, expectedProperties, info)
 	})

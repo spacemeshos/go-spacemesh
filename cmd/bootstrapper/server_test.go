@@ -79,7 +79,7 @@ func TestServer(t *testing.T) {
 		LyrDuration:  100 * time.Millisecond,
 		Offset:       1,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	ch := make(chan error, 1)
 	srv.Start(ctx, ch, np)

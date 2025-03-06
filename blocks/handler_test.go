@@ -1,7 +1,6 @@
 package blocks
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -168,7 +167,7 @@ func TestHandleSyncedBlock(t *testing.T) {
 			th.mockFetcher.EXPECT().GetBlockTxs(gomock.Any(), tc.txs).Return(tc.failTxs).MaxTimes(1)
 			th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), &decoded).Return(tc.failMesh).MaxTimes(1)
 
-			err := th.HandleSyncedBlock(context.Background(), tc.id, pid, tc.data)
+			err := th.HandleSyncedBlock(t.Context(), tc.id, pid, tc.data)
 			if len(tc.err) > 0 {
 				require.ErrorContains(t, err, tc.err)
 			} else {

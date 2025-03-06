@@ -11,7 +11,7 @@ import (
 
 func TestCache(t *testing.T) {
 	c := &queryCache{}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	_, err := WithCachedValue(ctx, c, QueryCacheKey("tst", "foo"), func(context.Context) (int, error) {
 		return 0, errors.New("error retrieving value")
@@ -50,7 +50,7 @@ func TestCacheEviction(t *testing.T) {
 			"kind1": 10,
 		},
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// use up all 10 items in the LRU cache
 	for i := 1; i <= 10; i++ {
@@ -89,7 +89,7 @@ func TestCacheEviction(t *testing.T) {
 }
 
 func TestNoCache(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	for _, nc := range []any{nil, struct{}{}, (*queryCache)(nil)} {
 		s, err := WithCachedValue(ctx, nc, QueryCacheKey("tst", "foo"), func(context.Context) ([]string, error) {
 			return []string{"abc", "def"}, nil

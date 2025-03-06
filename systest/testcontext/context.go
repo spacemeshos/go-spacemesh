@@ -328,6 +328,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 	generic, err := client.New(config, client.Options{Scheme: scheme})
 	require.NoError(t, err)
 
+	// nolint: usetesting
 	ctx, cancel := context.WithTimeout(context.Background(), *testTimeout)
 	t.Cleanup(cancel)
 

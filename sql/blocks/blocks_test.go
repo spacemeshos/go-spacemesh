@@ -1,7 +1,6 @@
 package blocks
 
 import (
-	"context"
 	"sort"
 	"testing"
 
@@ -276,7 +275,7 @@ func TestLastValid(t *testing.T) {
 
 func TestLoadBlob(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	lid1 := types.LayerID(11)
 	block1 := types.NewExistingBlock(

@@ -95,7 +95,7 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof, false)
+		err := tp.PublishATXProof(t.Context(), nodeID, proof, false)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -121,7 +121,7 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof, true)
+		err := tp.PublishATXProof(t.Context(), nodeID, proof, true)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -154,7 +154,7 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof)).
 			Return(errPublish)
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof, false)
+		err := tp.PublishATXProof(t.Context(), nodeID, proof, false)
 		require.ErrorIs(t, err, errPublish)
 
 		logs := tp.observedLogs.FilterLevelExact(zap.ErrorLevel)
@@ -184,7 +184,7 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(false) // results in no gossip but only storing the proof
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof, false)
+		err := tp.PublishATXProof(t.Context(), nodeID, proof, false)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -202,7 +202,7 @@ func TestPublishATXProof(t *testing.T) {
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(false) // results in no gossip but only storing the proof
 
-		err := tp.PublishATXProof(context.Background(), nodeID, proof, true)
+		err := tp.PublishATXProof(t.Context(), nodeID, proof, true)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -284,7 +284,7 @@ func TestPublishATXProof(t *testing.T) {
 			},
 		)
 
-		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof, false)
+		err = tp.PublishATXProof(t.Context(), nodeIDs[2], proof, false)
 		require.NoError(t, err)
 
 		for i := range nodeIDs {
@@ -312,7 +312,7 @@ func TestPublishATXProof(t *testing.T) {
 		err := malfeasance.AddProof(tp.db, nodeID, nil, proof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
-		err = tp.PublishATXProof(context.Background(), nodeID, proof, false)
+		err = tp.PublishATXProof(t.Context(), nodeID, proof, false)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
@@ -389,7 +389,7 @@ func TestPublishATXProof(t *testing.T) {
 			require.NoError(t, malfeasance.SetMalicious(tp.db, nodeID, mID, time.Now()))
 		}
 
-		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof, false)
+		err = tp.PublishATXProof(t.Context(), nodeIDs[2], proof, false)
 		require.NoError(t, err)
 
 		for i := range nodeIDs {
@@ -498,7 +498,7 @@ func TestPublishATXProof(t *testing.T) {
 			},
 		)
 
-		err = tp.PublishATXProof(context.Background(), nodeIDs[2], proof, false)
+		err = tp.PublishATXProof(t.Context(), nodeIDs[2], proof, false)
 		require.NoError(t, err)
 
 		for i := range nodeIDs {
@@ -553,7 +553,7 @@ func TestRegossip(t *testing.T) {
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
 
-		err = tp.Regossip(context.Background(), nodeID)
+		err = tp.Regossip(t.Context(), nodeID)
 		require.NoError(t, err)
 	})
 
@@ -573,7 +573,7 @@ func TestRegossip(t *testing.T) {
 
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(false)
 
-		err = tp.Regossip(context.Background(), nodeID)
+		err = tp.Regossip(t.Context(), nodeID)
 		require.NoError(t, err)
 	})
 
@@ -628,7 +628,7 @@ func TestRegossip(t *testing.T) {
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
 
-		err = tp.Regossip(context.Background(), nodeIDs[1])
+		err = tp.Regossip(t.Context(), nodeIDs[1])
 		require.NoError(t, err)
 	})
 
@@ -675,7 +675,7 @@ func TestRegossip(t *testing.T) {
 
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(false)
 
-		err = tp.Regossip(context.Background(), nodeIDs[1])
+		err = tp.Regossip(t.Context(), nodeIDs[1])
 		require.NoError(t, err)
 	})
 }
@@ -686,7 +686,7 @@ func TestProofByID(t *testing.T) {
 		tp := newTestPublisher(t)
 		nodeID := types.RandomNodeID()
 
-		proofBytes, err := tp.ProofByID(context.Background(), nodeID)
+		proofBytes, err := tp.ProofByID(t.Context(), nodeID)
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, proofBytes)
 	})
@@ -704,7 +704,7 @@ func TestProofByID(t *testing.T) {
 		err := malfeasance.AddProof(tp.db, nodeID, nil, proof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
-		proofBytes, err := tp.ProofByID(context.Background(), nodeID)
+		proofBytes, err := tp.ProofByID(t.Context(), nodeID)
 		require.NoError(t, err)
 
 		var malProof malfeasance2.MalfeasanceProof
@@ -749,7 +749,7 @@ func TestProofByID(t *testing.T) {
 			}))
 		}
 
-		proofBytes, err := tp.ProofByID(context.Background(), nodeIDs[4])
+		proofBytes, err := tp.ProofByID(t.Context(), nodeIDs[4])
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, proofBytes)
 	})
@@ -810,7 +810,7 @@ func TestProofByID(t *testing.T) {
 			require.NoError(t, malfeasance.SetMalicious(tp.db, nodeIDs[i], mID, time.Now()))
 		}
 
-		proofBytes, err := tp.ProofByID(context.Background(), nodeIDs[4])
+		proofBytes, err := tp.ProofByID(t.Context(), nodeIDs[4])
 		require.NoError(t, err)
 
 		var malProof malfeasance2.MalfeasanceProof

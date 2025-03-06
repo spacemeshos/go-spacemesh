@@ -36,7 +36,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
-func coinValueMock(tb testing.TB, value bool) coin {
+func coinValueMock(tb testing.TB, value bool) *Mockcoin {
 	ctrl := gomock.NewController(tb)
 	coinMock := NewMockcoin(ctrl)
 	coinMock.EXPECT().StartEpoch(
@@ -193,8 +193,8 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 		testNodes = append(testNodes, node)
 		dbs = append(dbs, node.cdb)
 
-		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
-		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(t.Context(), types.EpochID(0)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(t.Context(), types.EpochID(1)), errGenesis)
 		got, err := node.GetBeacon(types.EpochID(2))
 		require.NoError(t, err)
 		require.Equal(t, bootstrap, got)
@@ -210,7 +210,7 @@ func TestBeacon_MultipleNodes(t *testing.T) {
 	var eg errgroup.Group
 	for _, node := range testNodes {
 		eg.Go(func() error {
-			return node.onNewEpoch(context.Background(), types.EpochID(2))
+			return node.onNewEpoch(t.Context(), types.EpochID(2))
 		})
 	}
 	require.NoError(t, eg.Wait())
@@ -259,8 +259,8 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 		testNodes = append(testNodes, node)
 		dbs = append(dbs, node.cdb)
 
-		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
-		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(t.Context(), types.EpochID(0)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(t.Context(), types.EpochID(1)), errGenesis)
 		got, err := node.GetBeacon(types.EpochID(2))
 		require.NoError(t, err)
 		require.Equal(t, bootstrap, got)
@@ -283,7 +283,7 @@ func TestBeacon_MultipleNodes_OnlyOneHonest(t *testing.T) {
 	var eg errgroup.Group
 	for _, node := range testNodes {
 		eg.Go(func() error {
-			return node.onNewEpoch(context.Background(), types.EpochID(2))
+			return node.onNewEpoch(t.Context(), types.EpochID(2))
 		})
 	}
 	require.NoError(t, eg.Wait())
@@ -318,8 +318,8 @@ func TestBeacon_NoProposals(t *testing.T) {
 		testNodes = append(testNodes, node)
 		dbs = append(dbs, node.cdb)
 
-		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
-		require.ErrorIs(t, node.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(t.Context(), types.EpochID(0)), errGenesis)
+		require.ErrorIs(t, node.onNewEpoch(t.Context(), types.EpochID(1)), errGenesis)
 		got, err := node.GetBeacon(types.EpochID(2))
 		require.NoError(t, err)
 		require.Equal(t, bootstrap, got)
@@ -334,7 +334,7 @@ func TestBeacon_NoProposals(t *testing.T) {
 	var eg errgroup.Group
 	for _, node := range testNodes {
 		eg.Go(func() error {
-			return node.onNewEpoch(context.Background(), types.EpochID(2))
+			return node.onNewEpoch(t.Context(), types.EpochID(2))
 		})
 	}
 	require.NoError(t, eg.Wait())
@@ -358,9 +358,9 @@ func getNoWait(tb testing.TB, results <-chan result.Beacon) result.Beacon {
 func TestBeaconNotSynced(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(2)), errNodeNotSynced)
+	require.ErrorIs(t, tpd.onNewEpoch(t.Context(), types.EpochID(0)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(t.Context(), types.EpochID(1)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(t.Context(), types.EpochID(2)), errNodeNotSynced)
 
 	got, err := tpd.GetBeacon(types.EpochID(2))
 	require.Equal(t, errBeaconNotCalculated, err)
@@ -395,7 +395,7 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 		)
 		b.EligibilityProofs = []types.VotingEligibility{{J: 1}}
 		tpd.ReportBeaconFromBallot(eid, &b, types.RandomBeacon(), fixed.New64(1))
-		require.ErrorIs(t, tpd.onNewEpoch(context.Background(), eid), errNodeNotSynced)
+		require.ErrorIs(t, tpd.onNewEpoch(t.Context(), eid), errNodeNotSynced)
 	}
 	require.Len(t, tpd.beacons, numEpochsToKeep)
 	require.Len(t, tpd.ballotsBeacons, numEpochsToKeep)
@@ -404,10 +404,10 @@ func TestBeaconNotSynced_ReleaseMemory(t *testing.T) {
 func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
 	tpd := setUpProtocolDriver(t)
 	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(0)), errGenesis)
-	require.ErrorIs(t, tpd.onNewEpoch(context.Background(), types.EpochID(1)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(t.Context(), types.EpochID(0)), errGenesis)
+	require.ErrorIs(t, tpd.onNewEpoch(t.Context(), types.EpochID(1)), errGenesis)
 	tpd.mClock.EXPECT().LayerToTime(types.EpochID(2).FirstLayer()).Return(time.Now())
-	require.ErrorIs(t, errZeroEpochWeight, tpd.onNewEpoch(context.Background(), types.EpochID(2)))
+	require.ErrorIs(t, errZeroEpochWeight, tpd.onNewEpoch(t.Context(), types.EpochID(2)))
 }
 
 func TestBeaconWithMetrics(t *testing.T) {
@@ -418,7 +418,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	tpd.mClock.EXPECT().CurrentLayer().Return(gLayer).Times(2)
 	tpd.mClock.EXPECT().AwaitLayer(gLayer.Add(1)).Return(nil).Times(1)
 	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).AnyTimes()
-	tpd.Start(context.Background())
+	tpd.Start(t.Context())
 
 	epoch := types.EpochID(3)
 	for i := types.EpochID(2); i < epoch; i++ {
@@ -434,7 +434,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
 		tpd.mClock.EXPECT().CurrentLayer().Return(layer).AnyTimes()
 		if layer.FirstInEpoch() {
-			require.NoError(t, tpd.onNewEpoch(context.Background(), layer.GetEpoch()))
+			require.NoError(t, tpd.onNewEpoch(t.Context(), layer.GetEpoch()))
 		}
 		thisEpoch := layer.GetEpoch()
 		b := types.NewExistingBallot(
@@ -1075,7 +1075,7 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 				signer, err := signing.NewEdSigner()
 				require.NoError(t, err)
 				proposal := buildSignedProposal(
-					context.Background(),
+					t.Context(),
 					logger,
 					signer.VRFSigner(),
 					3,
@@ -1148,7 +1148,7 @@ func TestBeacon_getSignedProposal(t *testing.T) {
 			t.Parallel()
 
 			result := buildSignedProposal(
-				context.Background(),
+				t.Context(),
 				zaptest.NewLogger(t),
 				edSgn.VRFSigner(),
 				tc.epoch,

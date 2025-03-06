@@ -124,7 +124,7 @@ func BenchmarkWriteCoalescing(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
-			if err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			if err := db.WithTxImmediate(b.Context(), func(tx sql.Transaction) error {
 				if err := writeFn(a[i], tx); err != nil {
 					b.Fatal(err)
 				}
@@ -139,7 +139,7 @@ func BenchmarkWriteCoalescing(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
 		for j := 0; j < b.N/1000; j++ {
-			if err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			if err := db.WithTxImmediate(b.Context(), func(tx sql.Transaction) error {
 				var err error
 				for i := (j * 1000); i < (j*1000)+1000; i++ {
 					if err = writeFn(a[i], tx); err != nil {
@@ -157,7 +157,7 @@ func BenchmarkWriteCoalescing(b *testing.B) {
 		db := newDiskSqlite(b)
 		b.ResetTimer()
 		for j := 0; j < b.N/5000; j++ {
-			if err := db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			if err := db.WithTxImmediate(b.Context(), func(tx sql.Transaction) error {
 				var err error
 				for i := (j * 5000); i < (j*5000)+5000; i++ {
 					if err = writeFn(a[i], tx); err != nil {
@@ -189,7 +189,7 @@ func newTestBallotWriter(tb testing.TB) (*ballotwriter.BallotWriter, sql.Databas
 	db := statesql.InMemoryTest(tb)
 	log := zaptest.NewLogger(tb)
 	w := ballotwriter.New(db, log)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(tb.Context())
 	done := make(chan struct{})
 	tb.Cleanup(func() {
 		cancel()

@@ -2,7 +2,6 @@ package log
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"testing"
 
@@ -27,7 +26,7 @@ func TestShortUUID(t *testing.T) {
 		zap.NewAtomicLevelAt(zapcore.InfoLevel),
 	)
 	logger := NewFromLog(zap.New(core))
-	session := WithNewSessionID(context.Background())
+	session := WithNewSessionID(t.Context())
 	logger.WithContext(session).Info("test")
 	type msg struct {
 		Session string `json:"sessionId"`

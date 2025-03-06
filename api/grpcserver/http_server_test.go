@@ -35,7 +35,7 @@ func launchJsonServer(tb testing.TB, services ...ServiceAPI) (Config, func()) {
 	// update config with bound address
 	cfg.JSONListener = jsonService.BoundAddress
 
-	return cfg, func() { assert.NoError(tb, jsonService.Shutdown(context.Background())) }
+	return cfg, func() { assert.NoError(tb, jsonService.Shutdown(tb.Context())) }
 }
 
 func callEndpoint(ctx context.Context, tb testing.TB, url string, body []byte) ([]byte, int) {
@@ -59,7 +59,7 @@ func TestJsonApi(t *testing.T) {
 	const version = "v0.0.0"
 	const build = "cafebabe"
 
-	ctrl, ctx := gomock.WithContext(context.Background(), t)
+	ctrl, ctx := gomock.WithContext(t.Context(), t)
 	peerCounter := v1.NewMockpeerCounter(ctrl)
 	meshAPIMock := v1.NewMockmeshAPI(ctrl)
 	genTime := v1.NewMockgenesisTimeAPI(ctrl)

@@ -208,7 +208,7 @@ func newTestSyncerForState(tb testing.TB) *testSyncer {
 }
 
 func TestStartAndShutdown(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	ts := newTestSyncer(t, time.Millisecond*5)
 
@@ -241,7 +241,7 @@ func TestSynchronize_OnlyOneSynchronize_BeforeATXv2(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 	current := types.LayerID(10)
 	ts.mTicker.advanceToLayer(current)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	dlCh := ts.expectMalDownloadLoop()
 	ts.syncer.Start()
@@ -285,7 +285,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 	current := types.EpochID(11).FirstLayer()
 	ts.mTicker.advanceToLayer(current)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	dlCh := ts.expectMalDownloadLoop()
 	ts.syncer.Start()
@@ -343,13 +343,13 @@ func advanceState(tb testing.TB, ts *testSyncer, from, to types.LayerID) {
 		ts.mConState.EXPECT().UpdateCache(gomock.Any(), lid, gomock.Any(), nil, nil)
 		ts.mVm.EXPECT().GetStateRoot()
 	}
-	require.NoError(tb, ts.syncer.processLayers(context.Background()))
+	require.NoError(tb, ts.syncer.processLayers(tb.Context()))
 	require.True(tb, ts.syncer.stateSynced())
 }
 
 func TestSynchronize_AllGood_BeforeATXv2(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	gLayer := types.GetEffectiveGenesis()
 	current1 := gLayer.Add(10)
 	ts.mTicker.advanceToLayer(current1)
@@ -392,13 +392,13 @@ func TestSynchronize_AllGood_BeforeATXv2(t *testing.T) {
 	})
 	require.NoError(t, eg.Wait())
 
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.Equal(t, current1.Sub(1), ts.syncer.getLastSyncedLayer())
 	require.Equal(t, types.EpochID(current1.GetEpoch()-1), ts.syncer.lastAtxEpoch())
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
@@ -412,19 +412,20 @@ func TestSynchronize_AllGood_BeforeATXv2(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	ts.mTicker.advanceToLayer(current2)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 
 	advanceState(t, ts, gLayer+1, current2-1)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 	waitOutGossipSync(t, ts)
+	<-dlCh
 }
 
 func TestSynchronize_AllGood(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	gLayer := types.GetEffectiveGenesis()
 	current1 := gLayer.Add(2).Add(10 * types.GetLayersPerEpoch())
 	ts.mTicker.advanceToLayer(current1)
@@ -467,13 +468,13 @@ func TestSynchronize_AllGood(t *testing.T) {
 	})
 	require.NoError(t, eg.Wait())
 
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.Equal(t, current1.Sub(1), ts.syncer.getLastSyncedLayer())
 	require.Equal(t, types.EpochID(current1.GetEpoch()-1), ts.syncer.lastAtxEpoch())
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
@@ -487,19 +488,20 @@ func TestSynchronize_AllGood(t *testing.T) {
 	require.NoError(t, eg.Wait())
 
 	ts.mTicker.advanceToLayer(current2)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 
 	advanceState(t, ts, gLayer+1, current2-1)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 	waitOutGossipSync(t, ts)
+	<-dlCh
 }
 
 func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	gLayer := types.GetEffectiveGenesis()
 	current := gLayer.Add(2)
 	ts.mTicker.advanceToLayer(current)
@@ -509,14 +511,15 @@ func TestSynchronize_FetchLayerDataFailed(t *testing.T) {
 	ts.expectMalEnsureInSync(current, false)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("meh"))
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	ts.syncer.waitBackgroundSync()
 	require.Equal(t, lyr.Sub(1), ts.syncer.getLastSyncedLayer())
 	require.Equal(t, current.GetEpoch()-1, ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
+	<-dlCh
 }
 
 func TestSynchronize_FetchMalfeasanceFailed_BeforeATXv2(t *testing.T) {
@@ -527,7 +530,7 @@ func TestSynchronize_FetchMalfeasanceFailed_BeforeATXv2(t *testing.T) {
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	ts.mMalSyncer.EXPECT().EnsureLegacyInSync(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("meh"))
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.EqualValues(t, current.GetEpoch()-1, ts.syncer.lastAtxEpoch())
 	require.Equal(t, gLayer, ts.syncer.getLastSyncedLayer())
 }
@@ -541,7 +544,7 @@ func TestSynchronize_FetchMalfeasanceFailed(t *testing.T) {
 	ts.mMalSyncer.EXPECT().EnsureLegacyInSync(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("meh"))
 	ts.mMalSyncer.EXPECT().EnsureInSync(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("meh"))
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.EqualValues(t, current.GetEpoch()-1, ts.syncer.lastAtxEpoch())
 	require.Equal(t, gLayer, ts.syncer.getLastSyncedLayer())
 }
@@ -570,13 +573,13 @@ func TestSynchronize_FailedInitialATXsSync(t *testing.T) {
 	})
 	require.NoError(t, eg.Wait())
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
 	require.Equal(t, failedEpoch-1, ts.syncer.lastAtxEpoch())
 	require.False(t, ts.syncer.dataSynced())
 	require.False(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	eg.Go(func() error {
 		atxSyncedCh := ts.syncer.RegisterForATXSynced()
@@ -597,21 +600,21 @@ func startWithSyncedState(tb testing.TB, ts *testSyncer, malSyncEnabled bool) ty
 	ts.mTicker.advanceToLayer(gLayer)
 	ts.expectMalEnsureInSync(gLayer, malSyncEnabled)
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gLayer.GetEpoch(), gomock.Any())
-	require.True(tb, ts.syncer.synchronize(context.Background()))
+	require.True(tb, ts.syncer.synchronize(tb.Context()))
 	ts.syncer.waitBackgroundSync()
 	require.True(tb, ts.syncer.ListenToATXGossip())
 	require.True(tb, ts.syncer.ListenToGossip())
-	require.True(tb, ts.syncer.IsSynced(context.Background()))
+	require.True(tb, ts.syncer.IsSynced(tb.Context()))
 
 	current := gLayer.Add(2)
 	ts.mTicker.advanceToLayer(current)
 	lyr := current.Sub(1)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
 
-	require.True(tb, ts.syncer.synchronize(context.Background()))
+	require.True(tb, ts.syncer.synchronize(tb.Context()))
 	require.True(tb, ts.syncer.ListenToATXGossip())
 	require.True(tb, ts.syncer.ListenToGossip())
-	require.True(tb, ts.syncer.IsSynced(context.Background()))
+	require.True(tb, ts.syncer.IsSynced(tb.Context()))
 	return current
 }
 
@@ -619,13 +622,13 @@ func TestSyncAtxs_Genesis(t *testing.T) {
 	t.Run("no atx expected", func(t *testing.T) {
 		ts := newSyncerWithoutPeriodicRuns(t)
 		ts.mTicker.advanceToLayer(1)
-		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.synchronize(t.Context()))
 		require.True(t, ts.syncer.ListenToATXGossip())
 		require.Equal(t, types.EpochID(0), ts.syncer.lastAtxEpoch())
 	})
 	t.Run("first atx epoch", func(t *testing.T) {
 		ts := newSyncerWithoutPeriodicRuns(t)
-		ts.expectMalDownloadLoop()
+		dlCh := ts.expectMalDownloadLoop()
 		epoch := types.EpochID(1)
 		current := epoch.FirstLayer() + 2
 		ts.mTicker.advanceToLayer(current) // to pass epoch end fraction threshold
@@ -642,7 +645,7 @@ func TestSyncAtxs_Genesis(t *testing.T) {
 				return nil
 			})
 		ts.expectMalEnsureInSync(current, false)
-		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.synchronize(t.Context()))
 		require.True(t, ts.syncer.ListenToATXGossip())
 		select {
 		case downloaded := <-wait:
@@ -650,6 +653,7 @@ func TestSyncAtxs_Genesis(t *testing.T) {
 		case <-time.After(time.Second):
 			require.Fail(t, "timed out waiting for download of epoch %v", epoch)
 		}
+		<-dlCh
 	})
 }
 
@@ -661,22 +665,23 @@ func TestSyncAtxs_Genesis_SyncV2(t *testing.T) {
 	t.Run("no atx expected", func(t *testing.T) {
 		ts := newSyncerWithoutPeriodicRunsWithConfig(t, cfg)
 		ts.mTicker.advanceToLayer(1)
-		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.synchronize(t.Context()))
 		require.True(t, ts.syncer.ListenToATXGossip())
 		require.Equal(t, types.EpochID(0), ts.syncer.lastAtxEpoch())
 	})
 
 	t.Run("first atx epoch", func(t *testing.T) {
 		ts := newSyncerWithoutPeriodicRunsWithConfig(t, cfg)
-		ts.expectMalDownloadLoop()
+		dlCh := ts.expectMalDownloadLoop()
 		epoch := types.EpochID(1)
 		current := epoch.FirstLayer() + 2
 		ts.mTicker.advanceToLayer(current) // to pass epoch end fraction threshold
 		require.False(t, ts.syncer.ListenToATXGossip())
 		ts.mASV2.EXPECT().EnsureSync(gomock.Any(), types.EpochID(0), epoch)
 		ts.expectMalEnsureInSync(current, false)
-		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.synchronize(t.Context()))
 		require.True(t, ts.syncer.ListenToATXGossip())
+		<-dlCh
 	})
 }
 
@@ -700,7 +705,7 @@ func TestSyncAtxs(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			ts := newSyncerWithoutPeriodicRuns(t)
-			ts.expectMalDownloadLoop()
+			dlCh := ts.expectMalDownloadLoop()
 			lyr := startWithSyncedState(t, ts, false)
 			require.LessOrEqual(t, lyr, tc.current)
 			ts.mTicker.advanceToLayer(tc.current)
@@ -709,9 +714,10 @@ func TestSyncAtxs(t *testing.T) {
 			for lid := lyr; lid < tc.current; lid++ {
 				ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 			}
-			require.True(t, ts.syncer.synchronize(context.Background()))
+			require.True(t, ts.syncer.synchronize(t.Context()))
 			ts.syncer.waitBackgroundSync()
 			require.Equal(t, tc.downloaded, ts.syncer.lastAtxEpoch())
+			<-dlCh
 		})
 	}
 }
@@ -723,21 +729,21 @@ func startWithSyncedState_SyncV2(tb testing.TB, ts *testSyncer) types.LayerID {
 	ts.mTicker.advanceToLayer(gLayer)
 	ts.expectMalEnsureInSync(gLayer, false)
 	ts.mASV2.EXPECT().EnsureSync(gomock.Any(), types.EpochID(0), types.EpochID(1)).MinTimes(1)
-	require.True(tb, ts.syncer.synchronize(context.Background()))
+	require.True(tb, ts.syncer.synchronize(tb.Context()))
 	ts.syncer.waitBackgroundSync()
 	require.True(tb, ts.syncer.ListenToATXGossip())
 	require.True(tb, ts.syncer.ListenToGossip())
-	require.True(tb, ts.syncer.IsSynced(context.Background()))
+	require.True(tb, ts.syncer.IsSynced(tb.Context()))
 
 	current := gLayer.Add(2)
 	ts.mTicker.advanceToLayer(current)
 	lyr := current.Sub(1)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
 
-	require.True(tb, ts.syncer.synchronize(context.Background()))
+	require.True(tb, ts.syncer.synchronize(tb.Context()))
 	require.True(tb, ts.syncer.ListenToATXGossip())
 	require.True(tb, ts.syncer.ListenToGossip())
-	require.True(tb, ts.syncer.IsSynced(context.Background()))
+	require.True(tb, ts.syncer.IsSynced(tb.Context()))
 	return current
 }
 
@@ -764,7 +770,7 @@ func TestSyncAtxs_SyncV2(t *testing.T) {
 	for _, tc := range tcs {
 		t.Run(tc.desc, func(t *testing.T) {
 			ts := newSyncerWithoutPeriodicRunsWithConfig(t, cfg)
-			ts.expectMalDownloadLoop()
+			dlCh := ts.expectMalDownloadLoop()
 			lyr := startWithSyncedState_SyncV2(t, ts)
 			require.LessOrEqual(t, lyr, tc.current)
 			ts.mTicker.advanceToLayer(tc.current)
@@ -773,31 +779,33 @@ func TestSyncAtxs_SyncV2(t *testing.T) {
 			for lid := lyr; lid < tc.current; lid++ {
 				ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 			}
-			require.True(t, ts.syncer.synchronize(context.Background()))
+			require.True(t, ts.syncer.synchronize(t.Context()))
+			<-dlCh
 		})
 	}
 }
 
 func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	lyr := startWithSyncedState(t, ts, false)
 	current := lyr.Add(1)
 	ts.mTicker.advanceToLayer(current)
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), current.GetEpoch(), gomock.Any())
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("doh"))
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	ts.syncer.waitBackgroundSync()
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.True(t, ts.syncer.IsSynced(context.Background()))
+	require.True(t, ts.syncer.IsSynced(t.Context()))
+	<-dlCh
 }
 
 func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	lyr := startWithSyncedState(t, ts, false)
 	current := lyr.Add(outOfSyncThreshold)
 	ts.mTicker.advanceToLayer(current)
@@ -805,18 +813,19 @@ func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), current.GetEpoch()-1, gomock.Any())
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	ts.syncer.waitBackgroundSync()
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
+	<-dlCh
 }
 
 // test the case where the node originally starts from notSynced and eventually becomes synced.
 func TestFromNotSyncedToSynced_BeforeATXv2(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(5)
@@ -824,32 +833,33 @@ func TestFromNotSyncedToSynced_BeforeATXv2(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("baa-ram-ewe"))
 	ts.expectMalEnsureInSync(current, false)
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 
 	advanceState(t, ts, lyr, current-1)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	waitOutGossipSync(t, ts)
+	<-dlCh
 }
 
 func TestFromNotSyncedToSynced(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(10 * types.GetLayersPerEpoch()).Add(5)
@@ -857,34 +867,35 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("baa-ram-ewe"))
 	ts.expectMalEnsureInSync(current, true)
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 
 	advanceState(t, ts, lyr, current-1)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	waitOutGossipSync(t, ts)
+	<-dlCh
 }
 
 // test the case where the node originally starts from notSynced, advances to gossipSync, but falls behind
 // to notSynced.
 func TestFromGossipSyncToNotSynced_BeforeATXv2(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(1)
@@ -892,31 +903,32 @@ func TestFromGossipSyncToNotSynced_BeforeATXv2(t *testing.T) {
 	ts.expectMalEnsureInSync(current, false)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
 
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 
 	advanceState(t, ts, lyr, lyr)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	lyr = current
 	current = current.Add(outOfSyncThreshold)
 	ts.mTicker.advanceToLayer(current)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("baa-ram-ewe"))
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
+	<-dlCh
 }
 
 func TestFromGossipSyncToNotSynced(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(10 * types.GetLayersPerEpoch()).Add(1)
@@ -926,43 +938,44 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
 
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 
 	advanceState(t, ts, lyr, current-1)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	lyr = current
 	current = current.Add(outOfSyncThreshold)
 	ts.mTicker.advanceToLayer(current)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("baa-ram-ewe"))
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
+	<-dlCh
 }
 
 func TestNetworkHasNoData(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	lyr := startWithSyncedState(t, ts, false)
-	require.True(t, ts.syncer.IsSynced(context.Background()))
+	require.True(t, ts.syncer.IsSynced(t.Context()))
 
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	for lid := lyr.Add(1); lid < lyr.Add(outOfSyncThreshold+1); lid++ {
 		ts.mTicker.advanceToLayer(lid)
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), gomock.Any())
-		require.True(t, ts.syncer.synchronize(context.Background()))
+		require.True(t, ts.syncer.synchronize(t.Context()))
 		require.True(t, ts.syncer.dataSynced())
 		require.True(t, ts.syncer.ListenToATXGossip())
 		require.True(t, ts.syncer.ListenToGossip())
-		require.True(t, ts.syncer.IsSynced(context.Background()))
+		require.True(t, ts.syncer.IsSynced(t.Context()))
 	}
 	// the network hasn't received any data
 	require.Greater(
@@ -970,17 +983,18 @@ func TestNetworkHasNoData(t *testing.T) {
 		int(ts.syncer.ticker.CurrentLayer()-ts.msh.LatestLayer()),
 		outOfSyncThreshold,
 	)
+	<-dlCh
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but
 // eventually become synced again.
 func TestFromSyncedToNotSynced_BeforeATXv2(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	require.True(t, ts.syncer.synchronize(context.Background()))
-	require.True(t, ts.syncer.IsSynced(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
+	require.True(t, ts.syncer.IsSynced(t.Context()))
 
 	// cause the syncer to get out of synced and then wait again
 	lyr := types.GetEffectiveGenesis().Add(1)
@@ -988,36 +1002,37 @@ func TestFromSyncedToNotSynced_BeforeATXv2(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("baa-ram-ewe"))
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 
 	advanceState(t, ts, lyr, current-1)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	waitOutGossipSync(t, ts)
+	<-dlCh
 }
 
 func TestFromSyncedToNotSynced(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	require.True(t, ts.syncer.synchronize(context.Background()))
-	require.True(t, ts.syncer.IsSynced(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
+	require.True(t, ts.syncer.IsSynced(t.Context()))
 
 	// cause the syncer to get out of synced and then wait again
 	lyr := types.GetEffectiveGenesis().Add(1)
@@ -1025,46 +1040,47 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	ts.mTicker.advanceToLayer(current)
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr).Return(errors.New("baa-ram-ewe"))
 
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	require.False(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	for lid := lyr; lid.Before(current); lid = lid.Add(1) {
 		ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lid)
 	}
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.dataSynced())
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.False(t, ts.syncer.ListenToGossip())
 
 	advanceState(t, ts, lyr, current-1)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	require.True(t, ts.syncer.ListenToATXGossip())
 	require.True(t, ts.syncer.ListenToGossip())
-	require.False(t, ts.syncer.IsSynced(context.Background()))
+	require.False(t, ts.syncer.IsSynced(t.Context()))
 
 	waitOutGossipSync(t, ts)
+	<-dlCh
 }
 
 func waitOutGossipSync(tb testing.TB, ts *testSyncer) {
 	require.True(tb, ts.syncer.dataSynced())
 	require.True(tb, ts.syncer.ListenToATXGossip())
 	require.True(tb, ts.syncer.ListenToGossip())
-	require.False(tb, ts.syncer.IsSynced(context.Background()))
+	require.False(tb, ts.syncer.IsSynced(tb.Context()))
 
 	// next layer will be still gossip syncing
 	require.Eventually(tb, func() bool {
-		require.True(tb, ts.syncer.synchronize(context.Background()))
-		return ts.syncer.IsSynced(context.Background())
+		require.True(tb, ts.syncer.synchronize(tb.Context()))
+		return ts.syncer.IsSynced(tb.Context())
 	}, time.Second, 100*time.Millisecond)
 }
 
 func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	lyr := types.GetEffectiveGenesis().Add(1)
 	current := lyr.Add(1)
@@ -1081,16 +1097,17 @@ func TestSync_AlsoSyncProcessedLayer(t *testing.T) {
 	ts.mTortoise.EXPECT().OnHareOutput(lyr, types.EmptyBlockID)
 	require.NoError(
 		t,
-		ts.msh.ProcessLayerPerHareOutput(context.Background(), lyr, types.EmptyBlockID, false),
+		ts.msh.ProcessLayerPerHareOutput(t.Context(), lyr, types.EmptyBlockID, false),
 	)
 	require.Equal(t, lyr, ts.msh.ProcessedLayer())
 
 	// no data sync should happen
 	require.Equal(t, types.GetEffectiveGenesis(), ts.syncer.getLastSyncedLayer())
 	ts.mDataFetcher.EXPECT().PollLayerData(gomock.Any(), lyr)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	// but last synced is updated
 	require.Equal(t, lyr, ts.syncer.getLastSyncedLayer())
+	<-dlCh
 }
 
 func TestSyncer_setATXSyncedTwice_NoError(t *testing.T) {
@@ -1116,7 +1133,7 @@ func TestSyncer_setATXSyncedTwice_NoError(t *testing.T) {
 
 func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
-	ts.expectMalDownloadLoop()
+	dlCh := ts.expectMalDownloadLoop()
 	current := types.GetEffectiveGenesis().Add(types.GetLayersPerEpoch() * 11)
 	// recover from a checkpoint
 	types.SetEffectiveGenesis(current.Uint32())
@@ -1148,20 +1165,21 @@ func TestSynchronize_RecoverFromCheckpoint(t *testing.T) {
 	ts.mAtxSyncer.EXPECT().Download(gomock.Any(), current.GetEpoch(), gomock.Any())
 
 	ts.expectMalEnsureInSync(current, true)
-	require.True(t, ts.syncer.synchronize(context.Background()))
+	require.True(t, ts.syncer.synchronize(t.Context()))
 	ts.syncer.waitBackgroundSync()
 	require.Equal(t, current.GetEpoch(), ts.syncer.lastAtxEpoch())
 	types.SetEffectiveGenesis(types.FirstEffectiveGenesis().Uint32())
+	<-dlCh
 }
 
 func TestSyncBeforeGenesis(t *testing.T) {
 	ts := newSyncerWithoutPeriodicRuns(t)
 	ts.mTicker.advanceToLayer(0)
-	require.False(t, ts.syncer.synchronize(context.Background()))
+	require.False(t, ts.syncer.synchronize(t.Context()))
 	select {
 	case <-ts.syncer.RegisterForATXSynced():
 	default:
 		require.Fail(t, "should consider atxs to be synced")
 	}
-	require.True(t, ts.syncer.IsSynced(context.Background()))
+	require.True(t, ts.syncer.IsSynced(t.Context()))
 }

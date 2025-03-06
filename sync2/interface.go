@@ -25,7 +25,3 @@ type HashSync interface {
 type HashSyncSource interface {
 	CreateHashSync(name string, cfg Config, epoch types.EpochID) (HashSync, error)
 }
-
-type LayerTicker interface {
-	CurrentLayer() types.LayerID
-}

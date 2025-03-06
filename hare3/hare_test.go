@@ -746,22 +746,22 @@ func TestHandler(t *testing.T) {
 	n.tracer.waitEligibility()
 
 	t.Run("malformed", func(t *testing.T) {
-		require.ErrorIs(t, n.hare.Handler(context.Background(), "", []byte("malformed")),
+		require.ErrorIs(t, n.hare.Handler(t.Context(), "", []byte("malformed")),
 			pubsub.ErrValidationReject)
-		require.ErrorContains(t, n.hare.Handler(context.Background(), "", []byte("malformed")),
+		require.ErrorContains(t, n.hare.Handler(t.Context(), "", []byte("malformed")),
 			"decoding")
 	})
 	t.Run("invalidated", func(t *testing.T) {
 		msg := &Message{}
 		msg.Round = commit
-		require.ErrorIs(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+		require.ErrorIs(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg)),
 			pubsub.ErrValidationReject)
-		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+		require.ErrorContains(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg)),
 			"validation reference")
 	})
 	t.Run("unregistered", func(t *testing.T) {
 		msg := &Message{}
-		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+		require.ErrorContains(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg)),
 			"is not registered")
 	})
 	t.Run("invalid signature", func(t *testing.T) {
@@ -769,9 +769,9 @@ func TestHandler(t *testing.T) {
 		msg.Layer = layer
 		msg.Sender = n.signer.NodeID()
 		msg.Signature = n.signer.Sign(signing.HARE+1, msg.ToMetadata().ToBytes())
-		require.ErrorIs(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+		require.ErrorIs(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg)),
 			pubsub.ErrValidationReject)
-		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+		require.ErrorContains(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg)),
 			"invalid signature")
 	})
 	t.Run("zero grade", func(t *testing.T) {
@@ -781,7 +781,7 @@ func TestHandler(t *testing.T) {
 		msg.Layer = layer
 		msg.Sender = signer.NodeID()
 		msg.Signature = signer.Sign(signing.HARE, msg.ToMetadata().ToBytes())
-		require.ErrorContains(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg)),
+		require.ErrorContains(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg)),
 			"zero grade")
 	})
 	t.Run("equivocation", func(t *testing.T) {
@@ -799,15 +799,15 @@ func TestHandler(t *testing.T) {
 		msg2.Sender = n.signer.NodeID()
 		msg2.Signature = n.signer.Sign(signing.HARE, msg2.ToMetadata().ToBytes())
 
-		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg1)))
-		require.NoError(t, n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)))
+		require.NoError(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg1)))
+		require.NoError(t, n.hare.Handler(t.Context(), "", codec.MustEncode(msg2)))
 
 		malicious, err := identities.IsMalicious(n.db, n.signer.NodeID())
 		require.NoError(t, err)
 		require.True(t, malicious)
 
 		require.ErrorContains(t,
-			n.hare.Handler(context.Background(), "", codec.MustEncode(msg2)),
+			n.hare.Handler(t.Context(), "", codec.MustEncode(msg2)),
 			"dropped by graded",
 		)
 	})

@@ -100,7 +100,7 @@ func createFetch(tb testing.TB) *testFetch {
 		store.New(),
 		nil,
 		peers.New(),
-		WithContext(context.Background()),
+		WithContext(tb.Context()),
 		WithConfig(cfg),
 		WithLogger(lg),
 		withServers(map[string]requester{
@@ -148,7 +148,7 @@ func TestFetch_Start(t *testing.T) {
 		store.New(),
 		nil,
 		peers.New(),
-		WithContext(context.Background()),
+		WithContext(t.Context()),
 		WithConfig(DefaultConfig()),
 		WithLogger(lg),
 		withServers(map[string]requester{
@@ -168,14 +168,14 @@ func TestFetch_GetHash(t *testing.T) {
 	hint2 := datastore.BallotDB
 
 	// test hash aggregation
-	p0, err := f.getHash(context.Background(), h1, hint, goodReceiver)
+	p0, err := f.getHash(t.Context(), h1, hint, goodReceiver)
 	require.NoError(t, err)
-	p1, err := f.getHash(context.Background(), h1, hint, goodReceiver)
+	p1, err := f.getHash(t.Context(), h1, hint, goodReceiver)
 	require.NoError(t, err)
 	require.Equal(t, p0.completed, p1.completed)
 
 	h2 := types.RandomHash()
-	p2, err := f.getHash(context.Background(), h2, hint2, goodReceiver)
+	p2, err := f.getHash(t.Context(), h2, hint2, goodReceiver)
 	require.NoError(t, err)
 	require.NotEqual(t, p1.completed, p2.completed)
 }
@@ -242,10 +242,10 @@ func TestFetch_RequestHashBatchFromPeers(t *testing.T) {
 				receiver = badReceiver
 			}
 			for i := 0; i < 2; i++ {
-				p, err := f.getHash(context.Background(), hsh0, datastore.ProposalDB, receiver)
+				p, err := f.getHash(t.Context(), hsh0, datastore.ProposalDB, receiver)
 				require.NoError(t, err)
 				p0 = append(p0, p)
-				p, err = f.getHash(context.Background(), hsh1, datastore.BlockDB, receiver)
+				p, err = f.getHash(t.Context(), hsh1, datastore.BlockDB, receiver)
 				require.NoError(t, err)
 				p1 = append(p1, p)
 			}
@@ -311,11 +311,11 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 
 	defer f.Stop()
 	require.NoError(t, f.Start())
-	p1, err := f.getHash(context.Background(), h1, hint, goodReceiver)
+	p1, err := f.getHash(t.Context(), h1, hint, goodReceiver)
 	require.NoError(t, err)
-	p2, err := f.getHash(context.Background(), h2, hint, goodReceiver)
+	p2, err := f.getHash(t.Context(), h2, hint, goodReceiver)
 	require.NoError(t, err)
-	p3, err := f.getHash(context.Background(), h3, hint, goodReceiver)
+	p3, err := f.getHash(t.Context(), h3, hint, goodReceiver)
 	require.NoError(t, err)
 	for _, p := range []*promise{p1, p2, p3} {
 		<-p.completed
@@ -358,7 +358,7 @@ func TestFetch_RegisterPeerHashes(t *testing.T) {
 
 func TestFetch_PeerDroppedWhenMessageResultsInValidationReject(t *testing.T) {
 	lg := zaptest.NewLogger(t)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second*30)
 	defer cancel()
 	cfg := Config{
 		BatchTimeout:         2000 * time.Minute, // make sure we never hit the batch timeout

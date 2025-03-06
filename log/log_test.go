@@ -2,7 +2,6 @@ package log
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -120,7 +119,7 @@ func TestContextualLogging(t *testing.T) {
 	teststr := "test003"
 
 	// test basic context first: try to set and read context, roundtrip
-	ctx := context.Background()
+	ctx := t.Context()
 	ctx = withRequestID(ctx, reqID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(reqID, reqID2)
@@ -135,7 +134,7 @@ func TestContextualLogging(t *testing.T) {
 	}
 
 	// try again in reverse order
-	ctx = context.Background()
+	ctx = t.Context()
 	ctx = withRequestID(WithSessionID(ctx, sesID), reqID)
 	if reqID2, ok := ExtractRequestID(ctx); ok {
 		r.Equal(reqID, reqID2)
@@ -163,7 +162,7 @@ func TestContextualLogging(t *testing.T) {
 	}
 
 	// try setting new
-	ctx = WithNewRequestID(WithNewSessionID(context.Background()))
+	ctx = WithNewRequestID(WithNewSessionID(t.Context()))
 	if _, ok := ExtractRequestID(ctx); !ok {
 		r.Fail("failed to extract request ID after setting")
 	}
@@ -181,7 +180,7 @@ func TestContextualLogging(t *testing.T) {
 	logger := NewFromLog(zap.New(core).Named(mainLoggerName))
 
 	// make sure we can set and read context
-	ctx = withRequestID(context.Background(), reqID)
+	ctx = withRequestID(t.Context(), reqID)
 	contextualLogger := logger.WithContext(ctx)
 	contextualLogger.Info(teststr)
 	type entry struct {
@@ -199,7 +198,7 @@ func TestContextualLogging(t *testing.T) {
 
 	// test extra fields
 	buf.Reset()
-	ctx = WithSessionID(context.Background(), sesID, String("foo", "bar"))
+	ctx = WithSessionID(t.Context(), sesID, String("foo", "bar"))
 	contextualLogger = logger.WithContext(ctx)
 	contextualLogger.Info(teststr)
 	expect = entry{

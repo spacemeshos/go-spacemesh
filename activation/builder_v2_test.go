@@ -56,7 +56,7 @@ func TestBuilder_BuildsInitialAtxV2(t *testing.T) {
 
 			atxHandler := newTestHandler(t, tab.goldenATXID, WithAtxVersions(AtxVersions{1: types.AtxV2}))
 			atxHandler.expectInitialAtxV2(&atx)
-			require.NoError(t, atxHandler.HandleGossipAtx(context.Background(), p2p.NoPeer, got))
+			require.NoError(t, atxHandler.HandleGossipAtx(t.Context(), p2p.NoPeer, got))
 			return nil
 		})
 	require.Empty(t, atx.PreviousATXs)

@@ -256,8 +256,8 @@ func checkRewards(tb testing.TB, atxs []*types.ActivationTx, expWeightPer *big.R
 
 func Test_StartStop(t *testing.T) {
 	tg := createTestGenerator(t)
-	tg.Start(context.Background())
-	tg.Start(context.Background()) // start for the second time is ok.
+	tg.Start(t.Context())
+	tg.Start(t.Context()) // start for the second time is ok.
 	tg.Stop()
 }
 
@@ -293,7 +293,7 @@ func genData(
 
 func Test_SerialExecution(t *testing.T) {
 	tg := createTestGenerator(t)
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
@@ -449,7 +449,7 @@ func Test_run(t *testing.T) {
 						return nil
 					})
 			tg.mockPatrol.EXPECT().CompleteHare(layerID)
-			tg.Start(context.Background())
+			tg.Start(t.Context())
 			tg.hareCh <- hare4.ConsensusOutput{Layer: layerID, Proposals: pids}
 			require.Eventually(t, func() bool { return len(tg.hareCh) == 0 }, time.Second, 100*time.Millisecond)
 			tg.Stop()
@@ -461,7 +461,7 @@ func Test_processHareOutput_EmptyOutput(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	tg.mockCert.EXPECT().RegisterForCert(gomock.Any(), layerID, types.EmptyBlockID)
 	tg.mockCert.EXPECT().CertifyIfEligible(gomock.Any(), layerID, types.EmptyBlockID)
 	tg.mockMesh.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, types.EmptyBlockID, false)
@@ -475,7 +475,7 @@ func Test_run_FetchFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	pids := []types.ProposalID{{1}, {2}, {3}}
 	tg.mockFetch.EXPECT().GetProposals(gomock.Any(), pids).DoAndReturn(
 		func(_ context.Context, _ []types.ProposalID) error {
@@ -491,7 +491,7 @@ func Test_run_DiffHasFromConsensus(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 
 	// create multiple proposals with overlapping TXs
 	txIDs := createAndSaveTxs(t, 100, tg.db)
@@ -513,7 +513,7 @@ func Test_run_ExecuteFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -546,7 +546,7 @@ func Test_run_AddBlockFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -571,7 +571,7 @@ func Test_run_RegisterCertFailureIgnored(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -599,7 +599,7 @@ func Test_run_CertifyFailureIgnored(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -627,7 +627,7 @@ func Test_run_ProcessLayerFailed(t *testing.T) {
 	tg := createTestGenerator(t)
 	layerID := types.GetEffectiveGenesis().Add(100)
 	require.NoError(t, layers.SetApplied(tg.db, layerID-1, types.EmptyBlockID))
-	tg.Start(context.Background())
+	tg.Start(t.Context())
 	txIDs := createAndSaveTxs(t, 100, tg.db)
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), 10)
 	activeSet := types.ToATXIDs(atxes)
@@ -674,7 +674,7 @@ func Test_processHareOutput_UnequalHeight(t *testing.T) {
 	)
 	activeSet := types.ToATXIDs(atxes)
 	pList := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 	ho := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(pList),
@@ -738,7 +738,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 		}
 		tg.mockFetch.EXPECT().GetProposals(gomock.Any(), ho.Proposals)
 		tg.mockPatrol.EXPECT().CompleteHare(layerID)
-		got, err := tg.processHareOutput(context.Background(), ho)
+		got, err := tg.processHareOutput(t.Context(), ho)
 		require.ErrorIs(t, err, errProposalTxMissing)
 		require.Nil(t, got)
 	})
@@ -760,7 +760,7 @@ func Test_processHareOutput_bad_state(t *testing.T) {
 			[]types.TransactionID{tx.ID},
 			1,
 		)
-		ctx := context.Background()
+		ctx := t.Context()
 		ho := hare4.ConsensusOutput{
 			Layer:     layerID,
 			Proposals: types.ToProposalIDs([]*types.Proposal{p}),
@@ -784,7 +784,7 @@ func Test_processHareOutput_EmptyProposals(t *testing.T) {
 		p := createProposal(t, tg.db, tg.proposals, activeSet, lid, types.Hash32{}, activeSet[i], signers[i], nil, 1)
 		plist = append(plist, p)
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	ho := hare4.ConsensusOutput{
 		Layer:     lid,
 		Proposals: types.ToProposalIDs(plist),
@@ -833,7 +833,7 @@ func Test_processHareOutput_StableBlockID(t *testing.T) {
 	signers, atxes := createATXs(t, tg.atxs, (layerID.GetEpoch() - 1).FirstLayer(), numProposals)
 	activeSet := types.ToATXIDs(atxes)
 	plist := createProposals(t, tg.db, tg.proposals, layerID, types.Hash32{}, signers, activeSet, txIDs)
-	ctx := context.Background()
+	ctx := t.Context()
 	ho1 := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
@@ -887,9 +887,9 @@ func Test_processHareOutput_SameATX(t *testing.T) {
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
 	}
-	tg.mockFetch.EXPECT().GetProposals(context.Background(), ho.Proposals)
+	tg.mockFetch.EXPECT().GetProposals(t.Context(), ho.Proposals)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	got, err := tg.processHareOutput(context.Background(), ho)
+	got, err := tg.processHareOutput(t.Context(), ho)
 	require.ErrorIs(t, err, errDuplicateATX)
 	require.Nil(t, got)
 }
@@ -911,9 +911,9 @@ func Test_processHareOutput_EmptyATXID(t *testing.T) {
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
 	}
-	tg.mockFetch.EXPECT().GetProposals(context.Background(), ho.Proposals)
+	tg.mockFetch.EXPECT().GetProposals(t.Context(), ho.Proposals)
 	tg.mockPatrol.EXPECT().CompleteHare(layerID)
-	got, err := tg.processHareOutput(context.Background(), ho)
+	got, err := tg.processHareOutput(t.Context(), ho)
 	require.Error(t, err)
 	require.Nil(t, got)
 }
@@ -929,7 +929,7 @@ func Test_processHareOutput_MultipleEligibilities(t *testing.T) {
 		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[1].ID(), signers[1], ids, 1),
 		createProposal(t, tg.db, tg.proposals, activeSet, layerID, types.Hash32{}, atxes[2].ID(), signers[2], ids, 5),
 	}
-	ctx := context.Background()
+	ctx := t.Context()
 	ho := hare4.ConsensusOutput{
 		Layer:     layerID,
 		Proposals: types.ToProposalIDs(plist),
