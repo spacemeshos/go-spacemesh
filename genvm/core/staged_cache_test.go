@@ -15,7 +15,7 @@ func TestCacheGetCopies(t *testing.T) {
 	address := core.Address{1}
 	account, err := ss.Get(address)
 	require.NoError(t, err)
-	account.Balance = 100 // nolint:govet
+	account.Balance = 100
 
 	accountCopy, err := ss.Get(address)
 	require.NoError(t, err)
