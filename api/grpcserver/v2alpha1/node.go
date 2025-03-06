@@ -23,12 +23,7 @@ type nodeMeshAPI interface {
 	ProcessedLayer() types.LayerID
 }
 
-// nodeSyncer is an API to get sync status.
-type nodeSyncer interface {
-	IsSynced(context.Context) bool
-}
-
-func NewNodeService(peers nodePeerCounter, msh nodeMeshAPI, clock *timesync.NodeClock, syncer nodeSyncer) *NodeService {
+func NewNodeService(peers nodePeerCounter, msh nodeMeshAPI, clock *timesync.NodeClock, syncer syncer) *NodeService {
 	return &NodeService{
 		mesh:        msh,
 		clock:       clock,
@@ -41,7 +36,7 @@ type NodeService struct {
 	mesh        nodeMeshAPI
 	clock       *timesync.NodeClock
 	peerCounter nodePeerCounter
-	syncer      nodeSyncer
+	syncer      syncer
 }
 
 func (s *NodeService) RegisterService(server *grpc.Server) {

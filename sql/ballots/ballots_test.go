@@ -1,7 +1,6 @@
 package ballots
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
@@ -320,7 +319,7 @@ func TestAllFirstInEpoch(t *testing.T) {
 
 func TestLoadBlob(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ballot1 := types.NewExistingBallot(
 		types.RandomBallotID(), types.RandomEdSignature(), types.RandomNodeID(), types.LayerID(0))

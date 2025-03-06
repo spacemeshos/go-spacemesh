@@ -34,7 +34,7 @@ func TestRelay(t *testing.T) {
 	cmd := GetNodeServiceCommand()
 	cmd.SetArgs([]string{"relay", "--config", configPath})
 	var eg errgroup.Group
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	eg.Go(func() error {
 		defer cancel()

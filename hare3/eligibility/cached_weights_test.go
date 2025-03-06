@@ -1,7 +1,6 @@
 package eligibility
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -29,12 +28,12 @@ func TestMinerWeight(t *testing.T) {
 			Times(1)
 
 		// First call should hit the service
-		got, err := cache.MinerWeight(context.Background(), 1, nodeID)
+		got, err := cache.MinerWeight(t.Context(), 1, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, expectedWeight, got)
 
 		// Second call should use cache
-		got, err = cache.MinerWeight(context.Background(), 1, nodeID)
+		got, err = cache.MinerWeight(t.Context(), 1, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, expectedWeight, got)
 	})
@@ -53,12 +52,12 @@ func TestMinerWeight(t *testing.T) {
 			Times(2)
 
 		// First call should fail
-		_, err := cache.MinerWeight(context.Background(), 1, nodeID)
+		_, err := cache.MinerWeight(t.Context(), 1, nodeID)
 		require.Error(t, err)
 		require.ErrorIs(t, err, expectedErr)
 
 		// Second call should try again
-		_, err = cache.MinerWeight(context.Background(), 1, nodeID)
+		_, err = cache.MinerWeight(t.Context(), 1, nodeID)
 		require.Error(t, err)
 		require.ErrorIs(t, err, expectedErr)
 	})
@@ -84,7 +83,7 @@ func TestMinerWeight(t *testing.T) {
 				expectedWeight := uint64(epoch)*numNodes + uint64(i)
 				mock.EXPECT().MinerWeight(gomock.Any(), epoch, node).Return(expectedWeight, nil)
 				eg.Go(func() error {
-					w, _ := cache.MinerWeight(context.Background(), epoch, node)
+					w, _ := cache.MinerWeight(t.Context(), epoch, node)
 					if w != expectedWeight {
 						return fmt.Errorf(
 							"wrong weight for epoch %d node %v: got %d, want %d ",
@@ -104,7 +103,7 @@ func TestMinerWeight(t *testing.T) {
 		for _, epoch := range epochs {
 			for i, node := range nodes {
 				expectedWeight := uint64(epoch)*numNodes + uint64(i)
-				w, err := cache.MinerWeight(context.Background(), epoch, node)
+				w, err := cache.MinerWeight(t.Context(), epoch, node)
 				require.NoError(t, err)
 				require.Equal(t, expectedWeight, w)
 			}
@@ -120,17 +119,17 @@ func TestMinerWeight(t *testing.T) {
 
 		// Set up initial cache for epoch 1
 		mock.EXPECT().MinerWeight(gomock.Any(), types.EpochID(1), nodeID).Return(weight, nil)
-		_, err := cache.MinerWeight(context.Background(), 1, nodeID)
+		_, err := cache.MinerWeight(t.Context(), 1, nodeID)
 		require.NoError(t, err)
 
 		// Access epoch 3 which should trigger eviction of epoch 1
 		mock.EXPECT().MinerWeight(gomock.Any(), types.EpochID(3), nodeID).Return(weight, nil)
-		_, err = cache.MinerWeight(context.Background(), 3, nodeID)
+		_, err = cache.MinerWeight(t.Context(), 3, nodeID)
 		require.NoError(t, err)
 
 		// Epoch 1 should be evicted, requiring a new service call
 		mock.EXPECT().MinerWeight(gomock.Any(), types.EpochID(1), nodeID).Return(weight, nil)
-		_, err = cache.MinerWeight(context.Background(), 1, nodeID)
+		_, err = cache.MinerWeight(t.Context(), 1, nodeID)
 		require.NoError(t, err)
 	})
 }
@@ -146,12 +145,12 @@ func TestTotalWeight(t *testing.T) {
 		mock.EXPECT().TotalWeight(gomock.Any(), types.EpochID(1)).Return(expectedWeight, nil)
 
 		// First call should hit the service
-		got, err := cache.TotalWeight(context.Background(), 1)
+		got, err := cache.TotalWeight(t.Context(), 1)
 		require.NoError(t, err)
 		require.Equal(t, expectedWeight, got)
 
 		// Second call should use cache
-		got, err = cache.TotalWeight(context.Background(), 1)
+		got, err = cache.TotalWeight(t.Context(), 1)
 		require.NoError(t, err)
 		require.Equal(t, expectedWeight, got)
 	})
@@ -169,12 +168,12 @@ func TestTotalWeight(t *testing.T) {
 			Times(2)
 
 		// First call should fail
-		_, err := cache.TotalWeight(context.Background(), 1)
+		_, err := cache.TotalWeight(t.Context(), 1)
 		require.Error(t, err)
 		require.ErrorIs(t, err, expectedErr)
 
 		// Second call should try again
-		_, err = cache.TotalWeight(context.Background(), 1)
+		_, err = cache.TotalWeight(t.Context(), 1)
 		require.Error(t, err)
 		require.ErrorIs(t, err, expectedErr)
 	})
@@ -190,7 +189,7 @@ func TestTotalWeight(t *testing.T) {
 		var eg errgroup.Group
 		for range 100 {
 			eg.Go(func() error {
-				got, err := cache.TotalWeight(context.Background(), 1)
+				got, err := cache.TotalWeight(t.Context(), 1)
 				if err != nil {
 					return err
 				}
@@ -214,19 +213,19 @@ func TestTotalWeight(t *testing.T) {
 		mock.EXPECT().TotalWeight(gomock.Any(), types.EpochID(1)).Return(weight, nil)
 		mock.EXPECT().TotalWeight(gomock.Any(), types.EpochID(2)).Return(weight, nil)
 
-		_, err := cache.TotalWeight(context.Background(), 1)
+		_, err := cache.TotalWeight(t.Context(), 1)
 		require.NoError(t, err)
-		_, err = cache.TotalWeight(context.Background(), 2)
+		_, err = cache.TotalWeight(t.Context(), 2)
 		require.NoError(t, err)
 
 		// Add epoch 3, should evict epoch 1
 		mock.EXPECT().TotalWeight(gomock.Any(), types.EpochID(3)).Return(weight, nil)
-		_, err = cache.TotalWeight(context.Background(), 3)
+		_, err = cache.TotalWeight(t.Context(), 3)
 		require.NoError(t, err)
 
 		// Epoch 1 should require new service call
 		mock.EXPECT().TotalWeight(gomock.Any(), types.EpochID(1)).Return(weight, nil)
-		_, err = cache.TotalWeight(context.Background(), 1)
+		_, err = cache.TotalWeight(t.Context(), 1)
 		require.NoError(t, err)
 	})
 }

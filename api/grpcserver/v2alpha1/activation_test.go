@@ -1,7 +1,6 @@
 package v2alpha1
 
 import (
-	"context"
 	"errors"
 	"io"
 	"math/rand"
@@ -45,7 +44,7 @@ func TestActivationService_List(t *testing.T) {
 
 	t.Run("limit set too high", func(t *testing.T) {
 		client, _ := setup(t)
-		_, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{Limit: 200})
+		_, err := client.List(t.Context(), &spacemeshv2alpha1.ActivationRequest{Limit: 200})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -56,7 +55,7 @@ func TestActivationService_List(t *testing.T) {
 
 	t.Run("no limit set", func(t *testing.T) {
 		client, _ := setup(t)
-		_, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{})
+		_, err := client.List(t.Context(), &spacemeshv2alpha1.ActivationRequest{})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -67,7 +66,7 @@ func TestActivationService_List(t *testing.T) {
 
 	t.Run("limit and offset", func(t *testing.T) {
 		client, _ := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
+		list, err := client.List(t.Context(), &spacemeshv2alpha1.ActivationRequest{
 			Limit:  25,
 			Offset: 50,
 		})
@@ -77,14 +76,14 @@ func TestActivationService_List(t *testing.T) {
 
 	t.Run("all", func(t *testing.T) {
 		client, activations := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{Limit: 100})
+		list, err := client.List(t.Context(), &spacemeshv2alpha1.ActivationRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Equal(t, len(activations), len(list.Activations))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
 		client, activations := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
+		list, err := client.List(t.Context(), &spacemeshv2alpha1.ActivationRequest{
 			Limit:    1,
 			Coinbase: activations[3].Coinbase.String(),
 		})
@@ -94,7 +93,7 @@ func TestActivationService_List(t *testing.T) {
 
 	t.Run("smesherId", func(t *testing.T) {
 		client, activations := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
+		list, err := client.List(t.Context(), &spacemeshv2alpha1.ActivationRequest{
 			Limit:     1,
 			SmesherId: [][]byte{activations[1].SmesherID.Bytes()},
 		})
@@ -104,7 +103,7 @@ func TestActivationService_List(t *testing.T) {
 
 	t.Run("id", func(t *testing.T) {
 		client, activations := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2alpha1.ActivationRequest{
+		list, err := client.List(t.Context(), &spacemeshv2alpha1.ActivationRequest{
 			Limit: 1,
 			Id:    [][]byte{activations[3].ID().Bytes()},
 		})
@@ -137,7 +136,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 
 		client := setup(t, statesql.InMemoryTest(t))
 
-		stream, err := client.Stream(context.Background(), &spacemeshv2alpha1.ActivationStreamRequest{})
+		stream, err := client.Stream(t.Context(), &spacemeshv2alpha1.ActivationStreamRequest{})
 		require.NoError(t, err)
 
 		var i int
@@ -201,7 +200,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 			},
 		} {
 			t.Run(tc.desc, func(t *testing.T) {
-				stream, err := client.Stream(context.Background(), tc.request)
+				stream, err := client.Stream(t.Context(), tc.request)
 				require.NoError(t, err)
 				_, err = stream.Header()
 				require.NoError(t, err)
@@ -209,7 +208,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 				var expect []*types.ActivationTx
 				for _, rst := range streamed {
 					require.NoError(t, events.ReportNewActivation(rst.ActivationTx))
-					matcher := atxsMatcher{tc.request, context.Background()}
+					matcher := atxsMatcher{tc.request, t.Context()}
 					if matcher.match(rst) {
 						expect = append(expect, rst.ActivationTx)
 					}
@@ -227,7 +226,7 @@ func TestActivationStreamService_Stream(t *testing.T) {
 
 func TestActivationService_ActivationsCount(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	genEpoch3 := fixture.NewAtxsGenerator().WithEpochs(3, 1)
 	epoch3ATXs := make([]types.ActivationTx, 30)
@@ -282,7 +281,7 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 func TestActivationService_Highest(t *testing.T) {
 	t.Run("max tick height", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		goldenAtx := types.ATXID{2, 3, 4}
 		svc := NewActivationService(db, goldenAtx)
@@ -314,7 +313,7 @@ func TestActivationService_Highest(t *testing.T) {
 	})
 	t.Run("returns golden atx on error", func(t *testing.T) {
 		db := statesql.InMemoryTest(t)
-		ctx := context.Background()
+		ctx := t.Context()
 
 		goldenAtx := types.ATXID{2, 3, 4}
 		svc := NewActivationService(db, goldenAtx)

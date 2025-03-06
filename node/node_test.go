@@ -185,7 +185,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 		return nil
 	})
 
-	str, err := testArgs(context.Background(), c, "illegal")
+	str, err := testArgs(t.Context(), c, "illegal")
 	r.Error(err)
 	r.Equal(expected, err.Error())
 	r.Equal(expected2, str)
@@ -210,14 +210,14 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	require.NoError(t, err)
 
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices(t.Context())
 	}
-	defer app.stopServices(context.Background())
+	defer app.stopServices(t.Context())
 
 	events.CloseEventReporter()
 
 	// Test starting the server from the command line
-	str, err := testArgs(context.Background(), cmdWithRun(run))
+	str, err := testArgs(t.Context(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(listener, app.Config.API.PublicListener)
@@ -233,7 +233,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	// call echo and validate result
 	// We expect this one to succeed
 	const message = "Hello World"
-	response, err := c.Echo(context.Background(), &pb.EchoRequest{
+	response, err := c.Echo(t.Context(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
 	r.NoError(err)
@@ -256,13 +256,13 @@ func TestSpacemeshApp_JsonServiceNotRunning(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices(t.Context())
 	}
 
-	str, err := testArgs(context.Background(), cmdWithRun(run))
+	str, err := testArgs(t.Context(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
-	defer app.stopServices(context.Background())
+	defer app.stopServices(t.Context())
 
 	require.Nil(t, app.jsonAPIServer)
 }
@@ -289,16 +289,16 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 	// Make sure the service is not running by default
 	run := func(c *cobra.Command, args []string) error {
-		return app.startAPIServices(context.Background())
+		return app.startAPIServices(t.Context())
 	}
 
 	// Test starting the JSON server from the command line
 	// uses Cmd.Run from above
 
-	str, err := testArgs(context.Background(), cmdWithRun(run))
+	str, err := testArgs(t.Context(), cmdWithRun(run))
 	r.Empty(str)
 	r.NoError(err)
-	defer app.stopServices(context.Background())
+	defer app.stopServices(t.Context())
 
 	endpoint := fmt.Sprintf("http://%s/v1/node/echo", app.jsonAPIServer.BoundAddress)
 	var resp *http.Response
@@ -331,9 +331,9 @@ func TestProxyingJsonService(t *testing.T) {
 	logger := logtest.New(t)
 	db := localsql.InMemoryTest(t)
 	serverApp := New(WithConfig(&serverCfg), WithLog(logger.Named("server")))
-	err := serverApp.startAPIServices(context.Background())
+	err := serverApp.startAPIServices(t.Context())
 	require.NoError(t, err)
-	defer serverApp.stopServices(context.Background())
+	defer serverApp.stopServices(t.Context())
 
 	// Start client proxying to the server
 	clientCfg := config.Config{
@@ -349,8 +349,8 @@ func TestProxyingJsonService(t *testing.T) {
 	clientApp := New(WithConfig(&clientCfg), WithLog(logger.Named("client")))
 	clientApp.idStates = identity.NewIdentityStateStorage(db, logger.Named("idStates").Zap())
 
-	require.NoError(t, clientApp.startAPIServices(context.Background()))
-	defer clientApp.stopServices(context.Background())
+	require.NoError(t, clientApp.startAPIServices(t.Context()))
+	defer clientApp.stopServices(t.Context())
 
 	const message = "hello world"
 	endpoint := fmt.Sprintf("http://%s/v1/node/echo", clientApp.apiProxy.BoundAddress)
@@ -428,7 +428,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	cmd.Version = "v1.2.3"
 	cmd.Commit = "abc123"
 
-	appCtx, appCancel := context.WithCancel(context.Background())
+	appCtx, appCancel := context.WithCancel(t.Context())
 	defer appCancel()
 
 	run := func(c *cobra.Command, args []string) error {
@@ -446,7 +446,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// If there's an error in the args, it will return immediately.
 	var eg errgroup.Group
 	eg.Go(func() error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 		str, err := testArgs(ctx, cmdWithRun(run))
 		assert.Empty(t, str)
@@ -463,7 +463,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	t.Cleanup(func() { assert.NoError(t, conn.Close()) })
 
 	c := pb.NewNodeServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	eg.Go(func() error {
@@ -520,7 +520,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Cleanup stops all services and thereby the app
 	<-app.Started() // prevents races when app is not started yet
 	appCancel()
-	app.Cleanup(context.Background())
+	app.Cleanup(t.Context())
 
 	// Wait for everything to stop cleanly before ending test
 	eg.Wait()
@@ -538,7 +538,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	app.signers = []*signing.EdSigner{signer}
 	address := wallet.Address(signer.PublicKey().Bytes())
 
-	appCtx, appCancel := context.WithCancel(context.Background())
+	appCtx, appCancel := context.WithCancel(t.Context())
 	defer appCancel()
 
 	run := func(c *cobra.Command, args []string) error {
@@ -575,7 +575,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		return app.Start(appCtx)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
 	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
@@ -598,7 +598,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		10*time.Millisecond,
 	)
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel = context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	conn, err := grpc.NewClient(
 		listener,
@@ -640,7 +640,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	}()
 
 	// Submit the txs
-	res1, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+	res1, err := c.SubmitTransaction(t.Context(), &pb.SubmitTransactionRequest{
 		Transaction: tx1.Raw,
 	})
 	require.NoError(t, err)
@@ -654,7 +654,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// This stops the app
 	// Cleanup stops all services and thereby the app
 	appCancel()
-	app.Cleanup(context.Background())
+	app.Cleanup(t.Context())
 
 	// Wait for it to stop
 	wg.Wait()
@@ -923,7 +923,7 @@ func TestGenesisConfig(t *testing.T) {
 		app := New(WithConfig(&cfg))
 
 		require.NoError(t, app.Initialize())
-		t.Cleanup(func() { app.Cleanup(context.Background()) })
+		t.Cleanup(func() { app.Cleanup(t.Context()) })
 
 		var existing config.GenesisConfig
 		require.NoError(t, existing.LoadFromFile(filepath.Join(app.Config.DataDir(), genesisFileName)))
@@ -935,10 +935,10 @@ func TestGenesisConfig(t *testing.T) {
 		app := New(WithConfig(&cfg))
 
 		require.NoError(t, app.Initialize())
-		app.Cleanup(context.Background())
+		app.Cleanup(t.Context())
 
 		require.NoError(t, app.Initialize())
-		app.Cleanup(context.Background())
+		app.Cleanup(t.Context())
 	})
 
 	t.Run("fatal error on a diff", func(t *testing.T) {
@@ -946,10 +946,10 @@ func TestGenesisConfig(t *testing.T) {
 		app := New(WithConfig(&cfg))
 
 		require.NoError(t, app.Initialize())
-		t.Cleanup(func() { app.Cleanup(context.Background()) })
+		t.Cleanup(func() { app.Cleanup(t.Context()) })
 
 		app.Config.Genesis.ExtraData = "changed"
-		app.Cleanup(context.Background())
+		app.Cleanup(t.Context())
 		err := app.Initialize()
 		require.ErrorContains(t, err, "genesis config")
 	})
@@ -991,14 +991,14 @@ func TestAdminEvents(t *testing.T) {
 	require.NoError(t, app.Initialize())
 	require.NoError(t, app.NewIdentity())
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		if err := app.Start(ctx); err != nil {
 			return err
 		}
-		app.Cleanup(context.Background())
+		app.Cleanup(t.Context())
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })
@@ -1089,14 +1089,14 @@ func TestAdminEvents_MultiSmesher(t *testing.T) {
 	require.Len(t, app.signers, 2)
 	require.NoError(t, app.Initialize())
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	var eg errgroup.Group
 	eg.Go(func() error {
 		if err := app.Start(ctx); err != nil {
 			return err
 		}
-		app.Cleanup(context.Background())
+		app.Cleanup(t.Context())
 		return nil
 	})
 	t.Cleanup(func() { assert.NoError(t, eg.Wait()) })

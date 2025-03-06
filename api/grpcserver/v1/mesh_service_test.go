@@ -167,12 +167,12 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 		SmesherHex:   "0123456789abcdef",
 		IncludeProof: true,
 	}
-	resp, err := client.MalfeasanceQuery(context.Background(), req)
+	resp, err := client.MalfeasanceQuery(t.Context(), req)
 	require.Equal(t, codes.InvalidArgument, status.Code(err))
 	require.Nil(t, resp)
 
 	req.SmesherHex = hex.EncodeToString(nodeID.Bytes())
-	resp, err = client.MalfeasanceQuery(context.Background(), req)
+	resp, err = client.MalfeasanceQuery(t.Context(), req)
 	require.NoError(t, err)
 	require.Equal(t, nodeID, types.BytesToNodeID(resp.Proof.SmesherId.Id))
 	require.EqualValues(t, layer, resp.Proof.Layer.Number)
@@ -184,7 +184,7 @@ func TestMeshService_MalfeasanceQuery(t *testing.T) {
 	require.Equal(t, *proof, got)
 
 	req.IncludeProof = false
-	resp, err = client.MalfeasanceQuery(context.Background(), req)
+	resp, err = client.MalfeasanceQuery(t.Context(), req)
 	require.NoError(t, err)
 	require.Empty(t, resp.Proof.Proof)
 }
@@ -212,7 +212,7 @@ func TestMeshService_MalfeasanceStream(t *testing.T) {
 	cfg, cleanup := launchServer(t, srv)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	client := pb.NewMeshServiceClient(conn)
@@ -319,7 +319,7 @@ func TestReadLayer(t *testing.T) {
 		layerAvgSize,
 		txsPerProposal,
 	)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
 
 	instrumentedErr = errors.New("error")

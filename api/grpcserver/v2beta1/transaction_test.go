@@ -39,7 +39,7 @@ import (
 func TestTransactionService_List(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	gen := fixture.NewTransactionResultGenerator().WithAddresses(2)
 	txsList := make([]types.TransactionWithResult, 100)
@@ -225,7 +225,7 @@ func TestTransactionService_EstimateGas(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	db := statesql.InMemoryTest(t)
 	vminst := vm.New(db)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	svc := NewTransactionService(db, txs.NewConservativeState(vminst, db), nil, nil, nil)
 	cfg, cleanup := launchServer(t, svc)
@@ -291,7 +291,7 @@ func TestTransactionService_ParseTransaction(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	db := statesql.InMemoryTest(t)
 	vminst := vm.New(db)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	svc := NewTransactionService(db, txs.NewConservativeState(vminst, db), nil, nil, nil)
 	cfg, cleanup := launchServer(t, svc)
@@ -412,7 +412,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := spacemeshv2beta1.NewTransactionServiceClient(conn)
@@ -455,7 +455,7 @@ func TestTransactionServiceSubmitInvalidTx(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := spacemeshv2beta1.NewTransactionServiceClient(conn)
@@ -492,7 +492,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	conn := dialGrpc(t, cfg)
 	c := spacemeshv2beta1.NewTransactionServiceClient(conn)
@@ -784,7 +784,7 @@ func TestEvictedTransaction(t *testing.T) {
 	client := spacemeshv2beta1.NewTransactionServiceClient(conn)
 
 	conState.EXPECT().HasEvicted(gomock.Any()).Return(true, nil)
-	list, err := client.List(context.Background(), &spacemeshv2beta1.TransactionRequest{Limit: 1, IncludeState: true})
+	list, err := client.List(t.Context(), &spacemeshv2beta1.TransactionRequest{Limit: 1, IncludeState: true})
 	req.NoError(err)
 	req.Len(list.Transactions, 1)
 	req.Equal(tx.ID.Bytes(), list.Transactions[0].Tx.Id)

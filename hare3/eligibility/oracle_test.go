@@ -1,7 +1,6 @@
 package eligibility
 
 import (
-	"context"
 	"encoding/hex"
 	"errors"
 	"math/rand"
@@ -188,7 +187,7 @@ func TestCalcEligibility(t *testing.T) {
 
 	t.Run("zero committee", func(t *testing.T) {
 		o := defaultOracle(t)
-		res, err := o.CalcEligibility(context.Background(), types.LayerID(50), 1, 0, nid, types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(t.Context(), types.LayerID(50), 1, 0, nid, types.EmptyVrfSignature)
 		require.ErrorIs(t, err, errZeroCommitteeSize)
 		require.Equal(t, 0, int(res))
 	})
@@ -196,19 +195,19 @@ func TestCalcEligibility(t *testing.T) {
 	t.Run("empty active set", func(t *testing.T) {
 		o := defaultOracle(t)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), gomock.Any())
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false)
 		lid := types.EpochID(5).FirstLayer()
-		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(t.Context(), lid, 1, 1, nid, types.EmptyVrfSignature)
 		require.ErrorIs(t, err, errEmptyActiveSet)
 		require.Equal(t, 0, int(res))
 	})
 
 	t.Run("miner not active", func(t *testing.T) {
 		o := defaultOracle(t)
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false)
 		lid := types.EpochID(5).FirstLayer()
 		o.createLayerData(lid.Sub(defLayersPerEpoch), 11)
-		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(t.Context(), lid, 1, 1, nid, types.EmptyVrfSignature)
 		require.ErrorIs(t, err, ErrNotActive)
 		require.Equal(t, 0, int(res))
 	})
@@ -219,9 +218,9 @@ func TestCalcEligibility(t *testing.T) {
 		miners := o.createLayerData(layer.Sub(defLayersPerEpoch), 5)
 		errUnknown := errors.New("unknown")
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false)
 
-		res, err := o.CalcEligibility(context.Background(), layer, 0, 1, miners[0], types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(t.Context(), layer, 0, 1, miners[0], types.EmptyVrfSignature)
 		require.ErrorIs(t, err, errUnknown)
 		require.Equal(t, 0, int(res))
 	})
@@ -232,9 +231,9 @@ func TestCalcEligibility(t *testing.T) {
 		miners := o.createLayerData(layer.Sub(defLayersPerEpoch), 5)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(false).Times(1)
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false)
 
-		res, err := o.CalcEligibility(context.Background(), layer, 0, 1, miners[0], types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(t.Context(), layer, 0, 1, miners[0], types.EmptyVrfSignature)
 		require.NoError(t, err)
 		require.Equal(t, 0, int(res))
 	})
@@ -242,9 +241,9 @@ func TestCalcEligibility(t *testing.T) {
 	t.Run("empty active with fallback", func(t *testing.T) {
 		o := defaultOracle(t)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), gomock.Any())
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).Times(2)
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).Times(2)
 		lid := types.EpochID(5).FirstLayer().Add(o.cfg.ConfidenceParam)
-		res, err := o.CalcEligibility(context.Background(), lid, 1, 1, nid, types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(t.Context(), lid, 1, 1, nid, types.EmptyVrfSignature)
 		require.ErrorIs(t, err, errEmptyActiveSet)
 		require.Equal(t, 0, int(res))
 
@@ -252,9 +251,9 @@ func TestCalcEligibility(t *testing.T) {
 		miners := o.createActiveSet(types.EpochID(4).FirstLayer(), activeSet)
 		o.activeSetCache.UpdateActiveSet(5, activeSet)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), lid.GetEpoch()).Return(types.RandomBeacon(), nil)
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false)
 		o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true)
-		_, err = o.CalcEligibility(context.Background(), lid, 1, 1, miners[0], types.EmptyVrfSignature)
+		_, err = o.CalcEligibility(t.Context(), lid, 1, 1, miners[0], types.EmptyVrfSignature)
 		require.NoError(t, err)
 	})
 
@@ -284,8 +283,8 @@ func TestCalcEligibility(t *testing.T) {
 
 			o.mBeacon.EXPECT().Beacon(gomock.Any(), lid.GetEpoch()).Return(beacon, nil).Times(1)
 			o.mVerifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).Times(1)
-			o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).Times(2)
-			res, err := o.CalcEligibility(context.Background(), lid, 1, 10, miners[0], vrfSig)
+			o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).Times(2)
+			res, err := o.CalcEligibility(t.Context(), lid, 1, 10, miners[0], vrfSig)
 			require.NoError(t, err, vrf)
 			require.Equal(t, exp, res, vrf)
 		}
@@ -321,11 +320,11 @@ func TestCalcEligibilityWithSpaceUnit(t *testing.T) {
 				sig := types.RandomVrfSignature()
 
 				o.mBeacon.EXPECT().Beacon(gomock.Any(), lid.GetEpoch()).Return(beacon, nil).Times(2)
-				o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).Times(4)
-				res, err := o.CalcEligibility(context.Background(), lid, 1, committeeSize, nodeID, sig)
+				o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).Times(4)
+				res, err := o.CalcEligibility(t.Context(), lid, 1, committeeSize, nodeID, sig)
 				require.NoError(t, err)
 
-				valid, err := o.Validate(context.Background(), lid, 1, committeeSize, nodeID, sig, res)
+				valid, err := o.Validate(t.Context(), lid, 1, committeeSize, nodeID, sig, res)
 				require.NoError(t, err)
 				require.True(t, valid)
 
@@ -358,10 +357,10 @@ func BenchmarkOracle_CalcEligibility(b *testing.B) {
 	}
 	b.ResetTimer()
 	for _, nodeID := range nodeIDs {
-		res, err := o.CalcEligibility(context.Background(), lid, 1, committeeSize, nodeID, types.EmptyVrfSignature)
+		res, err := o.CalcEligibility(b.Context(), lid, 1, committeeSize, nodeID, types.EmptyVrfSignature)
 
 		if err == nil {
-			valid, err := o.Validate(context.Background(), lid, 1, committeeSize, nodeID, types.EmptyVrfSignature, res)
+			valid, err := o.Validate(b.Context(), lid, 1, committeeSize, nodeID, types.EmptyVrfSignature, res)
 			r.NoError(err)
 			r.True(valid)
 		}
@@ -382,7 +381,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	first := types.EpochID(5).FirstLayer()
 	prevEpoch := lid.GetEpoch() - 1
 	o.mBeacon.EXPECT().Beacon(gomock.Any(), lid.GetEpoch()).Return(types.Beacon{1, 0, 0, 0}, nil).AnyTimes()
-	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
+	o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).AnyTimes()
 
 	numMiners := 2
 	activeSet := types.RandomActiveSet(numMiners)
@@ -416,11 +415,11 @@ func Test_VrfSignVerify(t *testing.T) {
 
 	proof := GenVRF(signer.VRFSigner(), types.Beacon{1, 0, 0, 0}, lid, round)
 
-	res, err := o.CalcEligibility(context.Background(), lid, round, 10, nid, proof)
+	res, err := o.CalcEligibility(t.Context(), lid, round, 10, nid, proof)
 	require.NoError(t, err)
 	require.Equal(t, 1, int(res))
 
-	valid, err := o.Validate(context.Background(), lid, round, 10, nid, proof, 1)
+	valid, err := o.Validate(t.Context(), lid, round, 10, nid, proof, 1)
 	require.NoError(t, err)
 	require.True(t, valid)
 }
@@ -429,7 +428,7 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 	o := defaultOracle(t)
 	errUnknown := errors.New("unknown")
 	o.mBeacon.EXPECT().Beacon(gomock.Any(), gomock.Any()).Return(types.EmptyBeacon, errUnknown).Times(1)
-	msg, err := o.buildVRFMessage(context.Background(), types.LayerID(1), 1)
+	msg, err := o.buildVRFMessage(t.Context(), types.LayerID(1), 1)
 	require.ErrorIs(t, err, errUnknown)
 	require.Nil(t, msg)
 }
@@ -440,24 +439,24 @@ func TestBuildVRFMessage(t *testing.T) {
 	secondLayer := firstLayer.Add(1)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().Beacon(gomock.Any(), firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m1, err := o.buildVRFMessage(context.Background(), firstLayer, 2)
+	m1, err := o.buildVRFMessage(t.Context(), firstLayer, 2)
 	require.NoError(t, err)
 
 	// check not same for different round
 	o.mBeacon.EXPECT().Beacon(gomock.Any(), firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m3, err := o.buildVRFMessage(context.Background(), firstLayer, 3)
+	m3, err := o.buildVRFMessage(t.Context(), firstLayer, 3)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m3)
 
 	// check not same for different layer
 	o.mBeacon.EXPECT().Beacon(gomock.Any(), firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m4, err := o.buildVRFMessage(context.Background(), secondLayer, 2)
+	m4, err := o.buildVRFMessage(t.Context(), secondLayer, 2)
 	require.NoError(t, err)
 	require.NotEqual(t, m1, m4)
 
 	// check same call returns same result
 	o.mBeacon.EXPECT().Beacon(gomock.Any(), firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
-	m5, err := o.buildVRFMessage(context.Background(), firstLayer, 2)
+	m5, err := o.buildVRFMessage(t.Context(), firstLayer, 2)
 	require.NoError(t, err)
 	require.Equal(t, m1, m5) // check same result
 }
@@ -473,7 +472,7 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(context.Background(), firstLayer, uint32(x%expectAdd))
+			_, err := o.buildVRFMessage(t.Context(), firstLayer, uint32(x%expectAdd))
 			assert.NoError(t, err)
 			wg.Done()
 		}(i)
@@ -486,10 +485,10 @@ func TestActiveSet(t *testing.T) {
 	numMiners := 5
 	o := defaultOracle(t)
 	targetEpoch := types.EpochID(5)
-	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
+	o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).AnyTimes()
 	o.createLayerData(targetEpoch.FirstLayer(), numMiners)
 
-	aset, err := o.activeSetCache.actives(context.Background(), targetEpoch)
+	aset, err := o.activeSetCache.actives(t.Context(), targetEpoch)
 	require.NoError(t, err)
 	require.ElementsMatch(
 		t,
@@ -498,7 +497,7 @@ func TestActiveSet(t *testing.T) {
 		"assertion relies on the enumeration of identities",
 	)
 
-	got, err := o.activeSetCache.ActiveSet(context.Background(), targetEpoch)
+	got, err := o.activeSetCache.ActiveSet(t.Context(), targetEpoch)
 	require.NoError(t, err)
 	require.Len(t, got, len(aset.set))
 	for _, id := range got {
@@ -513,18 +512,18 @@ func TestActives(t *testing.T) {
 	numMiners := 5
 	t.Run("genesis bootstrap", func(t *testing.T) {
 		o := defaultOracle(t)
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false)
 		first := types.GetEffectiveGenesis().Add(1)
 		bootstrap := types.RandomActiveSet(numMiners)
 		o.createActiveSet(types.EpochID(1).FirstLayer(), bootstrap)
 		o.activeSetCache.UpdateActiveSet(types.GetEffectiveGenesis().GetEpoch()+1, bootstrap)
 
 		for lid := types.LayerID(0); lid.Before(first); lid = lid.Add(1) {
-			activeSet, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(lid))
+			activeSet, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(lid))
 			require.ErrorIs(t, err, errEmptyActiveSet)
 			require.Nil(t, activeSet)
 		}
-		activeSet, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(first))
+		activeSet, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(first))
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -537,12 +536,12 @@ func TestActives(t *testing.T) {
 		numMiners++
 		o := defaultOracle(t)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), gomock.Any())
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).AnyTimes()
 		layer := types.EpochID(4).FirstLayer()
 		o.createLayerData(layer, numMiners)
 
 		start := layer.Add(o.cfg.ConfidenceParam)
-		activeSet, err := o.activeSetCache.actives(context.Background(), layer.GetEpoch())
+		activeSet, err := o.activeSetCache.actives(t.Context(), layer.GetEpoch())
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -553,12 +552,12 @@ func TestActives(t *testing.T) {
 		end := (layer.GetEpoch() + 1).FirstLayer().Add(o.cfg.ConfidenceParam)
 
 		for lid := start.Add(1); lid.Before(end); lid = lid.Add(1) {
-			got, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(lid))
+			got, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(lid))
 			require.NoError(t, err)
 			// cached
 			require.Equal(t, &activeSet, &got)
 		}
-		got, err := o.activeSetCache.actives(context.Background(), end.GetEpoch())
+		got, err := o.activeSetCache.actives(t.Context(), end.GetEpoch())
 		require.ErrorIs(t, err, errEmptyActiveSet)
 		require.Nil(t, got)
 	})
@@ -566,7 +565,7 @@ func TestActives(t *testing.T) {
 		numMiners++
 		o := defaultOracle(t)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), gomock.Any()).AnyTimes()
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).AnyTimes()
 		layer := types.EpochID(4).FirstLayer()
 		end := layer.Add(o.cfg.ConfidenceParam)
 		o.createLayerData(layer, numMiners)
@@ -575,11 +574,11 @@ func TestActives(t *testing.T) {
 		o.activeSetCache.UpdateActiveSet(end.GetEpoch(), fallback)
 
 		for lid := layer; lid.Before(end); lid = lid.Add(1) {
-			got, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(lid))
+			got, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(lid))
 			require.ErrorIs(t, err, errEmptyActiveSet)
 			require.Nil(t, got)
 		}
-		activeSet, err := o.activeSetCache.actives(context.Background(), end.GetEpoch())
+		activeSet, err := o.activeSetCache.actives(t.Context(), end.GetEpoch())
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -592,7 +591,7 @@ func TestActives(t *testing.T) {
 		numMiners++
 		o := defaultOracle(t)
 		o.mBeacon.EXPECT().Beacon(gomock.Any(), gomock.Any()).AnyTimes()
-		o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).AnyTimes()
+		o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).AnyTimes()
 		layer := types.EpochID(4).FirstLayer()
 		old := types.GetEffectiveGenesis()
 		types.SetEffectiveGenesis(layer.Uint32() - 1)
@@ -604,7 +603,7 @@ func TestActives(t *testing.T) {
 		o.createActiveSet(types.EpochID(3).FirstLayer(), fallback)
 		o.activeSetCache.UpdateActiveSet(layer.GetEpoch(), fallback)
 
-		activeSet, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
+		activeSet, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(layer))
 		require.NoError(t, err)
 		require.ElementsMatch(
 			t,
@@ -612,7 +611,7 @@ func TestActives(t *testing.T) {
 			maps.Keys(activeSet.set),
 			"assertion relies on the enumeration of identities",
 		)
-		activeSet2, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer+1))
+		activeSet2, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(layer+1))
 		require.NoError(t, err)
 		require.Equal(t, activeSet, activeSet2)
 	})
@@ -623,21 +622,21 @@ func TestActives_ConcurrentCalls(t *testing.T) {
 	layer := types.LayerID(100)
 	o.createLayerData(layer.Sub(defLayersPerEpoch), 5)
 
-	o.mSyncer.EXPECT().IsSynced(context.Background()).Return(false).Times(102)
+	o.mSyncer.EXPECT().IsSynced(t.Context()).Return(false).Times(102)
 
 	// outstanding probability for concurrent access to calc active set size
 	var eg errgroup.Group
 	for range 100 {
 		eg.Go(func() error {
-			_, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
+			_, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(layer))
 			return err
 		})
 	}
 
 	// make sure we wait at least two calls duration
-	_, err := o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
+	_, err := o.activeSetCache.actives(t.Context(), o.layerToEpoch(layer))
 	require.NoError(t, err)
-	_, err = o.activeSetCache.actives(context.Background(), o.layerToEpoch(layer))
+	_, err = o.activeSetCache.actives(t.Context(), o.layerToEpoch(layer))
 	require.NoError(t, err)
 	require.NoError(t, eg.Wait())
 }
@@ -875,8 +874,8 @@ func TestActiveSetMatrix(t *testing.T) {
 			} else {
 				oracle.mBeacon.EXPECT().Beacon(gomock.Any(), target).Return(types.EmptyBeacon, sql.ErrNotFound)
 			}
-			oracle.mSyncer.EXPECT().IsSynced(context.Background()).Return(false)
-			rst, err := oracle.activeSetCache.ActiveSet(context.Background(), target)
+			oracle.mSyncer.EXPECT().IsSynced(t.Context()).Return(false)
+			rst, err := oracle.activeSetCache.ActiveSet(t.Context(), target)
 
 			switch typed := tc.expect.(type) {
 			case []types.ATXID:

@@ -121,7 +121,7 @@ func TestSplitSync(t *testing.T) {
 	}
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return tst.splitSync.Sync(context.Background())
+		return tst.splitSync.Sync(t.Context())
 	})
 	require.NoError(t, eg.Wait())
 	for pr, count := range tst.expPeerRanges {
@@ -138,7 +138,7 @@ func TestSplitSync_Retry(t *testing.T) {
 	tst.fail[tstRanges[2]] = true
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return tst.splitSync.Sync(context.Background())
+		return tst.splitSync.Sync(t.Context())
 	})
 	require.NoError(t, eg.Wait())
 	for pr, count := range tst.expPeerRanges {
@@ -165,7 +165,7 @@ func TestSplitSync_SlowPeers(t *testing.T) {
 
 	var eg errgroup.Group
 	eg.Go(func() error {
-		return tst.splitSync.Sync(context.Background())
+		return tst.splitSync.Sync(t.Context())
 	})
 
 	require.Eventually(t, func() bool {
@@ -174,7 +174,7 @@ func TestSplitSync_SlowPeers(t *testing.T) {
 		return len(tst.peerRanges) == 2
 	}, 10*time.Millisecond, time.Millisecond)
 	// Make sure all 4 grace period timers are started.
-	tst.clock.BlockUntilContext(context.Background(), 4)
+	tst.clock.BlockUntilContext(t.Context(), 4)
 	tst.clock.Advance(time.Minute)
 	require.NoError(t, eg.Wait())
 	for pr, count := range tst.expPeerRanges {

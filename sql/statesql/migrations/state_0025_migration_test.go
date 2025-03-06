@@ -1,7 +1,6 @@
 package migrations
 
 import (
-	"context"
 	"slices"
 	"testing"
 	"time"
@@ -92,7 +91,7 @@ func Test0025Migration(t *testing.T) {
 
 		for nodeID, proof := range proofs {
 			blob := &sql.Blob{}
-			err := identities.LoadMalfeasanceBlob(context.Background(), db, nodeID.Bytes(), blob)
+			err := identities.LoadMalfeasanceBlob(t.Context(), db, nodeID.Bytes(), blob)
 			require.NoError(t, err)
 			got := &mwire.MalfeasanceProof{}
 			codec.MustDecode(blob.Bytes, got)
@@ -145,7 +144,7 @@ func Test0025Migration(t *testing.T) {
 
 		// check proof was not changed
 		blob := &sql.Blob{}
-		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), db, sig.NodeID().Bytes(), blob))
+		require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), db, sig.NodeID().Bytes(), blob))
 		got := &mwire.MalfeasanceProof{}
 		codec.MustDecode(blob.Bytes, got)
 
@@ -205,7 +204,7 @@ func Test0025Migration(t *testing.T) {
 
 		// check proof was updated
 		blob := &sql.Blob{}
-		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), db, sig.NodeID().Bytes(), blob))
+		require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), db, sig.NodeID().Bytes(), blob))
 		got := &mwire.MalfeasanceProof{}
 		codec.MustDecode(blob.Bytes, got)
 
@@ -266,7 +265,7 @@ func Test0025Migration(t *testing.T) {
 
 		// check proof not updated
 		blob := &sql.Blob{}
-		require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), db, sig.NodeID().Bytes(), blob))
+		require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), db, sig.NodeID().Bytes(), blob))
 		got := &mwire.MalfeasanceProof{}
 		codec.MustDecode(blob.Bytes, got)
 

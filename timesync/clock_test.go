@@ -113,7 +113,7 @@ func Test_NodeClock_NoRaceOnTick(t *testing.T) {
 	require.NotNil(t, clock)
 	t.Cleanup(clock.Close)
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	eg, egCtx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
 		for {

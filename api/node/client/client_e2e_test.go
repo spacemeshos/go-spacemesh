@@ -1,7 +1,6 @@
 package client_test
 
 import (
-	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -85,7 +84,7 @@ func Test_ActivationService_Atx(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(nil, activation.ErrNotFound)
-		_, err := svc.Atx(context.Background(), atxid)
+		_, err := svc.Atx(t.Context(), atxid)
 		require.ErrorIs(t, err, activation.ErrNotFound)
 	})
 
@@ -93,7 +92,7 @@ func Test_ActivationService_Atx(t *testing.T) {
 		atx := &types.ActivationTx{}
 		atx.SetID(atxid)
 		mock.atxService.EXPECT().Atx(gomock.Any(), atxid).Return(atx, nil)
-		gotAtx, err := svc.Atx(context.Background(), atxid)
+		gotAtx, err := svc.Atx(t.Context(), atxid)
 		require.NoError(t, err)
 		require.Equal(t, atx, gotAtx)
 	})
@@ -103,7 +102,7 @@ func Test_ActivationService_Atx(t *testing.T) {
 			Atx(gomock.Any(), atxid).
 			Times(retries+1).
 			Return(nil, errors.New("ops"))
-		_, err := svc.Atx(context.Background(), atxid)
+		_, err := svc.Atx(t.Context(), atxid)
 		require.Error(t, err)
 	})
 }
@@ -114,7 +113,7 @@ func Test_ActivationService_PositioningATX(t *testing.T) {
 	t.Run("found", func(t *testing.T) {
 		posAtx := types.RandomATXID()
 		mock.atxService.EXPECT().PositioningATX(gomock.Any(), types.EpochID(77)).Return(posAtx, nil)
-		gotAtx, err := svc.PositioningATX(context.Background(), 77)
+		gotAtx, err := svc.PositioningATX(t.Context(), 77)
 		require.NoError(t, err)
 		require.Equal(t, posAtx, gotAtx)
 	})
@@ -124,7 +123,7 @@ func Test_ActivationService_PositioningATX(t *testing.T) {
 			PositioningATX(gomock.Any(), types.EpochID(77)).
 			Times(retries+1).
 			Return(types.EmptyATXID, errors.New("ops"))
-		_, err := svc.PositioningATX(context.Background(), 77)
+		_, err := svc.PositioningATX(t.Context(), 77)
 		require.Error(t, err)
 	})
 }
@@ -137,7 +136,7 @@ func Test_ActivationService_LastATX(t *testing.T) {
 
 	t.Run("not found", func(t *testing.T) {
 		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(nil, activation.ErrNotFound)
-		_, err := svc.LastATX(context.Background(), nodeid)
+		_, err := svc.LastATX(t.Context(), nodeid)
 		require.ErrorIs(t, err, activation.ErrNotFound)
 	})
 
@@ -145,7 +144,7 @@ func Test_ActivationService_LastATX(t *testing.T) {
 		atx := &types.ActivationTx{}
 		atx.SetID(atxid)
 		mock.atxService.EXPECT().LastATX(gomock.Any(), nodeid).Return(atx, nil)
-		gotAtx, err := svc.LastATX(context.Background(), nodeid)
+		gotAtx, err := svc.LastATX(t.Context(), nodeid)
 		require.NoError(t, err)
 		require.Equal(t, atx, gotAtx)
 	})
@@ -155,7 +154,7 @@ func Test_ActivationService_LastATX(t *testing.T) {
 			LastATX(gomock.Any(), nodeid).
 			Times(retries+1).
 			Return(nil, errors.New("ops"))
-		_, err := svc.LastATX(context.Background(), nodeid)
+		_, err := svc.LastATX(t.Context(), nodeid)
 		require.Error(t, err)
 	})
 }
@@ -185,12 +184,12 @@ func Test_PublishingATX(t *testing.T) {
 		svc, mocks := setupE2E(t)
 		mocks.publisher.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, blob)
 		mocks.poetDb.EXPECT().ValidateAndStore(gomock.Any(), &poetProof)
-		svc.PublishATX(context.Background(), blob, &poetProof)
+		svc.PublishATX(t.Context(), blob, &poetProof)
 	})
 	t.Run("publish only ATX (poet proof is optional)", func(t *testing.T) {
 		svc, mocks := setupE2E(t)
 		mocks.publisher.EXPECT().Publish(gomock.Any(), pubsub.AtxProtocol, blob)
-		svc.PublishATX(context.Background(), blob, nil)
+		svc.PublishATX(t.Context(), blob, nil)
 	})
 }
 
@@ -199,7 +198,7 @@ func Test_Beacon(t *testing.T) {
 	t.Run("beacon", func(t *testing.T) {
 		beacon := types.Beacon{12, 12, 12, 12}
 		mock.beacons.EXPECT().Beacon(gomock.Any(), types.EpochID(15)).Return(beacon, nil)
-		v, err := svc.Beacon(context.Background(), types.EpochID(15))
+		v, err := svc.Beacon(t.Context(), types.EpochID(15))
 		require.NoError(t, err)
 		require.Equal(t, v, beacon)
 	})
@@ -210,7 +209,7 @@ func Test_Hare(t *testing.T) {
 	t.Run("total weight", func(t *testing.T) {
 		val := uint64(11)
 		mock.weights.EXPECT().TotalWeight(gomock.Any(), types.EpochID(112)).Return(val, nil)
-		v, err := svc.TotalWeight(context.Background(), 112)
+		v, err := svc.TotalWeight(t.Context(), 112)
 		require.NoError(t, err)
 		require.Equal(t, v, val)
 	})
@@ -218,7 +217,7 @@ func Test_Hare(t *testing.T) {
 		val := uint64(101)
 		nodeID := types.RandomNodeID()
 		mock.weights.EXPECT().MinerWeight(gomock.Any(), types.EpochID(113), nodeID).Return(val, nil)
-		v, err := svc.MinerWeight(context.Background(), 113, nodeID)
+		v, err := svc.MinerWeight(t.Context(), 113, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, v, val)
 	})
@@ -234,7 +233,7 @@ func Test_Hare(t *testing.T) {
 			},
 		}
 		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(&body)
-		gotBody, err := svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
+		gotBody, err := svc.HareRoundTemplate(t.Context(), body.Layer, body.IterRound)
 		require.NoError(t, err)
 		require.Equal(t, body, *gotBody)
 
@@ -242,13 +241,13 @@ func Test_Hare(t *testing.T) {
 		ref := types.RandomHash()
 		body.Value.Reference = &ref
 		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(&body)
-		gotBody, err = svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
+		gotBody, err = svc.HareRoundTemplate(t.Context(), body.Layer, body.IterRound)
 		require.NoError(t, err)
 		require.Equal(t, body, *gotBody)
 
 		// no template
 		mock.hare.EXPECT().RoundTemplate(gomock.Any(), gomock.Any()).Return(nil)
-		gotBody, err = svc.HareRoundTemplate(context.Background(), body.Layer, body.IterRound)
+		gotBody, err = svc.HareRoundTemplate(t.Context(), body.Layer, body.IterRound)
 		require.NoError(t, err)
 		require.Nil(t, gotBody)
 	})
@@ -259,7 +258,7 @@ func TestProposals(t *testing.T) {
 		svc, mock := setupE2E(t)
 		p := createProposal(t, true)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
-		prop, _, err := svc.Proposal(context.Background(), p.Layer, p.SmesherID)
+		prop, _, err := svc.Proposal(t.Context(), p.Layer, p.SmesherID)
 		require.NoError(t, err)
 		prop.MustInitialize()
 		require.EqualValues(t, p, prop)
@@ -268,7 +267,7 @@ func TestProposals(t *testing.T) {
 		svc, mock := setupE2E(t)
 		p := createProposal(t, false)
 		mock.proposals.EXPECT().BuildFor(gomock.Any(), gomock.Any(), gomock.Any()).Return(p, 0, nil)
-		prop, _, err := svc.Proposal(context.Background(), types.LayerID(112), types.NodeID{})
+		prop, _, err := svc.Proposal(t.Context(), types.LayerID(112), types.NodeID{})
 		require.NoError(t, err)
 		require.Empty(t, prop)
 	})
@@ -280,7 +279,7 @@ func TestCalculateEligibilitySlots(t *testing.T) {
 		node := types.RandomNodeID()
 		epoch := types.EpochID(5)
 		mock.proposals.EXPECT().CalculateEligibilitySlotsFor(gomock.Any(), node, epoch).Return(10, 11111, nil)
-		slots, vrfNonce, err := svc.CalculateEligibilitySlotsFor(context.Background(), node, epoch)
+		slots, vrfNonce, err := svc.CalculateEligibilitySlotsFor(t.Context(), node, epoch)
 		require.NoError(t, err)
 		require.EqualValues(t, 10, slots)
 		require.EqualValues(t, 11111, vrfNonce)
@@ -290,7 +289,7 @@ func TestCalculateEligibilitySlots(t *testing.T) {
 		node := types.RandomNodeID()
 		epoch := types.EpochID(5)
 		mock.proposals.EXPECT().CalculateEligibilitySlotsFor(gomock.Any(), node, epoch).Return(0, 0, nil)
-		slots, _, err := svc.CalculateEligibilitySlotsFor(context.Background(), node, epoch)
+		slots, _, err := svc.CalculateEligibilitySlotsFor(t.Context(), node, epoch)
 		require.NoError(t, err)
 		require.Zero(t, slots)
 	})

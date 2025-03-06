@@ -120,7 +120,7 @@ func TestHTTPPoet(t *testing.T) {
 	poetDir := t.TempDir()
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 
 	certPubKey, certPrivKey, err := ed25519.GenerateKey(nil)
@@ -157,7 +157,7 @@ func TestHTTPPoet(t *testing.T) {
 		require.NoError(t, err)
 
 		poetRound, err := client.Submit(
-			context.Background(),
+			t.Context(),
 			time.Time{},
 			prefix,
 			ch.Bytes(),
@@ -175,7 +175,7 @@ func TestHTTPPoet(t *testing.T) {
 	})
 	t.Run("return proper error code on rejected cert", func(t *testing.T) {
 		_, err := client.Submit(
-			context.Background(),
+			t.Context(),
 			time.Time{},
 			prefix,
 			ch.Bytes(),
@@ -195,7 +195,7 @@ func TestSubmitTooLate(t *testing.T) {
 	poetDir := t.TempDir()
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	c, err := NewHTTPPoetTestHarness(ctx, poetDir)
 	r.NoError(err)
@@ -221,7 +221,7 @@ func TestSubmitTooLate(t *testing.T) {
 	prefix := bytes.Join([][]byte{signer.Prefix(), {byte(signing.POET)}}, nil)
 
 	_, err = client.Submit(
-		context.Background(),
+		t.Context(),
 		time.Now(),
 		prefix,
 		ch.Bytes(),
@@ -240,7 +240,7 @@ func TestInfoWithCertifierInfo(t *testing.T) {
 	poetDir := t.TempDir()
 	t.Cleanup(func() { r.NoError(eg.Wait()) })
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	c, err := NewHTTPPoetTestHarness(ctx, poetDir, WithCertifier(&registration.CertifierConfig{
 		URL:    "http://localhost:8080",
@@ -261,7 +261,7 @@ func TestInfoWithCertifierInfo(t *testing.T) {
 	)
 	require.NoError(t, err)
 
-	info, err := client.Info(context.Background())
+	info, err := client.Info(t.Context())
 	r.NoError(err)
 	r.Equal("http://localhost:8080", info.Certifier.Url.String())
 	r.Equal([]byte("pubkey"), info.Certifier.Pubkey)

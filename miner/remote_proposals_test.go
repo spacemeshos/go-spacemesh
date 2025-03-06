@@ -25,7 +25,7 @@ func TestRemoteProposals(t *testing.T) {
 		signers[i] = signer
 	}
 	var (
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		ctrl        = gomock.NewController(t)
 		clock       = mocks.NewMocklayerClock(ctrl)
 		publisher   = pmocks.NewMockPublisher(ctrl)

@@ -1,7 +1,6 @@
 package fptree_test
 
 import (
-	"context"
 	"fmt"
 	"math/rand/v2"
 	"slices"
@@ -630,7 +629,7 @@ func makeDBBackedFPTree(t *testing.T) []*fptree.FPTree {
 		TableName: "foo",
 		IDColumn:  "id",
 	}
-	tx, err := db.Tx(context.Background())
+	tx, err := db.Tx(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { tx.Release() })
 	sts, err := st.Snapshot(tx)

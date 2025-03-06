@@ -116,7 +116,7 @@ func TestP2P(t *testing.T) {
 		}
 		d := rangesync.NewDispatcher(logger)
 		srv := d.SetupServer(host, "sync2test", server.WithLog(logger))
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		eg.Go(func() error { return srv.Run(ctx) })
 		hs[n], err = sync2.NewP2PHashSync(
@@ -139,7 +139,7 @@ func TestP2P(t *testing.T) {
 			}
 			r := true
 			require.NoError(t, hsync.Set().WithCopy(
-				context.Background(),
+				t.Context(),
 				func(os rangesync.OrderedSet) error {
 					info, err := os.SetInfo()
 					require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestP2P(t *testing.T) {
 	advCounts := make([]int, len(hs))
 	for n, hsync := range hs {
 		require.NoError(t, hsync.Set().WithCopy(
-			context.Background(),
+			t.Context(),
 			func(os rangesync.OrderedSet) error {
 				info, err := os.SetInfo()
 				require.NoError(t, err)
@@ -255,7 +255,7 @@ func TestP2P_DBSet(t *testing.T) {
 		ds := dbset.NewDBSet(dbs[n], st, keyLen, maxDepth)
 		d := rangesync.NewDispatcher(logger)
 		srv := d.SetupServer(host, "sync2test", server.WithLog(logger))
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 		eg.Go(func() error { return srv.Run(ctx) })
 		hs[n], err = sync2.NewP2PHashSync(
@@ -288,7 +288,7 @@ func TestP2P_DBSet(t *testing.T) {
 			}
 			r := true
 			require.NoError(t, hsync.Set().WithCopy(
-				context.Background(),
+				t.Context(),
 				func(os rangesync.OrderedSet) error {
 					info, err := os.SetInfo()
 					require.NoError(t, err)

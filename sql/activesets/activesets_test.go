@@ -1,7 +1,6 @@
 package activesets
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,7 +12,7 @@ import (
 )
 
 func TestActiveSet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 
 	ids := []types.Hash32{{1}, {2}, {3}, {4}}
 	set := &types.EpochActiveSet{
@@ -59,7 +58,7 @@ func TestActiveSet(t *testing.T) {
 }
 
 func TestCachedActiveSet(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	ids := []types.Hash32{{1}, {2}}
 	set0 := &types.EpochActiveSet{
 		Epoch: 2,

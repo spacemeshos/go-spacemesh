@@ -1,7 +1,6 @@
 package identities_test
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -53,7 +52,7 @@ func TestMalicious(t *testing.T) {
 	require.False(t, mal)
 
 	var blob sql.Blob
-	require.NoError(t, identities.LoadMalfeasanceBlob(context.Background(), db, nodeID.Bytes(), &blob))
+	require.NoError(t, identities.LoadMalfeasanceBlob(t.Context(), db, nodeID.Bytes(), &blob))
 	got := &wire.MalfeasanceProof{}
 	codec.MustDecode(blob.Bytes, got)
 	require.Equal(t, proof, got)
@@ -94,7 +93,7 @@ func Test_CountMalicious(t *testing.T) {
 
 func TestLoadMalfeasanceBlob(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	nid1 := types.RandomNodeID()
 	proof1 := types.RandomBytes(11)

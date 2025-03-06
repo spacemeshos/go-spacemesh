@@ -40,7 +40,7 @@ type fetchRequest struct {
 }
 
 func TestDownload(t *testing.T) {
-	canceled, cancel := context.WithCancel(context.Background())
+	canceled, cancel := context.WithCancel(t.Context())
 	cancel()
 	for _, tc := range []struct {
 		desc     string
@@ -53,13 +53,13 @@ func TestDownload(t *testing.T) {
 	}{
 		{
 			desc:     "all existing",
-			ctx:      context.Background(),
+			ctx:      t.Context(),
 			existing: []*types.ActivationTx{atx(id(1)), atx(id(2)), atx(id(3))},
 			set:      []types.ATXID{id(1), id(2), id(3)},
 		},
 		{
 			desc:     "with multiple requests",
-			ctx:      context.Background(),
+			ctx:      t.Context(),
 			existing: []*types.ActivationTx{atx(id(1))},
 			retry:    1,
 			fetched: []fetchRequest{
@@ -74,7 +74,7 @@ func TestDownload(t *testing.T) {
 		},
 		{
 			desc:     "continue on error",
-			ctx:      context.Background(),
+			ctx:      t.Context(),
 			retry:    1,
 			existing: []*types.ActivationTx{atx(id(1))},
 			fetched: []fetchRequest{
