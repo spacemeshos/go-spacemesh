@@ -1,7 +1,6 @@
 package v2beta1
 
 import (
-	"context"
 	"errors"
 	"io"
 	"testing"
@@ -41,7 +40,7 @@ func TestRewardService_List(t *testing.T) {
 
 	t.Run("limit set too high", func(t *testing.T) {
 		client, _ := setup(t)
-		_, err := client.List(context.Background(), &spacemeshv2beta1.RewardRequest{Limit: 200})
+		_, err := client.List(t.Context(), &spacemeshv2beta1.RewardRequest{Limit: 200})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -52,7 +51,7 @@ func TestRewardService_List(t *testing.T) {
 
 	t.Run("no limit set", func(t *testing.T) {
 		client, _ := setup(t)
-		_, err := client.List(context.Background(), &spacemeshv2beta1.RewardRequest{})
+		_, err := client.List(t.Context(), &spacemeshv2beta1.RewardRequest{})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -63,7 +62,7 @@ func TestRewardService_List(t *testing.T) {
 
 	t.Run("limit and offset", func(t *testing.T) {
 		client, _ := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2beta1.RewardRequest{
+		list, err := client.List(t.Context(), &spacemeshv2beta1.RewardRequest{
 			Limit:  25,
 			Offset: 50,
 		})
@@ -73,14 +72,14 @@ func TestRewardService_List(t *testing.T) {
 
 	t.Run("all", func(t *testing.T) {
 		client, rwds := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2beta1.RewardRequest{Limit: 100})
+		list, err := client.List(t.Context(), &spacemeshv2beta1.RewardRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, list.Rewards, len(rwds))
 	})
 
 	t.Run("coinbase", func(t *testing.T) {
 		client, rwds := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2beta1.RewardRequest{
+		list, err := client.List(t.Context(), &spacemeshv2beta1.RewardRequest{
 			Limit:      1,
 			StartLayer: rwds[3].Layer.Uint32(),
 			EndLayer:   rwds[3].Layer.Uint32(),
@@ -95,7 +94,7 @@ func TestRewardService_List(t *testing.T) {
 
 	t.Run("smesher", func(t *testing.T) {
 		client, rwds := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2beta1.RewardRequest{
+		list, err := client.List(t.Context(), &spacemeshv2beta1.RewardRequest{
 			Limit:      1,
 			StartLayer: rwds[4].Layer.Uint32(),
 			EndLayer:   rwds[4].Layer.Uint32(),
@@ -135,7 +134,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 
 		client := setup(t)
 
-		stream, err := client.Stream(context.Background(), &spacemeshv2beta1.RewardStreamRequest{})
+		stream, err := client.Stream(t.Context(), &spacemeshv2beta1.RewardStreamRequest{})
 		require.NoError(t, err)
 
 		var i int
@@ -195,7 +194,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 			},
 		} {
 			t.Run(tc.desc, func(t *testing.T) {
-				stream, err := client.Stream(context.Background(), tc.request)
+				stream, err := client.Stream(t.Context(), tc.request)
 				require.NoError(t, err)
 				_, err = stream.Header()
 				require.NoError(t, err)
@@ -203,7 +202,7 @@ func TestRewardStreamService_Stream(t *testing.T) {
 				var expect []*types.Reward
 				for _, rst := range streamed {
 					require.NoError(t, events.ReportRewardReceived(rst))
-					matcher := rewardsMatcher{tc.request, context.Background()}
+					matcher := rewardsMatcher{tc.request, t.Context()}
 					if matcher.match(&rst) {
 						expect = append(expect, &rst)
 					}

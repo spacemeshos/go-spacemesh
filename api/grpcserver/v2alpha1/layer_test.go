@@ -1,7 +1,6 @@
 package v2alpha1
 
 import (
-	"context"
 	"errors"
 	"io"
 	"math/rand"
@@ -47,7 +46,7 @@ func TestLayerService_List(t *testing.T) {
 
 	t.Run("limit set too high", func(t *testing.T) {
 		client := setup(t)
-		_, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{Limit: 200})
+		_, err := client.List(t.Context(), &spacemeshv2alpha1.LayerRequest{Limit: 200})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -58,7 +57,7 @@ func TestLayerService_List(t *testing.T) {
 
 	t.Run("no limit set", func(t *testing.T) {
 		client := setup(t)
-		_, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{})
+		_, err := client.List(t.Context(), &spacemeshv2alpha1.LayerRequest{})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -69,7 +68,7 @@ func TestLayerService_List(t *testing.T) {
 
 	t.Run("limit and offset", func(t *testing.T) {
 		client := setup(t)
-		list, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{
+		list, err := client.List(t.Context(), &spacemeshv2alpha1.LayerRequest{
 			Limit:  25,
 			Offset: 50,
 		})
@@ -79,7 +78,7 @@ func TestLayerService_List(t *testing.T) {
 
 	t.Run("all", func(t *testing.T) {
 		client := setup(t)
-		ls, err := client.List(context.Background(), &spacemeshv2alpha1.LayerRequest{
+		ls, err := client.List(t.Context(), &spacemeshv2alpha1.LayerRequest{
 			StartLayer: 0,
 			EndLayer:   100,
 			Limit:      100,
@@ -130,7 +129,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 
 		client, lrs := setup(t, statesql.InMemoryTest(t))
 
-		stream, err := client.Stream(context.Background(), &spacemeshv2alpha1.LayerStreamRequest{})
+		stream, err := client.Stream(t.Context(), &spacemeshv2alpha1.LayerStreamRequest{})
 		require.NoError(t, err)
 
 		var i int
@@ -178,7 +177,7 @@ func TestLayerStreamService_Stream(t *testing.T) {
 			},
 		} {
 			t.Run(tc.desc, func(t *testing.T) {
-				stream, err := client.Stream(context.Background(), tc.request)
+				stream, err := client.Stream(t.Context(), tc.request)
 				require.NoError(t, err)
 				_, err = stream.Header()
 				require.NoError(t, err)

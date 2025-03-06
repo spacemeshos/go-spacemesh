@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -42,7 +41,7 @@ func TestTracer(t *testing.T) {
 		t.Parallel()
 		path := filepath.Join(t.TempDir(), "tortoise.trace")
 		trt, err := Recover(
-			context.Background(),
+			t.Context(),
 			s.GetState(0).DB.Database,
 			s.GetState(0).Atxdata,
 			last,

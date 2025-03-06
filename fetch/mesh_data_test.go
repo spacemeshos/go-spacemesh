@@ -65,11 +65,11 @@ func (f *testFetch) expectTransactionCall(times int) *gomock.Call {
 	return nil
 }
 
-func (f *testFetch) testGetTxs(tids []types.TransactionID) error {
+func (f *testFetch) testGetTxs(ctx context.Context, tids []types.TransactionID) error {
 	if f.method == txsForBlock {
-		return f.GetBlockTxs(context.Background(), tids)
+		return f.GetBlockTxs(ctx, tids)
 	} else if f.method == txsForProposal {
-		return f.GetProposalTxs(context.Background(), tids)
+		return f.GetProposalTxs(ctx, tids)
 	}
 	return nil
 }
@@ -156,7 +156,7 @@ func TestFetch_getHashes(t *testing.T) {
 			return codec.MustEncode(&resBatch), nil
 		}
 		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.NoError(t, err)
 	})
 
@@ -170,7 +170,7 @@ func TestFetch_getHashes(t *testing.T) {
 			return codec.MustEncode(&resBatch), nil
 		}
 		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 
@@ -180,7 +180,7 @@ func TestFetch_getHashes(t *testing.T) {
 		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("request failed")).
 			Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 
@@ -202,7 +202,7 @@ func TestFetch_getHashes(t *testing.T) {
 			return codec.MustEncode(&resBatch), nil
 		}
 		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 
@@ -221,7 +221,7 @@ func TestFetch_getHashes(t *testing.T) {
 			return codec.MustEncode(&resBatch), nil
 		}
 		f.mHashS.EXPECT().Request(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(requestFn).Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 }
@@ -279,7 +279,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(streamFn).
 			Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.NoError(t, err)
 	})
 
@@ -302,7 +302,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(streamFn).
 			Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 
@@ -312,7 +312,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			Return(errors.New("request failed")).
 			Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 
@@ -342,7 +342,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(streamFn).
 			Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 
@@ -369,7 +369,7 @@ func TestFetch_getHashesStreaming(t *testing.T) {
 		f.mHashS.EXPECT().StreamRequest(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
 			DoAndReturn(streamFn).
 			Times(len(peers))
-		err := f.getHashes(context.Background(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
+		err := f.getHashes(t.Context(), hashes, datastore.BlockDB, f.validators.block.HandleMessage)
 		require.Error(t, err)
 	})
 }
@@ -386,7 +386,7 @@ func TestFetch_LegacyMalfeasanceProofs(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.LegacyMalfeasanceProofs(context.Background(), nodeIDs))
+	require.NoError(t, f.LegacyMalfeasanceProofs(t.Context(), nodeIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -403,7 +403,7 @@ func TestFetch_MalfeasanceProofs(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.MalfeasanceProofs(context.Background(), nodeIDs))
+	require.NoError(t, f.MalfeasanceProofs(t.Context(), nodeIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -424,7 +424,7 @@ func TestFetch_GetBlocks(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetBlocks(context.Background(), blockIDs))
+	require.NoError(t, f.GetBlocks(t.Context(), blockIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -445,7 +445,7 @@ func TestFetch_GetBallots(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetBallots(context.Background(), ballotIDs))
+	require.NoError(t, f.GetBallots(t.Context(), ballotIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -517,7 +517,7 @@ func TestFetch_GetProposals(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetProposals(context.Background(), proposalIDs))
+	require.NoError(t, f.GetProposals(t.Context(), proposalIDs))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -580,7 +580,7 @@ func TestFetch_GetTxs(t *testing.T) {
 			var eg errgroup.Group
 			startTestLoop(t, f.Fetch, &eg, stop)
 
-			require.NoError(t, f.testGetTxs(tids))
+			require.NoError(t, f.testGetTxs(t.Context(), tids))
 			close(stop)
 			require.NoError(t, eg.Wait())
 		})
@@ -618,12 +618,12 @@ func TestGetATXs(t *testing.T) {
 	startTestLoop(t, f.Fetch, &eg, stop)
 
 	atxIDs1 := types.ToATXIDs(atxs[:2])
-	require.NoError(t, f.GetAtxs(context.Background(), atxIDs1))
+	require.NoError(t, f.GetAtxs(t.Context(), atxIDs1))
 
 	atxIDs2 := types.ToATXIDs(atxs[2:])
 	var recvIDs []types.ATXID
 	var mtx sync.Mutex
-	require.NoError(t, f.GetAtxs(context.Background(), atxIDs2,
+	require.NoError(t, f.GetAtxs(t.Context(), atxIDs2,
 		system.WithATXCallback(func(id types.ATXID, err error) {
 			mtx.Lock()
 			defer mtx.Unlock()
@@ -645,7 +645,7 @@ func TestGetActiveSet(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetActiveSet(context.Background(), types.Hash32{1, 2, 3}))
+	require.NoError(t, f.GetActiveSet(t.Context(), types.Hash32{1, 2, 3}))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -661,7 +661,7 @@ func TestGetPoetProof(t *testing.T) {
 	var eg errgroup.Group
 	startTestLoop(t, f.Fetch, &eg, stop)
 
-	require.NoError(t, f.GetPoetProof(context.Background(), h))
+	require.NoError(t, f.GetPoetProof(t.Context(), h))
 	close(stop)
 	require.NoError(t, eg.Wait())
 }
@@ -677,7 +677,7 @@ func TestFetch_LegacyMaliciousIDs(t *testing.T) {
 		resp := codec.MustEncode(&MaliciousIDs{NodeIDs: expectedIDs})
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.mLegacyMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(resp, nil)
-		ids, err := f.LegacyMaliciousIDs(context.Background(), "p0")
+		ids, err := f.LegacyMaliciousIDs(t.Context(), "p0")
 		require.NoError(t, err)
 		require.Equal(t, expectedIDs, ids)
 	})
@@ -686,7 +686,7 @@ func TestFetch_LegacyMaliciousIDs(t *testing.T) {
 		errUnknown := errors.New("unknown")
 		f := createFetch(t)
 		f.mLegacyMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(nil, errUnknown)
-		ids, err := f.LegacyMaliciousIDs(context.Background(), "p0")
+		ids, err := f.LegacyMaliciousIDs(t.Context(), "p0")
 		require.ErrorIs(t, err, errUnknown)
 		require.Nil(t, ids)
 	})
@@ -703,7 +703,7 @@ func TestFetch_MaliciousIDs(t *testing.T) {
 		resp := codec.MustEncode(&MaliciousIDs{NodeIDs: expectedIDs})
 		f.mh.EXPECT().ID().Return("self").AnyTimes()
 		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(resp, nil)
-		ids, err := f.MaliciousIDs(context.Background(), "p0")
+		ids, err := f.MaliciousIDs(t.Context(), "p0")
 		require.NoError(t, err)
 		require.Equal(t, expectedIDs, ids)
 	})
@@ -712,7 +712,7 @@ func TestFetch_MaliciousIDs(t *testing.T) {
 		errUnknown := errors.New("unknown")
 		f := createFetch(t)
 		f.mMalS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), []byte{}).Return(nil, errUnknown)
-		ids, err := f.MaliciousIDs(context.Background(), "p0")
+		ids, err := f.MaliciousIDs(t.Context(), "p0")
 		require.ErrorIs(t, err, errUnknown)
 		require.Nil(t, ids)
 	})
@@ -724,7 +724,7 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 		f := createFetch(t)
 		expected := generateLayerContent(t)
 		f.mOpn2S.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(expected, nil)
-		res, err := f.GetLayerOpinions(context.Background(), "p0", 7)
+		res, err := f.GetLayerOpinions(t.Context(), "p0", 7)
 		require.NoError(t, err)
 		require.Equal(t, expected, res)
 	})
@@ -733,7 +733,7 @@ func TestFetch_GetLayerOpinions(t *testing.T) {
 		errUnknown := errors.New("unknown")
 		f := createFetch(t)
 		f.mOpn2S.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(nil, errUnknown)
-		res, err := f.GetLayerOpinions(context.Background(), "p0", 7)
+		res, err := f.GetLayerOpinions(t.Context(), "p0", 7)
 		require.ErrorIs(t, err, errUnknown)
 		require.Nil(t, res)
 	})
@@ -745,7 +745,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 		f := createFetch(t)
 		expected := generateLayerContent(t)
 		f.mLyrS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(expected, nil)
-		res, err := f.GetLayerData(context.Background(), "p0", 7)
+		res, err := f.GetLayerData(t.Context(), "p0", 7)
 		require.NoError(t, err)
 		require.Equal(t, expected, res)
 	})
@@ -754,7 +754,7 @@ func TestFetch_GetLayerData(t *testing.T) {
 		errUnknown := errors.New("unknown")
 		f := createFetch(t)
 		f.mLyrS.EXPECT().Request(gomock.Any(), p2p.Peer("p0"), gomock.Any()).Return(nil, errUnknown)
-		res, err := f.GetLayerData(context.Background(), "p0", 7)
+		res, err := f.GetLayerData(t.Context(), "p0", 7)
 		require.ErrorIs(t, err, errUnknown)
 		require.Nil(t, res)
 	})
@@ -855,7 +855,7 @@ func Test_PeerEpochInfo(t *testing.T) {
 							return nil, errors.New(tc.err)
 						})
 			}
-			got, err := f.PeerEpochInfo(context.Background(), peer, types.EpochID(111))
+			got, err := f.PeerEpochInfo(t.Context(), peer, types.EpochID(111))
 			if tc.err == "" {
 				require.NoError(t, err)
 				require.Equal(t, expected, got)
@@ -924,7 +924,7 @@ func TestFetch_GetMeshHashes(t *testing.T) {
 						}
 						return nil, tc.err
 					})
-			got, err := f.PeerMeshHashes(context.Background(), peer, req)
+			got, err := f.PeerMeshHashes(t.Context(), peer, req)
 			if tc.err == nil {
 				require.NoError(t, err)
 				require.Equal(t, expected, *got)
@@ -990,7 +990,7 @@ func TestFetch_GetCert(t *testing.T) {
 					break
 				}
 			}
-			got, err := f.GetCert(context.Background(), lid, bid, peers)
+			got, err := f.GetCert(t.Context(), lid, bid, peers)
 			if tc.err {
 				require.Error(t, err)
 			} else {
@@ -1039,7 +1039,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 
 			var (
 				eg          errgroup.Group
-				ctx, cancel = context.WithCancel(context.Background())
+				ctx, cancel = context.WithCancel(t.Context())
 			)
 			defer cancel()
 			eg.Go(func() error {
@@ -1062,7 +1062,7 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			ps := peers.New()
 			f, err := NewFetch(db, store.New(), host,
 				ps,
-				WithContext(context.Background()),
+				WithContext(t.Context()),
 				withServers(map[string]requester{hashProtocol: client}),
 				WithConfig(cfg),
 			)
@@ -1115,9 +1115,9 @@ func Test_GetAtxsLimiting(t *testing.T) {
 			}
 
 			if withLimiting {
-				err = f.GetAtxs(context.Background(), atxIds)
+				err = f.GetAtxs(t.Context(), atxIds)
 			} else {
-				err = f.GetAtxs(context.Background(), atxIds, system.WithoutLimiting())
+				err = f.GetAtxs(t.Context(), atxIds, system.WithoutLimiting())
 			}
 			require.NoError(t, err)
 		})
@@ -1209,14 +1209,14 @@ func TestBatchErrorIgnore(t *testing.T) {
 func FuzzCertRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleLayerOpinionsReq2(context.Background(), p2p.Peer(""), data)
+		h.handleLayerOpinionsReq2(t.Context(), p2p.Peer(""), data)
 	})
 }
 
 func FuzzMeshHashRequest(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleMeshHashReq(context.Background(), p2p.Peer(""), data)
+		h.handleMeshHashReq(t.Context(), p2p.Peer(""), data)
 	})
 }
 
@@ -1224,14 +1224,14 @@ func FuzzMeshHashRequestStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleMeshHashReqStream(context.Background(), p2p.Peer(""), data, &b)
+		h.handleMeshHashReqStream(t.Context(), p2p.Peer(""), data, &b)
 	})
 }
 
 func FuzzLayerInfo(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleEpochInfoReq(context.Background(), p2p.Peer(""), data)
+		h.handleEpochInfoReq(t.Context(), p2p.Peer(""), data)
 	})
 }
 
@@ -1239,14 +1239,14 @@ func FuzzLayerInfoStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleEpochInfoReqStream(context.Background(), p2p.Peer(""), data, &b)
+		h.handleEpochInfoReqStream(t.Context(), p2p.Peer(""), data, &b)
 	})
 }
 
 func FuzzHashReq(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
-		h.handleHashReq(context.Background(), p2p.Peer(""), data)
+		h.handleHashReq(t.Context(), p2p.Peer(""), data)
 	})
 }
 
@@ -1254,6 +1254,6 @@ func FuzzHashReqStream(f *testing.F) {
 	h := createTestHandler(f)
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var b bytes.Buffer
-		h.handleHashReqStream(context.Background(), p2p.Peer(""), data, &b)
+		h.handleHashReqStream(t.Context(), p2p.Peer(""), data, &b)
 	})
 }

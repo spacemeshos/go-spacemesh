@@ -182,7 +182,7 @@ func TestRegossip(t *testing.T) {
 		tab := newTestBuilder(t, 5)
 		for _, sig := range tab.signers {
 			tab.mclock.EXPECT().CurrentLayer().Return(layer)
-			require.NoError(t, tab.Regossip(context.Background(), sig.NodeID()))
+			require.NoError(t, tab.Regossip(t.Context(), sig.NodeID()))
 		}
 	})
 
@@ -200,9 +200,8 @@ func TestRegossip(t *testing.T) {
 
 		// atx will be regossiped once (by the smesher)
 		tab.mclock.EXPECT().CurrentLayer().Return(layer)
-		ctx := context.Background()
-		tab.mpub.EXPECT().PublishATX(ctx, blob, gomock.Any())
-		require.NoError(t, tab.Regossip(ctx, smesher))
+		tab.mpub.EXPECT().PublishATX(t.Context(), blob, gomock.Any())
+		require.NoError(t, tab.Regossip(t.Context(), smesher))
 	})
 }
 
@@ -233,10 +232,10 @@ func Test_Builder_Multi_InitialPost(t *testing.T) {
 				},
 				nil,
 			)
-			require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
+			require.NoError(t, tab.BuildInitialPost(t.Context(), sig.NodeID()))
 
 			// postClient.Proof() should not be called again
-			require.NoError(t, tab.BuildInitialPost(context.Background(), sig.NodeID()))
+			require.NoError(t, tab.BuildInitialPost(t.Context(), sig.NodeID()))
 			return nil
 		})
 	}

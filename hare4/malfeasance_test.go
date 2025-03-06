@@ -1,7 +1,6 @@
 package hare4
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -87,7 +86,7 @@ func TestHandler_Validate(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &hp)
+		nodeID, err := h.Validate(t.Context(), &hp)
 		require.ErrorContains(t, err, "identity does not exist")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -122,7 +121,7 @@ func TestHandler_Validate(t *testing.T) {
 		hp.Messages[1].Signature = types.RandomEdSignature()
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &hp)
+		nodeID, err := h.Validate(t.Context(), &hp)
 		require.ErrorContains(t, err, "invalid signature")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -158,7 +157,7 @@ func TestHandler_Validate(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &hp)
+		nodeID, err := h.Validate(t.Context(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -193,7 +192,7 @@ func TestHandler_Validate(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &hp)
+		nodeID, err := h.Validate(t.Context(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -228,7 +227,7 @@ func TestHandler_Validate(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &hp)
+		nodeID, err := h.Validate(t.Context(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -267,7 +266,7 @@ func TestHandler_Validate(t *testing.T) {
 		hp.Messages[1].Signature = sig2.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig2.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &hp)
+		nodeID, err := h.Validate(t.Context(), &hp)
 		require.ErrorContains(t, err, "invalid hare malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, nodeID)
 	})
@@ -302,7 +301,7 @@ func TestHandler_Validate(t *testing.T) {
 		hp.Messages[1].Signature = sig.Sign(signing.HARE, hp.Messages[1].SignedBytes())
 		hp.Messages[1].SmesherID = sig.NodeID()
 
-		nodeID, err := h.Validate(context.Background(), &hp)
+		nodeID, err := h.Validate(t.Context(), &hp)
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), nodeID)
 	})

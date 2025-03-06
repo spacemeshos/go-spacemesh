@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -58,7 +57,7 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	atxSvc.validator.(*MocknipostValidator).EXPECT().
 		VerifyChain(gomock.Any(), validAtx.ID(), atxSvc.golden, gomock.Any())
 
-	posAtxID, err := atxSvc.PositioningATX(context.Background(), validAtx.PublishEpoch)
+	posAtxID, err := atxSvc.PositioningATX(t.Context(), validAtx.PublishEpoch)
 	require.NoError(t, err)
 	require.Equal(t, vValidAtx.ID(), posAtxID)
 
@@ -69,11 +68,11 @@ func TestGetPositioningAtxPicksAtxWithValidChain(t *testing.T) {
 	atxSvc.validator.(*MocknipostValidator).EXPECT().
 		VerifyChain(gomock.Any(), validAtx.ID(), atxSvc.golden, gomock.Any())
 
-	posAtxID, err = atxSvc.PositioningATX(context.Background(), validAtx.PublishEpoch+1)
+	posAtxID, err = atxSvc.PositioningATX(t.Context(), validAtx.PublishEpoch+1)
 	require.NoError(t, err)
 	require.Equal(t, vValidAtx.ID(), posAtxID)
 
-	_, err = atxSvc.PositioningATX(context.Background(), validAtx.PublishEpoch-1)
+	_, err = atxSvc.PositioningATX(t.Context(), validAtx.PublishEpoch-1)
 	require.ErrorIs(t, err, ErrNotFound)
 }
 
@@ -95,7 +94,7 @@ func TestFindFullyValidHighTickAtx(t *testing.T) {
 		mValidator.EXPECT().VerifyChain(gomock.Any(), atxLower.ID(), golden, gomock.Any())
 
 		lg := zaptest.NewLogger(t)
-		found, err := findFullyValidHighTickAtx(context.Background(), data, 0, golden, mValidator, lg)
+		found, err := findFullyValidHighTickAtx(t.Context(), data, 0, golden, mValidator, lg)
 		require.NoError(t, err)
 		require.Equal(t, atxLower.ID(), found)
 	})

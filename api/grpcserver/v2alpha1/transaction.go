@@ -37,11 +37,6 @@ type transactionConState interface {
 	HasEvicted(tid types.TransactionID) (bool, error)
 }
 
-// transactionSyncer is an API to get sync status.
-type transactionSyncer interface {
-	IsSynced(context.Context) bool
-}
-
 // transactionValidator is the API to validate and cache transactions.
 type transactionValidator interface {
 	VerifyAndCacheTx(context.Context, []byte) error
@@ -69,7 +64,7 @@ func (s *TransactionStreamService) Stream(
 }
 
 func NewTransactionService(db sql.Executor, conState transactionConState,
-	syncer transactionSyncer, validator transactionValidator,
+	syncer syncer, validator transactionValidator,
 	publisher pubsub.Publisher,
 ) *TransactionService {
 	return &TransactionService{
@@ -84,7 +79,7 @@ func NewTransactionService(db sql.Executor, conState transactionConState,
 type TransactionService struct {
 	db        sql.Executor
 	conState  transactionConState
-	syncer    transactionSyncer
+	syncer    syncer
 	validator transactionValidator
 	publisher pubsub.Publisher // P2P Swarm
 }

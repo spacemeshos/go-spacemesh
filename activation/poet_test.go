@@ -14,7 +14,7 @@ func TestCheckRetry(t *testing.T) {
 	t.Parallel()
 	t.Run("doesn't retry on context cancellation.", func(t *testing.T) {
 		t.Parallel()
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		cancel()
 		retry, err := checkRetry(ctx, nil, nil)
 		require.ErrorIs(t, err, context.Canceled)
@@ -22,13 +22,13 @@ func TestCheckRetry(t *testing.T) {
 	})
 	t.Run("doesn't retry on unrecoverable error.", func(t *testing.T) {
 		t.Parallel()
-		retry, err := checkRetry(context.Background(), nil, &url.Error{Err: errors.New("unsupported protocol scheme")})
+		retry, err := checkRetry(t.Context(), nil, &url.Error{Err: errors.New("unsupported protocol scheme")})
 		require.NoError(t, err)
 		require.False(t, retry)
 	})
 	t.Run("retries on 404 (not found).", func(t *testing.T) {
 		t.Parallel()
-		retry, err := checkRetry(context.Background(), &http.Response{StatusCode: http.StatusNotFound}, nil)
+		retry, err := checkRetry(t.Context(), &http.Response{StatusCode: http.StatusNotFound}, nil)
 		require.NoError(t, err)
 		require.True(t, retry)
 	})

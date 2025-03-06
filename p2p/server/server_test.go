@@ -34,7 +34,7 @@ func (hw *hostWrapper) PeerInfo() peerinfo.PeerInfo {
 	return hw.pi
 }
 
-func wrapHost(tb testing.TB, h host.Host) Host {
+func wrapHost(tb testing.TB, h host.Host) *hostWrapper {
 	pt := peerinfo.NewPeerInfoTracker()
 	pt.Start(h.Network())
 	tb.Cleanup(pt.Stop)
@@ -124,7 +124,7 @@ func TestServer(t *testing.T) {
 			append(opts, WithRequestSizeLimit(limit))...,
 		),
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	var eg errgroup.Group
 	for _, srv := range srvs {
 		eg.Go(func() error {
@@ -263,7 +263,7 @@ func Test_Queued(t *testing.T) {
 	)
 	var (
 		eg          errgroup.Group
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 	)
 	defer cancel()
 	eg.Go(func() error {
@@ -315,7 +315,7 @@ func Test_RequestInterval(t *testing.T) {
 	)
 	var (
 		eg          errgroup.Group
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 	)
 	defer cancel()
 	eg.Go(func() error {
@@ -334,7 +334,7 @@ func Test_RequestInterval(t *testing.T) {
 	}
 
 	// new request will be delayed by the interval
-	resp, err := client.Request(context.Background(), mesh.Hosts()[1].ID(), []byte("ping"))
+	resp, err := client.Request(t.Context(), mesh.Hosts()[1].ID(), []byte("ping"))
 	require.NoError(t, err)
 	require.Equal(t, []byte("ping"), resp)
 

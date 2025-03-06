@@ -97,13 +97,13 @@ func TestDataFetch_PollLayerData(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
-		require.NoError(t, td.PollLayerData(context.Background(), layerID))
+		require.NoError(t, td.PollLayerData(t.Context(), layerID))
 	})
 	t.Run("GetBallots failure", func(t *testing.T) {
 		t.Parallel()
 		td := newTestDataFetchWithMocks(t)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any()).Return(errUnknown)
-		require.ErrorIs(t, td.PollLayerData(context.Background(), layerID), errUnknown)
+		require.ErrorIs(t, td.PollLayerData(t.Context(), layerID), errUnknown)
 	})
 }
 
@@ -116,7 +116,7 @@ func TestDataFetch_PollLayerData_FailToRequest(t *testing.T) {
 	for _, peer := range peers {
 		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peer, types.LayerID(7)).Return(nil, expectedErr)
 	}
-	require.ErrorIs(t, td.PollLayerData(context.Background(), 7), expectedErr)
+	require.ErrorIs(t, td.PollLayerData(t.Context(), 7), expectedErr)
 }
 
 func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
@@ -132,7 +132,7 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 		td.mFetcher.EXPECT().GetLayerData(gomock.Any(), gomock.Any(), lid).Return(nil, errors.New("na")).
 			Times(numPeers - 1)
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
-		require.NoError(t, td.PollLayerData(context.Background(), lid))
+		require.NoError(t, td.PollLayerData(t.Context(), lid))
 	})
 	t.Run("only one peer has empty layer", func(t *testing.T) {
 		t.Parallel()
@@ -144,7 +144,7 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 			td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[i], lid).Return(generateLayerContent(t), nil)
 		}
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
-		require.NoError(t, td.PollLayerData(context.Background(), lid))
+		require.NoError(t, td.PollLayerData(t.Context(), lid))
 	})
 	t.Run("one peer sends malformed data", func(t *testing.T) {
 		t.Parallel()
@@ -156,7 +156,7 @@ func TestDataFetch_PollLayerData_PeerErrors(t *testing.T) {
 			td.mFetcher.EXPECT().GetLayerData(gomock.Any(), peers[i], lid).Return(generateLayerContent(t), nil)
 		}
 		td.mFetcher.EXPECT().GetBallots(gomock.Any(), gomock.Any())
-		require.NoError(t, td.PollLayerData(context.Background(), lid))
+		require.NoError(t, td.PollLayerData(t.Context(), lid))
 	})
 }
 
@@ -246,7 +246,7 @@ func TestDataFetch_PollLayerOpinions(t *testing.T) {
 					})
 			}
 
-			got, certs, err := td.PollLayerOpinions(context.Background(), lid, tc.needCert, peers)
+			got, certs, err := td.PollLayerOpinions(t.Context(), lid, tc.needCert, peers)
 			require.ErrorIs(t, err, tc.err)
 			if err == nil {
 				require.NotEmpty(t, got)
@@ -267,7 +267,7 @@ func TestDataFetch_PollLayerOpinions_FailToRequest(t *testing.T) {
 	td := newTestDataFetch(t)
 	expectedErr := errors.New("failed to request")
 	td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers[0], types.LayerID(10)).Return(nil, expectedErr)
-	_, _, err := td.PollLayerOpinions(context.Background(), 10, false, peers)
+	_, _, err := td.PollLayerOpinions(t.Context(), 10, false, peers)
 	require.ErrorIs(t, err, expectedErr)
 }
 
@@ -275,6 +275,6 @@ func TestDataFetch_PollLayerOpinions_MalformedData(t *testing.T) {
 	peers := []p2p.Peer{"p0"}
 	td := newTestDataFetch(t)
 	td.mFetcher.EXPECT().GetLayerOpinions(gomock.Any(), peers[0], types.LayerID(10)).Return([]byte("malformed"), nil)
-	_, _, err := td.PollLayerOpinions(context.Background(), 10, false, peers)
+	_, _, err := td.PollLayerOpinions(t.Context(), 10, false, peers)
 	require.ErrorContains(t, err, "decode")
 }

@@ -20,7 +20,7 @@ func TestCanBeAggregated(t *testing.T) {
 		fetch       = NewMockblockFetcher(ctrl)
 		req         = make(chan []types.BlockID, 10)
 		out         = make(chan []types.BlockID, 10)
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		eg          errgroup.Group
 	)
 	t.Cleanup(func() {
@@ -54,7 +54,7 @@ func TestErrorDoesntExit(t *testing.T) {
 		fetch       = NewMockblockFetcher(ctrl)
 		req         = make(chan []types.BlockID, 10)
 		out         = make(chan []types.BlockID, 10)
-		ctx, cancel = context.WithCancel(context.Background())
+		ctx, cancel = context.WithCancel(t.Context())
 		eg          errgroup.Group
 	)
 	t.Cleanup(func() {

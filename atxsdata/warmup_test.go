@@ -1,7 +1,6 @@
 package atxsdata
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -81,7 +80,7 @@ func TestWarmup(t *testing.T) {
 		exec := sql.NewMockExecutor(gomock.NewController(t))
 		call := 0
 		fail := 0
-		tx, err := db.Tx(context.Background())
+		tx, err := db.Tx(t.Context())
 		require.NoError(t, err)
 		defer tx.Release()
 		exec.EXPECT().

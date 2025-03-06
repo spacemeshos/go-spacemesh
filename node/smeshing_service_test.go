@@ -79,7 +79,7 @@ func TestNewSmeshingService(t *testing.T) {
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		require.NotNil(t, service)
-		defer service.Close(context.Background())
+		defer service.Close(t.Context())
 
 		// Verify DataDir was created
 		dataDir := cfg.DataDir()
@@ -92,7 +92,7 @@ func TestNewSmeshingService(t *testing.T) {
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
 		require.NotNil(t, service)
-		defer service.Close(context.Background())
+		defer service.Close(t.Context())
 
 		require.Len(t, service.signers, 1)
 
@@ -109,9 +109,9 @@ func TestSmeshingService_Start(t *testing.T) {
 
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
-		defer service.Close(context.Background())
+		defer service.Close(t.Context())
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 		defer cancel()
 
 		var eg errgroup.Group
@@ -148,9 +148,9 @@ func TestSmeshingService_StartSmeshing(t *testing.T) {
 		cfg := getSmeshingServiceTestConfig(t)
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
-		defer service.Close(context.Background())
+		defer service.Close(t.Context())
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer cancel()
 
 		err = service.startServices(ctx)
@@ -163,9 +163,9 @@ func TestSmeshingService_StartSmeshing(t *testing.T) {
 
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
-		defer service.Close(context.Background())
+		defer service.Close(t.Context())
 
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 		defer cancel()
 
 		err = service.startServices(ctx)
@@ -179,7 +179,7 @@ func TestSmeshingService_GRPCServices(t *testing.T) {
 		cfg := getSmeshingServiceTestConfig(t)
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
-		defer service.Close(context.Background())
+		defer service.Close(t.Context())
 
 		services := []grpcserver.Service{
 			grpcserver.Debug,
@@ -199,7 +199,7 @@ func TestSmeshingService_GRPCServices(t *testing.T) {
 		cfg := getSmeshingServiceTestConfig(t)
 		service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 		require.NoError(t, err)
-		defer service.Close(context.Background())
+		defer service.Close(t.Context())
 
 		api, err := service.grpcService("unknown", zaptest.NewLogger(t))
 		require.Error(t, err)
@@ -218,9 +218,9 @@ func TestSmeshingService_NonProxiedServices(t *testing.T) {
 
 	service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 	require.NoError(t, err)
-	defer service.Close(context.Background())
+	defer service.Close(t.Context())
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	require.NoError(t, service.start(ctx))
 
@@ -276,9 +276,9 @@ func TestSmeshingService_PprofServer(t *testing.T) {
 	cfg.PprofMutexProfile = true
 	service, err := NewSmeshingService(cfg, zaptest.NewLogger(t))
 	require.NoError(t, err)
-	defer service.Close(context.Background())
+	defer service.Close(t.Context())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
 	defer cancel()
 
 	require.NoError(t, service.start(ctx))

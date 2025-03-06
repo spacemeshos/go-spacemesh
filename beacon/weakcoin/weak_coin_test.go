@@ -185,15 +185,15 @@ func TestWeakCoin(t *testing.T) {
 				weakcoin.WithLog(zaptest.NewLogger(t)),
 			)
 
-			wc.StartEpoch(context.Background(), epoch)
-			wc.StartRound(context.Background(), round, tc.participants)
+			wc.StartEpoch(t.Context(), epoch)
+			wc.StartRound(t.Context(), round, tc.participants)
 
 			if len(tc.msg) > 0 {
-				require.True(t, tc.result(wc.HandleProposal(context.Background(), "", tc.msg)))
+				require.True(t, tc.result(wc.HandleProposal(t.Context(), "", tc.msg)))
 			}
-			wc.FinishRound(context.Background())
+			wc.FinishRound(t.Context())
 
-			flip, err := wc.Get(context.Background(), epoch, round)
+			flip, err := wc.Get(t.Context(), epoch, round)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, flip)
 		})
@@ -337,11 +337,11 @@ func TestWeakCoin_HandleProposal(t *testing.T) {
 				weakcoin.WithLog(zaptest.NewLogger(t)),
 			)
 
-			wc.StartEpoch(context.Background(), tc.startedEpoch)
-			wc.StartRound(context.Background(), tc.startedRound, []weakcoin.Participant{})
+			wc.StartEpoch(t.Context(), tc.startedEpoch)
+			wc.StartRound(t.Context(), tc.startedRound, []weakcoin.Participant{})
 
-			require.True(t, tc.expected(wc.HandleProposal(context.Background(), "", tc.msg)))
-			wc.FinishRound(context.Background())
+			require.True(t, tc.expected(wc.HandleProposal(t.Context(), "", tc.msg)))
+			wc.FinishRound(t.Context())
 		})
 	}
 }
@@ -371,10 +371,10 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
-	wc.StartEpoch(context.Background(), epoch)
-	wc.StartRound(context.Background(), round, nil)
+	wc.StartEpoch(t.Context(), epoch)
+	wc.StartRound(t.Context(), round, nil)
 	for i := 0; i < bufSize; i++ {
-		wc.HandleProposal(context.Background(), "", codec.MustEncode(&weakcoin.Message{
+		wc.HandleProposal(t.Context(), "", codec.MustEncode(&weakcoin.Message{
 			Epoch:        epoch,
 			Round:        nextRound,
 			Unit:         1,
@@ -382,16 +382,16 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			VRFSignature: oneLSBSig,
 		}))
 	}
-	wc.HandleProposal(context.Background(), "", codec.MustEncode(&weakcoin.Message{
+	wc.HandleProposal(t.Context(), "", codec.MustEncode(&weakcoin.Message{
 		Epoch:        epoch,
 		Round:        nextRound,
 		Unit:         1,
 		VRFSignature: zeroLSBSig,
 	}))
-	wc.FinishRound(context.Background())
-	wc.StartRound(context.Background(), nextRound, nil)
-	wc.FinishRound(context.Background())
-	flip, err := wc.Get(context.Background(), epoch, nextRound)
+	wc.FinishRound(t.Context())
+	wc.StartRound(t.Context(), nextRound, nil)
+	wc.FinishRound(t.Context())
+	flip, err := wc.Get(t.Context(), epoch, nextRound)
 	require.NoError(t, err)
 	require.True(t, flip)
 }
@@ -439,8 +439,8 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		&stubClock{},
 		weakcoin.WithLog(zaptest.NewLogger(t)),
 	)
-	instance.StartEpoch(context.Background(), epoch)
-	instance.StartRound(context.Background(), round, []weakcoin.Participant{
+	instance.StartEpoch(t.Context(), epoch)
+	instance.StartRound(t.Context(), round, []weakcoin.Participant{
 		{
 			Signer: vrfSig,
 			Nonce:  types.VRFPostIndex(1),
@@ -469,7 +469,7 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
 			DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 				for j := range instances {
-					instances[j].HandleProposal(context.Background(), "", data)
+					instances[j].HandleProposal(t.Context(), "", data)
 				}
 				return nil
 			}).AnyTimes()
@@ -498,14 +498,14 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 
 	for epoch := epochStart; epoch <= epochEnd; epoch++ {
 		for _, instance := range instances {
-			instance.StartEpoch(context.Background(), epoch)
+			instance.StartEpoch(t.Context(), epoch)
 		}
 		for current := start; current <= end; current++ {
 			for i, instance := range instances {
 				if i == 0 {
-					instance.StartRound(context.Background(), current, nil)
+					instance.StartRound(t.Context(), current, nil)
 				} else {
-					instance.StartRound(context.Background(), current, []weakcoin.Participant{
+					instance.StartRound(t.Context(), current, []weakcoin.Participant{
 						{
 							Signer: vrfSigners[i],
 							Nonce:  types.VRFPostIndex(1),
@@ -514,18 +514,18 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 				}
 			}
 			for _, instance := range instances {
-				instance.FinishRound(context.Background())
+				instance.FinishRound(t.Context())
 			}
-			rst, err := instances[0].Get(context.Background(), epoch, current)
+			rst, err := instances[0].Get(t.Context(), epoch, current)
 			require.NoError(t, err)
 			for _, instance := range instances[1:] {
-				got, err := instance.Get(context.Background(), epoch, current)
+				got, err := instance.Get(t.Context(), epoch, current)
 				require.NoError(t, err)
 				require.Equal(t, rst, got, "round %d", current)
 			}
 		}
 		for _, instance := range instances {
-			instance.FinishEpoch(context.Background(), epoch)
+			instance.FinishEpoch(t.Context(), epoch)
 		}
 	}
 }

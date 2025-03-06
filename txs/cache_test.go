@@ -1,7 +1,6 @@
 package txs
 
 import (
-	"context"
 	"math/rand/v2"
 	"testing"
 	"time"
@@ -321,7 +320,7 @@ func TestCache_Account_HappyFlow(t *testing.T) {
 	}
 	ta.balance += income
 	applied := makeResults(lid, bid, mtxs[0].Transaction, mtxs[1].Transaction)
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, applied, []types.Transaction{}))
 
 	for _, mtx := range mtxs[:2] {
 		checkNoTX(t, tc.Cache, mtx.ID)
@@ -392,7 +391,7 @@ func TestCache_Account_TXInMultipleLayers(t *testing.T) {
 	ta.nonce++
 	ta.balance = ta.balance - mtxs[0].Spending() + income
 	applied := makeResults(lid, bid0, mtxs[0].Transaction)
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid0, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid0, applied, []types.Transaction{}))
 	checkNoTX(t, tc.Cache, mtxs[0].ID)
 	checkTX(t, tc.Cache, mtxs[1].ID, lid.Add(1), types.EmptyBlockID)
 	for _, mtx := range mtxs[2:] {
@@ -430,7 +429,7 @@ func TestCache_Account_EmptyLayerApplied_LowerNonceBackToMempool(t *testing.T) {
 
 	// empty layer is applied.
 	// there is also an incoming fund of `income` to the principal's account
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, types.EmptyBlockID, nil, nil))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, types.EmptyBlockID, nil, nil))
 	checkTX(t, tc.Cache, mtxs[0].ID, 0, types.EmptyBlockID)
 	checkTX(t, tc.Cache, mtxs[1].ID, lid.Add(1), types.EmptyBlockID)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
@@ -470,7 +469,7 @@ func TestCache_Account_EmptyLayerApplied_HigherNonceBackToMempool(t *testing.T) 
 
 	// empty layer is applied.
 	// there is also an incoming fund of `income` to the principal's account
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, types.EmptyBlockID, nil, nil))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, types.EmptyBlockID, nil, nil))
 	checkTX(t, tc.Cache, mtxs[0].ID, lid.Add(1), types.EmptyBlockID)
 	checkTX(t, tc.Cache, mtxs[1].ID, 0, types.EmptyBlockID)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
@@ -590,7 +589,7 @@ func TestCache_Account_Add_TooManyNonce_OK(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce+maxTXsPerAcct, defaultAmount, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.Background(), tc.db, &oneTooMany.Transaction, oneTooMany.Received))
+	require.NoError(t, tc.Add(t.Context(), tc.db, &oneTooMany.Transaction, oneTooMany.Received))
 	require.True(t, tc.MoreInDB(ta.principal))
 	checkNoTX(t, tc.Cache, oneTooMany.ID)
 	checkTXStateFromDB(t, tc.db, append(mtxs, oneTooMany), types.MEMPOOL)
@@ -615,7 +614,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, defaultAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.Background(), tc.db, &better.Transaction, better.Received))
+	require.NoError(t, tc.Add(t.Context(), tc.db, &better.Transaction, better.Received))
 	checkTX(t, tc.Cache, better.ID, 0, types.EmptyBlockID)
 	checkNoTX(t, tc.Cache, oldOne.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce+1, ta.balance-better.Spending())
@@ -636,7 +635,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 		Transaction: *newTx(t, ta.nonce, bigAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.NoError(t, tc.Add(context.Background(), tc.db, &better.Transaction, better.Received))
+	require.NoError(t, tc.Add(t.Context(), tc.db, &better.Transaction, better.Received))
 	checkTX(t, tc.Cache, better.ID, 0, types.EmptyBlockID)
 	for _, mtx := range mtxs {
 		checkNoTX(t, tc.Cache, mtx.ID)
@@ -663,7 +662,7 @@ func TestCache_Account_Add_UpdateHeader(t *testing.T) {
 	require.Nil(t, got.TxHeader)
 
 	// update header and cache during execution
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, tx, time.Now()), errBadNonce)
+	require.ErrorIs(t, tc.Add(t.Context(), tc.db, tx, time.Now()), errBadNonce)
 	got, err = transactions.Get(tc.db, tx.ID)
 	require.NoError(t, err)
 	require.Nil(t, got.TxHeader)
@@ -674,7 +673,7 @@ func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
 	buildSingleAccountCache(t, tc, ta, nil)
 
 	tx := newTx(t, ta.nonce-1, defaultAmount, defaultFee, ta.signer)
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, tx, time.Now()), errBadNonce)
+	require.ErrorIs(t, tc.Add(t.Context(), tc.db, tx, time.Now()), errBadNonce)
 	checkNoTX(t, tc.Cache, tx.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
@@ -693,7 +692,7 @@ func TestCache_Account_Add_RandomOrder(t *testing.T) {
 		sorted[i], sorted[j] = sorted[j], sorted[i]
 	})
 	for _, mtx := range sorted {
-		require.NoError(t, tc.Add(context.Background(), tc.db, &mtx.Transaction, mtx.Received))
+		require.NoError(t, tc.Add(t.Context(), tc.db, &mtx.Transaction, mtx.Received))
 	}
 	newBalance := ta.balance
 	for _, mtx := range mtxs {
@@ -722,7 +721,7 @@ func TestCache_Account_ReplaceByFee(t *testing.T) {
 	rbfTx := newMeshTX(t, ta.nonce, ta.signer, defaultAmount+500, now.Add(time.Second*time.Duration(10)))
 	rbfTx.GasPrice = defaultFee + 1
 	rbfTx.MaxGas = 1
-	err := tc.Cache.Add(context.Background(), tc.db, &rbfTx.Transaction, now.Add(time.Second*time.Duration(20)))
+	err := tc.Cache.Add(t.Context(), tc.db, &rbfTx.Transaction, now.Add(time.Second*time.Duration(20)))
 	require.NoError(t, err)
 
 	checkTX(t, tc.Cache, rbfTx.ID, 0, types.EmptyBlockID)
@@ -739,7 +738,7 @@ func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, &mtx.Transaction, mtx.Received), errInsufficientBalance)
+	require.ErrorIs(t, tc.Add(t.Context(), tc.db, &mtx.Transaction, mtx.Received), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, mtx.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
@@ -750,7 +749,7 @@ func TestCache_Account_Add_InsufficientBalance_ResetAfterApply(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	// the account will receive funds in layer 97 (via rewards or incoming transfer)
 	ta.balance += ta.balance
-	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
+	require.NoError(t, tc.Cache.ApplyLayer(t.Context(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
 
 	checkMempool(t, tc.Cache, nil)
 	require.False(t, tc.MoreInDB(ta.principal))
@@ -769,8 +768,8 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 		Transaction: *newTx(t, ta.nonce+10, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, &mtx0.Transaction, mtx0.Received), errInsufficientBalance)
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, &mtx1.Transaction, mtx1.Received), errInsufficientBalance)
+	require.ErrorIs(t, tc.Add(t.Context(), tc.db, &mtx0.Transaction, mtx0.Received), errInsufficientBalance)
+	require.ErrorIs(t, tc.Add(t.Context(), tc.db, &mtx1.Transaction, mtx1.Received), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, mtx0.ID)
 	checkNoTX(t, tc.Cache, mtx1.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
@@ -781,7 +780,7 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 
 	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
-	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
+	require.NoError(t, tc.Cache.ApplyLayer(t.Context(), tc.db, lid, types.BlockID{1, 2, 3}, nil, nil))
 	checkNoTX(t, tc.Cache, mtx0.ID)
 	checkNoTX(t, tc.Cache, mtx1.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
@@ -793,7 +792,7 @@ func TestCache_Account_Add_InsufficientBalance_HigherNonceFeasibleFirst(t *testi
 	// for some reasons this account wasn't applied in layer 98.
 	// but the account receive enough funds in layer 98 (via rewards or incoming transfer) for both mtx0 and mtx1
 	ta.balance = mtx0.Spending() + mtx1.Spending()
-	require.NoError(t, tc.Cache.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{2, 3, 4}, nil, nil))
+	require.NoError(t, tc.Cache.ApplyLayer(t.Context(), tc.db, lid, types.BlockID{2, 3, 4}, nil, nil))
 	checkNoTX(t, tc.Cache, mtx0.ID)
 	checkNoTX(t, tc.Cache, mtx1.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
@@ -809,7 +808,7 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, defaultBalance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	require.ErrorIs(t, tc.Add(context.Background(), tc.db, &mtx.Transaction, mtx.Received), errInsufficientBalance)
+	require.ErrorIs(t, tc.Add(t.Context(), tc.db, &mtx.Transaction, mtx.Received), errInsufficientBalance)
 	checkNoTX(t, tc.Cache, mtx.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
@@ -830,7 +829,7 @@ func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce, ta.balance, defaultFee, ta.signer),
 		Received:    time.Now(),
 	}
-	err := tc.Add(context.Background(), tc.db, &spender.Transaction, spender.Received)
+	err := tc.Add(t.Context(), tc.db, &spender.Transaction, spender.Received)
 	require.ErrorIs(t, err, errInsufficientBalance)
 	checkNoTX(t, tc.Cache, spender.ID)
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce+1, ta.balance-mtx.Spending())
@@ -859,7 +858,7 @@ func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
 	ta.nonce = newNextNonce + 2
 	ta.balance = newBalance - mtxs[1].Spending() - mtxs[2].Spending()
 
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, applied, []types.Transaction{}))
 	checkProjection(t, tc.Cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.Cache, nil)
 	checkTXStateFromDB(t, tc.db, mtxs, types.APPLIED)
@@ -881,7 +880,7 @@ func TestCache_Account_TooManyNonceAfterApply(t *testing.T) {
 	applied := makeResults(lid, bid, mtxs[0].Transaction)
 	// more txs arrived
 	saveTXs(t, tc.db, mtxs[1:])
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, applied, []types.Transaction{}))
 
 	pending := mtxs[1:]
 	// cache can only accommodate maxTXsPerAcct nonce
@@ -910,7 +909,7 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	largeAmount := defaultBalance
 	for _, p := range pending {
 		p.MaxSpend = largeAmount
-		require.ErrorIs(t, tc.Add(context.Background(), tc.db, &p.Transaction, p.Received), errInsufficientBalance)
+		require.ErrorIs(t, tc.Add(t.Context(), tc.db, &p.Transaction, p.Received), errInsufficientBalance)
 		checkNoTX(t, tc.Cache, p.ID)
 		checkTXNotInDB(t, tc.db, p.ID)
 	}
@@ -928,7 +927,7 @@ func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, applied, []types.Transaction{}))
 	// all pending txs are added to cache now
 	newNextNonce = ta.nonce
 	newBalance = ta.balance
@@ -949,7 +948,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 		Transaction: *newTx(t, ta.nonce+1, largeAmount, higherFee, ta.signer),
 		Received:    time.Now(),
 	}
-	err := tc.Add(context.Background(), tc.db, &better.Transaction, better.Received)
+	err := tc.Add(t.Context(), tc.db, &better.Transaction, better.Received)
 	require.ErrorIs(t, err, errInsufficientBalance)
 	checkNoTX(t, tc.Cache, better.ID)
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
@@ -965,7 +964,7 @@ func TestCache_Account_BalanceRelaxedAfterApply_EvictLaterNonce(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtxs[0].Transaction)
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, applied, []types.Transaction{}))
 	expectedMempool = map[types.Address][]*types.MeshTransaction{ta.principal: mtxs[1:]}
 	checkMempool(t, tc.Cache, expectedMempool)
 	checkTXStateFromDB(t, tc.db, mtxs[:1], types.APPLIED)
@@ -987,7 +986,7 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(1), types.RandomBlockID()))
 	bid := types.BlockID{1, 2, 3}
 	applied := makeResults(lid, bid, mtx.Transaction)
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, applied, []types.Transaction{}))
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	checkMempool(t, tc.Cache, nil)
 	require.False(t, tc.MoreInDB(ta.principal))
@@ -1014,7 +1013,7 @@ func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 		Received:    time.Now(),
 	}
 	saveTXs(t, tc.db, []*types.MeshTransaction{pendingInsufficient})
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, applied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, applied, []types.Transaction{}))
 	checkProjection(t, tc.Cache, ta.principal, newNextNonce, newBalance)
 	checkMempool(t, tc.Cache, nil)
 	require.True(t, tc.MoreInDB(ta.principal))
@@ -1267,7 +1266,7 @@ func TestCache_ApplyLayerAndRevert(t *testing.T) {
 		accounts[principal].balance = newBalance
 		allApplied = append(allApplied, applied...)
 	}
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, allApplied, []types.Transaction{}))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, allApplied, []types.Transaction{}))
 	checkTXStateFromDB(t, tc.db, appliedMTXs, types.APPLIED)
 	checkTXStateFromDB(t, tc.db, allPendingMTXs, types.MEMPOOL)
 
@@ -1331,7 +1330,7 @@ func TestCache_ApplyLayerWithSkippedTXs(t *testing.T) {
 	require.NoError(t, transactions.Add(tc.db, skippedNotInCache, time.Now()))
 	allSkipped = append(allSkipped, *skippedNotInCache)
 
-	require.NoError(t, tc.ApplyLayer(context.Background(), tc.db, lid, bid, allApplied, allSkipped))
+	require.NoError(t, tc.ApplyLayer(t.Context(), tc.db, lid, bid, allApplied, allSkipped))
 	checkTXStateFromDB(t, tc.db, appliedMTXs, types.APPLIED)
 	checkTXStateFromDB(t, tc.db, allPendingMTXs, types.MEMPOOL)
 	for _, addr := range addrs {
@@ -1349,7 +1348,7 @@ func TestCache_ApplyLayer_OutOfOrder(t *testing.T) {
 	buildSmallCache(t, tc, accounts, 10)
 	lid := types.LayerID(97)
 	require.NoError(t, layers.SetApplied(tc.db, lid.Sub(2), types.RandomBlockID()))
-	err := tc.ApplyLayer(context.Background(), tc.db, lid, types.BlockID{1, 2, 3}, nil, []types.Transaction{})
+	err := tc.ApplyLayer(t.Context(), tc.db, lid, types.BlockID{1, 2, 3}, nil, []types.Transaction{})
 	require.ErrorIs(t, err, errLayerNotInOrder)
 }
 

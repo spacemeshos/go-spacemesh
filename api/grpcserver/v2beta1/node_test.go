@@ -1,7 +1,6 @@
 package v2beta1
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -20,7 +19,7 @@ const (
 )
 
 func TestNodeService_Status(t *testing.T) {
-	ctrl, ctx := gomock.WithContext(context.Background(), t)
+	ctrl, ctx := gomock.WithContext(t.Context(), t)
 	peerCounter := NewMocknodePeerCounter(ctrl)
 	meshAPI := NewMocknodeMeshAPI(ctrl)
 	syncer := NewMocknodeSyncer(ctrl)
@@ -59,13 +58,13 @@ func TestNodeService_Status(t *testing.T) {
 	})
 
 	t.Run("node version", func(t *testing.T) {
-		version, err := client.Version(context.Background(), &spacemeshv2beta1.NodeVersionRequest{})
+		version, err := client.Version(t.Context(), &spacemeshv2beta1.NodeVersionRequest{})
 		require.NoError(t, err)
 		require.Equal(t, testVersion, version.Version)
 	})
 
 	t.Run("node build", func(t *testing.T) {
-		build, err := client.Build(context.Background(), &spacemeshv2beta1.NodeBuildRequest{})
+		build, err := client.Build(t.Context(), &spacemeshv2beta1.NodeBuildRequest{})
 		require.NoError(t, err)
 		require.Equal(t, testCommit, build.Build)
 	})

@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"errors"
 	"testing"
 	"time"
@@ -26,11 +25,11 @@ func TestOffloadingPostVerifier(t *testing.T) {
 	verifier.EXPECT().Close()
 
 	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any())
-	err := offloadingVerifier.Verify(context.Background(), &proof, &metadata)
+	err := offloadingVerifier.Verify(t.Context(), &proof, &metadata)
 	require.NoError(t, err)
 
 	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any()).Return(errors.New("invalid proof!"))
-	err = offloadingVerifier.Verify(context.Background(), &proof, &metadata)
+	err = offloadingVerifier.Verify(t.Context(), &proof, &metadata)
 	require.ErrorContains(t, err, "invalid proof!")
 }
 
@@ -38,7 +37,7 @@ func TestPostVerifierDetectsInvalidProof(t *testing.T) {
 	verifier, err := NewPostVerifier(PostConfig{}, zaptest.NewLogger(t))
 	require.NoError(t, err)
 	defer verifier.Close()
-	require.Error(t, verifier.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}))
+	require.Error(t, verifier.Verify(t.Context(), &shared.Proof{}, &shared.ProofMetadata{}))
 }
 
 func TestPostVerifierVerifyAfterStop(t *testing.T) {
@@ -50,14 +49,14 @@ func TestPostVerifierVerifyAfterStop(t *testing.T) {
 	defer offloadingVerifier.Close()
 
 	verifier.EXPECT().Verify(gomock.Any(), &proof, &metadata, gomock.Any())
-	err := offloadingVerifier.Verify(context.Background(), &proof, &metadata)
+	err := offloadingVerifier.Verify(t.Context(), &proof, &metadata)
 	require.NoError(t, err)
 
 	// Stop the verifier
 	verifier.EXPECT().Close()
 	offloadingVerifier.Close()
 
-	err = offloadingVerifier.Verify(context.Background(), &proof, &metadata)
+	err = offloadingVerifier.Verify(t.Context(), &proof, &metadata)
 	require.EqualError(t, err, "verifier is closed")
 }
 
@@ -83,7 +82,7 @@ func TestPostVerifierNoRaceOnClose(t *testing.T) {
 		ms := 10 * i
 		eg.Go(func() error {
 			time.Sleep(time.Duration(ms) * time.Millisecond)
-			return offloadingVerifier.Verify(context.Background(), &proof, &metadata)
+			return offloadingVerifier.Verify(t.Context(), &proof, &metadata)
 		})
 	}
 
@@ -98,7 +97,7 @@ func TestPostVerifierClose(t *testing.T) {
 	verifier.EXPECT().Close()
 	require.NoError(t, v.Close())
 
-	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{})
+	err := v.Verify(t.Context(), &shared.Proof{}, &shared.ProofMetadata{})
 	require.EqualError(t, err, "verifier is closed")
 }
 
@@ -109,12 +108,12 @@ func TestPostVerifierPrioritization(t *testing.T) {
 
 	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), &shared.ProofMetadata{NodeId: nodeID.Bytes()}, gomock.Any())
 
-	err := v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
+	err := v.Verify(t.Context(), &shared.Proof{}, &shared.ProofMetadata{NodeId: nodeID.Bytes()})
 	require.NoError(t, err)
 
-	verifier.EXPECT().Verify(context.Background(), gomock.Any(), &shared.ProofMetadata{}, gomock.Any())
+	verifier.EXPECT().Verify(t.Context(), gomock.Any(), &shared.ProofMetadata{}, gomock.Any())
 
-	err = v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}, PrioritizedCall())
+	err = v.Verify(t.Context(), &shared.Proof{}, &shared.ProofMetadata{}, PrioritizedCall())
 	require.NoError(t, err)
 
 	verifier.EXPECT().Close()
@@ -126,6 +125,6 @@ func TestVerificationDisabled(t *testing.T) {
 	opts.Disabled = true
 	v, err := NewPostVerifier(DefaultPostConfig(), zap.NewNop(), WithVerifyingOpts(opts))
 	require.NoError(t, err)
-	require.NoError(t, v.Verify(context.Background(), &shared.Proof{}, &shared.ProofMetadata{}))
+	require.NoError(t, v.Verify(t.Context(), &shared.Proof{}, &shared.ProofMetadata{}))
 	require.NoError(t, v.Close())
 }

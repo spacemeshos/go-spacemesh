@@ -122,7 +122,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 
 	t.Run("limit set too high", func(t *testing.T) {
 		client := spacemeshv2beta1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
-		_, err := client.List(context.Background(), &spacemeshv2beta1.MalfeasanceRequest{Limit: 200})
+		_, err := client.List(t.Context(), &spacemeshv2beta1.MalfeasanceRequest{Limit: 200})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -133,7 +133,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 
 	t.Run("no limit set", func(t *testing.T) {
 		client := spacemeshv2beta1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
-		_, err := client.List(context.Background(), &spacemeshv2beta1.MalfeasanceRequest{})
+		_, err := client.List(t.Context(), &spacemeshv2beta1.MalfeasanceRequest{})
 		require.Error(t, err)
 
 		s, ok := status.FromError(err)
@@ -144,7 +144,7 @@ func TestMalfeasanceService_List(t *testing.T) {
 
 	t.Run("limit and offset", func(t *testing.T) {
 		client := spacemeshv2beta1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
-		list, err := client.List(context.Background(), &spacemeshv2beta1.MalfeasanceRequest{
+		list, err := client.List(t.Context(), &spacemeshv2beta1.MalfeasanceRequest{
 			Limit:  25,
 			Offset: 50,
 		})
@@ -154,14 +154,14 @@ func TestMalfeasanceService_List(t *testing.T) {
 
 	t.Run("all", func(t *testing.T) {
 		client := spacemeshv2beta1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
-		list, err := client.List(context.Background(), &spacemeshv2beta1.MalfeasanceRequest{Limit: 100})
+		list, err := client.List(t.Context(), &spacemeshv2beta1.MalfeasanceRequest{Limit: 100})
 		require.NoError(t, err)
 		require.Len(t, list.Proofs, 90)
 	})
 
 	t.Run("smesherId", func(t *testing.T) {
 		client := spacemeshv2beta1.NewMalfeasanceServiceClient(dialGrpc(t, cfg))
-		list, err := client.List(context.Background(), &spacemeshv2beta1.MalfeasanceRequest{
+		list, err := client.List(t.Context(), &spacemeshv2beta1.MalfeasanceRequest{
 			Limit:     1,
 			SmesherId: [][]byte{proofs[1].ID.Bytes()},
 		})
@@ -268,7 +268,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 		legacyInfo := NewMockmalfeasanceInfo(ctrl)
 		client := setup(t, db, info, legacyInfo)
 
-		stream, err := client.Stream(context.Background(), &spacemeshv2beta1.MalfeasanceStreamRequest{})
+		stream, err := client.Stream(t.Context(), &spacemeshv2beta1.MalfeasanceStreamRequest{})
 		require.NoError(t, err)
 
 		var i int
@@ -387,7 +387,7 @@ func TestMalfeasanceStreamService_Stream(t *testing.T) {
 			return nil
 		})
 
-		stream, err := client.Stream(context.Background(), request)
+		stream, err := client.Stream(t.Context(), request)
 		require.NoError(t, err)
 
 		for _, rst := range expect {

@@ -24,7 +24,7 @@ type globalStateServiceConn struct {
 }
 
 func setupGlobalStateService(tb testing.TB) (*globalStateServiceConn, context.Context) {
-	ctrl, mockCtx := gomock.WithContext(context.Background(), tb)
+	ctrl, mockCtx := gomock.WithContext(tb.Context(), tb)
 	meshAPI := NewMockmeshAPI(ctrl)
 	conStateAPI := NewMockconservativeState(ctrl)
 	svc := NewGlobalStateService(meshAPI, conStateAPI)

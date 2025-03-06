@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -67,6 +66,6 @@ func TestPostState_OnProof(t *testing.T) {
 		mpostStates.EXPECT().Set(id, types.PostStateIdle),
 	)
 
-	_, _, err = nb.Proof(context.Background(), id, []byte("abc"), nil)
+	_, _, err = nb.Proof(t.Context(), id, []byte("abc"), nil)
 	require.NoError(t, err)
 }

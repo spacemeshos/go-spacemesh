@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -241,7 +240,7 @@ func TestPublish(t *testing.T) {
 		proof := wire.NewMockProof(th.ctrl)
 
 		proof.EXPECT().AllowNoRefATXs().Return(false)
-		proof.EXPECT().Valid(context.Background(), th.MalfeasanceHandlerV2).Return(nodeID, nil)
+		proof.EXPECT().Valid(t.Context(), th.MalfeasanceHandlerV2).Return(nodeID, nil)
 		proof.EXPECT().Type().Return(wire.DoubleMarry).AnyTimes()
 		proof.EXPECT().EncodeScale(gomock.Any())
 
@@ -251,9 +250,9 @@ func TestPublish(t *testing.T) {
 
 			Proof: []byte{},
 		}
-		th.mPublish.EXPECT().PublishATXProof(context.Background(), nodeID, codec.MustEncode(atxProof), false)
+		th.mPublish.EXPECT().PublishATXProof(t.Context(), nodeID, codec.MustEncode(atxProof), false)
 
-		err := th.Publish(context.Background(), nodeID, proof)
+		err := th.Publish(t.Context(), nodeID, proof)
 		require.NoError(t, err)
 	})
 
@@ -266,7 +265,7 @@ func TestPublish(t *testing.T) {
 		proof := wire.NewMockProof(th.ctrl)
 
 		proof.EXPECT().AllowNoRefATXs().Return(true)
-		proof.EXPECT().Valid(context.Background(), th.MalfeasanceHandlerV2).Return(nodeID, nil)
+		proof.EXPECT().Valid(t.Context(), th.MalfeasanceHandlerV2).Return(nodeID, nil)
 		proof.EXPECT().Type().Return(wire.InvalidPost).AnyTimes()
 		proof.EXPECT().EncodeScale(gomock.Any())
 
@@ -276,9 +275,9 @@ func TestPublish(t *testing.T) {
 
 			Proof: []byte{},
 		}
-		th.mPublish.EXPECT().PublishATXProof(context.Background(), nodeID, codec.MustEncode(atxProof), true)
+		th.mPublish.EXPECT().PublishATXProof(t.Context(), nodeID, codec.MustEncode(atxProof), true)
 
-		err := th.Publish(context.Background(), nodeID, proof)
+		err := th.Publish(t.Context(), nodeID, proof)
 		require.NoError(t, err)
 	})
 
@@ -290,9 +289,9 @@ func TestPublish(t *testing.T) {
 		proof := wire.NewMockProof(th.ctrl)
 		nodeID := types.RandomNodeID()
 		errInvalidProof := errors.New("invalid proof")
-		proof.EXPECT().Valid(context.Background(), th.MalfeasanceHandlerV2).Return(types.EmptyNodeID, errInvalidProof)
+		proof.EXPECT().Valid(t.Context(), th.MalfeasanceHandlerV2).Return(types.EmptyNodeID, errInvalidProof)
 
-		err := th.Publish(context.Background(), nodeID, proof)
+		err := th.Publish(t.Context(), nodeID, proof)
 		require.ErrorIs(t, err, errInvalidProof)
 		require.ErrorContains(t, err, "proof not valid")
 	})
@@ -308,7 +307,7 @@ func TestPublish(t *testing.T) {
 
 		proof := wire.NewMockProof(th.ctrl)
 
-		err = th.Publish(context.Background(), sig1.NodeID(), proof)
+		err = th.Publish(t.Context(), sig1.NodeID(), proof)
 		require.ErrorContains(t, err, fmt.Sprintf("identity %s is managed by node", sig1.NodeID()))
 	})
 
@@ -321,9 +320,9 @@ func TestPublish(t *testing.T) {
 		sig2 := types.RandomNodeID()
 
 		proof := wire.NewMockProof(th.ctrl)
-		proof.EXPECT().Valid(context.Background(), th.MalfeasanceHandlerV2).Return(sig2, nil)
+		proof.EXPECT().Valid(t.Context(), th.MalfeasanceHandlerV2).Return(sig2, nil)
 
-		err := th.Publish(context.Background(), sig1, proof)
+		err := th.Publish(t.Context(), sig1, proof)
 		require.ErrorContains(t, err,
 			fmt.Sprintf("proof for %s does not match node ID %s", sig2.ShortString(), sig1.ShortString()),
 		)
@@ -342,7 +341,7 @@ func TestMalfeasanceRegossip(t *testing.T) {
 		require.NoError(t, err)
 		th.Register(sig1)
 
-		err = th.Regossip(context.Background(), sig1.NodeID())
+		err = th.Regossip(t.Context(), sig1.NodeID())
 		require.ErrorContains(t, err, fmt.Sprintf("identity %s is managed by node", sig1.NodeID()))
 	})
 
@@ -354,7 +353,7 @@ func TestMalfeasanceRegossip(t *testing.T) {
 		nodeID := types.RandomNodeID()
 		th.mPublish.EXPECT().Regossip(gomock.Any(), nodeID).Return(nil)
 
-		err := th.Regossip(context.Background(), nodeID)
+		err := th.Regossip(t.Context(), nodeID)
 		require.NoError(t, err)
 	})
 
@@ -367,7 +366,7 @@ func TestMalfeasanceRegossip(t *testing.T) {
 		errRegossip := errors.New("regossip error")
 		th.mPublish.EXPECT().Regossip(gomock.Any(), nodeID).Return(errRegossip)
 
-		err := th.Regossip(context.Background(), nodeID)
+		err := th.Regossip(t.Context(), nodeID)
 		require.ErrorIs(t, err, errRegossip)
 	})
 }
@@ -380,7 +379,7 @@ func TestValidate(t *testing.T) {
 
 		th := newTestMalHandler(t)
 
-		id, err := th.Validate(context.Background(), []byte{})
+		id, err := th.Validate(t.Context(), []byte{})
 		require.ErrorContains(t, err, "decoding ATX malfeasance proof")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -395,7 +394,7 @@ func TestValidate(t *testing.T) {
 			ProofType: 0x42, // unknown proof type
 		}
 
-		id, err := th.Validate(context.Background(), codec.MustEncode(atxProof))
+		id, err := th.Validate(t.Context(), codec.MustEncode(atxProof))
 		require.ErrorContains(t, err, "unknown ATX malfeasance proof type")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -411,7 +410,7 @@ func TestValidate(t *testing.T) {
 			Proof:     []byte{}, // invalid proof
 		}
 
-		id, err := th.Validate(context.Background(), codec.MustEncode(atxProof))
+		id, err := th.Validate(t.Context(), codec.MustEncode(atxProof))
 		require.ErrorContains(t, err, "decoding ATX malfeasance proof of type 0x11")
 		require.Equal(t, types.EmptyNodeID, id)
 	})
@@ -461,7 +460,7 @@ func TestValidate(t *testing.T) {
 		}
 
 		th.mValidator.EXPECT().PostV2(
-			context.Background(),
+			t.Context(),
 			proof.NodeID,
 			proof.InvalidPostProof.CommitmentATX,
 			wire.PostFromWireV1(&proof.InvalidPostProof.Post),
@@ -474,7 +473,7 @@ func TestValidate(t *testing.T) {
 			}),
 		).Return(errors.New("invalid post"))
 		th.mValidator.EXPECT().PostV2(
-			context.Background(),
+			t.Context(),
 			proof.NodeID,
 			proof.InvalidPostProof.CommitmentATX,
 			wire.PostFromWireV1(&proof.InvalidPostProof.Post),
@@ -486,7 +485,7 @@ func TestValidate(t *testing.T) {
 				return *opts.postIdx == int(proof.InvalidPostProof.ValidPostIndex)
 			}),
 		).Return(nil)
-		id, err := th.Validate(context.Background(), codec.MustEncode(atxProof))
+		id, err := th.Validate(t.Context(), codec.MustEncode(atxProof))
 		require.NoError(t, err)
 		require.Equal(t, sig.NodeID(), id)
 	})
@@ -506,7 +505,7 @@ func TestValidate(t *testing.T) {
 			Proof:     codec.MustEncode(proof),
 		}
 
-		id, err := th.Validate(context.Background(), codec.MustEncode(atxProof))
+		id, err := th.Validate(t.Context(), codec.MustEncode(atxProof))
 		require.ErrorContains(t, err, "validating ATX malfeasance proof:")
 		require.Equal(t, types.EmptyNodeID, id)
 	})

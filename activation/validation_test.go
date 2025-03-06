@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"testing"
@@ -42,7 +41,7 @@ func Test_Validation_VRFNonce(t *testing.T) {
 		initialization.WithInitOpts(initOpts.ToInitOpts()),
 	)
 	r.NoError(err)
-	r.NoError(init.Initialize(context.Background()))
+	r.NoError(init.Initialize(t.Context()))
 	r.NotNil(init.Nonce())
 
 	nonce := *init.Nonce()
@@ -264,13 +263,13 @@ func Test_Validation_Post(t *testing.T) {
 	meta := types.PostMetadata{LabelsPerUnit: postCfg.LabelsPerUnit}
 
 	postVerifier.EXPECT().Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).Return(nil)
-	err := v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1)
+	err := v.Post(t.Context(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1)
 	require.NoError(t, err)
 
 	postVerifier.EXPECT().
 		Verify(gomock.Any(), (*shared.Proof)(&post), gomock.Any(), gomock.Any()).
 		Return(errors.New("invalid"))
-	err = v.Post(context.Background(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1)
+	err = v.Post(t.Context(), types.EmptyNodeID, types.RandomATXID(), &post, &meta, 1)
 	require.Error(t, err)
 }
 
@@ -476,7 +475,7 @@ func TestValidateMerkleProof(t *testing.T) {
 
 func TestVerifyChainDeps(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)
@@ -662,7 +661,7 @@ func TestVerifyChainDeps(t *testing.T) {
 
 func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 	db := statesql.InMemoryTest(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	goldenATXID := types.ATXID{2, 3, 4}
 	signer, err := signing.NewEdSigner()
 	require.NoError(t, err)

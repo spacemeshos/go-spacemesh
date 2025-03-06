@@ -230,68 +230,6 @@ func (c *MockSyncValidatorHandleMessageCall) DoAndReturn(f func(context.Context,
 	return c
 }
 
-// MockPoetValidator is a mock of PoetValidator interface.
-type MockPoetValidator struct {
-	ctrl     *gomock.Controller
-	recorder *MockPoetValidatorMockRecorder
-	isgomock struct{}
-}
-
-// MockPoetValidatorMockRecorder is the mock recorder for MockPoetValidator.
-type MockPoetValidatorMockRecorder struct {
-	mock *MockPoetValidator
-}
-
-// NewMockPoetValidator creates a new mock instance.
-func NewMockPoetValidator(ctrl *gomock.Controller) *MockPoetValidator {
-	mock := &MockPoetValidator{ctrl: ctrl}
-	mock.recorder = &MockPoetValidatorMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPoetValidator) EXPECT() *MockPoetValidatorMockRecorder {
-	return m.recorder
-}
-
-// ValidateAndStoreMsg mocks base method.
-func (m *MockPoetValidator) ValidateAndStoreMsg(arg0 context.Context, arg1 types.Hash32, arg2 p2p.Peer, arg3 []byte) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndStoreMsg", arg0, arg1, arg2, arg3)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// ValidateAndStoreMsg indicates an expected call of ValidateAndStoreMsg.
-func (mr *MockPoetValidatorMockRecorder) ValidateAndStoreMsg(arg0, arg1, arg2, arg3 any) *MockPoetValidatorValidateAndStoreMsgCall {
-	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndStoreMsg", reflect.TypeOf((*MockPoetValidator)(nil).ValidateAndStoreMsg), arg0, arg1, arg2, arg3)
-	return &MockPoetValidatorValidateAndStoreMsgCall{Call: call}
-}
-
-// MockPoetValidatorValidateAndStoreMsgCall wrap *gomock.Call
-type MockPoetValidatorValidateAndStoreMsgCall struct {
-	*gomock.Call
-}
-
-// Return rewrite *gomock.Call.Return
-func (c *MockPoetValidatorValidateAndStoreMsgCall) Return(arg0 error) *MockPoetValidatorValidateAndStoreMsgCall {
-	c.Call = c.Call.Return(arg0)
-	return c
-}
-
-// Do rewrite *gomock.Call.Do
-func (c *MockPoetValidatorValidateAndStoreMsgCall) Do(f func(context.Context, types.Hash32, p2p.Peer, []byte) error) *MockPoetValidatorValidateAndStoreMsgCall {
-	c.Call = c.Call.Do(f)
-	return c
-}
-
-// DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockPoetValidatorValidateAndStoreMsgCall) DoAndReturn(f func(context.Context, types.Hash32, p2p.Peer, []byte) error) *MockPoetValidatorValidateAndStoreMsgCall {
-	c.Call = c.Call.DoAndReturn(f)
-	return c
-}
-
 // Mockhost is a mock of host interface.
 type Mockhost struct {
 	ctrl     *gomock.Controller

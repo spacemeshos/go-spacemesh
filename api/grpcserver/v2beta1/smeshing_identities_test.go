@@ -1,7 +1,6 @@
 package v2beta1
 
 import (
-	"context"
 	"maps"
 	"math"
 	"slices"
@@ -60,7 +59,7 @@ func TestSmeshingIdentitiesService_States(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				_, err := svc.States(context.Background(), tc.req)
+				_, err := svc.States(t.Context(), tc.req)
 				st, ok := status.FromError(err)
 				require.True(t, ok)
 				require.Equal(t, tc.wantErr, st.Code())
@@ -91,7 +90,7 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 	}
 
 	t.Run("filter by state", func(t *testing.T) {
-		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 			States: []pb.IdentityState{pb.IdentityState_ATX_BROADCASTED},
 			Limit:  10,
 		})
@@ -101,7 +100,7 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 		require.Equal(t, broadcasted.APIStateInfo().State, resp.States[0].State)
 	})
 	t.Run("DESC", func(t *testing.T) {
-		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 			Order: pb.SortOrder_DESC,
 			Limit: 10,
 		})
@@ -115,7 +114,7 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 		}
 	})
 	t.Run("ASC", func(t *testing.T) {
-		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 			Order: pb.SortOrder_ASC,
 			Limit: 10,
 		})
@@ -130,7 +129,7 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 	})
 	t.Run("from ASC", func(t *testing.T) {
 		from := firstTimestamp.Add(2 * time.Second)
-		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 			From:  timestamppb.New(from),
 			Order: pb.SortOrder_ASC,
 			Limit: 10,
@@ -143,7 +142,7 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 	})
 	t.Run("from DESC", func(t *testing.T) {
 		from := firstTimestamp.Add(2 * time.Second)
-		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 			From:  timestamppb.New(from),
 			Order: pb.SortOrder_DESC,
 			Limit: 10,
@@ -157,7 +156,7 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 	t.Run("from to ASC", func(t *testing.T) {
 		from := firstTimestamp.Add(time.Second)
 		to := from.Add(2 * time.Second)
-		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 			From:  timestamppb.New(from),
 			To:    timestamppb.New(to),
 			Order: pb.SortOrder_ASC,
@@ -172,7 +171,7 @@ func TestSmeshingIdentitiesService_StatesFiltering(t *testing.T) {
 	t.Run("from to DESC", func(t *testing.T) {
 		from := firstTimestamp.Add(time.Second)
 		to := from.Add(2 * time.Second)
-		resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+		resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 			From:  timestamppb.New(from),
 			To:    timestamppb.New(to),
 			Order: pb.SortOrder_DESC,
@@ -221,7 +220,7 @@ func TestSmeshingIdentitiesService_FilterBySmeshers(t *testing.T) {
 		timestamp = timestamp.Add(time.Second)
 	}
 
-	resp, err := svc.States(context.Background(), &pb.IdentityStatesRequest{
+	resp, err := svc.States(t.Context(), &pb.IdentityStatesRequest{
 		Smeshers: [][]byte{
 			nodeID2[:],
 			nodeID3[:],

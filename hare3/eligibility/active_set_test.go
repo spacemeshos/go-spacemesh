@@ -1,7 +1,6 @@
 package eligibility
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,20 +25,20 @@ func TestResetCache(t *testing.T) {
 	cache.cache.Add(1, nil)
 
 	mSyncer.EXPECT().IsSynced(gomock.Any()).Return(false)
-	cache.resetCacheOnSynced(context.Background())
+	cache.resetCacheOnSynced(t.Context())
 	require.True(t, cache.cache.Contains(1))
 
 	mSyncer.EXPECT().IsSynced(gomock.Any()).Return(false)
-	cache.resetCacheOnSynced(context.Background())
+	cache.resetCacheOnSynced(t.Context())
 	require.True(t, cache.cache.Contains(1))
 
 	mSyncer.EXPECT().IsSynced(gomock.Any()).Return(true)
-	cache.resetCacheOnSynced(context.Background())
+	cache.resetCacheOnSynced(t.Context())
 	require.Equal(t, 0, cache.cache.Len())
 
 	cache.cache.Add(1, nil)
 
 	mSyncer.EXPECT().IsSynced(gomock.Any()).Return(true)
-	cache.resetCacheOnSynced(context.Background())
+	cache.resetCacheOnSynced(t.Context())
 	require.True(t, cache.cache.Contains(1))
 }

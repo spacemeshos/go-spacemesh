@@ -684,7 +684,7 @@ func waitPod(ctx *testcontext.Context, id string) (*apiv1.Pod, error) {
 			return pod, nil
 		}
 	}
-	return nil, fmt.Errorf("watcher terminated while waiting for pod with id %v: %w", id, ctx.Err())
+	return nil, fmt.Errorf("watcher terminated while waiting for pod with id %v: %w", id, watcherCtx.Err())
 }
 
 func nodeLabels(name, id string) map[string]string {

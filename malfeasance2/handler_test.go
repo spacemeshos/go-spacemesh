@@ -114,7 +114,7 @@ func TestHandler_HandleSync(t *testing.T) {
 
 		th := newTestHandler(t)
 
-		err := th.HandleSynced(context.Background(), types.EmptyHash32, "peer", []byte("malformed"))
+		err := th.HandleSynced(t.Context(), types.EmptyHash32, "peer", []byte("malformed"))
 		require.ErrorIs(t, err, malfeasance2.ErrMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -134,7 +134,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 			Version: 42,
 		}
 
-		err := th.HandleSynced(context.Background(), types.EmptyHash32, "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), types.EmptyHash32, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, malfeasance2.ErrUnknownVersion)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
@@ -148,7 +148,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 			Domain:  42,
 		}
 
-		err := th.HandleSynced(context.Background(), types.EmptyHash32, "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), types.EmptyHash32, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, malfeasance2.ErrUnknownDomain)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
@@ -169,7 +169,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 			Proof:   invalidProof,
 		}
 
-		err := th.HandleSynced(context.Background(), types.EmptyHash32, "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), types.EmptyHash32, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, handlerError)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -212,7 +212,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 			Proof:   validProof,
 		}
 
-		err := th.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -284,7 +284,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:   validProof,
 		}
 
-		err := th.HandleSynced(context.Background(), types.Hash32(nodeIDs[0]), "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), types.Hash32(nodeIDs[0]), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -320,7 +320,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:   validProof,
 		}
 
-		err := th.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 		require.ErrorIs(t, err, errFetchFailed)
 
@@ -354,7 +354,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:  validProof,
 		}
 
-		err := th.HandleSynced(context.Background(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -392,7 +392,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		}
 
 		expectedHash := types.RandomHash()
-		err := th.HandleSynced(context.Background(), expectedHash, "peer", codec.MustEncode(proof))
+		err := th.HandleSynced(t.Context(), expectedHash, "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, malfeasance2.ErrWrongHash)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -420,7 +420,7 @@ func TestHandler_HandleGossip(t *testing.T) {
 		t.Parallel()
 		th := newTestHandler(t)
 
-		err := th.HandleGossip(context.Background(), "peer", []byte("malformed"))
+		err := th.HandleGossip(t.Context(), "peer", []byte("malformed"))
 		require.ErrorIs(t, err, malfeasance2.ErrMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -437,7 +437,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 		th := newTestHandler(t)
 
 		// ignore messages from self
-		err := th.HandleGossip(context.Background(), th.self, []byte("malformed"))
+		err := th.HandleGossip(t.Context(), th.self, []byte("malformed"))
 		require.NoError(t, err)
 	})
 
@@ -449,7 +449,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 			Version: 42,
 		}
 
-		err := th.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, malfeasance2.ErrUnknownVersion)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
@@ -463,7 +463,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 			Domain:  42,
 		}
 
-		err := th.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, malfeasance2.ErrUnknownDomain)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
@@ -484,7 +484,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 			Proof:   invalidProof,
 		}
 
-		err := th.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, handlerError)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 
@@ -527,7 +527,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 			Proof:   validProof,
 		}
 
-		err := th.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -588,7 +588,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:   validProof,
 		}
 
-		err = th.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		err = th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -628,7 +628,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:   validProof,
 		}
 
-		err := th.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 		require.ErrorIs(t, err, errFetchFailed)
 
@@ -662,7 +662,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:  validProof,
 		}
 
-		err := th.HandleGossip(context.Background(), "peer", codec.MustEncode(proof))
+		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -707,7 +707,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		err := malfeasance.AddProof(th.db, nodeID, nil, proofBytes, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
-		err = th.HandleGossip(context.Background(), "peer", proofBytes)
+		err = th.HandleGossip(t.Context(), "peer", proofBytes)
 		require.NoError(t, err)
 
 		expected := `
@@ -726,7 +726,7 @@ func TestHandler_Info(t *testing.T) {
 		t.Parallel()
 		th := newTestHandler(t)
 
-		info, err := th.Info(context.Background(), types.RandomNodeID())
+		info, err := th.Info(t.Context(), types.RandomNodeID())
 		require.ErrorContains(t, err, "get malfeasance proof")
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, info)
@@ -750,7 +750,7 @@ func TestHandler_Info(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		info, err := th.Info(context.Background(), nodeID)
+		info, err := th.Info(t.Context(), nodeID)
 		require.ErrorContains(t, err, "get malfeasance proof")
 		require.ErrorIs(t, err, sql.ErrNotFound)
 		require.Nil(t, info)
@@ -765,7 +765,7 @@ func TestHandler_Info(t *testing.T) {
 		err := malfeasance.AddProof(th.db, nodeID, nil, proofBytes, 999, time.Now())
 		require.NoError(t, err)
 
-		info, err := th.Info(context.Background(), nodeID)
+		info, err := th.Info(t.Context(), nodeID)
 		require.ErrorContains(t, err, "unknown malfeasance domain 999")
 		require.Nil(t, info)
 	})
@@ -783,7 +783,7 @@ func TestHandler_Info(t *testing.T) {
 		err := malfeasance.AddProof(th.db, nodeID, nil, invalidProof, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
-		info, err := th.Info(context.Background(), nodeID)
+		info, err := th.Info(t.Context(), nodeID)
 		require.ErrorIs(t, err, infoError)
 		require.Nil(t, info)
 	})
@@ -807,7 +807,7 @@ func TestHandler_Info(t *testing.T) {
 		expectedProperties := maps.Clone(properties)
 		expectedProperties["domain"] = strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10)
 
-		info, err := th.Info(context.Background(), nodeID)
+		info, err := th.Info(t.Context(), nodeID)
 		require.NoError(t, err)
 		require.Equal(t, expectedProperties, info)
 	})
@@ -857,7 +857,7 @@ func TestHandler_Info(t *testing.T) {
 		expectedProperties["domain"] = strconv.FormatUint(uint64(malfeasance2.InvalidActivation), 10)
 		expectedProperties["malicious_id"] = maliciousID.String()
 
-		info, err := th.Info(context.Background(), maliciousID)
+		info, err := th.Info(t.Context(), maliciousID)
 		require.NoError(t, err)
 		require.Equal(t, expectedProperties, info)
 	})
