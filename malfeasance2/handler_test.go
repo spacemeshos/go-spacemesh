@@ -201,8 +201,8 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
@@ -285,8 +285,8 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
@@ -370,8 +370,8 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
@@ -547,8 +547,8 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
@@ -620,8 +620,8 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
@@ -709,8 +709,8 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
@@ -762,8 +762,8 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,

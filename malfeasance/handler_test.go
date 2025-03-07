@@ -176,8 +176,8 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		err = h.HandleGossip(t.Context(), "peer", codec.MustEncode(gossip))
@@ -319,8 +319,8 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		expectedHash := types.RandomHash()
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
@@ -423,8 +423,8 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		events.InitializeReporter()
 		defer events.CloseEventReporter()
 		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
-		defer sub.Close()
 		require.NoError(t, err)
+		defer sub.Close()
 
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		err = h.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", proofBytes)
