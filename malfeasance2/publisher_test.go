@@ -17,6 +17,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/malfeasance2"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -71,10 +72,7 @@ func newTestPublisher(tb testing.TB) *testPublisher {
 }
 
 func TestPublishATXProof(t *testing.T) {
-	t.Parallel()
-
 	t.Run("not married and in sync", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeID := types.RandomNodeID()
@@ -91,21 +89,33 @@ func TestPublishATXProof(t *testing.T) {
 			Proof:   proof,
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
 
-		err := tp.PublishATXProof(t.Context(), nodeID, proof, false)
+		err = tp.PublishATXProof(t.Context(), nodeID, proof, false)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
 		require.Equal(t, proof, dbProof)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("not married and in sync, allow without refATXs", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeID := types.RandomNodeID()
@@ -117,21 +127,33 @@ func TestPublishATXProof(t *testing.T) {
 			Proof:   proof,
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof))
 
-		err := tp.PublishATXProof(t.Context(), nodeID, proof, true)
+		err = tp.PublishATXProof(t.Context(), nodeID, proof, true)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
 		require.Equal(t, proof, dbProof)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("not married, in sync, but failed to gossip", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeID := types.RandomNodeID()
@@ -148,13 +170,19 @@ func TestPublishATXProof(t *testing.T) {
 			Proof:   proof,
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(true)
 		errPublish := errors.New("failed to publish")
 		tp.mockPub.EXPECT().Publish(gomock.Any(), pubsub.MalfeasanceProof2, codec.MustEncode(malfeasanceProof)).
 			Return(errPublish)
 
-		err := tp.PublishATXProof(t.Context(), nodeID, proof, false)
+		err = tp.PublishATXProof(t.Context(), nodeID, proof, false)
 		require.ErrorIs(t, err, errPublish)
 
 		logs := tp.observedLogs.FilterLevelExact(zap.ErrorLevel)
@@ -168,10 +196,16 @@ func TestPublishATXProof(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
 		require.Equal(t, proof, dbProof)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("not married, not in sync", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeID := types.RandomNodeID()
@@ -181,38 +215,62 @@ func TestPublishATXProof(t *testing.T) {
 		atx.SetID(types.RandomATXID())
 		require.NoError(t, atxs.Add(tp.db, atx, types.AtxBlob{}))
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(false) // results in no gossip but only storing the proof
 
-		err := tp.PublishATXProof(t.Context(), nodeID, proof, false)
+		err = tp.PublishATXProof(t.Context(), nodeID, proof, false)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
 		require.Equal(t, proof, dbProof)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("not married, not in sync, allow no ref ATXs", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeID := types.RandomNodeID()
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		tp.mockSync.EXPECT().ListenToATXGossip().Return(false) // results in no gossip but only storing the proof
 
-		err := tp.PublishATXProof(t.Context(), nodeID, proof, true)
+		err = tp.PublishATXProof(t.Context(), nodeID, proof, true)
 		require.NoError(t, err)
 
 		dbProof, domain, err := malfeasance.NodeIDProof(tp.db, nodeID)
 		require.NoError(t, err)
 		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
 		require.Equal(t, proof, dbProof)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("married and in sync", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeIDs := make([]types.NodeID, 20)
@@ -265,6 +323,12 @@ func TestPublishATXProof(t *testing.T) {
 			Proof:   proof,
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		for _, nodeID := range nodeIDs {
 			tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		}
@@ -296,10 +360,20 @@ func TestPublishATXProof(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
 		require.Equal(t, proof, dbProof)
+
+		eventNodeIDs := make([]types.NodeID, 0, len(nodeIDs))
+		for range nodeIDs {
+			select {
+			case ev := <-sub.Out():
+				eventNodeIDs = append(eventNodeIDs, ev.Smesher)
+			case <-time.After(5 * time.Second):
+				require.FailNow(t, "timed out waiting for event")
+			}
+		}
+		require.ElementsMatch(t, nodeIDs, eventNodeIDs)
 	})
 
 	t.Run("identity already malicious", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeID := types.RandomNodeID()
@@ -330,7 +404,6 @@ func TestPublishATXProof(t *testing.T) {
 	})
 
 	t.Run("married and all already malicious", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeIDs := make([]types.NodeID, 20)
@@ -414,7 +487,6 @@ func TestPublishATXProof(t *testing.T) {
 	})
 
 	t.Run("married and some already malicious", func(t *testing.T) {
-		t.Parallel()
 		tp := newTestPublisher(t)
 		proof := types.RandomBytes(10)
 		nodeIDs := make([]types.NodeID, 20)
@@ -479,6 +551,12 @@ func TestPublishATXProof(t *testing.T) {
 			Proof:   proof,
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		for _, nodeID := range nodeIDs { // only the last 10 were not already marked as malicious
 			tp.mockTrt.EXPECT().OnMalfeasance(nodeID)
 		}
@@ -523,6 +601,17 @@ func TestPublishATXProof(t *testing.T) {
 		require.Contains(t, logs.All()[20].Message, "persisted malfeasance proof")
 		require.Equal(t, zap.DebugLevel, logs.All()[21].Level)
 		require.Contains(t, logs.All()[21].Message, "broadcast malfeasance proof")
+
+		eventNodeIDs := make([]types.NodeID, 0, len(nodeIDs))
+		for range nodeIDs {
+			select {
+			case ev := <-sub.Out():
+				eventNodeIDs = append(eventNodeIDs, ev.Smesher)
+			case <-time.After(5 * time.Second):
+				require.FailNow(t, "timed out waiting for event")
+			}
+		}
+		require.ElementsMatch(t, nodeIDs, eventNodeIDs)
 	})
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
@@ -56,6 +57,7 @@ func (p *Publisher) PublishProof(ctx context.Context, smesherID types.NodeID, pr
 
 	p.cdb.CacheMalfeasanceProof(smesherID, codec.MustEncode(proof))
 	p.tortoise.OnMalfeasance(smesherID)
+	events.ReportMalfeasance(smesherID)
 
 	// Only gossip the proof if we are synced (to not spam the network with proofs others probably already have).
 	if !p.sync.ListenToATXGossip() {

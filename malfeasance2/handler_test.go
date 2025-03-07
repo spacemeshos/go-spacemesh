@@ -19,6 +19,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/malfeasance2"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -107,11 +108,7 @@ func TestRegister(t *testing.T) {
 }
 
 func TestHandler_HandleSync(t *testing.T) {
-	t.Parallel()
-
 	t.Run("malformed data", func(t *testing.T) {
-		t.Parallel()
-
 		th := newTestHandler(t)
 
 		err := th.HandleSynced(t.Context(), types.EmptyHash32, "peer", []byte("malformed"))
@@ -127,7 +124,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 	})
 
 	t.Run("unknown version", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -140,7 +136,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 	})
 
 	t.Run("unknown domain", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -154,7 +149,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		invalidProof := []byte("invalid")
 		handlerError := errors.New("invalid proof")
@@ -183,7 +177,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -205,6 +198,12 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 			},
 		)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		defer sub.Close()
+		require.NoError(t, err)
+
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
 			RefATXs: []types.ATXID{atxID},
@@ -212,7 +211,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 			Proof:   validProof,
 		}
 
-		err := th.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		err = th.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -225,10 +224,16 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		malicious, err := malfeasance.IsMalicious(th.db, nodeID)
 		require.NoError(t, err)
 		require.True(t, malicious)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("valid proof, married identity", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeIDs := make([]types.NodeID, 20)
@@ -277,6 +282,12 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			},
 		)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		defer sub.Close()
+		require.NoError(t, err)
+
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
 			RefATXs: []types.ATXID{mATXID},
@@ -284,7 +295,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:   validProof,
 		}
 
-		err := th.HandleSynced(t.Context(), types.Hash32(nodeIDs[0]), "peer", codec.MustEncode(proof))
+		err = th.HandleSynced(t.Context(), types.Hash32(nodeIDs[0]), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -299,10 +310,20 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			require.NoError(t, err)
 			require.True(t, malicious)
 		}
+
+		eventNodeIDs := make([]types.NodeID, 0, len(nodeIDs))
+		for range nodeIDs {
+			select {
+			case ev := <-sub.Out():
+				eventNodeIDs = append(eventNodeIDs, ev.Smesher)
+			case <-time.After(5 * time.Second):
+				require.FailNow(t, "timed out waiting for event")
+			}
+		}
+		require.ElementsMatch(t, nodeIDs, eventNodeIDs)
 	})
 
 	t.Run("valid proof, fail to fetch reference ATX", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -331,7 +352,6 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 	})
 
 	t.Run("valid proof, no reference ATX but identity is known", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -347,6 +367,12 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		th.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 		th.mockTrt.EXPECT().OnMalfeasance(nodeID)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		defer sub.Close()
+		require.NoError(t, err)
+
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
 			// no reference ATX
@@ -354,7 +380,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:  validProof,
 		}
 
-		err := th.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
+		err = th.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -367,10 +393,16 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		malicious, err := malfeasance.IsMalicious(th.db, nodeID)
 		require.NoError(t, err)
 		require.True(t, malicious)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("valid proof, wrong hash", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -414,10 +446,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 }
 
 func TestHandler_HandleGossip(t *testing.T) {
-	t.Parallel()
-
 	t.Run("malformed data", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 
 		err := th.HandleGossip(t.Context(), "peer", []byte("malformed"))
@@ -433,7 +462,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 	})
 
 	t.Run("self peer", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 
 		// ignore messages from self
@@ -442,7 +470,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 	})
 
 	t.Run("unknown version", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -455,7 +482,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 	})
 
 	t.Run("unknown domain", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 
 		proof := &malfeasance2.MalfeasanceProof{
@@ -469,7 +495,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 1
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		invalidProof := []byte("invalid")
 		handlerError := errors.New("invalid proof")
@@ -498,7 +523,6 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 	})
 
 	t.Run("valid proof", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -520,6 +544,12 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 			},
 		)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		defer sub.Close()
+		require.NoError(t, err)
+
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
 			RefATXs: []types.ATXID{atxID},
@@ -527,7 +557,7 @@ spacemesh_malfeasance2_num_invalid_proofs{domain="mal",type="unknown"} 0
 			Proof:   validProof,
 		}
 
-		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
+		err = th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -541,10 +571,16 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		malicious, err := malfeasance.IsMalicious(th.db, nodeID)
 		require.NoError(t, err)
 		require.True(t, malicious)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("valid proof, married identity", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeIDs := make([]types.NodeID, 20)
@@ -581,6 +617,12 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		th.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{mATXID.Hash32()})
 		th.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{mATXID}, gomock.Any()).Return(nil)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		defer sub.Close()
+		require.NoError(t, err)
+
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
 			RefATXs: []types.ATXID{mATXID},
@@ -607,10 +649,20 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		require.NoError(t, err)
 		require.Equal(t, malfeasance2.InvalidActivation, malfeasance2.ProofDomain(domain))
 		require.Equal(t, validProof, dbProof)
+
+		eventNodeIDs := make([]types.NodeID, 0, len(nodeIDs))
+		for range nodeIDs {
+			select {
+			case ev := <-sub.Out():
+				eventNodeIDs = append(eventNodeIDs, ev.Smesher)
+			case <-time.After(5 * time.Second):
+				require.FailNow(t, "timed out waiting for event")
+			}
+		}
+		require.ElementsMatch(t, nodeIDs, eventNodeIDs)
 	})
 
 	t.Run("valid proof, fail to fetch reference ATX", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -639,7 +691,6 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 	})
 
 	t.Run("valid proof, no reference ATX but identity is known", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -655,6 +706,12 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		th.RegisterHandler(malfeasance2.InvalidActivation, mockHandler)
 		th.mockTrt.EXPECT().OnMalfeasance(nodeID)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		defer sub.Close()
+		require.NoError(t, err)
+
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
 			// no reference ATX
@@ -662,7 +719,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 			Proof:  validProof,
 		}
 
-		err := th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
+		err = th.HandleGossip(t.Context(), "peer", codec.MustEncode(proof))
 		require.NoError(t, err)
 
 		expected := `
@@ -675,10 +732,16 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		malicious, err := malfeasance.IsMalicious(th.db, nodeID)
 		require.NoError(t, err)
 		require.True(t, malicious)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("valid proof for known malicious identity", func(t *testing.T) {
-		t.Parallel()
 		th := newTestHandler(t)
 		validProof := []byte("valid")
 		nodeID := types.RandomNodeID()
@@ -696,6 +759,12 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		th.mockFetch.EXPECT().RegisterPeerHashes(p2p.Peer("peer"), []types.Hash32{atxID.Hash32()})
 		th.mockFetch.EXPECT().GetAtxs(gomock.Any(), []types.ATXID{atxID}, gomock.Any()).Return(nil)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		defer sub.Close()
+		require.NoError(t, err)
+
 		proof := &malfeasance2.MalfeasanceProof{
 			Version: 0,
 			RefATXs: []types.ATXID{atxID},
@@ -704,7 +773,7 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 		}
 		proofBytes := codec.MustEncode(proof)
 
-		err := malfeasance.AddProof(th.db, nodeID, nil, proofBytes, int(malfeasance2.InvalidActivation), time.Now())
+		err = malfeasance.AddProof(th.db, nodeID, nil, proofBytes, int(malfeasance2.InvalidActivation), time.Now())
 		require.NoError(t, err)
 
 		err = th.HandleGossip(t.Context(), "peer", proofBytes)
@@ -716,6 +785,13 @@ spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 spacemesh_malfeasance2_num_proofs{domain="ATX",type="invalidPost"} 1
 `
 		require.NoError(t, testutil.CollectAndCompare(th.NumValidProofs(), strings.NewReader(expected)))
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 }
 
