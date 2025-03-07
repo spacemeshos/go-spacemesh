@@ -102,7 +102,6 @@ type meshAPI interface {
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetLayerVerified(types.LayerID) (*types.Block, error)
 	GetRewardsByCoinbase(types.Address) ([]*types.Reward, error)
-	GetRewardsBySmesherId(id types.NodeID) ([]*types.Reward, error)
 	LatestLayer() types.LayerID
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
