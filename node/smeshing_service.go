@@ -36,6 +36,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/proxy"
 	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -295,6 +296,7 @@ func NewSmeshingService(cfg *config.Config, logger *zap.Logger) (*SmeshingServic
 		nodeServiceClient,
 		beaconProvider,
 		hOracle,
+		blocks.NewCertifierService(nodeServiceClient, hOracle, cfg.Certificate.CommitteeSize),
 		loggers.add(HareLogger, logger),
 	)
 	for _, sig := range signers {

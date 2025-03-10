@@ -2,6 +2,7 @@ package hare3
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -15,11 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
-
-type NodeService interface {
-	HareRoundTemplate(ctx context.Context, layer types.LayerID, round IterRound) (*Body, error)
-	Publish(ctx context.Context, proto string, blob []byte) error
-}
 
 type beaconService interface {
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
@@ -36,6 +32,7 @@ type RemoteHare struct {
 	eg        errgroup.Group
 	svc       NodeService
 	beaconSvc beaconService
+	certifier certifier
 
 	log *zap.Logger
 }
@@ -45,6 +42,7 @@ func NewRemoteHare(config Config,
 	nodeService NodeService,
 	beaconService beaconService,
 	oracle oracle,
+	certifier certifier,
 	log *zap.Logger,
 ) *RemoteHare {
 	return &RemoteHare{
@@ -56,6 +54,7 @@ func NewRemoteHare(config Config,
 			oracle: oracle,
 			config: config,
 		},
+		certifier: certifier,
 
 		sessions:  make(map[types.LayerID]*protocol),
 		eg:        errgroup.Group{},
@@ -141,6 +140,24 @@ func (h *RemoteHare) onLayer(ctx context.Context, layer types.LayerID) {
 	})
 }
 
+func (h *RemoteHare) certify(ctx context.Context, session *session, blockID types.BlockID) {
+	for _, signer := range session.signers {
+		err := h.certifier.CertifyBlock(ctx, signer, session.lid, blockID, session.beacon)
+		if err != nil {
+			// there isn't any handling that the caller could do so we log and return nil
+			h.log.Warn(
+				"failed to certify block",
+				zap.Error(err),
+				zap.Uint8("iter", session.proto.Iter),
+				zap.Uint32("layer", session.lid.Uint32()),
+				zap.Stringer("blockID", blockID),
+				zap.Stringer("round", session.proto.Round),
+				log.ZShortStringer("smesherID", signer.NodeID()),
+			)
+		}
+	}
+}
+
 func (h *RemoteHare) run(ctx context.Context, session *session) error {
 	var (
 		current = IterRound{Round: preround}
@@ -175,9 +192,45 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 	}
 
 	onRound(session.proto)
+	certified := false
 	for {
-		if session.proto.IterRound.Iter >= h.config.IterationsLimit {
+		if certified && session.proto.Round == hardlock {
+			// The full iteration after hare converged passed.
+			// It can now terminate.
+			h.log.Debug(
+				"hare terminated",
+				zap.Uint8("iter", session.proto.Iter),
+				zap.Stringer("round", session.proto.Round),
+				zap.Uint32("layer", session.lid.Uint32()),
+			)
 			return nil
+		}
+		if !certified && session.proto.Iter > 0 {
+			// Check if hare already converged and a block was produced.
+			// If yes - certify it and quit.
+			blockID, err := h.svc.BlockID(ctx, session.lid)
+			switch {
+			case err != nil:
+				h.log.Debug("couldn't fetch block ID", zap.Uint32("layer", session.lid.Uint32()))
+			case blockID == types.EmptyBlockID:
+				h.log.Debug("hare has not converged yet", zap.Uint32("layer", session.lid.Uint32()))
+			default:
+				h.log.Debug(
+					"hare converged",
+					zap.Stringer("blockID", blockID),
+					zap.Uint8("iter", session.proto.Iter),
+					zap.Stringer("round", session.proto.Round),
+					zap.Uint32("layer", session.lid.Uint32()),
+				)
+				h.certify(ctx, session, blockID)
+				certified = true
+				// The hare converged and block was produced.
+				// However, we continue to participate in the protocol till
+				// the end of the current iteration.
+			}
+		}
+		if session.proto.Iter >= h.config.IterationsLimit {
+			return fmt.Errorf("hare failed to reach consensus in %d iterations", h.config.IterationsLimit)
 		}
 
 		walltime = walltime.Add(h.config.RoundDuration)

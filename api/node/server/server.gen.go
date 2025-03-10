@@ -60,6 +60,9 @@ type ServerInterface interface {
 	// Get the beacon value for an epoch
 	// (GET /beacon/{epoch})
 	GetBeaconEpoch(w http.ResponseWriter, r *http.Request, epoch externalRef0.EpochID)
+	// Get a block ID in the giver layer
+	// (GET /blockids/{layer})
+	GetBlockidsLayer(w http.ResponseWriter, r *http.Request, layer uint32)
 	// Get eligibility slots for a given node id in given epoch
 	// (GET /eligibility/slots/{node}/{epoch})
 	GetEligibilitySlotsNodeEpoch(w http.ResponseWriter, r *http.Request, node externalRef0.Bytes32Hex, epoch externalRef0.EpochID)
@@ -194,6 +197,31 @@ func (siw *ServerInterfaceWrapper) GetBeaconEpoch(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetBeaconEpoch(w, r, epoch)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetBlockidsLayer operation middleware
+func (siw *ServerInterfaceWrapper) GetBlockidsLayer(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "layer" -------------
+	var layer uint32
+
+	err = runtime.BindStyledParameterWithOptions("simple", "layer", r.PathValue("layer"), &layer, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "layer", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetBlockidsLayer(w, r, layer)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -523,6 +551,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc("GET "+options.BaseURL+"/activation/positioning_atx/{publish_epoch}", wrapper.GetActivationPositioningAtxPublishEpoch)
 	m.HandleFunc("POST "+options.BaseURL+"/activation/publish", wrapper.PostActivationPublish)
 	m.HandleFunc("GET "+options.BaseURL+"/beacon/{epoch}", wrapper.GetBeaconEpoch)
+	m.HandleFunc("GET "+options.BaseURL+"/blockids/{layer}", wrapper.GetBlockidsLayer)
 	m.HandleFunc("GET "+options.BaseURL+"/eligibility/slots/{node}/{epoch}", wrapper.GetEligibilitySlotsNodeEpoch)
 	m.HandleFunc("GET "+options.BaseURL+"/hare/round_template/{layer}/{iter}/{round}", wrapper.GetHareRoundTemplateLayerIterRound)
 	m.HandleFunc("GET "+options.BaseURL+"/proposal/{layer}/{node}", wrapper.GetProposalLayerNode)
@@ -699,6 +728,41 @@ type GetBeaconEpoch204Response struct {
 
 func (response GetBeaconEpoch204Response) VisitGetBeaconEpochResponse(w http.ResponseWriter) error {
 	w.WriteHeader(204)
+	return nil
+}
+
+type GetBlockidsLayerRequestObject struct {
+	Layer uint32 `json:"layer"`
+}
+
+type GetBlockidsLayerResponseObject interface {
+	VisitGetBlockidsLayerResponse(w http.ResponseWriter) error
+}
+
+type GetBlockidsLayer200JSONResponse struct {
+	BlockID externalRef0.Bytes20 `json:"BlockID"`
+}
+
+func (response GetBlockidsLayer200JSONResponse) VisitGetBlockidsLayerResponse(w http.ResponseWriter) error {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(200)
+
+	return json.NewEncoder(w).Encode(response)
+}
+
+type GetBlockidsLayer404Response struct {
+}
+
+func (response GetBlockidsLayer404Response) VisitGetBlockidsLayerResponse(w http.ResponseWriter) error {
+	w.WriteHeader(404)
+	return nil
+}
+
+type GetBlockidsLayer500Response struct {
+}
+
+func (response GetBlockidsLayer500Response) VisitGetBlockidsLayerResponse(w http.ResponseWriter) error {
+	w.WriteHeader(500)
 	return nil
 }
 
@@ -922,6 +986,9 @@ type StrictServerInterface interface {
 	// Get the beacon value for an epoch
 	// (GET /beacon/{epoch})
 	GetBeaconEpoch(ctx context.Context, request GetBeaconEpochRequestObject) (GetBeaconEpochResponseObject, error)
+	// Get a block ID in the giver layer
+	// (GET /blockids/{layer})
+	GetBlockidsLayer(ctx context.Context, request GetBlockidsLayerRequestObject) (GetBlockidsLayerResponseObject, error)
 	// Get eligibility slots for a given node id in given epoch
 	// (GET /eligibility/slots/{node}/{epoch})
 	GetEligibilitySlotsNodeEpoch(ctx context.Context, request GetEligibilitySlotsNodeEpochRequestObject) (GetEligibilitySlotsNodeEpochResponseObject, error)
@@ -1099,6 +1166,32 @@ func (sh *strictHandler) GetBeaconEpoch(w http.ResponseWriter, r *http.Request, 
 		sh.options.ResponseErrorHandlerFunc(w, r, err)
 	} else if validResponse, ok := response.(GetBeaconEpochResponseObject); ok {
 		if err := validResponse.VisitGetBeaconEpochResponse(w); err != nil {
+			sh.options.ResponseErrorHandlerFunc(w, r, err)
+		}
+	} else if response != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, fmt.Errorf("unexpected response type: %T", response))
+	}
+}
+
+// GetBlockidsLayer operation middleware
+func (sh *strictHandler) GetBlockidsLayer(w http.ResponseWriter, r *http.Request, layer uint32) {
+	var request GetBlockidsLayerRequestObject
+
+	request.Layer = layer
+
+	handler := func(ctx context.Context, w http.ResponseWriter, r *http.Request, request interface{}) (interface{}, error) {
+		return sh.ssi.GetBlockidsLayer(ctx, request.(GetBlockidsLayerRequestObject))
+	}
+	for _, middleware := range sh.middlewares {
+		handler = middleware(handler, "GetBlockidsLayer")
+	}
+
+	response, err := handler(r.Context(), w, r, request)
+
+	if err != nil {
+		sh.options.ResponseErrorHandlerFunc(w, r, err)
+	} else if validResponse, ok := response.(GetBlockidsLayerResponseObject); ok {
+		if err := validResponse.VisitGetBlockidsLayerResponse(w); err != nil {
 			sh.options.ResponseErrorHandlerFunc(w, r, err)
 		}
 	} else if response != nil {

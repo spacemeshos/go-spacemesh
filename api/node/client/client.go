@@ -195,6 +195,21 @@ func (s *NodeService) HareRoundTemplate(
 	}
 }
 
+func (s *NodeService) BlockID(ctx context.Context, layer types.LayerID) (types.BlockID, error) {
+	resp, err := s.client.GetBlockidsLayerWithResponse(ctx, layer.Uint32())
+	if err != nil {
+		return types.EmptyBlockID, fmt.Errorf("getting block ID: %w", err)
+	}
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return types.BlockID(resp.JSON200.BlockID), nil
+	case http.StatusNotFound:
+		return types.EmptyBlockID, nil
+	default:
+		return types.EmptyBlockID, fmt.Errorf("unexpected status: %q", resp.Status())
+	}
+}
+
 func (s *NodeService) TotalWeight(ctx context.Context, epoch types.EpochID) (uint64, error) {
 	resp, err := s.client.GetWeightsTotalEpochWithResponse(ctx, epoch.Uint32())
 	if err != nil {

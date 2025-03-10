@@ -12,6 +12,7 @@ import (
 	"github.com/oapi-codegen/runtime/strictmiddleware/nethttp"
 	"github.com/spacemeshos/poet/shared"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/node/models"
@@ -19,6 +20,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/hare3/eligibility"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 )
 
 //go:generate mockgen -typed -package=server -destination=mocks.go -source=server.go
@@ -51,6 +54,7 @@ type syncer interface {
 }
 
 type Server struct {
+	db         sql.StateDatabase
 	atxService activation.AtxService
 	beacons    beaconService
 	publisher  pubsub.Publisher
@@ -64,6 +68,7 @@ type Server struct {
 var _ StrictServerInterface = (*Server)(nil)
 
 func NewServer(
+	db sql.StateDatabase,
 	atxService activation.AtxService,
 	beacons beaconService,
 	publisher pubsub.Publisher,
@@ -74,6 +79,7 @@ func NewServer(
 	logger *zap.Logger,
 ) *Server {
 	return &Server{
+		db:         db,
 		atxService: atxService,
 		beacons:    beacons,
 		publisher:  publisher,
@@ -451,4 +457,35 @@ func (s *Server) GetEligibilitySlotsNodeEpoch(
 		Slots: slots,
 		Nonce: uint64(nonce),
 	}, nil
+}
+
+// GetBlocksLayer implements StrictServerInterface.
+func (s *Server) GetBlockidsLayer(ctx context.Context, request GetBlockidsLayerRequestObject) (GetBlockidsLayerResponseObject, error) {
+	ids, err := blocks.IDsInLayer(s.db, types.LayerID(request.Layer))
+	switch {
+	case errors.Is(err, sql.ErrNotFound):
+		return GetBlockidsLayer404Response{}, nil
+	case err != nil:
+		s.logger.Debug("could not retrieve block ID", zap.Uint32("layer", request.Layer), zap.Error(err))
+		return GetBlockidsLayer500Response{}, nil
+	case len(ids) == 0:
+		return GetBlockidsLayer404Response{}, nil
+	default:
+	}
+	s.logger.Debug("retrieved block ids", zap.Array("block ids", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
+		for _, id := range ids {
+			ae.AppendString(id.String())
+		}
+		return nil
+	})))
+
+	// Theoretically this is possible to have > 1 block in case of a network partition.
+	// However, this API is used only for the hare certification and in this situation
+	// its queried right after the block is created when its unlikely to have more than
+	// 1 block.
+	// We only return the first one.
+	return GetBlockidsLayer200JSONResponse{
+		BlockID: ids[0][:],
+	}, nil
+
 }
