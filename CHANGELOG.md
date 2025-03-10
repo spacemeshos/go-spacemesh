@@ -21,6 +21,9 @@ in terms of data size and more easily extendable in the future.
   proof will be streamed at least once. This ensures that no malfeasance proofs are missed when streaming, but shifts
   responsibilities for deduplication to clients.
 
+* [#6779](https://github.com/spacemeshos/go-spacemesh/pull/6779) Fixed the malfeasance publisher not emitting events.
+  This caused the node to miss malfeasance proofs when streaming via the GRPC API.
+
 ## v1.7.17
 
 ### Improvements
