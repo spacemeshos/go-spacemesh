@@ -44,10 +44,10 @@ require (
 	github.com/spacemeshos/api/release/go v1.62.1-0.20250304113046-fef396ff2fbe
 	github.com/spacemeshos/economics v0.1.4
 	github.com/spacemeshos/fixed v0.1.2
-	github.com/spacemeshos/go-scale v1.2.1
+	github.com/spacemeshos/go-scale v1.3.0
 	github.com/spacemeshos/merkle-tree v0.2.6
-	github.com/spacemeshos/poet v0.10.10
-	github.com/spacemeshos/post v0.12.11
+	github.com/spacemeshos/poet v0.10.11
+	github.com/spacemeshos/post v0.13.0
 	github.com/spf13/afero v1.12.0
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
@@ -107,7 +107,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

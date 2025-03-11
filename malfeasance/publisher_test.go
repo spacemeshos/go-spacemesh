@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
@@ -81,12 +82,25 @@ func TestMalfeasancePublisher(t *testing.T) {
 				return nil
 			})
 
-		err := malPublisher.PublishProof(t.Context(), nodeID, proof)
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
+		err = malPublisher.PublishProof(t.Context(), nodeID, proof)
 		require.NoError(t, err)
 
 		malicious, err := identities.IsMalicious(malPublisher.cdb, nodeID)
 		require.NoError(t, err)
 		require.True(t, malicious)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("PublishProof when not in sync", func(t *testing.T) {
@@ -101,16 +115,29 @@ func TestMalfeasancePublisher(t *testing.T) {
 			},
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		malPublisher.mTortoise.EXPECT().OnMalfeasance(nodeID)
 		malPublisher.mSyncer.EXPECT().ListenToATXGossip().Return(false)
 
-		err := malPublisher.PublishProof(t.Context(), nodeID, proof)
+		err = malPublisher.PublishProof(t.Context(), nodeID, proof)
 		require.NoError(t, err)
 
-		// proof is only persisted but not published
+		// proof is persisted but not published
 		malicious, err := identities.IsMalicious(malPublisher.cdb, nodeID)
 		require.NoError(t, err)
 		require.True(t, malicious)
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("PublishProof when already marked as malicious", func(t *testing.T) {

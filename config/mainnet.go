@@ -136,6 +136,10 @@ func MainnetConfig() Config {
 			ATXGradeDelay:           30 * time.Minute,
 			PostValidDelay:          time.Duration(math.MaxInt64),
 			PprofHTTPServerListener: "localhost:6060",
+
+			AtxVersions: activation.AtxVersions{
+				types.EpochID(45): types.AtxV2,
+			},
 		},
 		Genesis: GenesisConfig{
 			GenesisTime: Genesis(genesisTime),
@@ -226,6 +230,7 @@ func MainnetConfig() Config {
 			MalSync:                  malsync.DefaultConfig(),
 			ReconcSync: syncer.ReconcSyncConfig{
 				Enable:            true,
+				EnableActiveSync:  true,
 				OldAtxSyncCfg:     oldAtxSyncCfg,
 				NewAtxSyncCfg:     newAtxSyncCfg,
 				ParallelLoadLimit: 10,
