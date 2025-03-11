@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -145,6 +146,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 	}
 	for _, nodeID := range set {
 		p.tortoise.OnMalfeasance(nodeID)
+		events.ReportMalfeasance(nodeID)
 	}
 	return p.publish(ctx, set, refATXs, proof, ProofDomain(InvalidActivation))
 }

@@ -16,18 +16,40 @@ pointing to the running `node` service.
 
 * [#6625](https://github.com/spacemeshos/go-spacemesh/pull/6625) Add command for starting services
 
+## v1.8.0
+
+### Highlights
+
+This release will enable syncv2 fully to sync ATXs for all nodes. This should greatly reduce the time it takes to sync
+a node from genesis and the amount of data that is needed to be exchanged with the network to keep a node in sync. The
+improvements are enabled automatically after upgrading to this version and no user action is needed.
+
+Development on ATXv2 has concluded and the feature is now enabled on mainnet. Nodes will produce the new ATX format
+starting from epoch 45 and ever epoch after. The new ATXs also comes with new malfeasance proofs that are more efficient
+in terms of data size and more easily extendable in the future.
+
+### Improvements
+
+* [#6777](https://github.com/spacemeshos/go-spacemesh/pull/6777) Change malfeasance streaming guarantees for v2alpha1
+  and v2beta1. Now instead of guaranteeing that every proof will be streamed at most once, the guarantee is that every
+  proof will be streamed at least once. This ensures that no malfeasance proofs are missed when streaming, but shifts
+  responsibilities for deduplication to clients.
+
+* [#6779](https://github.com/spacemeshos/go-spacemesh/pull/6779) Fixed the malfeasance publisher not emitting events.
+  This caused the node to miss malfeasance proofs when streaming via the GRPC API.
+
 ## v1.7.17
 
 ### Improvements
 
-- [#6756](https://github.com/spacemeshos/go-spacemesh/pull/6756) Fixed possible deadlock in ATX handler which
+* [#6756](https://github.com/spacemeshos/go-spacemesh/pull/6756) Fixed possible deadlock in ATX handler which
   sometimes results in sync from genesis getting stuck.
 
 ## v1.7.16
 
 ### Improvements
 
-- [#6746](https://github.com/spacemeshos/go-spacemesh/pull/6746) Fixed malfeasance sync not starting in
+* [#6746](https://github.com/spacemeshos/go-spacemesh/pull/6746) Fixed malfeasance sync not starting in
   the first ATX V2 epoch.
 
 ## v1.7.15

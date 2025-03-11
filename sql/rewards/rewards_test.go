@@ -90,45 +90,8 @@ func TestRewards(t *testing.T) {
 	require.Equal(t, part, got[1].TotalReward)
 	require.Equal(t, lyrReward, got[1].LayerReward)
 
-	got, err = ListBySmesherId(db, smesherID1)
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.Equal(t, coinbase1, got[0].Coinbase)
-	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, smesherID1, got[0].SmesherID)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
-
-	got, err = ListBySmesherId(db, smesherID2)
-	require.NoError(t, err)
-	require.Len(t, got, 2)
-	require.Equal(t, coinbase1, got[0].Coinbase)
-	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, smesherID2, got[0].SmesherID)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
-	require.Equal(t, coinbase2, got[1].Coinbase)
-	require.Equal(t, lid2, got[1].Layer)
-	require.Equal(t, smesherID2, got[1].SmesherID)
-	require.Equal(t, part, got[1].TotalReward)
-	require.Equal(t, lyrReward, got[1].LayerReward)
-
-	got, err = ListBySmesherId(db, smesherID3)
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.Equal(t, coinbase2, got[0].Coinbase)
-	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, smesherID3, got[0].SmesherID)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
-
 	unknownAddr := types.Address{1, 2, 3}
 	got, err = ListByCoinbase(db, unknownAddr)
-	require.NoError(t, err)
-	require.Empty(t, got)
-
-	unknownSmesher := types.NodeID{1, 2, 3}
-	got, err = ListBySmesherId(db, unknownSmesher)
 	require.NoError(t, err)
 	require.Empty(t, got)
 
@@ -148,33 +111,6 @@ func TestRewards(t *testing.T) {
 	require.Equal(t, lyrReward, got[1].LayerReward)
 
 	got, err = ListByCoinbase(db, coinbase2)
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.Equal(t, coinbase2, got[0].Coinbase)
-	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, smesherID3, got[0].SmesherID)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
-
-	got, err = ListBySmesherId(db, smesherID1)
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.Equal(t, coinbase1, got[0].Coinbase)
-	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, smesherID1, got[0].SmesherID)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
-
-	got, err = ListBySmesherId(db, smesherID2)
-	require.NoError(t, err)
-	require.Len(t, got, 1)
-	require.Equal(t, coinbase1, got[0].Coinbase)
-	require.Equal(t, lid1, got[0].Layer)
-	require.Equal(t, smesherID2, got[0].SmesherID)
-	require.Equal(t, part, got[0].TotalReward)
-	require.Equal(t, lyrReward, got[0].LayerReward)
-
-	got, err = ListBySmesherId(db, smesherID3)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, coinbase2, got[0].Coinbase)
@@ -312,11 +248,6 @@ func Test_0008Migration(t *testing.T) {
 	// this should not be set
 	require.Equal(t, types.NodeID{0}, rewards[0].SmesherID)
 
-	// this should return nothing (since smesherID wasn't set)
-	rewards, err = ListBySmesherId(db, reward.SmesherID)
-	require.NoError(t, err)
-	require.Empty(t, rewards)
-
 	// add more data and verify that we can read it both ways
 	reward = &types.Reward{
 		Layer:       9001,
@@ -336,13 +267,4 @@ func Test_0008Migration(t *testing.T) {
 	require.Equal(t, reward.LayerReward, rewards[1].LayerReward)
 	require.Equal(t, reward.Layer, rewards[1].Layer)
 	require.Equal(t, reward.SmesherID, rewards[1].SmesherID)
-
-	rewards, err = ListBySmesherId(db, reward.SmesherID)
-	require.NoError(t, err)
-	require.Len(t, rewards, 1)
-	require.Equal(t, reward.Coinbase, rewards[0].Coinbase)
-	require.Equal(t, reward.TotalReward, rewards[0].TotalReward)
-	require.Equal(t, reward.LayerReward, rewards[0].LayerReward)
-	require.Equal(t, reward.Layer, rewards[0].Layer)
-	require.Equal(t, reward.SmesherID, rewards[0].SmesherID)
 }

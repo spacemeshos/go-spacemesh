@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/datastore"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/malfeasance/wire"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -172,8 +173,14 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 			},
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleGossip(t.Context(), "peer", codec.MustEncode(gossip))
+		err = h.HandleGossip(t.Context(), "peer", codec.MustEncode(gossip))
 		require.NoError(t, err)
 
 		var blob sql.Blob
@@ -186,6 +193,13 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
 		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected)))
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {
@@ -302,9 +316,15 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 			},
 		}
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		expectedHash := types.RandomHash()
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleSynced(
+		err = h.HandleSynced(
 			t.Context(),
 			expectedHash,
 			"peer",
@@ -326,6 +346,13 @@ spacemesh_malfeasance_num_invalid_proofs{type="mal"} 1
 spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
 		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected))) // proof is still valid
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("invalid proof", func(t *testing.T) {
@@ -393,8 +420,14 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 		}
 		proofBytes := codec.MustEncode(proof)
 
+		events.InitializeReporter()
+		defer events.CloseEventReporter()
+		sub, err := events.SubscribeMatched(func(event *events.EventMalfeasance) bool { return true })
+		require.NoError(t, err)
+		defer sub.Close()
+
 		h.mockTrt.EXPECT().OnMalfeasance(nodeID)
-		err := h.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", proofBytes)
+		err = h.HandleSynced(t.Context(), types.Hash32(nodeID), "peer", proofBytes)
 		require.NoError(t, err)
 
 		var blob sql.Blob
@@ -407,6 +440,13 @@ spacemesh_malfeasance_num_invalid_proofs{type="multiATXs"} 1
 spacemesh_malfeasance_num_proofs{type="multiATXs"} 1
 `
 		require.NoError(t, testutil.CollectAndCompare(h.numProofs, strings.NewReader(expected)))
+
+		select {
+		case ev := <-sub.Out():
+			require.Equal(t, nodeID, ev.Smesher)
+		case <-time.After(5 * time.Second):
+			require.FailNow(t, "timed out waiting for event")
+		}
 	})
 
 	t.Run("new proof is noop", func(t *testing.T) {

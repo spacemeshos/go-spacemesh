@@ -155,6 +155,16 @@ func (s *MalfeasanceStreamService) Stream(
 	request *spacemeshv2alpha1.MalfeasanceStreamRequest,
 	stream spacemeshv2alpha1.MalfeasanceStreamService_StreamServer,
 ) error {
+	var sub subscription
+	if request.Watch {
+		var err error
+		sub, err = s.events.SubscribeMatched(request)
+		if err != nil {
+			return status.Error(codes.Internal, err.Error())
+		}
+		defer sub.Close()
+	}
+
 	legacyProofs, err := fetchLegacyFromDB(
 		stream.Context(),
 		s.db,
@@ -193,15 +203,10 @@ func (s *MalfeasanceStreamService) Stream(
 		}
 	}
 
-	if !request.Watch {
+	if sub == nil {
 		return nil
 	}
 
-	sub, err := s.events.SubscribeMatched(request)
-	if err != nil {
-		return status.Error(codes.Internal, err.Error())
-	}
-	defer sub.Close()
 	eventsOut := sub.Out()
 	eventsFull := sub.Full()
 
