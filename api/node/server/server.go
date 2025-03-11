@@ -460,7 +460,10 @@ func (s *Server) GetEligibilitySlotsNodeEpoch(
 }
 
 // GetBlocksLayer implements StrictServerInterface.
-func (s *Server) GetBlockidsLayer(ctx context.Context, request GetBlockidsLayerRequestObject) (GetBlockidsLayerResponseObject, error) {
+func (s *Server) GetBlockidsLayer(
+	ctx context.Context,
+	request GetBlockidsLayerRequestObject,
+) (GetBlockidsLayerResponseObject, error) {
 	ids, err := blocks.IDsInLayer(s.db, types.LayerID(request.Layer))
 	switch {
 	case errors.Is(err, sql.ErrNotFound):
@@ -472,12 +475,15 @@ func (s *Server) GetBlockidsLayer(ctx context.Context, request GetBlockidsLayerR
 		return GetBlockidsLayer404Response{}, nil
 	default:
 	}
-	s.logger.Debug("retrieved block ids", zap.Array("block ids", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
-		for _, id := range ids {
-			ae.AppendString(id.String())
-		}
-		return nil
-	})))
+	s.logger.Debug(
+		"retrieved block ids",
+		zap.Array("block ids", zapcore.ArrayMarshalerFunc(func(ae zapcore.ArrayEncoder) error {
+			for _, id := range ids {
+				ae.AppendString(id.String())
+			}
+			return nil
+		})),
+	)
 
 	// Theoretically this is possible to have > 1 block in case of a network partition.
 	// However, this API is used only for the hare certification and in this situation
@@ -487,5 +493,4 @@ func (s *Server) GetBlockidsLayer(ctx context.Context, request GetBlockidsLayerR
 	return GetBlockidsLayer200JSONResponse{
 		BlockID: ids[0][:],
 	}, nil
-
 }

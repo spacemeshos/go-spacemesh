@@ -4,11 +4,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func TestRemoteHare(t *testing.T) {
@@ -43,7 +44,10 @@ func TestRemoteHare(t *testing.T) {
 	require.NoError(t, err)
 	s.signers[0] = signer
 
-	oracle.EXPECT().CalcEligibility(gomock.Any(), s.lid, gomock.Any(), gomock.Any(), signer.NodeID(), gomock.Any()).Return(10, nil).AnyTimes()
+	oracle.EXPECT().
+		CalcEligibility(gomock.Any(), s.lid, gomock.Any(), gomock.Any(), signer.NodeID(), gomock.Any()).
+		Return(10, nil).
+		AnyTimes()
 
 	svc.EXPECT().HareRoundTemplate(gomock.Any(), s.lid, IterRound{
 		Iter:  0,
