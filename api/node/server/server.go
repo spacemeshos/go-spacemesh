@@ -466,8 +466,6 @@ func (s *Server) GetBlockidsLayer(
 ) (GetBlockidsLayerResponseObject, error) {
 	ids, err := blocks.IDsInLayer(s.db, types.LayerID(request.Layer))
 	switch {
-	case errors.Is(err, sql.ErrNotFound):
-		return GetBlockidsLayer404Response{}, nil
 	case err != nil:
 		s.logger.Debug("could not retrieve block ID", zap.Uint32("layer", request.Layer), zap.Error(err))
 		return GetBlockidsLayer500Response{}, nil
