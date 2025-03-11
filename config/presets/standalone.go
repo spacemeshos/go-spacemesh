@@ -22,6 +22,11 @@ func standalone() config.Config {
 	conf := config.DefaultConfig()
 	conf.NetworkHRP = "standalone"
 
+	// switch on ATXv2 in epoch 2
+	conf.BaseConfig.AtxVersions = activation.AtxVersions{
+		types.EpochID(2): types.AtxV2,
+	}
+
 	conf.TIME.Peersync.Disable = true
 	conf.Standalone = true
 	conf.DataDirParent = filepath.Join(os.TempDir(), "spacemesh")
@@ -34,8 +39,9 @@ func standalone() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 6 * time.Second
-	conf.Sync.Interval = 3 * time.Second
 	conf.LayersPerEpoch = 10
+
+	conf.Sync.Interval = 3 * time.Second
 
 	conf.HARE3.Enable = true
 	conf.HARE3.PreroundDelay = 1 * time.Second
