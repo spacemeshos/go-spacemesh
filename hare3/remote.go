@@ -137,7 +137,7 @@ func (h *RemoteHare) certify(ctx context.Context, session *session, blockID type
 	for _, signer := range session.signers {
 		err := h.certifier.CertifyBlock(ctx, signer, session.lid, blockID, session.beacon)
 		if err != nil {
-			// there isn't any handling that the caller could do so we log and return nil
+			// There isn't any handling that the caller could do so we only log a warning.
 			h.log.Warn(
 				"failed to certify block",
 				zap.Error(err),
@@ -200,7 +200,7 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 		}
 		if !certified && session.proto.Iter > 0 {
 			// Check if hare already converged and a block was produced.
-			// If yes - certify it and quit.
+			// If yes - certify it and continue till the end of the current iteration.
 			blockID, err := h.svc.BlockID(ctx, session.lid)
 			switch {
 			case err != nil:
