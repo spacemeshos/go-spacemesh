@@ -12,9 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/sync2"
-	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
 func init() {
@@ -42,31 +39,9 @@ func standalone() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 6 * time.Second
-	conf.Sync.Interval = 3 * time.Second
 	conf.LayersPerEpoch = 10
 
-	oldAtxSyncCfg := sync2.DefaultConfig()
-	oldAtxSyncCfg.MaxDepth = 16
-	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 15 * time.Second
-	oldAtxSyncCfg.AdvanceInterval = 3 * time.Second
-	newAtxSyncCfg := sync2.DefaultConfig()
-	newAtxSyncCfg.MaxDepth = 21
-	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Second
-	newAtxSyncCfg.AdvanceInterval = time.Second
-
-	conf.Sync.ReconcSync = syncer.ReconcSyncConfig{
-		Enable:            true,
-		EnableActiveSync:  true,
-		OldAtxSyncCfg:     oldAtxSyncCfg,
-		NewAtxSyncCfg:     newAtxSyncCfg,
-		ParallelLoadLimit: 10,
-		HardTimeout:       5 * time.Second,
-		ServerConfig: fetch.ServerConfig{
-			Queue:    200,
-			Requests: 100,
-			Interval: time.Second,
-		},
-	}
+	conf.Sync.Interval = 3 * time.Second
 
 	conf.HARE3.Enable = true
 	conf.HARE3.PreroundDelay = 1 * time.Second
