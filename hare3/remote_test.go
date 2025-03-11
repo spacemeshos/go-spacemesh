@@ -109,8 +109,9 @@ func TestRemoteHare_NotActiveInPreround(t *testing.T) {
 	s.signers[0] = signer
 
 	// Not active in preround
+	preround := IterRound{Iter: 0, Round: preround}
 	oracle.EXPECT().
-		CalcEligibility(gomock.Any(), s.lid, IterRound{Iter: 0, Round: preround}.Absolute(), gomock.Any(), signer.NodeID(), gomock.Any()).
+		CalcEligibility(gomock.Any(), s.lid, preround.Absolute(), gomock.Any(), signer.NodeID(), gomock.Any()).
 		Return(0, nil)
 
 	// Active in all other rounds

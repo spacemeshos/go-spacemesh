@@ -27,7 +27,6 @@ type RemoteHare struct {
 	mu        sync.Mutex
 	signers   map[string]*signing.EdSigner
 	oracle    *legacyOracle
-	sessions  map[types.LayerID]*protocol
 	eg        errgroup.Group
 	svc       NodeService
 	beaconSvc beaconService
