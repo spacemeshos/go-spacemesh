@@ -56,6 +56,21 @@ func fastnet() config.Config {
 	conf.Sync.AtxSync.EpochInfoPeers = 10
 	conf.Sync.AtxSync.RequestsLimit = 100
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
+	conf.Sync.ReconcSync.Enable = true
+	conf.Sync.ReconcSync.EnableActiveSync = true
+	conf.Sync.ReconcSync.NewAtxSyncCfg.AdvanceInterval = 20 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncInterval = 10 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncPeerCount = 4
+	conf.Sync.ReconcSync.NewAtxSyncCfg.RetryInterval = 2 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.FullSyncednessPeriod = time.Minute
+	conf.Sync.ReconcSync.NewAtxSyncCfg.NoPeersRecheckInterval = 5 * time.Second
+	conf.Sync.ReconcSync.OldAtxSyncCfg.AdvanceInterval = time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.SyncInterval = time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.SyncPeerCount = 4
+	conf.Sync.ReconcSync.OldAtxSyncCfg.RetryInterval = 2 * time.Second
+	conf.Sync.ReconcSync.OldAtxSyncCfg.FullSyncednessPeriod = 15 * time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.NoPeersRecheckInterval = 5 * time.Second
+
 	conf.LayersPerEpoch = 4
 	conf.RegossipAtxInterval = 30 * time.Second
 	conf.FETCH.RequestTimeout = 2 * time.Second
@@ -104,6 +119,8 @@ func fastnet() config.Config {
 	conf.POET.MaxRequestRetries = 3
 	conf.POET.InfoCacheTTL = time.Minute
 	conf.POET.PowParamsCacheTTL = 10 * time.Second
+
+	conf.LOGGING.SyncLoggerLevel = "debug"
 
 	return conf
 }
