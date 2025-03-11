@@ -11,11 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-type oracle interface {
-	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature, uint16) (bool, error)
-	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, types.VrfSignature) (uint16, error)
-}
-
 type legacyOracle struct {
 	log    *zap.Logger
 	oracle oracle

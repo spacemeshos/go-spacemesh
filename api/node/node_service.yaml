@@ -114,6 +114,33 @@ paths:
               schema:
                 type: string
 
+  /blockids/{layer}:
+    get:
+      summary: Get a block ID in the giver layer
+      parameters:
+        - in: path
+          name: layer
+          required: true
+          schema:
+            type: integer
+            format: uint32
+      responses:
+        "200":
+          description: successfully found the block id
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  BlockID:
+                    $ref: "models/components.yaml#/components/schemas/Bytes20"
+                required:
+                  - BlockID
+        "404":
+          description: block not found in this layer
+        "500":
+          description: could not retrieve block in this layer
+
   /publish/{protocol}:
     post:
       summary: Publish a blob in the given p2p protocol

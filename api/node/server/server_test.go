@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 func TestServerReadiness(t *testing.T) {
@@ -20,6 +21,7 @@ func TestServerReadiness(t *testing.T) {
 
 	beacons := NewMockbeaconService(ctrl)
 	srv := NewServer(
+		statesql.InMemoryTest(t),
 		activation.NewMockAtxService(ctrl),
 		beacons,
 		mocks.NewMockPublisher(ctrl),

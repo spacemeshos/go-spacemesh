@@ -811,13 +811,13 @@ func (app *App) initServices(ctx context.Context) error {
 	certifier = blocks.NewCertifier(
 		app.db,
 		hOracle,
+		app.Config.Certificate,
 		app.edVerifier,
 		app.host,
 		app.clock,
 		beaconProtocol,
 		trtl,
-		blocks.WithCertConfig(app.Config.Certificate),
-		blocks.WithCertifierLogger(app.addLogger(BlockCertLogger, lg).Zap()),
+		app.addLogger(BlockCertLogger, lg).Zap(),
 	)
 	for _, sig := range app.signers {
 		certifier.Register(sig)
@@ -2040,6 +2040,7 @@ func (app *App) startAPIServices(ctx context.Context) error {
 		logger := app.addLogger(NodeServiceLogger, app.log).Zap()
 		actSvc := activation.NewDBAtxService(app.db, golden, app.atxsdata, app.validator, logger)
 		server := nodeserver.NewServer(
+			app.db,
 			actSvc,
 			&beaconGetter{app.beaconProtocol},
 			app.host,

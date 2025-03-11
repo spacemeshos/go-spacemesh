@@ -133,6 +133,9 @@ type ClientInterface interface {
 	// GetBeaconEpoch request
 	GetBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetBlockidsLayer request
+	GetBlockidsLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetEligibilitySlotsNodeEpoch request
 	GetEligibilitySlotsNodeEpoch(ctx context.Context, node externalRef0.Bytes32Hex, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -214,6 +217,18 @@ func (c *Client) PostActivationPublish(ctx context.Context, body PostActivationP
 
 func (c *Client) GetBeaconEpoch(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetBeaconEpochRequest(c.Server, epoch)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetBlockidsLayer(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetBlockidsLayerRequest(c.Server, layer)
 	if err != nil {
 		return nil, err
 	}
@@ -455,6 +470,40 @@ func NewGetBeaconEpochRequest(server string, epoch externalRef0.EpochID) (*http.
 	}
 
 	operationPath := fmt.Sprintf("/beacon/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetBlockidsLayerRequest generates requests for GetBlockidsLayer
+func NewGetBlockidsLayerRequest(server string, layer uint32) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "layer", runtime.ParamLocationPath, layer)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/blockids/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -773,6 +822,9 @@ type ClientWithResponsesInterface interface {
 	// GetBeaconEpochWithResponse request
 	GetBeaconEpochWithResponse(ctx context.Context, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetBeaconEpochResponse, error)
 
+	// GetBlockidsLayerWithResponse request
+	GetBlockidsLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetBlockidsLayerResponse, error)
+
 	// GetEligibilitySlotsNodeEpochWithResponse request
 	GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.Bytes32Hex, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error)
 
@@ -899,6 +951,30 @@ func (r GetBeaconEpochResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetBeaconEpochResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetBlockidsLayerResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *struct {
+		BlockID externalRef0.Bytes20 `json:"BlockID"`
+	}
+}
+
+// Status returns HTTPResponse.Status
+func (r GetBlockidsLayerResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetBlockidsLayerResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1096,6 +1172,15 @@ func (c *ClientWithResponses) GetBeaconEpochWithResponse(ctx context.Context, ep
 	return ParseGetBeaconEpochResponse(rsp)
 }
 
+// GetBlockidsLayerWithResponse request returning *GetBlockidsLayerResponse
+func (c *ClientWithResponses) GetBlockidsLayerWithResponse(ctx context.Context, layer uint32, reqEditors ...RequestEditorFn) (*GetBlockidsLayerResponse, error) {
+	rsp, err := c.GetBlockidsLayer(ctx, layer, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetBlockidsLayerResponse(rsp)
+}
+
 // GetEligibilitySlotsNodeEpochWithResponse request returning *GetEligibilitySlotsNodeEpochResponse
 func (c *ClientWithResponses) GetEligibilitySlotsNodeEpochWithResponse(ctx context.Context, node externalRef0.Bytes32Hex, epoch externalRef0.EpochID, reqEditors ...RequestEditorFn) (*GetEligibilitySlotsNodeEpochResponse, error) {
 	rsp, err := c.GetEligibilitySlotsNodeEpoch(ctx, node, epoch, reqEditors...)
@@ -1263,6 +1348,34 @@ func ParseGetBeaconEpochResponse(rsp *http.Response) (*GetBeaconEpochResponse, e
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
 			Beacon externalRef0.Beacon `json:"beacon"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetBlockidsLayerResponse parses an HTTP response from a GetBlockidsLayerWithResponse call
+func ParseGetBlockidsLayerResponse(rsp *http.Response) (*GetBlockidsLayerResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetBlockidsLayerResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			BlockID externalRef0.Bytes20 `json:"BlockID"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

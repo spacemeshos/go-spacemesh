@@ -2,7 +2,7 @@ package hare3
 
 import (
 	"context"
-	"math"
+	"fmt"
 	"sync"
 	"time"
 
@@ -16,11 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-type NodeService interface {
-	HareRoundTemplate(ctx context.Context, layer types.LayerID, round IterRound) (*Body, error)
-	Publish(ctx context.Context, proto string, blob []byte) error
-}
-
 type beaconService interface {
 	Beacon(ctx context.Context, epoch types.EpochID) (types.Beacon, error)
 }
@@ -32,19 +27,21 @@ type RemoteHare struct {
 	mu        sync.Mutex
 	signers   map[string]*signing.EdSigner
 	oracle    *legacyOracle
-	sessions  map[types.LayerID]*protocol
 	eg        errgroup.Group
 	svc       NodeService
 	beaconSvc beaconService
+	certifier certifier
 
 	log *zap.Logger
 }
 
-func NewRemoteHare(config Config,
+func NewRemoteHare(
+	config Config,
 	nodeClock nodeClock,
 	nodeService NodeService,
 	beaconService beaconService,
 	oracle oracle,
+	certifier certifier,
 	log *zap.Logger,
 ) *RemoteHare {
 	return &RemoteHare{
@@ -56,8 +53,8 @@ func NewRemoteHare(config Config,
 			oracle: oracle,
 			config: config,
 		},
+		certifier: certifier,
 
-		sessions:  make(map[types.LayerID]*protocol),
 		eg:        errgroup.Group{},
 		svc:       nodeService,
 		beaconSvc: beaconService,
@@ -76,7 +73,7 @@ func (h *RemoteHare) Register(sig *signing.EdSigner) {
 func (h *RemoteHare) Start(ctx context.Context) {
 	current := h.nodeClock.CurrentLayer() + 1
 	enabled := max(current, h.config.EnableLayer, types.GetEffectiveGenesis()+1)
-	disabled := types.LayerID(math.MaxUint32)
+	disabled := h.config.DisableLayer
 	h.log.Info("started",
 		zap.Inline(&h.config),
 		zap.Uint32("enabled", enabled.Uint32()),
@@ -85,7 +82,7 @@ func (h *RemoteHare) Start(ctx context.Context) {
 	h.eg.Go(func() error {
 		h.log.Info("remote hare processing starting")
 		for next := enabled; next < disabled; next++ {
-			h.log.Info("remote hare processing layer", zap.Int("next", int(next)))
+			h.log.Info("remote hare awaiting layer", zap.Int("next", int(next)))
 			select {
 			case <-h.nodeClock.AwaitLayer(next):
 				h.log.Debug("notified", zap.Uint32("layer", next.Uint32()))
@@ -116,11 +113,9 @@ func (h *RemoteHare) onLayer(ctx context.Context, layer types.LayerID) {
 		vrfs:    make([]*types.HareEligibility, len(h.signers)),
 		proto:   newProtocol(h.config.CommitteeFor(layer)/2+1, h.log.Named("proto")),
 	}
-	h.sessions[layer] = s.proto
 	h.mu.Unlock()
 
 	sessionStart.Inc()
-	h.log.Debug("registered layer", zap.Uint32("lid", layer.Uint32()))
 	h.eg.Go(func() error {
 		if err := h.run(ctx, s); err != nil {
 			h.log.Warn("failed",
@@ -133,12 +128,27 @@ func (h *RemoteHare) onLayer(ctx context.Context, layer types.LayerID) {
 				zap.Uint32("lid", layer.Uint32()),
 			)
 		}
-		h.mu.Lock()
-		delete(h.sessions, layer)
-		h.mu.Unlock()
 		sessionTerminated.Inc()
 		return nil
 	})
+}
+
+func (h *RemoteHare) certify(ctx context.Context, session *session, blockID types.BlockID) {
+	for _, signer := range session.signers {
+		err := h.certifier.CertifyBlock(ctx, signer, session.lid, blockID, session.beacon)
+		if err != nil {
+			// There isn't any handling that the caller could do so we only log a warning.
+			h.log.Warn(
+				"failed to certify block",
+				zap.Error(err),
+				zap.Uint8("iter", session.proto.Iter),
+				zap.Uint32("layer", session.lid.Uint32()),
+				zap.Stringer("blockID", blockID),
+				zap.Stringer("round", session.proto.Round),
+				log.ZShortStringer("smesherID", signer.NodeID()),
+			)
+		}
+	}
 }
 
 func (h *RemoteHare) run(ctx context.Context, session *session) error {
@@ -175,9 +185,50 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 	}
 
 	onRound(session.proto)
+	certified := false
 	for {
-		if session.proto.IterRound.Iter >= h.config.IterationsLimit {
+		if certified && session.proto.Round == hardlock {
+			// The full iteration after hare converged passed.
+			// It can now terminate.
+			h.log.Debug(
+				"hare terminated",
+				zap.Uint8("iter", session.proto.Iter),
+				zap.Stringer("round", session.proto.Round),
+				zap.Uint32("layer", session.lid.Uint32()),
+			)
 			return nil
+		}
+		if !certified && session.proto.Iter > 0 {
+			// Check if hare already converged and a block was produced.
+			// If yes - certify it and continue till the end of the current iteration.
+			blockID, err := h.svc.BlockID(ctx, session.lid)
+			switch {
+			case err != nil:
+				h.log.Debug("couldn't fetch block ID", zap.Uint32("layer", session.lid.Uint32()))
+			case blockID == types.EmptyBlockID:
+				h.log.Debug(
+					"hare has not converged yet",
+					zap.Uint8("iter", session.proto.Iter),
+					zap.Stringer("round", session.proto.Round),
+					zap.Uint32("layer", session.lid.Uint32()),
+				)
+			default:
+				h.log.Debug(
+					"hare converged",
+					zap.Stringer("blockID", blockID),
+					zap.Uint8("iter", session.proto.Iter),
+					zap.Stringer("round", session.proto.Round),
+					zap.Uint32("layer", session.lid.Uint32()),
+				)
+				h.certify(ctx, session, blockID)
+				certified = true
+				// The hare converged and block was produced.
+				// However, we continue to participate in the protocol till
+				// the end of the current iteration.
+			}
+		}
+		if session.proto.Iter >= h.config.IterationsLimit {
+			return fmt.Errorf("hare failed to reach consensus in %d iterations", h.config.IterationsLimit)
 		}
 
 		walltime = walltime.Add(h.config.RoundDuration)
@@ -205,19 +256,16 @@ func (h *RemoteHare) run(ctx context.Context, session *session) error {
 				)
 
 				body, err := h.svc.HareRoundTemplate(ctx, session.lid, session.proto.IterRound)
-				if body == nil && err == nil {
+				switch {
+				case err != nil:
+					h.log.Error("failed to get hare round template", zap.Error(err))
+				case body != nil:
+					msg := &Message{Body: *body}
+					h.signPub(ctx, session, msg)
+				case body == nil:
 					// special case - no message to process, we're either too early or hare terminated.
 					// do the onRound and then continue
-					onRound(session.proto) // advance the protocol state before continuing
-					continue
 				}
-				if err != nil {
-					h.log.Error("getting hare round template", zap.Error(err))
-					onRound(session.proto) // advance the protocol state before continuing
-					continue
-				}
-				msg := &Message{Body: *body}
-				h.signPub(ctx, session, msg)
 			}
 
 			onRound(session.proto) // advance the protocol state before continuing

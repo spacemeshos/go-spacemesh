@@ -48,23 +48,6 @@ func defaultCertConfig() CertConfig {
 	}
 }
 
-// CertifierOpt for configuring Certifier.
-type CertifierOpt func(*Certifier)
-
-// WithCertConfig defines cfg for Certifier.
-func WithCertConfig(cfg CertConfig) CertifierOpt {
-	return func(c *Certifier) {
-		c.cfg = cfg
-	}
-}
-
-// WithCertifierLogger defines logger for Certifier.
-func WithCertifierLogger(logger *zap.Logger) CertifierOpt {
-	return func(c *Certifier) {
-		c.logger = logger
-	}
-}
-
 type certInfo struct {
 	registered, done bool
 	totalEligibility uint16
@@ -85,7 +68,6 @@ type Certifier struct {
 	oracle     eligibility.Rolacle
 	signers    map[types.NodeID]*signing.EdSigner
 	edVerifier *signing.EdVerifier
-	publisher  pubsub.Publisher
 	layerClock layerClock
 	beacon     system.BeaconGetter
 	tortoise   system.Tortoise
@@ -93,36 +75,35 @@ type Certifier struct {
 	mu          sync.Mutex
 	certifyMsgs map[types.LayerID]map[types.BlockID]*certInfo
 	certCount   map[types.EpochID]int
+
+	certify *CertifyService
 }
 
 // NewCertifier creates new block certifier.
 func NewCertifier(
 	db sql.StateDatabase,
 	o eligibility.Rolacle,
-
+	cfg CertConfig,
 	v *signing.EdVerifier,
 	p pubsub.Publisher,
 	lc layerClock,
 	b system.BeaconGetter,
 	tortoise system.Tortoise,
-	opts ...CertifierOpt,
+	logger *zap.Logger,
 ) *Certifier {
 	c := &Certifier{
-		logger:      zap.NewNop(),
-		cfg:         defaultCertConfig(),
+		logger:      logger,
+		cfg:         cfg,
 		db:          db,
 		oracle:      o,
 		signers:     make(map[types.NodeID]*signing.EdSigner),
 		edVerifier:  v,
-		publisher:   p,
+		certify:     NewCertifierService(p, o, cfg.CommitteeSize),
 		layerClock:  lc,
 		beacon:      b,
 		tortoise:    tortoise,
 		certifyMsgs: make(map[types.LayerID]map[types.BlockID]*certInfo),
 		certCount:   map[types.EpochID]int{},
-	}
-	for _, opt := range opts {
-		opt(c)
 	}
 	return c
 }
@@ -233,7 +214,7 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, lid types.LayerID, bi
 
 	var errs error
 	for _, s := range signers {
-		if err := c.certifySingleSigner(ctx, s, lid, bid, beacon); err != nil {
+		if err := c.certify.CertifyBlock(ctx, s, lid, bid, beacon); err != nil {
 			errs = errors.Join(
 				errs,
 				fmt.Errorf("certifying block %v/%v by %s: %w", lid, bid, s.NodeID().ShortString(), err),
@@ -243,7 +224,21 @@ func (c *Certifier) CertifyIfEligible(ctx context.Context, lid types.LayerID, bi
 	return errs
 }
 
-func (c *Certifier) certifySingleSigner(
+type CertifyService struct {
+	publisher     pubsub.Publisher
+	oracle        eligibility.Rolacle
+	committeeSize int
+}
+
+func NewCertifierService(publisher pubsub.Publisher, oracle eligibility.Rolacle, committeeSize int) *CertifyService {
+	return &CertifyService{
+		publisher:     publisher,
+		oracle:        oracle,
+		committeeSize: committeeSize,
+	}
+}
+
+func (c *CertifyService) CertifyBlock(
 	ctx context.Context,
 	s *signing.EdSigner,
 	lid types.LayerID,
@@ -255,7 +250,7 @@ func (c *Certifier) certifySingleSigner(
 		ctx,
 		lid,
 		eligibility.CertifyRound,
-		c.cfg.CommitteeSize,
+		c.committeeSize,
 		s.NodeID(),
 		proof,
 	)

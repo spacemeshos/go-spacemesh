@@ -46,9 +46,8 @@ func newTestCertifier(tb testing.TB, signers int) *testCertifier {
 	mc := mocks.NewMocklayerClock(ctrl)
 	mb := smocks.NewMockBeaconGetter(ctrl)
 	mtortoise := smocks.NewMockTortoise(ctrl)
-	c := NewCertifier(db, mo, signing.NewEdVerifier(), mp, mc, mb, mtortoise,
-		WithCertifierLogger(zaptest.NewLogger(tb)),
-	)
+	logger := zaptest.NewLogger(tb)
+	c := NewCertifier(db, mo, defaultCertConfig(), signing.NewEdVerifier(), mp, mc, mb, mtortoise, logger)
 	for i := 0; i < signers; i++ {
 		signer, err := signing.NewEdSigner()
 		require.NoError(tb, err)

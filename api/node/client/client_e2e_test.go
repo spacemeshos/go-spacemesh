@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare3"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubMocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/sql/statesql"
 )
 
 const retries = 3
@@ -46,7 +47,9 @@ func setupE2E(t *testing.T) (*client.NodeService, *mocks) {
 		proposals:  server.NewMockproposalBuilder(ctrl),
 	}
 
-	activationServiceServer := server.NewServer(m.atxService,
+	activationServiceServer := server.NewServer(
+		statesql.InMemoryTest(t),
+		m.atxService,
 		m.beacons,
 		m.publisher,
 		m.poetDb,
