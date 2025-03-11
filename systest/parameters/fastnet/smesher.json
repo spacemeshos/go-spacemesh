@@ -1,10 +1,5 @@
 {
     "preset": "fastnet",
-    "main": {
-        "atx-versions": {
-            "2": 2
-        }
-    },
     "poet": {
         "phase-shift": "30s",
         "cycle-gap": "30s",

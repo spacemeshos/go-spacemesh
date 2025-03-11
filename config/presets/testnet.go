@@ -102,6 +102,10 @@ func testnet() config.Config {
 			ATXGradeDelay:       30 * time.Minute,
 
 			PprofHTTPServerListener: "localhost:6060",
+
+			AtxVersions: activation.AtxVersions{
+				types.EpochID(2): types.AtxV2,
+			},
 		},
 		Genesis: config.GenesisConfig{
 			GenesisTime: config.Genesis(genesisTime),

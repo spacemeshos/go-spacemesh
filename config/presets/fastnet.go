@@ -10,6 +10,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/sync2"
+	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
 func init() {
@@ -26,6 +29,11 @@ func fastnet() config.Config {
 
 	// set for systest TestEquivocation
 	conf.BaseConfig.MinerGoodAtxsPercent = 50
+
+	// switch on ATXv2 in epoch 2
+	conf.BaseConfig.AtxVersions = activation.AtxVersions{
+		types.EpochID(2): types.AtxV2,
+	}
 
 	// node will select atxs that were received at least 4 seconds before start of the epoch
 	// for activeset.
@@ -50,14 +58,39 @@ func fastnet() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 15 * time.Second
+	conf.LayersPerEpoch = 4
+	conf.RegossipAtxInterval = 15 * time.Second
+
 	conf.Sync.Interval = 5 * time.Second
 	conf.Sync.GossipDuration = 10 * time.Second
 	conf.Sync.AtxSync.EpochInfoInterval = 1 * time.Second
 	conf.Sync.AtxSync.EpochInfoPeers = 10
 	conf.Sync.AtxSync.RequestsLimit = 100
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
-	conf.LayersPerEpoch = 4
-	conf.RegossipAtxInterval = 30 * time.Second
+
+	oldAtxSyncCfg := sync2.DefaultConfig()
+	oldAtxSyncCfg.MaxDepth = 16
+	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 15 * time.Second
+	oldAtxSyncCfg.AdvanceInterval = 3 * time.Second
+	newAtxSyncCfg := sync2.DefaultConfig()
+	newAtxSyncCfg.MaxDepth = 21
+	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Second
+	newAtxSyncCfg.AdvanceInterval = time.Second
+
+	conf.Sync.ReconcSync = syncer.ReconcSyncConfig{
+		Enable:            true,
+		EnableActiveSync:  true,
+		OldAtxSyncCfg:     oldAtxSyncCfg,
+		NewAtxSyncCfg:     newAtxSyncCfg,
+		ParallelLoadLimit: 10,
+		HardTimeout:       5 * time.Second,
+		ServerConfig: fetch.ServerConfig{
+			Queue:    200,
+			Requests: 100,
+			Interval: time.Second,
+		},
+	}
+
 	conf.FETCH.RequestTimeout = 2 * time.Second
 
 	conf.Tortoise.Hdist = 4
