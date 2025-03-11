@@ -10,9 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/sync2"
-	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
 func init() {
@@ -68,28 +65,20 @@ func fastnet() config.Config {
 	conf.Sync.AtxSync.RequestsLimit = 100
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
 
-	oldAtxSyncCfg := sync2.DefaultConfig()
-	oldAtxSyncCfg.MaxDepth = 16
-	oldAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 15 * time.Second
-	oldAtxSyncCfg.AdvanceInterval = 3 * time.Second
-	newAtxSyncCfg := sync2.DefaultConfig()
-	newAtxSyncCfg.MaxDepth = 21
-	newAtxSyncCfg.MultiPeerReconcilerConfig.SyncInterval = 5 * time.Second
-	newAtxSyncCfg.AdvanceInterval = time.Second
-
-	conf.Sync.ReconcSync = syncer.ReconcSyncConfig{
-		Enable:            true,
-		EnableActiveSync:  true,
-		OldAtxSyncCfg:     oldAtxSyncCfg,
-		NewAtxSyncCfg:     newAtxSyncCfg,
-		ParallelLoadLimit: 10,
-		HardTimeout:       5 * time.Second,
-		ServerConfig: fetch.ServerConfig{
-			Queue:    200,
-			Requests: 100,
-			Interval: time.Second,
-		},
-	}
+	conf.Sync.ReconcSync.Enable = true
+	conf.Sync.ReconcSync.EnableActiveSync = true
+	conf.Sync.ReconcSync.NewAtxSyncCfg.AdvanceInterval = 20 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncInterval = 10 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncPeerCount = 4
+	conf.Sync.ReconcSync.NewAtxSyncCfg.RetryInterval = 2 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.FullSyncednessPeriod = time.Minute
+	conf.Sync.ReconcSync.NewAtxSyncCfg.NoPeersRecheckInterval = 5 * time.Second
+	conf.Sync.ReconcSync.OldAtxSyncCfg.AdvanceInterval = time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.SyncInterval = time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.SyncPeerCount = 4
+	conf.Sync.ReconcSync.OldAtxSyncCfg.RetryInterval = 2 * time.Second
+	conf.Sync.ReconcSync.OldAtxSyncCfg.FullSyncednessPeriod = 15 * time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.NoPeersRecheckInterval = 5 * time.Second
 
 	conf.FETCH.RequestTimeout = 2 * time.Second
 
