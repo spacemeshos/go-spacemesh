@@ -363,7 +363,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 				require.Equal(t, mwire.InvalidPostIndex, mp.Proof.Type)
 
 				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
-				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(func(tx sql.Transaction) error {
 					mal, err := identities.IsMalicious(tx, sig.NodeID())
 					require.NoError(t, err)
 					require.False(t, mal)
@@ -728,7 +728,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 				require.Equal(t, mwire.MultipleATXs, mp.Proof.Type)
 
 				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
-				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(func(tx sql.Transaction) error {
 					mal, err := identities.IsMalicious(tx, sig.NodeID())
 					require.NoError(t, err)
 					require.False(t, mal)
@@ -824,7 +824,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 				require.Equal(t, mwire.InvalidPrevATX, mp.Proof.Type)
 
 				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
-				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(func(tx sql.Transaction) error {
 					mal, err := identities.IsMalicious(tx, sig.NodeID())
 					require.NoError(t, err)
 					require.False(t, mal)
@@ -898,7 +898,7 @@ func TestHandlerV1_StoreAtx(t *testing.T) {
 		atxHdlr.mMalPublish.EXPECT().Publish(t.Context(), sig.NodeID(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, _ types.NodeID, proof wire.Proof) error {
 				// check if no transaction is currently open in the DB, since otherwise it could cause a deadlock
-				require.NoError(t, atxHdlr.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+				require.NoError(t, atxHdlr.cdb.WithTxImmediate(func(tx sql.Transaction) error {
 					mal, err := identities.IsMalicious(tx, sig.NodeID())
 					require.NoError(t, err)
 					require.False(t, mal)

@@ -102,7 +102,7 @@ func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.P
 
 func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, _ []byte, s io.ReadWriter) error {
 	err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		return h.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+		return h.db.WithTxImmediate(func(tx sql.Transaction) error {
 			total, err := malfeasance.Count(tx)
 			if err != nil {
 				return fmt.Errorf("counting malicious nodes: %w", err)

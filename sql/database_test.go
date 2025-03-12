@@ -521,7 +521,7 @@ func TestDBClosed(t *testing.T) {
 	require.NoError(t, db.Close())
 	_, err := db.Exec("select 1", nil, nil)
 	require.ErrorIs(t, err, ErrClosed)
-	err = db.WithTxImmediate(t.Context(), func(tx Transaction) error { return nil })
+	err = db.WithTxImmediate(func(tx Transaction) error { return nil })
 	require.ErrorIs(t, err, ErrClosed)
 }
 

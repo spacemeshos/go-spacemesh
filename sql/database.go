@@ -635,8 +635,7 @@ type Database interface {
 	// statement.
 	// It then commits the transaction if the exec function doesn't return an error,
 	// and rolls it back otherwise.
-	// If the context is canceled, the currently running SQL statement is interrupted.
-	WithTxImmediate(ctx context.Context, exec func(Transaction) error) error
+	WithTxImmediate(exec func(Transaction) error) error
 	// WithConnection executes the provided function with a connection from the
 	// database pool.
 	// If many queries are to be executed in a row, but there's no need for an
@@ -788,8 +787,8 @@ func (db *sqliteDatabase) TxImmediate(ctx context.Context) (Transaction, error) 
 }
 
 // WithTxImmediate implements Database.
-func (db *sqliteDatabase) WithTxImmediate(ctx context.Context, exec func(Transaction) error) error {
-	return db.withTx(ctx, beginImmediate, exec)
+func (db *sqliteDatabase) WithTxImmediate(exec func(Transaction) error) error {
+	return db.withTx(context.Background(), beginImmediate, exec)
 }
 
 func (db *sqliteDatabase) runInterceptors(query string) error {
