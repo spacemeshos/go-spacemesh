@@ -1,7 +1,6 @@
 package sql
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -37,7 +36,7 @@ func Test_ConReturnedToPool(t *testing.T) {
 		})
 	})
 
-	con := db.pool.Get(context.Background())
+	con := db.pool.Get(t.Context())
 	require.NotNil(t, con, "connection was not returned")
 }
 
