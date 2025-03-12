@@ -52,7 +52,7 @@ func checkpointDB(
 		},
 	}
 
-	tx, err := db.Tx(ctx)
+	tx, err := db.Tx()
 	if err != nil {
 		return nil, fmt.Errorf("create db tx: %w", err)
 	}

@@ -40,8 +40,8 @@ func newSetSyncBaseTester(t *testing.T, os rangesync.OrderedSet) *setSyncBaseTes
 
 func (st *setSyncBaseTester) expectCopy() *mocks.MockOrderedSet {
 	copy := mocks.NewMockOrderedSet(st.ctrl)
-	st.os.EXPECT().WithCopy(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(_ context.Context, toCall func(rangesync.OrderedSet) error) error {
+	st.os.EXPECT().WithCopy(gomock.Any()).DoAndReturn(
+		func(toCall func(rangesync.OrderedSet) error) error {
 			return toCall(copy)
 		})
 	return copy

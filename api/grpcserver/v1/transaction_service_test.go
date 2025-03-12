@@ -137,9 +137,6 @@ func TestTransactionService_StreamResults(t *testing.T) {
 func BenchmarkStreamResults(b *testing.B) {
 	db := statesql.InMemoryTest(b)
 
-	ctx, cancel := context.WithTimeout(b.Context(), 10*time.Second)
-	defer cancel()
-
 	var (
 		gen      = fixture.NewTransactionResultGenerator().WithAddresses(10_000)
 		count    = map[types.Address]int{}
@@ -147,7 +144,7 @@ func BenchmarkStreamResults(b *testing.B) {
 		maxcount int
 		start    = time.Now()
 	)
-	tx, err := db.Tx(ctx)
+	tx, err := db.Tx()
 	require.NoError(b, err)
 	for range 1_000 {
 		rst := gen.Next()
@@ -173,6 +170,9 @@ func BenchmarkStreamResults(b *testing.B) {
 	b.Logf("setup took %s", time.Since(start))
 	b.ResetTimer()
 	b.ReportAllocs()
+
+	ctx, cancel := context.WithTimeout(b.Context(), 10*time.Second)
+	defer cancel()
 
 	stats := runtime.MemStats{}
 	for range b.N {

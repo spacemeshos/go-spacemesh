@@ -629,7 +629,7 @@ func makeDBBackedFPTree(t *testing.T) []*fptree.FPTree {
 		TableName: "foo",
 		IDColumn:  "id",
 	}
-	tx, err := db.Tx(t.Context())
+	tx, err := db.Tx()
 	require.NoError(t, err)
 	t.Cleanup(func() { tx.Release() })
 	sts, err := st.Snapshot(tx)

@@ -152,7 +152,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 }
 
 func (p *Publisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
-	tx, err := p.db.TxImmediate(ctx)
+	tx, err := p.db.TxImmediate()
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
@@ -234,7 +234,7 @@ func (p *Publisher) publish(
 }
 
 func (p *Publisher) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error) {
-	tx, err := p.db.TxImmediate(ctx)
+	tx, err := p.db.TxImmediate()
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}

@@ -59,7 +59,7 @@ func (h *handler) handleLegacyMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _
 
 // handleMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-	tx, err := h.db.TxImmediate(ctx)
+	tx, err := h.db.TxImmediate()
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}

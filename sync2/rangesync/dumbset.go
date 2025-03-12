@@ -1,7 +1,6 @@
 package rangesync
 
 import (
-	"context"
 	"crypto/md5"
 	"errors"
 	"fmt"
@@ -12,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hash"
 )
 
-// stringToFP conversts a string to a Fingerprint.
+// stringToFP converts a string to a Fingerprint.
 // It is only used in tests.
 func stringToFP(s string) Fingerprint {
 	h := md5.New()
@@ -308,7 +307,7 @@ func (ds *DumbSet) SetInfo() (RangeInfo, error) {
 }
 
 // WithCopy implements OrderedSet.
-func (ds *DumbSet) WithCopy(_ context.Context, toCall func(OrderedSet) error) error {
+func (ds *DumbSet) WithCopy(toCall func(OrderedSet) error) error {
 	ds.copyMtx.Lock()
 	copy := &DumbSet{
 		keys:              slices.Clone(ds.keys),
