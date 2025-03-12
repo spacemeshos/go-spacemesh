@@ -62,7 +62,7 @@ func (ssb *SetSyncBase) syncPeer(
 	toCall func(rangesync.OrderedSet) error,
 ) error {
 	sr := rangesync.EmptySeqResult()
-	if err := ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
+	if err := ssb.os.WithCopy(func(os rangesync.OrderedSet) error {
 		if err := toCall(os); err != nil {
 			return err
 		}
@@ -101,7 +101,7 @@ func (ssb *SetSyncBase) Serve(ctx context.Context, p p2p.Peer, stream io.ReadWri
 // Probe implements SyncBase.
 func (ssb *SetSyncBase) Probe(ctx context.Context, p p2p.Peer) (pr rangesync.ProbeResult, err error) {
 	// Use a snapshot of the store to avoid holding the mutex for a long time
-	if err := ssb.os.WithCopy(ctx, func(os rangesync.OrderedSet) error {
+	if err := ssb.os.WithCopy(func(os rangesync.OrderedSet) error {
 		pr, err = ssb.ps.Probe(ctx, p, os, nil, nil)
 		if err != nil {
 			return fmt.Errorf("probing peer %s: %w", p, err)

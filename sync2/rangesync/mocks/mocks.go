@@ -10,7 +10,6 @@
 package mocks
 
 import (
-	context "context"
 	reflect "reflect"
 	time "time"
 
@@ -466,17 +465,17 @@ func (c *MockOrderedSetSplitRangeCall) DoAndReturn(f func(rangesync.KeyBytes, ra
 }
 
 // WithCopy mocks base method.
-func (m *MockOrderedSet) WithCopy(ctx context.Context, toCall func(rangesync.OrderedSet) error) error {
+func (m *MockOrderedSet) WithCopy(toCall func(rangesync.OrderedSet) error) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WithCopy", ctx, toCall)
+	ret := m.ctrl.Call(m, "WithCopy", toCall)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // WithCopy indicates an expected call of WithCopy.
-func (mr *MockOrderedSetMockRecorder) WithCopy(ctx, toCall any) *MockOrderedSetWithCopyCall {
+func (mr *MockOrderedSetMockRecorder) WithCopy(toCall any) *MockOrderedSetWithCopyCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithCopy", reflect.TypeOf((*MockOrderedSet)(nil).WithCopy), ctx, toCall)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WithCopy", reflect.TypeOf((*MockOrderedSet)(nil).WithCopy), toCall)
 	return &MockOrderedSetWithCopyCall{Call: call}
 }
 
@@ -492,13 +491,13 @@ func (c *MockOrderedSetWithCopyCall) Return(arg0 error) *MockOrderedSetWithCopyC
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockOrderedSetWithCopyCall) Do(f func(context.Context, func(rangesync.OrderedSet) error) error) *MockOrderedSetWithCopyCall {
+func (c *MockOrderedSetWithCopyCall) Do(f func(func(rangesync.OrderedSet) error) error) *MockOrderedSetWithCopyCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockOrderedSetWithCopyCall) DoAndReturn(f func(context.Context, func(rangesync.OrderedSet) error) error) *MockOrderedSetWithCopyCall {
+func (c *MockOrderedSetWithCopyCall) DoAndReturn(f func(func(rangesync.OrderedSet) error) error) *MockOrderedSetWithCopyCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }

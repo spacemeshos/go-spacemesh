@@ -1,7 +1,6 @@
 package atxsdata
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -21,7 +20,7 @@ func Warm(db sql.StateDatabase, keep types.EpochID, logger *zap.Logger, signers 
 	for _, sig := range signers {
 		cache.Register(sig)
 	}
-	tx, err := db.Tx(context.Background())
+	tx, err := db.Tx()
 	if err != nil {
 		return nil, err
 	}

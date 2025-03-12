@@ -20,7 +20,7 @@ func CreateDB(t *testing.T, keyLen int) sql.Database {
 }
 
 func insertDBItems(t *testing.T, db sql.Database, content []rangesync.KeyBytes, cmd string) {
-	err := db.WithTx(t.Context(), func(tx sql.Transaction) error {
+	err := db.WithTx(func(tx sql.Transaction) error {
 		for _, id := range content {
 			_, err := tx.Exec(cmd, func(stmt *sql.Statement) {
 				stmt.BindBytes(1, id)
