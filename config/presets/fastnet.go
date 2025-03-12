@@ -66,7 +66,7 @@ func fastnet() config.Config {
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
 
 	conf.Sync.ReconcSync.Enable = true
-	conf.Sync.ReconcSync.EnableActiveSync = true
+	conf.Sync.ReconcSync.EnableActiveSync = false
 	conf.Sync.ReconcSync.NewAtxSyncCfg.AdvanceInterval = 20 * time.Second
 	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncInterval = 10 * time.Second
 	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncPeerCount = 4
