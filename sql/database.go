@@ -718,6 +718,9 @@ func (db *sqliteDatabase) getTx(ctx context.Context, initstmt string) (*sqliteTx
 	if err := tx.begin(initstmt); err != nil {
 		cancel()
 		db.putConn(conn)
+		if strings.Contains(err.Error(), "transaction within a transaction") {
+			panic("DUPA")
+		}
 		return nil, err
 	}
 	return tx, nil
@@ -1136,7 +1139,11 @@ func (tx *sqliteTx) begin(initstmt string) error {
 	stmt := tx.conn.Prep(initstmt)
 	_, err := stmt.Step()
 	if err != nil {
-		return fmt.Errorf("begin: %w", mapSqliteError(err))
+		err1 := mapSqliteError(err)
+		if strings.Contains(err1.Error(), "transaction within a transaction") {
+			panic("QQQQQ: gotcha!!!")
+		}
+		return fmt.Errorf("begin: %w", err1)
 	}
 	return nil
 }
