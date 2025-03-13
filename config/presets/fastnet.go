@@ -27,6 +27,11 @@ func fastnet() config.Config {
 	// set for systest TestEquivocation
 	conf.BaseConfig.MinerGoodAtxsPercent = 50
 
+	// switch on ATXv2 in epoch 2
+	conf.BaseConfig.AtxVersions = activation.AtxVersions{
+		types.EpochID(2): types.AtxV2,
+	}
+
 	// node will select atxs that were received at least 4 seconds before start of the epoch
 	// for activeset.
 	// if some atxs weren't received on time it will skew eligibility distribution
@@ -50,14 +55,31 @@ func fastnet() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.LayerDuration = 15 * time.Second
+	conf.LayersPerEpoch = 4
+	conf.RegossipAtxInterval = 15 * time.Second
+
 	conf.Sync.Interval = 5 * time.Second
 	conf.Sync.GossipDuration = 10 * time.Second
 	conf.Sync.AtxSync.EpochInfoInterval = 1 * time.Second
 	conf.Sync.AtxSync.EpochInfoPeers = 10
 	conf.Sync.AtxSync.RequestsLimit = 100
 	conf.Sync.MalSync.IDRequestInterval = 20 * time.Second
-	conf.LayersPerEpoch = 4
-	conf.RegossipAtxInterval = 30 * time.Second
+
+	conf.Sync.ReconcSync.Enable = true
+	conf.Sync.ReconcSync.EnableActiveSync = false
+	conf.Sync.ReconcSync.NewAtxSyncCfg.AdvanceInterval = 20 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncInterval = 10 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.SyncPeerCount = 4
+	conf.Sync.ReconcSync.NewAtxSyncCfg.RetryInterval = 2 * time.Second
+	conf.Sync.ReconcSync.NewAtxSyncCfg.FullSyncednessPeriod = time.Minute
+	conf.Sync.ReconcSync.NewAtxSyncCfg.NoPeersRecheckInterval = 5 * time.Second
+	conf.Sync.ReconcSync.OldAtxSyncCfg.AdvanceInterval = time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.SyncInterval = time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.SyncPeerCount = 4
+	conf.Sync.ReconcSync.OldAtxSyncCfg.RetryInterval = 2 * time.Second
+	conf.Sync.ReconcSync.OldAtxSyncCfg.FullSyncednessPeriod = 15 * time.Minute
+	conf.Sync.ReconcSync.OldAtxSyncCfg.NoPeersRecheckInterval = 5 * time.Second
+
 	conf.FETCH.RequestTimeout = 2 * time.Second
 
 	conf.Tortoise.Hdist = 4

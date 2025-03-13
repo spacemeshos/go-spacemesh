@@ -236,7 +236,7 @@ func (h *Handler) validateAndSave(ctx context.Context, p *wire.MalfeasanceProof)
 		return types.EmptyNodeID, errors.Join(err, pubsub.ErrValidationReject)
 	}
 	proofBytes := codec.MustEncode(p)
-	if err := h.cdb.WithTxImmediate(ctx, func(dbtx sql.Transaction) error {
+	if err := h.cdb.WithTxImmediate(func(dbtx sql.Transaction) error {
 		malicious, err := identities.IsMalicious(dbtx, nodeID)
 		if err != nil {
 			return fmt.Errorf("check known malicious: %w", err)

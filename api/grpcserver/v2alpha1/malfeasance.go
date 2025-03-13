@@ -59,7 +59,7 @@ func (s *MalfeasanceService) List(
 	}
 
 	result := &spacemeshv2alpha1.MalfeasanceList{}
-	err := s.db.WithTx(ctx, func(tx sql.Transaction) error {
+	err := s.db.WithTx(func(tx sql.Transaction) error {
 		legacyCount, err := identities.CountMalicious(tx)
 		if err != nil {
 			return status.Error(codes.Internal, err.Error())

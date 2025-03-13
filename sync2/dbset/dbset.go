@@ -1,7 +1,6 @@
 package dbset
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -229,7 +228,7 @@ func (d *DBSet) Advance() error {
 
 // WithCopy invokes the specified function, passing it a temporary copy of the DBSet.
 // Implements rangesync.OrderedSet.
-func (d *DBSet) WithCopy(ctx context.Context, toCall func(rangesync.OrderedSet) error) error {
+func (d *DBSet) WithCopy(toCall func(rangesync.OrderedSet) error) error {
 	if err := d.EnsureLoaded(); err != nil {
 		return fmt.Errorf("loading DBSet: %w", err)
 	}
@@ -249,7 +248,7 @@ func (d *DBSet) WithCopy(ctx context.Context, toCall func(rangesync.OrderedSet) 
 	defer ds.release()
 	db, ok := d.db.(sql.Database)
 	if ok {
-		return db.WithConnection(ctx, func(ex sql.Executor) error {
+		return db.WithConnection(func(ex sql.Executor) error {
 			ds.db = ex
 			return toCall(ds)
 		})

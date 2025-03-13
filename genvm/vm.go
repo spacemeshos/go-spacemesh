@@ -2,7 +2,6 @@ package vm
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -122,7 +121,7 @@ func (v *VM) GetAllAccounts() ([]*types.Account, error) {
 }
 
 func (v *VM) revert(lid types.LayerID) error {
-	tx, err := v.db.Tx(context.Background())
+	tx, err := v.db.Tx()
 	if err != nil {
 		return err
 	}
@@ -173,7 +172,7 @@ func (v *VM) GetBalance(address types.Address) (uint64, error) {
 
 // ApplyGenesis saves list of accounts for genesis.
 func (v *VM) ApplyGenesis(genesis []types.Account) error {
-	tx, err := v.db.Tx(context.Background())
+	tx, err := v.db.Tx()
 	if err != nil {
 		return err
 	}
@@ -221,7 +220,7 @@ func (v *VM) Apply(
 	encoder := scale.NewEncoder(hasher)
 	total := 0
 
-	tx, err := v.db.TxImmediate(context.Background())
+	tx, err := v.db.TxImmediate()
 	if err != nil {
 		return nil, nil, err
 	}

@@ -230,7 +230,7 @@ func MainnetConfig() Config {
 			MalSync:                  malsync.DefaultConfig(),
 			ReconcSync: syncer.ReconcSyncConfig{
 				Enable:            true,
-				EnableActiveSync:  true,
+				EnableActiveSync:  false,
 				OldAtxSyncCfg:     oldAtxSyncCfg,
 				NewAtxSyncCfg:     newAtxSyncCfg,
 				ParallelLoadLimit: 10,

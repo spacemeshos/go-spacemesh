@@ -1,9 +1,10 @@
 {
     "preset": "fastnet",
-    "main": {
-        "atx-versions": {
-            "2": 2
-        }
+    "poet": {
+        "phase-shift": "30s",
+        "cycle-gap": "30s",
+        "grace-period": "10s",
+        "positioning-atx-selection-timeout":"7s"
     },
     "api": {
         "grpc-public-listener": "0.0.0.0:9092",

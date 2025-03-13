@@ -82,7 +82,7 @@ func DefaultConfig() Config {
 		MalSync:                  malsync.DefaultConfig(),
 		ReconcSync: ReconcSyncConfig{
 			Enable:            true,
-			EnableActiveSync:  false,
+			EnableActiveSync:  true,
 			OldAtxSyncCfg:     oldAtxSyncCfg,
 			NewAtxSyncCfg:     newAtxSyncCfg,
 			ParallelLoadLimit: 10,

@@ -53,7 +53,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 	// Persisting the proof in the DB has to be done within a transaction to ensure consistency. The ATX handler could
 	// update the (or merge multiple) marriage set in parallel, so we need to make sure data is consistent while we
 	// update the malfeasance table.
-	err := p.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+	err := p.db.WithTxImmediate(func(tx sql.Transaction) error {
 		marriageID, err := marriage.FindIDByNodeID(tx, nodeID)
 		switch {
 		case errors.Is(err, sql.ErrNotFound): // smesher is not married
@@ -152,7 +152,7 @@ func (p *Publisher) PublishATXProof(ctx context.Context, nodeID types.NodeID, pr
 }
 
 func (p *Publisher) Regossip(ctx context.Context, nodeID types.NodeID) error {
-	tx, err := p.db.TxImmediate(ctx)
+	tx, err := p.db.TxImmediate()
 	if err != nil {
 		return fmt.Errorf("starting transaction: %w", err)
 	}
@@ -234,7 +234,7 @@ func (p *Publisher) publish(
 }
 
 func (p *Publisher) ProofByID(ctx context.Context, nodeID types.NodeID) ([]byte, error) {
-	tx, err := p.db.TxImmediate(ctx)
+	tx, err := p.db.TxImmediate()
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}

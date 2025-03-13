@@ -75,10 +75,7 @@ func (w *BallotWriter) Start(ctx context.Context) {
 			FlushBatchSize.Add(float64(len(batch)))
 
 			var ballotAddDur, layerBallotDur time.Duration
-			// we use a context.Background() because: on shutdown the canceling of the
-			// context may exit the transaction halfway and leave the db in some state where it
-			// causes crawshaw to panic on a "not all connections returned to pool".
-			if err := w.db.WithTxImmediate(context.Background(), func(tx sql.Transaction) error {
+			if err := w.db.WithTxImmediate(func(tx sql.Transaction) error {
 				for _, ballot := range batch {
 					if !ballot.IsMalicious() {
 						layerBallotStart := time.Now()
