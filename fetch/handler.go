@@ -59,7 +59,7 @@ func (h *handler) handleLegacyMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _
 
 // handleMaliciousIDsReq returns the IDs of all known malicious nodes.
 func (h *handler) handleMaliciousIDsReq(ctx context.Context, _ p2p.Peer, _ []byte) ([]byte, error) {
-	tx, err := h.db.TxImmediate(ctx)
+	tx, err := h.db.TxImmediate()
 	if err != nil {
 		return nil, fmt.Errorf("starting transaction: %w", err)
 	}
@@ -102,7 +102,7 @@ func (h *handler) handleLegacyMaliciousIDsReqStream(ctx context.Context, _ p2p.P
 
 func (h *handler) handleMaliciousIDsReqStream(ctx context.Context, _ p2p.Peer, _ []byte, s io.ReadWriter) error {
 	err := h.streamIDs(ctx, s, func(cbk retrieveCallback) error {
-		return h.db.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+		return h.db.WithTxImmediate(func(tx sql.Transaction) error {
 			total, err := malfeasance.Count(tx)
 			if err != nil {
 				return fmt.Errorf("counting malicious nodes: %w", err)

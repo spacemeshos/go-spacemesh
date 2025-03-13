@@ -439,31 +439,19 @@ func (s *Syncer) downloadNodeIDs(ctx context.Context, initial bool, updates chan
 	}
 }
 
-func (s *Syncer) updateLegacyState(ctx context.Context) error {
-	if err := s.localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+func (s *Syncer) updateLegacyState() error {
+	if err := s.localDB.WithTxImmediate(func(tx sql.Transaction) error {
 		return malsync.UpdateLegacySyncState(tx, s.clock.Now())
 	}); err != nil {
-		if ctx.Err() != nil {
-			// FIXME: with crawshaw, canceling the context which has been used to get
-			// a connection from the pool may cause "database: no free connection" errors.
-			// Related: #6273
-			err = ctx.Err()
-		}
 		return fmt.Errorf("error updating legacy malsync state: %w", err)
 	}
 	return nil
 }
 
-func (s *Syncer) updateState(ctx context.Context) error {
-	if err := s.localDB.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+func (s *Syncer) updateState() error {
+	if err := s.localDB.WithTxImmediate(func(tx sql.Transaction) error {
 		return malsync.UpdateSyncState(tx, s.clock.Now())
 	}); err != nil {
-		if ctx.Err() != nil {
-			// FIXME: with crawshaw, canceling the context which has been used to get
-			// a connection from the pool may cause "database: no free connection" errors.
-			// Related: #6273
-			err = ctx.Err()
-		}
 		return fmt.Errorf("error updating malsync state: %w", err)
 	}
 
@@ -481,13 +469,13 @@ func (s *Syncer) downloadLegacyMalfeasanceProofs(ctx context.Context, initial bo
 		if nothingToDownload {
 			sst.done()
 			if initial && sst.numSyncedPeers() >= s.cfg.MinSyncPeers {
-				if err := s.updateLegacyState(ctx); err != nil {
+				if err := s.updateLegacyState(); err != nil {
 					return err
 				}
 				s.logger.Info("initial sync of legacy malfeasance proofs completed", log.ZContext(ctx))
 				return nil
 			} else if !initial && gotUpdate {
-				if err := s.updateLegacyState(ctx); err != nil {
+				if err := s.updateLegacyState(); err != nil {
 					return err
 				}
 			}
@@ -577,13 +565,13 @@ func (s *Syncer) downloadMalfeasanceProofs(ctx context.Context, initial bool, up
 		if nothingToDownload {
 			sst.done()
 			if initial && sst.numSyncedPeers() >= s.cfg.MinSyncPeers {
-				if err := s.updateState(ctx); err != nil {
+				if err := s.updateState(); err != nil {
 					return err
 				}
 				s.logger.Info("initial sync of malfeasance proofs completed", log.ZContext(ctx))
 				return nil
 			} else if !initial && gotUpdate {
-				if err := s.updateState(ctx); err != nil {
+				if err := s.updateState(); err != nil {
 					return err
 				}
 			}

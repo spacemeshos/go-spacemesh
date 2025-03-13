@@ -138,16 +138,14 @@ func TestP2P(t *testing.T) {
 				return false
 			}
 			r := true
-			require.NoError(t, hsync.Set().WithCopy(
-				t.Context(),
-				func(os rangesync.OrderedSet) error {
-					info, err := os.SetInfo()
-					require.NoError(t, err)
-					if info.Count < numHashes {
-						r = false
-					}
-					return nil
-				}))
+			require.NoError(t, hsync.Set().WithCopy(func(os rangesync.OrderedSet) error {
+				info, err := os.SetInfo()
+				require.NoError(t, err)
+				if info.Count < numHashes {
+					r = false
+				}
+				return nil
+			}))
 			if !r {
 				return false
 			}
@@ -157,16 +155,14 @@ func TestP2P(t *testing.T) {
 
 	advCounts := make([]int, len(hs))
 	for n, hsync := range hs {
-		require.NoError(t, hsync.Set().WithCopy(
-			t.Context(),
-			func(os rangesync.OrderedSet) error {
-				info, err := os.SetInfo()
-				require.NoError(t, err)
-				actualItems, err := info.Items.Collect()
-				require.NoError(t, err)
-				require.ElementsMatch(t, initialSet, actualItems)
-				return nil
-			}))
+		require.NoError(t, hsync.Set().WithCopy(func(os rangesync.OrderedSet) error {
+			info, err := os.SetInfo()
+			require.NoError(t, err)
+			actualItems, err := info.Items.Collect()
+			require.NoError(t, err)
+			require.ElementsMatch(t, initialSet, actualItems)
+			return nil
+		}))
 		// OrderedSet is advanced after each sync.
 		// The first set may not be advanced initially here b/c it does
 		// not receive any new items.
@@ -287,17 +283,15 @@ func TestP2P_DBSet(t *testing.T) {
 				return false
 			}
 			r := true
-			require.NoError(t, hsync.Set().WithCopy(
-				t.Context(),
-				func(os rangesync.OrderedSet) error {
-					info, err := os.SetInfo()
-					require.NoError(t, err)
-					if info.Count < numHashes {
-						r = false
-					}
-					require.Equal(t, initialInfo.Fingerprint, info.Fingerprint)
-					return nil
-				}))
+			require.NoError(t, hsync.Set().WithCopy(func(os rangesync.OrderedSet) error {
+				info, err := os.SetInfo()
+				require.NoError(t, err)
+				if info.Count < numHashes {
+					r = false
+				}
+				require.Equal(t, initialInfo.Fingerprint, info.Fingerprint)
+				return nil
+			}))
 			if !r {
 				return false
 			}

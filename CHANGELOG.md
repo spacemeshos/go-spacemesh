@@ -20,10 +20,6 @@ pointing to the running `node` service.
 
 ### Highlights
 
-This release will enable syncv2 fully to sync ATXs for all nodes. This should greatly reduce the time it takes to sync
-a node from genesis and the amount of data that is needed to be exchanged with the network to keep a node in sync. The
-improvements are enabled automatically after upgrading to this version and no user action is needed.
-
 Development on ATXv2 has concluded and the feature is now enabled on mainnet. Nodes will produce the new ATX format
 starting from epoch 45 and ever epoch after. The new ATXs also comes with new malfeasance proofs that are more efficient
 in terms of data size and more easily extendable in the future.

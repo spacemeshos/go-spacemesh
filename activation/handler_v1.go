@@ -498,7 +498,7 @@ func (h *HandlerV1) storeAtx(
 	malicious := false
 	var proof *mwire.MalfeasanceProof // legacy malfeasance proofs
 	var proof2 wire.Proof             // new malfeasance proofs
-	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+	if err := h.cdb.WithTxImmediate(func(tx sql.Transaction) error {
 		var err error
 		malicious, err = identities.IsMalicious(tx, atx.SmesherID)
 		if err != nil {

@@ -979,7 +979,7 @@ func (h *HandlerV2) storeAtx(ctx context.Context, atx *types.ActivationTx, watx 
 	malicious := false
 	var proof wire.Proof
 	var nodeID types.NodeID
-	if err := h.cdb.WithTxImmediate(ctx, func(tx sql.Transaction) error {
+	if err := h.cdb.WithTxImmediate(func(tx sql.Transaction) error {
 		if len(watx.marriages) != 0 {
 			newMarriageID, err := marriage.NewID(tx)
 			if err != nil {

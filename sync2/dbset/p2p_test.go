@@ -53,7 +53,7 @@ func populateFoo(t testing.TB, rows []fooRow) (db sql.Database, dir string) {
 	t.Cleanup(func() {
 		require.NoError(t, db.Close())
 	})
-	require.NoError(t, db.WithTx(t.Context(), func(tx sql.Transaction) error {
+	require.NoError(t, db.WithTx(func(tx sql.Transaction) error {
 		_, err := tx.Exec(
 			"create table foo(id char(32) not null primary key, received int)",
 			nil, nil)
@@ -112,7 +112,7 @@ func stopTimer(tb testing.TB) {
 
 func dbFromRows(t testing.TB, rows []fooRow) sql.Transaction {
 	db, _ := populateFoo(t, rows)
-	tx, err := db.Tx(t.Context())
+	tx, err := db.Tx()
 	require.NoError(t, err)
 	t.Cleanup(func() { tx.Release() })
 	return tx
@@ -186,7 +186,7 @@ func runSync(
 	cfg.MaxReconcDiff = 1 // always reconcile
 	pssA := rangesync.NewPairwiseSetSyncerInternal(syncLogger.Named("sideA"), nil, "test", cfg, &tr, clock)
 	d := rangesync.NewDispatcher(log)
-	require.NoError(t, setA.WithCopy(t.Context(), func(copyA rangesync.OrderedSet) error {
+	require.NoError(t, setA.WithCopy(func(copyA rangesync.OrderedSet) error {
 		syncSetA := copyA.(*dbset.DBSet)
 		pssA.Register(d, syncSetA)
 		srv := server.New(mesh.Hosts()[0], proto,
@@ -220,7 +220,7 @@ func runSync(
 			syncLogger.Named("sideB"), client, "test", cfg, &tr, clock)
 
 		tStart := time.Now()
-		require.NoError(t, setB.WithCopy(t.Context(), func(copyB rangesync.OrderedSet) error {
+		require.NoError(t, setB.WithCopy(func(copyB rangesync.OrderedSet) error {
 			syncSetB := copyB.(*dbset.DBSet)
 			require.NoError(t, pssB.Sync(ctx, srvPeerID, syncSetB, x, x))
 			stopTimer(t)
@@ -531,7 +531,7 @@ func copyDB(t testing.TB, srcDir, dstDir string) sql.Transaction {
 	db, err := sql.Open("file:"+filepath.Join(dstDir, "temp.db"),
 		sql.WithNoCheckSchemaDrift())
 	require.NoError(t, err)
-	tx, err := db.Tx(t.Context())
+	tx, err := db.Tx()
 	require.NoError(t, err)
 	t.Cleanup(func() { tx.Release() })
 	return tx

@@ -80,7 +80,7 @@ func TestWarmup(t *testing.T) {
 		exec := sql.NewMockExecutor(gomock.NewController(t))
 		call := 0
 		fail := 0
-		tx, err := db.Tx(t.Context())
+		tx, err := db.Tx()
 		require.NoError(t, err)
 		defer tx.Release()
 		exec.EXPECT().
