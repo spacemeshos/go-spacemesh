@@ -162,7 +162,7 @@ func WithForceMigrations(force bool) Opt {
 	}
 }
 
-// WithSchema specifies database schema script.
+// WithDatabaseSchema specifies database schema script.
 func WithDatabaseSchema(schema *Schema) Opt {
 	return func(c *conf) {
 		c.schema = schema
