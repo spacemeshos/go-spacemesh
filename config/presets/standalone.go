@@ -26,6 +26,7 @@ func standalone() config.Config {
 	conf.BaseConfig.AtxVersions = activation.AtxVersions{
 		types.EpochID(2): types.AtxV2,
 	}
+	conf.BaseConfig.DatabaseConnIdleTimeout = 500 * time.Millisecond
 
 	conf.TIME.Peersync.Disable = true
 	conf.Standalone = true

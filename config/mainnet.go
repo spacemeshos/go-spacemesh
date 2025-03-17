@@ -96,7 +96,7 @@ func MainnetConfig() Config {
 			DatabaseConnections:     32,
 			DatabasePruneInterval:   30 * time.Minute,
 			DatabaseVacuumState:     21,
-			DatabaseConnIdleTimeout: 10 * time.Millisecond,
+			DatabaseConnIdleTimeout: 500 * time.Millisecond,
 			PruneActivesetsFrom:     12, // starting from epoch 13 activesets below 12 will be pruned
 			NetworkHRP:              "sm",
 
