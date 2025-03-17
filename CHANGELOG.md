@@ -16,6 +16,21 @@ pointing to the running `node` service.
 
 * [#6625](https://github.com/spacemeshos/go-spacemesh/pull/6625) Add command for starting services
 
+## v1.8.1
+
+### Highlights
+
+This release will enable syncv2 fully to sync ATXs for all nodes. This should greatly reduce the time it takes to sync
+a node from genesis and the amount of data that is needed to be exchanged with the network to keep a node in sync. The
+improvements are enabled automatically after upgrading to this version and no user action is needed.
+
+### Improvements
+
+* [6792](https://github.com/spacemeshos/go-spacemesh/pull/6792) Fixed race condition in `FPTree` implementation (sync v2).
+
+* [6794](https://github.com/spacemeshos/go-spacemesh/pull/6794) Increased database connection idle timeout,
+  which should reduce occurances of `SQLITE_BUSY` errors.
+
 ## v1.8.0
 
 ### Highlights
@@ -33,6 +48,9 @@ in terms of data size and more easily extendable in the future.
 
 * [#6779](https://github.com/spacemeshos/go-spacemesh/pull/6779) Fixed the malfeasance publisher not emitting events.
   This caused the node to miss malfeasance proofs when streaming via the GRPC API.
+
+* [#6784](https://github.com/spacemeshos/go-spacemesh/pull/6784) Fixed possible corruptions of DB transactions
+  when a context is cancelled mid transaction (sync v2).
 
 ## v1.7.17
 
