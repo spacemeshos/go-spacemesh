@@ -163,7 +163,7 @@ func (st *SyncedTable) loadMaxRowID(db sql.Executor) (maxRowID int64, err error)
 	return maxRowID, err
 }
 
-// Snaptshot creates a snapshot of the table based on its current max rowid value.
+// Snapshot creates a snapshot of the table based on its current max rowid value.
 func (st *SyncedTable) Snapshot(db sql.Executor) (*SyncedTableSnapshot, error) {
 	maxRowID, err := st.loadMaxRowID(db)
 	if err != nil {

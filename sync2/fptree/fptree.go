@@ -617,6 +617,8 @@ func (ft *FPTree) storeValues() bool {
 // If this function returns true and the tree doesn't store the values, the key may be
 // contained in the tree.
 func (ft *FPTree) CheckKey(k rangesync.KeyBytes) bool {
+	ft.np.lockRead()
+	defer ft.np.unlockRead()
 	// We're unlikely to be able to find a node with the full prefix, but if we can
 	// find a leaf node with matching partial prefix, that's good enough except
 	// that we also need to check the node's fingerprint.

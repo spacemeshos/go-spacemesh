@@ -85,7 +85,7 @@ func testnet() config.Config {
 			DatabaseConnections:          32,
 			DatabaseSizeMeteringInterval: 10 * time.Minute,
 			DatabasePruneInterval:        30 * time.Minute,
-			DatabaseConnIdleTimeout:      10 * time.Millisecond,
+			DatabaseConnIdleTimeout:      500 * time.Millisecond,
 			NetworkHRP:                   "stest",
 
 			LayerDuration:  5 * time.Minute,
