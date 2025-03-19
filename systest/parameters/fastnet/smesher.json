@@ -23,11 +23,7 @@
         }
     },
     "hare3": {
-        "log-stats": true,
-        "committeeupgrade": {
-            "layer": 16,
-            "size": 50
-        }
+        "log-stats": true
     },
     "smeshing": {
         "smeshing-verifying-opts": {
