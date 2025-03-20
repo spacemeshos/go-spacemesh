@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/hare3"
 )
 
 func init() {
@@ -47,11 +46,6 @@ func fastnet() config.Config {
 	conf.HARE3.PreroundDelay = 3 * time.Second
 	conf.HARE3.RoundDuration = 700 * time.Millisecond
 	conf.HARE3.IterationsLimit = 2
-
-	conf.HARE3.CommitteeUpgrade = &hare3.CommitteeUpgrade{
-		Layer: 16,
-		Size:  50,
-	}
 
 	conf.P2P.MinPeers = 10
 

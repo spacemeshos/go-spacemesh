@@ -122,8 +122,8 @@ const (
 
 // Config for all things related to p2p layer.
 type Config struct {
-	DataDir            string
-	LogLevel           zapcore.Level
+	DataDir            string        `mapstructure:"-"` // not configurable, overwritten by "`BaseConfig.DataDir()`/p2p"
+	LogLevel           zapcore.Level `mapstructure:"-"` // not configurable, overwritten by LoggerConfig.P2PLoggerLevel
 	GracePeersShutdown time.Duration `mapstructure:"gracepeersshutdown"`
 	MaxMessageSize     int           `mapstructure:"maxmessagesize"`
 

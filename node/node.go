@@ -316,7 +316,11 @@ func LoadConfig(cfg *config.Config, preset string, src io.Reader) error {
 	opts := []viper.DecoderConfigOption{
 		viper.DecodeHook(hook),
 		WithZeroFields(),
-		WithIgnoreUntagged(),
+		// Disabled because it was broken for some time with `github.com/spf13/viper` `v1.19.0` and now
+		// previously untagged fields are used in existing configs.
+		// Instead of now tagging all untagged fields we will just allow them and disable fields explicitly that
+		// must not be configurable.
+		// WithIgnoreUntagged(),
 		WithErrorUnused(),
 	}
 	if err := v.Unmarshal(cfg, opts...); err != nil {

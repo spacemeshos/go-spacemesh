@@ -34,13 +34,13 @@ import (
 type Config struct {
 	Interval         time.Duration `mapstructure:"interval"`
 	EpochEndFraction float64       `mapstructure:"epochendfraction"`
-	HareDelayLayers  uint32
-	SyncCertDistance uint32
+	HareDelayLayers  uint32        `mapstructure:"-"` // not configurable, overwritten by tortoise.Config.Zdist
+	SyncCertDistance uint32        `mapstructure:"-"` // not configurable, overwritten by tortoise.Config.Hdist
 	// TallyVotesFrequency how often to tally votes during layers sync.
 	// Setting this to 0.25 will tally votes after downloading data for quarter of the epoch.
 	TallyVotesFrequency      float64
-	MaxStaleDuration         time.Duration `mapstructure:"maxstaleduration"`
-	Standalone               bool
+	MaxStaleDuration         time.Duration    `mapstructure:"maxstaleduration"`
+	Standalone               bool             `mapstructure:"-"` // not configurable, overwritten by BaseCfg.Standalone
 	GossipDuration           time.Duration    `mapstructure:"gossipduration"`
 	DisableMeshAgreement     bool             `mapstructure:"disable-mesh-agreement"`
 	OutOfSyncThresholdLayers uint32           `mapstructure:"out-of-sync-threshold"`

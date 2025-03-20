@@ -33,10 +33,10 @@ var (
 
 // CertConfig is the config for Certifier.
 type CertConfig struct {
-	CommitteeSize    int `mapstructure:"committee-size"`
-	CertifyThreshold int
-	LayerBuffer      uint32
-	NumLayersToKeep  uint32
+	CommitteeSize    int    `mapstructure:"committee-size"`
+	CertifyThreshold int    `mapstructure:"-"` // not configurable, overwritten by CommitteeSize/2 + 1
+	LayerBuffer      uint32 `mapstructure:"-"` // not configurable, overwritten by tortoise.Config.Zdist
+	NumLayersToKeep  uint32 `mapstructure:"-"` // not configurable, overwritten by tortoise.Config.Zdist * 2
 }
 
 func defaultCertConfig() CertConfig {
