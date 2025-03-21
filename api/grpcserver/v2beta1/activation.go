@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -162,16 +163,18 @@ func toAtx(atx *types.ActivationTx) *spacemeshv2beta1.Activation {
 	}
 }
 
-func NewActivationService(db sql.Executor, goldenAtx types.ATXID) *ActivationService {
+func NewActivationService(db sql.Executor, goldenAtx types.ATXID, atxdata *atxsdata.Data) *ActivationService {
 	return &ActivationService{
 		db:        db,
 		goldenAtx: goldenAtx,
+		atxdata:   atxdata,
 	}
 }
 
 type ActivationService struct {
 	goldenAtx types.ATXID
 	db        sql.Executor
+	atxdata   *atxsdata.Data
 }
 
 func (s *ActivationService) RegisterService(server *grpc.Server) {
@@ -240,15 +243,14 @@ func (s *ActivationService) Highest(
 	_ context.Context,
 	_ *spacemeshv2beta1.HighestRequest,
 ) (*spacemeshv2beta1.HighestResponse, error) {
-	highest, err := atxs.GetIDWithMaxHeight(s.db, types.EmptyNodeID, atxs.FilterAll)
-	if err != nil {
+	highest := s.atxdata.FindHighestHonest()
+	if highest == types.EmptyATXID {
 		return &spacemeshv2beta1.HighestResponse{
 			Activation: &spacemeshv2beta1.Activation{
 				Id: s.goldenAtx.Bytes(),
 			},
 		}, nil
 	}
-
 	atx, err := atxs.Get(s.db, highest)
 	if err != nil || atx == nil {
 		return nil, status.Error(codes.NotFound, fmt.Sprintf("atx id %v not found: %s", highest, err))

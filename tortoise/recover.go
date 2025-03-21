@@ -59,7 +59,7 @@ func Recover(
 		}
 	}
 
-	for _, id := range atxdata.MaliciousIdentities() {
+	for id := range atxdata.MaliciousIdentities() {
 		trtl.OnMalfeasance(id)
 	}
 

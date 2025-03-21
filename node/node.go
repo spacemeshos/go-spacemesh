@@ -1639,7 +1639,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	// v2beta1
 	case grpcserver.ActivationV2Beta1:
-		service := v2beta1.NewActivationService(app.apiDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		service := v2beta1.NewActivationService(app.apiDB, types.ATXID(app.Config.Genesis.GoldenATX()), app.atxsdata)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.ActivationStreamV2Beta1:
