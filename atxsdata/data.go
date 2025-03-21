@@ -1,11 +1,12 @@
 package atxsdata
 
 import (
+	"cmp"
+	"iter"
+	"maps"
 	"slices"
 	"sync"
 	"sync/atomic"
-
-	"golang.org/x/exp/maps"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -177,7 +178,7 @@ func (d *Data) SetMalicious(node types.NodeID) {
 	d.malicious[node] = struct{}{}
 }
 
-func (d *Data) MaliciousIdentities() []types.NodeID {
+func (d *Data) MaliciousIdentities() iter.Seq[types.NodeID] {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return maps.Keys(d.malicious)
@@ -254,6 +255,10 @@ func NotMalicious(d *Data, atx *ATX, _ lockGuard) bool {
 func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), filters ...AtxFilter) {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
+	d.iterateInEpoch(epoch, fn, filters...)
+}
+
+func (d *Data) iterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), filters ...AtxFilter) {
 	ecache, exists := d.epochs[epoch]
 	if !exists {
 		return
@@ -271,22 +276,16 @@ func (d *Data) IterateInEpoch(epoch types.EpochID, fn func(types.ATXID, *ATX), f
 
 func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(types.ATXID) bool) {
 	type candidate struct {
-		id types.ATXID
-		*ATX
+		id     types.ATXID
+		Height uint64
 	}
 	candidates := make([]candidate, 0, d.Size(target))
 	d.IterateInEpoch(target, func(id types.ATXID, atx *ATX) {
-		candidates = append(candidates, candidate{id: id, ATX: atx})
+		candidates = append(candidates, candidate{id: id, Height: atx.Height})
 	}, NotMalicious)
 
 	slices.SortFunc(candidates, func(a, b candidate) int {
-		switch {
-		case a.Height < b.Height:
-			return 1
-		case a.Height > b.Height:
-			return -1
-		}
-		return 0
+		return cmp.Compare(b.Height, a.Height)
 	})
 
 	for _, c := range candidates {
@@ -294,6 +293,40 @@ func (d *Data) IterateHighTicksInEpoch(target types.EpochID, fn func(types.ATXID
 			return
 		}
 	}
+}
+
+// FindHighestHonest looks for a heightest ATX in the most recent 2 epochs.
+func (d *Data) FindHighestHonest() types.ATXID {
+	type candidateATX struct {
+		id     types.ATXID
+		Height uint64
+	}
+
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	epochsDescending := slices.SortedFunc(
+		maps.Keys(d.epochs),
+		func(a, b types.EpochID) int {
+			return cmp.Compare(b, a)
+		},
+	)
+	var candidate candidateATX
+	for _, target := range epochsDescending[0:min(2, len(epochsDescending))] {
+		d.iterateInEpoch(
+			target,
+			func(id types.ATXID, atx *ATX) {
+				if atx.Height > candidate.Height {
+					candidate = candidateATX{
+						id:     id,
+						Height: atx.Height,
+					}
+				}
+			},
+			NotMalicious,
+		)
+	}
+
+	return candidate.id
 }
 
 func (d *Data) MissingInEpoch(epoch types.EpochID, atxs []types.ATXID) []types.ATXID {

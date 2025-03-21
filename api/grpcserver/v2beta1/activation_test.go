@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/spacemeshos/go-spacemesh/atxsdata"
 	"github.com/spacemeshos/go-spacemesh/common/fixture"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -34,7 +35,7 @@ func TestActivationService_List(t *testing.T) {
 		}
 
 		goldenAtx := types.ATXID{2, 3, 4}
-		svc := NewActivationService(db, goldenAtx)
+		svc := NewActivationService(db, goldenAtx, atxsdata.New())
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
@@ -246,7 +247,7 @@ func TestActivationService_ActivationsCount(t *testing.T) {
 	}
 
 	goldenAtx := types.ATXID{2, 3, 4}
-	svc := NewActivationService(db, goldenAtx)
+	svc := NewActivationService(db, goldenAtx, atxsdata.New())
 	cfg, cleanup := launchServer(t, svc)
 	t.Cleanup(cleanup)
 
@@ -284,7 +285,8 @@ func TestActivationService_Highest(t *testing.T) {
 		ctx := t.Context()
 
 		goldenAtx := types.ATXID{2, 3, 4}
-		svc := NewActivationService(db, goldenAtx)
+		atxdata := atxsdata.New()
+		svc := NewActivationService(db, goldenAtx, atxdata)
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
@@ -292,14 +294,16 @@ func TestActivationService_Highest(t *testing.T) {
 		client := spacemeshv2beta1.NewActivationServiceClient(conn)
 
 		atx := &types.ActivationTx{
-			Sequence:     rand.Uint64(),
-			PublishEpoch: 0,
-			Coinbase:     types.GenerateAddress(types.RandomBytes(32)),
-			NumUnits:     rand.Uint32(),
+			Sequence:       rand.Uint64(),
+			PublishEpoch:   0,
+			BaseTickHeight: 100,
+			Coinbase:       types.GenerateAddress(types.RandomBytes(32)),
+			NumUnits:       rand.Uint32(),
 		}
 		id := types.RandomATXID()
 		atx.SetID(id)
 		require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
+		atxdata.AddFromAtx(atx, false)
 
 		res, err := client.Highest(ctx, &spacemeshv2beta1.HighestRequest{})
 		require.NoError(t, err)
@@ -316,7 +320,7 @@ func TestActivationService_Highest(t *testing.T) {
 		ctx := t.Context()
 
 		goldenAtx := types.ATXID{2, 3, 4}
-		svc := NewActivationService(db, goldenAtx)
+		svc := NewActivationService(db, goldenAtx, atxsdata.New())
 		cfg, cleanup := launchServer(t, svc)
 		t.Cleanup(cleanup)
 
