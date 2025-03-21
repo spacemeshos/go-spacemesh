@@ -39,8 +39,8 @@ func WithLogger(logger *zap.Logger) Opt {
 
 // Config defines the configuration options for vm.
 type Config struct {
-	GasLimit  uint64
-	GenesisID types.Hash20
+	GasLimit  uint64       `mapstructure:"-"` // not configurable, overwritten by BaseConfig.BlockGasLimit
+	GenesisID types.Hash20 `mapstructure:"-"` // not configurable, overwritten by GenesisConfig.GenesisID()
 }
 
 // DefaultConfig returns the default RewardConfig.

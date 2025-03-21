@@ -34,7 +34,7 @@ type Config struct {
 	// CollectDetails sets numbers of layers to collect details.
 	// Must be less than WindowSize.
 	CollectDetails uint32 `mapstructure:"tortoise-collect-details"`
-	LayerSize      uint32
+	LayerSize      uint32 `mapstructure:"-"` // not configurable, overwritten by BaseConfig.LayerAvgSize
 }
 
 type WindowSizeInterval struct {

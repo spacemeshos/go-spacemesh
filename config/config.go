@@ -49,31 +49,31 @@ func init() {
 // Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	Preset          string                     `mapstructure:"preset"`
-	Genesis         GenesisConfig              `mapstructure:"genesis"`
-	PublicMetrics   PublicMetrics              `mapstructure:"public-metrics"`
-	Tortoise        tortoise.Config            `mapstructure:"tortoise"`
-	P2P             p2p.Config                 `mapstructure:"p2p"`
-	API             grpcserver.Config          `mapstructure:"api"`
-	HARE3           hare3.Config               `mapstructure:"hare3"`
-	HARE4           hare4.Config               `mapstructure:"hare4"`
-	HareEligibility eligibility.Config         `mapstructure:"hare-eligibility"`
-	Certificate     blocks.CertConfig          `mapstructure:"certificate"`
-	Beacon          beacon.Config              `mapstructure:"beacon"`
-	TIME            timeConfig.TimeConfig      `mapstructure:"time"`
-	VM              vm.Config                  `mapstructure:"vm"`
-	Certifier       activation.CertifierConfig `mapstructure:"certifier"`
-	POST            activation.PostConfig      `mapstructure:"post"`
-	POSTService     activation.PostSupervisorConfig
-	POET            activation.PoetConfig      `mapstructure:"poet"`
-	SMESHING        SmeshingConfig             `mapstructure:"smeshing"`
-	LOGGING         LoggerConfig               `mapstructure:"logging"`
-	FETCH           fetch.Config               `mapstructure:"fetch"`
-	Bootstrap       bootstrap.Config           `mapstructure:"bootstrap"`
-	Sync            syncer.Config              `mapstructure:"syncer"`
-	Recovery        checkpoint.Config          `mapstructure:"recovery"`
-	Cache           datastore.Config           `mapstructure:"cache"`
-	ActiveSet       miner.ActiveSetPreparation `mapstructure:"active-set-preparation"`
+	Preset          string                          `mapstructure:"preset"`
+	Genesis         GenesisConfig                   `mapstructure:"genesis"`
+	PublicMetrics   PublicMetrics                   `mapstructure:"public-metrics"`
+	Tortoise        tortoise.Config                 `mapstructure:"tortoise"`
+	P2P             p2p.Config                      `mapstructure:"p2p"`
+	API             grpcserver.Config               `mapstructure:"api"`
+	HARE3           hare3.Config                    `mapstructure:"hare3"`
+	HARE4           hare4.Config                    `mapstructure:"hare4"`
+	HareEligibility eligibility.Config              `mapstructure:"hare-eligibility"`
+	Certificate     blocks.CertConfig               `mapstructure:"certificate"`
+	Beacon          beacon.Config                   `mapstructure:"beacon"`
+	TIME            timeConfig.TimeConfig           `mapstructure:"time"`
+	VM              vm.Config                       `mapstructure:"vm"`
+	Certifier       activation.CertifierConfig      `mapstructure:"certifier"`
+	POST            activation.PostConfig           `mapstructure:"post"`
+	POSTService     activation.PostSupervisorConfig `mapstructure:"-"` // not configurable by the user
+	POET            activation.PoetConfig           `mapstructure:"poet"`
+	SMESHING        SmeshingConfig                  `mapstructure:"smeshing"`
+	LOGGING         LoggerConfig                    `mapstructure:"logging"`
+	FETCH           fetch.Config                    `mapstructure:"fetch"`
+	Bootstrap       bootstrap.Config                `mapstructure:"bootstrap"`
+	Sync            syncer.Config                   `mapstructure:"syncer"`
+	Recovery        checkpoint.Config               `mapstructure:"recovery"`
+	Cache           datastore.Config                `mapstructure:"cache"`
+	ActiveSet       miner.ActiveSetPreparation      `mapstructure:"active-set-preparation"`
 }
 
 // DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config

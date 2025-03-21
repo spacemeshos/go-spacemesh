@@ -57,8 +57,8 @@ type Config struct {
 	URL     string `mapstructure:"bootstrap-url"`
 	Version string `mapstructure:"bootstrap-version"`
 
-	DataDir  string
-	Interval time.Duration
+	DataDir  string        `mapstructure:"-"` // not configurable, overwritten by BaseConfig.DataDir()
+	Interval time.Duration `mapstructure:"-"` // not configurable, overwritten by BaseConfig.LayerDuration / 5
 }
 
 func DefaultConfig() Config {
