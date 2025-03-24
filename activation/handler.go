@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/bits"
 	"slices"
 	"time"
 
@@ -294,4 +295,38 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	})
 	h.inProgress.Forget(key)
 	return err
+}
+
+func calcWeight(
+	numUnits, tickCount uint64,
+	rewardBonusEpoch, commitmentEpoch, publishEpoch types.EpochID,
+) (uint64, error) {
+	hi, weight := bits.Mul64(numUnits, tickCount)
+	if hi != 0 {
+		return 0, fmt.Errorf("weight overflow (%d * %d)", numUnits, tickCount)
+	}
+	if rewardBonusEpoch == 0 {
+		// no bonus epoch configured
+		return weight, nil
+	}
+	if commitmentEpoch < rewardBonusEpoch-2 {
+		// An identity selecting a commitment in epoch X will init in epoch X and create an initial post. Now there are
+		// two scenarios:
+		// 1. The identity has enough time to register at PoET during the cyclegap of epoch X, and the initial ATX will
+		// be published in epoch X+1.
+		// 2. The cyclegap already closed in epoch X and the identity will publish the initial ATX in epoch X+2.
+		//
+		// since 2) is the more common case (most ATXs that could be selected for commitment are published during the
+		// cyclegap) we allow a 2 epoch gap between the commitment and the reward bonus epoch.
+		return weight, nil
+	}
+	if publishEpoch < rewardBonusEpoch { // bonus hasn't started yet
+		return weight, nil
+	}
+	epochsSinceBonus := uint64(min(publishEpoch-rewardBonusEpoch+1, 10)) // we scale the bonus over 10 epochs ...
+	hi, bonusWeight := bits.Mul64(weight, epochsSinceBonus)
+	if hi != 0 {
+		return 0, fmt.Errorf("bonus weight overflow (%d * %d)", weight, epochsSinceBonus)
+	}
+	return weight + (bonusWeight / 10), nil // ... linearly to 100% extra weight
 }
