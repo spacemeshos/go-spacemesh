@@ -153,9 +153,13 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	}
 	h.mClock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 
+	cAtx := h.goldenATXID
+	if atx.CommitmentATXID != nil {
+		cAtx = *atx.CommitmentATXID
+	}
+
 	if atx.VRFNonce != nil {
-		h.mValidator.EXPECT().
-			VRFNonce(nodeId, h.goldenATXID, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
+		h.mValidator.EXPECT().VRFNonce(nodeId, cAtx, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
 	}
 	h.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	h.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.BytesToHash(atx.NIPost.PostMetadata.Challenge))
@@ -163,7 +167,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	if atx.PrevATXID == types.EmptyATXID {
 		h.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), h.goldenATXID)
 		h.mValidator.EXPECT().
-			Post(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
+			Post(gomock.Any(), nodeId, cAtx, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			DoAndReturn(func(
 				_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post,
 				_ *types.PostMetadata, _ uint32, _ ...validatorOption,
@@ -184,7 +188,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	}
 	h.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), h.goldenATXID, atx.PublishEpoch)
 	h.mValidator.EXPECT().
-		NIPost(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
+		NIPost(gomock.Any(), nodeId, cAtx, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(settings.poetLeaves, nil)
 	h.mValidator.EXPECT().IsVerifyingFullPost().Return(!settings.distributedPost)
 	h.mBeacon.EXPECT().OnAtx(gomock.Any())

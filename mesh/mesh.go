@@ -145,7 +145,8 @@ func (msh *Mesh) recoverFromDB(latest types.LayerID) {
 	}
 	msh.logger.Info("recovered mesh from disk",
 		zap.Stringer("latest", msh.LatestLayer()),
-		zap.Stringer("processed", msh.ProcessedLayer()))
+		zap.Stringer("processed", msh.ProcessedLayer()),
+	)
 }
 
 // LatestLayerInState returns the latest layer we applied to state.
