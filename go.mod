@@ -27,7 +27,6 @@ require (
 	github.com/libp2p/go-libp2p-record v0.3.1
 	github.com/libp2p/go-msgio v0.3.0
 	github.com/libp2p/go-yamux/v4 v4.0.2
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/multiformats/go-multiaddr v0.15.0
 	github.com/multiformats/go-varint v0.0.7
 	github.com/natefinch/atomic v1.0.1
