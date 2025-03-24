@@ -69,7 +69,7 @@ type HandlerV1 struct {
 	edVerifier       *signing.EdVerifier
 	clock            layerClock
 	tickSize         uint64
-	rewardBonusEpoch types.EpochID
+	bonusWeightEpoch types.EpochID
 	goldenATXID      types.ATXID
 	nipostValidator  nipostValidatorV1
 	beacon           atxReceiver
@@ -284,7 +284,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	weight, err := calcWeight(
 		uint64(atx.NumUnits),
 		atx.TickCount,
-		h.rewardBonusEpoch,
+		h.bonusWeightEpoch,
 		commitmentEpoch,
 		atx.PublishEpoch,
 	)

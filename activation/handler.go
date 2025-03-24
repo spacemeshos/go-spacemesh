@@ -91,6 +91,13 @@ func WithTickSize(tickSize uint64) HandlerOption {
 	}
 }
 
+func WithBonusWeightEpoch(epoch types.EpochID) HandlerOption {
+	return func(h *Handler) {
+		h.v1.bonusWeightEpoch = epoch
+		h.v2.bonusWeightEpoch = epoch
+	}
+}
+
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	local p2p.Peer,
@@ -99,7 +106,6 @@ func NewHandler(
 	edVerifier *signing.EdVerifier,
 	c layerClock,
 	fetcher system.Fetcher,
-	rewardBonusEpoch types.EpochID,
 	goldenATXID types.ATXID,
 	nipostValidator nipostValidator,
 	malPublisher atxMalfeasancePublisher,
@@ -121,7 +127,7 @@ func NewHandler(
 			edVerifier:       edVerifier,
 			clock:            c,
 			tickSize:         1,
-			rewardBonusEpoch: rewardBonusEpoch,
+			bonusWeightEpoch: 0,
 			goldenATXID:      goldenATXID,
 			nipostValidator:  nipostValidator,
 			logger:           lg,
@@ -139,7 +145,7 @@ func NewHandler(
 			edVerifier:       edVerifier,
 			clock:            c,
 			tickSize:         1,
-			rewardBonusEpoch: rewardBonusEpoch,
+			bonusWeightEpoch: 0,
 			goldenATXID:      goldenATXID,
 			nipostValidator:  nipostValidator,
 			logger:           lg,
@@ -160,8 +166,8 @@ func NewHandler(
 				enc.AppendString(fmt.Sprintf("v%v from epoch %d", v.AtxVersion, v.publish))
 			}
 			return nil
-		})))
-
+		})),
+	)
 	return h
 }
 

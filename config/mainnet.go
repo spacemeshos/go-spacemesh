@@ -104,6 +104,8 @@ func MainnetConfig() Config {
 			LayerAvgSize:   50,
 			LayersPerEpoch: 4032,
 
+			BonusWeightEpoch: 50, // TODO(mafa): set to correct value
+
 			TxsPerProposal: 700,       // https://github.com/spacemeshos/go-spacemesh/issues/4559
 			BlockGasLimit:  100107000, // 3000 of spends
 
