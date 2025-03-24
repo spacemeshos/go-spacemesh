@@ -52,14 +52,16 @@ func DefaultTestPostServiceConfig(tb testing.TB) PostSupervisorConfig {
 	}
 }
 
+// PostSupervisorConfig holds the configuration for the post service.
+// This is not intended to be configurable by the user.
 type PostSupervisorConfig struct {
-	PostServiceCmd string
-	NodeAddress    string
-	MaxRetries     int
+	PostServiceCmd string // path to the post service binary, configurable for testing
+	NodeAddress    string // address of the node, configurable for testing, set automatically during startup
+	MaxRetries     int    // only for testing, not used in production
 
-	CACert string
-	Cert   string
-	Key    string
+	CACert string // only for testing, not used in production
+	Cert   string // only for testing, not used in production
+	Key    string // only for testing, not used in production
 }
 
 // PostSupervisor manages a local post service.

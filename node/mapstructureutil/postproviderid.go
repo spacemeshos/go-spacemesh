@@ -5,7 +5,7 @@ import (
 	"math"
 	"reflect"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 )
@@ -23,7 +23,7 @@ func PostProviderIDDecodeFunc() mapstructure.DecodeHookFunc {
 			if value > math.MaxUint32 || value < 0 || value != math.Trunc(value) {
 				return nil, fmt.Errorf("invalid provider ID value: %v", value)
 			}
-			id := activation.PostProviderID{}
+			var id activation.PostProviderID
 			id.SetUint32(uint32(value))
 			return id, nil
 		case reflect.String:
