@@ -3268,6 +3268,36 @@ func Test_CalculatingWeight(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, 1*100+10*1000, w)
 	})
+	t.Run("weight is not increased for non-eligible identities", func(t *testing.T) {
+		t.Parallel()
+		const bonusWeightEpoch = 10
+
+		ns := make(nipostSizes, 0)
+		ns = append(ns, &nipostSize{units: 1, ticks: 100, commitmentEpoch: 5}, &nipostSize{units: 10, ticks: 1000, commitmentEpoch: 5})
+		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch)
+		require.NoError(t, err)
+		require.EqualValues(t, 1*100+10*1000, w)
+	})
+	t.Run("weight is increased for eligible identities", func(t *testing.T) {
+		t.Parallel()
+		const bonusWeightEpoch = 10
+
+		ns := make(nipostSizes, 0)
+		ns = append(ns, &nipostSize{units: 1, ticks: 100, commitmentEpoch: 5}, &nipostSize{units: 10, ticks: 1000, commitmentEpoch: 8})
+		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch)
+		require.NoError(t, err)
+		require.EqualValues(t, 1*100+uint64(10*1000*1.1), w) // second identity gets 10% bonus
+	})
+	t.Run("weight is not increased for eligible identities before bonus epoch", func(t *testing.T) {
+		t.Parallel()
+		const bonusWeightEpoch = 10
+
+		ns := make(nipostSizes, 0)
+		ns = append(ns, &nipostSize{units: 1, ticks: 100, commitmentEpoch: 5}, &nipostSize{units: 10, ticks: 1000, commitmentEpoch: 8})
+		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch-1)
+		require.NoError(t, err)
+		require.EqualValues(t, 1*100+10*1000, w)
+	})
 }
 
 func Test_CalculatingTicks(t *testing.T) {
