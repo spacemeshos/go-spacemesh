@@ -605,18 +605,16 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		nipostSizes[i].ticks = leaves / h.tickSize
 	}
 
-	result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.bonusWeightEpoch, atx.PublishEpoch)
-	if err != nil {
-		return nil, err
-	}
-
 	// validate all NIPoSTs
 	if atx.Initial != nil {
-		commitment := atx.Initial.CommitmentATX
+		commitmentATX, commitmentEpoch, err := h.commitment(atx, atx.SmesherID)
+		if err != nil {
+			return nil, fmt.Errorf("fetching commitment atx: %w", err)
+		}
 		nipostIdx := 0
 		challenge := atx.NIPosts[nipostIdx].Challenge
 		post := atx.NIPosts[nipostIdx].Posts[0]
-		if err := h.validatePost(ctx, atx.SmesherID, atx, peer, commitment, challenge, post, nipostIdx); err != nil {
+		if err := h.validatePost(ctx, atx.SmesherID, atx, peer, commitmentATX, challenge, post, nipostIdx); err != nil {
 			return nil, err
 		}
 		result.ids[atx.SmesherID] = idData{
@@ -625,21 +623,27 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			units:         post.NumUnits,
 		}
 		result.ticks = nipostSizes.minTicks()
+
+		nipostSizes[0].commitmentEpoch = commitmentEpoch
+		result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.bonusWeightEpoch, atx.PublishEpoch)
+		if err != nil {
+			return nil, err
+		}
 		return &result, nil
 	}
 
 	var smesherCommitment *types.ATXID
 	for idx, niPosts := range atx.NIPosts {
-		for _, post := range niPosts.Posts {
+		for i, post := range niPosts.Posts {
 			id := equivocationSet[post.MarriageIndex]
-			commitment, err := atxs.CommitmentATX(h.cdb, id)
+			commitmentATX, commitmentEpoch, err := h.commitment(atx, id)
 			if err != nil {
 				return nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
 			}
 			if id == atx.SmesherID {
-				smesherCommitment = &commitment
+				smesherCommitment = &commitmentATX
 			}
-			if err := h.validatePost(ctx, id, atx, peer, commitment, niPosts.Challenge, post, idx); err != nil {
+			if err := h.validatePost(ctx, id, atx, peer, commitmentATX, niPosts.Challenge, post, idx); err != nil {
 				return nil, err
 			}
 			result.ids[id] = idData{
@@ -647,6 +651,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				previousIndex: int(post.PrevATXIndex),
 				units:         post.NumUnits,
 			}
+			nipostSizes[i].commitmentEpoch = commitmentEpoch
 		}
 	}
 
@@ -659,7 +664,34 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	result.ticks = nipostSizes.minTicks()
+	result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.bonusWeightEpoch, atx.PublishEpoch)
+	if err != nil {
+		return nil, err
+	}
 	return &result, nil
+}
+
+// Obtain the commitment ATX ID for the given ATX.
+func (h *HandlerV2) commitment(watx *wire.ActivationTxV2, nodeID types.NodeID) (types.ATXID, types.EpochID, error) {
+	var id types.ATXID
+	switch {
+	case watx.Initial != nil: // initial ATX
+		id = *&watx.Initial.CommitmentATX
+	default: // non-initial ATX
+		var err error
+		id, err = atxs.CommitmentATX(h.cdb, nodeID)
+		if err != nil {
+			return types.EmptyATXID, 0, fmt.Errorf("fetching commitment atx ID: %w", err)
+		}
+	}
+	if id == h.goldenATXID {
+		return id, 0, nil
+	}
+	atx, err := atxs.Get(h.cdb, id)
+	if err != nil {
+		return types.EmptyATXID, 0, fmt.Errorf("fetching commitment atx %s: %w", id, err)
+	}
+	return id, atx.PublishEpoch, nil
 }
 
 func (h *HandlerV2) validatePost(
