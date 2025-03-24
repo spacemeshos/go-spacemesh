@@ -478,13 +478,13 @@ func (n nipostSizes) minTicks() uint64 {
 	return slices.MinFunc(n, func(a, b *nipostSize) int { return cmp.Compare(a.ticks, b.ticks) }).ticks
 }
 
-func (n nipostSizes) sumUp(rewardBonusEpoch, publishEpoch types.EpochID) (units uint32, weight uint64, err error) {
+func (n nipostSizes) sumUp(bonusWeightEpoch, publishEpoch types.EpochID) (units uint32, weight uint64, err error) {
 	var totalUnits uint64
 	var totalWeight uint64
 	for _, ns := range n {
 		totalUnits += uint64(ns.units)
 
-		weight, err := calcWeight(uint64(ns.units), ns.ticks, rewardBonusEpoch, ns.commitmentEpoch, publishEpoch)
+		weight, err := calcWeight(uint64(ns.units), ns.ticks, bonusWeightEpoch, ns.commitmentEpoch, publishEpoch)
 		if err != nil {
 			return 0, 0, err
 		}
