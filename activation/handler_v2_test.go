@@ -854,8 +854,11 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 		atxHandler := newV2TestHandler(t, golden)
 		atxHandler.bonusWeightEpoch = 10
 
+		normalSigners := signers[:3]
+		bonusSigners := signers[3:]
+
 		// Marry IDs
-		mATX, otherATXs := marryIDs(t, atxHandler, signers[:3], golden, signers[3:]...)
+		mATX, otherATXs := marryIDs(t, atxHandler, normalSigners, golden, bonusSigners...)
 		previousATXs := []types.ATXID{mATX.ID()}
 		for _, atx := range otherATXs {
 			previousATXs = append(previousATXs, atx.ID())
@@ -872,13 +875,15 @@ func TestHandlerV2_ProcessMergedATX(t *testing.T) {
 				PrevATXIndex:  uint32(i + 1),
 			}
 			factor := 1.0
-			if i >= 3 {
+			if slices.ContainsFunc(bonusSigners, func(sig *signing.EdSigner) bool {
+				return atx.SmesherID == sig.NodeID()
+			}) {
 				// merged ATX in `bonusWeightEpoch+3`
-				// so the weight should be 20% * 4 higher for eligible identities
-				factor = 1.8
+				// so the weight should be 40% higher for eligible identities
+				factor = 1.4
 			}
 			totalNumUnits += post.NumUnits
-			totalWeight += uint32(float64(post.NumUnits) * poetLeaves * factor / tickSize)
+			totalWeight += uint32(float64(post.NumUnits*poetLeaves/tickSize) * factor)
 			merged.NIPosts[0].Posts = append(merged.NIPosts[0].Posts, post)
 		}
 		mATXID := mATX.ID()
@@ -3483,9 +3488,9 @@ func Test_CalculatingWeight(t *testing.T) {
 
 		ns := make(nipostSizes, 0)
 		ns = append(ns, &nipostSize{units: 1, ticks: 100, commitmentEpoch: 5}, &nipostSize{units: 10, ticks: 1000, commitmentEpoch: 8})
-		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch)
+		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch+1)
 		require.NoError(t, err)
-		require.EqualValues(t, 1*100+uint64(10*1000*1.1), w) // second identity gets 10% bonus
+		require.EqualValues(t, 1*100+uint64(10*1000*1.2), w) // second identity gets 20% bonus
 	})
 	t.Run("weight is not increased for eligible identities before bonus epoch", func(t *testing.T) {
 		t.Parallel()
