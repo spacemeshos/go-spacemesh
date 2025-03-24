@@ -21,10 +21,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	pyroscope "github.com/grafana/pyroscope-go"
 	grpc_logsettable "github.com/grpc-ecosystem/go-grpc-middleware/logging/settable"
 	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
-	"github.com/mitchellh/mapstructure"
 	"github.com/spacemeshos/poet/server"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
@@ -326,7 +326,11 @@ func LoadConfig(cfg *config.Config, preset string, src io.Reader) error {
 	opts := []viper.DecoderConfigOption{
 		viper.DecodeHook(hook),
 		WithZeroFields(),
-		WithIgnoreUntagged(),
+		// Disabled because it was broken for some time with `github.com/spf13/viper` `v1.19.0` and now
+		// previously untagged fields are used in existing configs.
+		// Instead of now tagging all untagged fields we will just allow them and disable fields explicitly that
+		// must not be configurable.
+		// WithIgnoreUntagged(),
 		WithErrorUnused(),
 	}
 	if err := v.Unmarshal(cfg, opts...); err != nil {
@@ -1694,7 +1698,7 @@ func (app *App) grpcService(svc grpcserver.Service, lg log.Log) (grpcserver.Serv
 		return service, nil
 	// v2beta1
 	case grpcserver.ActivationV2Beta1:
-		service := v2beta1.NewActivationService(app.apiDB, types.ATXID(app.Config.Genesis.GoldenATX()))
+		service := v2beta1.NewActivationService(app.apiDB, types.ATXID(app.Config.Genesis.GoldenATX()), app.atxsdata)
 		app.grpcServices[svc] = service
 		return service, nil
 	case grpcserver.ActivationStreamV2Beta1:

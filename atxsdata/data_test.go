@@ -379,3 +379,113 @@ func BenchmarkGetByNodeID_Managed(b *testing.B) {
 		})
 	}
 }
+
+func TestFindHighestHonest(t *testing.T) {
+	t.Parallel()
+
+	t.Run("empty data returns empty ATXID", func(t *testing.T) {
+		data := New()
+		id := data.FindHighestHonest()
+		require.Equal(t, types.EmptyATXID, id)
+	})
+
+	t.Run("returns highest ATX from most recent epoch", func(t *testing.T) {
+		data := New()
+
+		// Add ATXs to epoch 1
+		atx1ID := types.ATXID{1}
+		atx1 := &ATX{
+			Node:   types.NodeID{1},
+			Height: 100,
+		}
+		data.AddAtx(1, atx1ID, atx1)
+
+		// Add ATXs to epoch 2 (more recent)
+		atx2ID := types.ATXID{2}
+		atx2 := &ATX{
+			Node:   types.NodeID{2},
+			Height: 50, // Lower height
+		}
+		data.AddAtx(2, atx2ID, atx2)
+
+		atx3ID := types.ATXID{3}
+		atx3 := &ATX{
+			Node:   types.NodeID{3},
+			Height: 150, // Higher height
+		}
+		data.AddAtx(2, atx3ID, atx3)
+
+		// Should return the highest ATX from epoch 2
+		id := data.FindHighestHonest()
+		require.Equal(t, atx3ID, id)
+	})
+
+	t.Run("ignores malicious ATXs", func(t *testing.T) {
+		data := New()
+
+		// Add honest ATX to epoch 2
+		honestID := types.ATXID{1}
+		honest := &ATX{
+			Node:   types.NodeID{1},
+			Height: 100,
+		}
+		data.AddAtx(2, honestID, honest)
+
+		// Add malicious ATX to epoch 2 with higher height
+		maliciousID := types.ATXID{2}
+		malicious := &ATX{
+			Node:   types.NodeID{2},
+			Height: 200, // Higher height but malicious
+		}
+		data.AddAtx(2, maliciousID, malicious)
+		data.SetMalicious(malicious.Node)
+
+		// Should return the honest ATX despite lower height
+		id := data.FindHighestHonest()
+		require.Equal(t, honestID, id)
+	})
+
+	t.Run("handles more than two epochs correctly", func(t *testing.T) {
+		data := New()
+
+		// Add ATXs to multiple epochs
+		for epoch := types.EpochID(1); epoch <= 5; epoch++ {
+			atxID := types.ATXID{byte(epoch)}
+			atx := &ATX{
+				Node:   types.NodeID{byte(epoch)},
+				Height: uint64(epoch * 100), // Height increases with epoch
+			}
+			data.AddAtx(epoch, atxID, atx)
+		}
+
+		// Should consider only epochs 4 and 5, and return the highest from those
+		id := data.FindHighestHonest()
+
+		// Highest should be from epoch 5
+		expectedID := types.ATXID{5}
+		require.Equal(t, expectedID, id)
+	})
+
+	t.Run("returns ATX from the most recent epoch when multiple ATXs have same height", func(t *testing.T) {
+		data := New()
+
+		// Add multiple ATXs with same height to the same epoch
+		atx1ID := types.ATXID{1}
+		atx1 := &ATX{
+			Node:   types.NodeID{1},
+			Height: 100,
+		}
+		data.AddAtx(2, atx1ID, atx1)
+
+		atx2ID := types.ATXID{2}
+		atx2 := &ATX{
+			Node:   types.NodeID{2},
+			Height: 100, // Same height
+		}
+		data.AddAtx(3, atx2ID, atx2)
+
+		// The method should return one of them (implementation dependent)
+		id := data.FindHighestHonest()
+		require.Equal(t, atx2ID, id)
+	})
+}
