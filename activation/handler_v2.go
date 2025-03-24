@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/bits"
 	"slices"
 	"time"
 
@@ -461,15 +460,6 @@ type nipostSize struct {
 	ticks uint64
 
 	commitmentEpoch types.EpochID
-}
-
-func (n *nipostSize) addUnits(units uint32) error {
-	sum, carry := bits.Add32(n.units, units, 0)
-	if carry != 0 {
-		return errors.New("units overflow")
-	}
-	n.units = sum
-	return nil
 }
 
 type nipostSizes []*nipostSize
