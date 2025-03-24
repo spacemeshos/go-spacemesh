@@ -130,6 +130,7 @@ func TestBuilder_SwitchesToBuildV2(t *testing.T) {
 		edVerifier,
 		clock,
 		mFetch,
+		0,
 		goldenATX,
 		validator,
 		mMalPublish,

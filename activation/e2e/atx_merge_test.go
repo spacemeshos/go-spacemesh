@@ -289,6 +289,7 @@ func Test_MarryAndMerge(t *testing.T) {
 		signing.NewEdVerifier(),
 		clock,
 		mFetch,
+		0,
 		goldenATX,
 		validator,
 		mMalPublish,

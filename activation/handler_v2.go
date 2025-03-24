@@ -57,19 +57,20 @@ type nipostValidatorV2 interface {
 }
 
 type HandlerV2 struct {
-	local           p2p.Peer
-	cdb             *datastore.CachedDB
-	atxsdata        *atxsdata.Data
-	edVerifier      *signing.EdVerifier
-	clock           layerClock
-	tickSize        uint64
-	goldenATXID     types.ATXID
-	nipostValidator nipostValidatorV2
-	beacon          atxReceiver
-	tortoise        system.Tortoise
-	logger          *zap.Logger
-	fetcher         system.Fetcher
-	malPublisher    atxMalfeasancePublisher
+	local            p2p.Peer
+	cdb              *datastore.CachedDB
+	atxsdata         *atxsdata.Data
+	edVerifier       *signing.EdVerifier
+	clock            layerClock
+	tickSize         uint64
+	rewardBonusEpoch types.EpochID
+	goldenATXID      types.ATXID
+	nipostValidator  nipostValidatorV2
+	beacon           atxReceiver
+	tortoise         system.Tortoise
+	logger           *zap.Logger
+	fetcher          system.Fetcher
+	malPublisher     atxMalfeasancePublisher
 }
 
 func (h *HandlerV2) processATX(
@@ -458,6 +459,8 @@ type activationTx struct {
 type nipostSize struct {
 	units uint32
 	ticks uint64
+
+	commitmentEpoch types.EpochID
 }
 
 func (n *nipostSize) addUnits(units uint32) error {
@@ -475,15 +478,15 @@ func (n nipostSizes) minTicks() uint64 {
 	return slices.MinFunc(n, func(a, b *nipostSize) int { return cmp.Compare(a.ticks, b.ticks) }).ticks
 }
 
-func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
+func (n nipostSizes) sumUp(rewardBonusEpoch, publishEpoch types.EpochID) (units uint32, weight uint64, err error) {
 	var totalUnits uint64
 	var totalWeight uint64
 	for _, ns := range n {
 		totalUnits += uint64(ns.units)
 
-		hi, weight := bits.Mul64(uint64(ns.units), ns.ticks)
-		if hi != 0 {
-			return 0, 0, fmt.Errorf("weight overflow (%d * %d)", ns.units, ns.ticks)
+		weight, err := calcWeight(uint64(ns.units), ns.ticks, rewardBonusEpoch, ns.commitmentEpoch, publishEpoch)
+		if err != nil {
+			return 0, 0, err
 		}
 		totalWeight += weight
 	}
@@ -491,6 +494,40 @@ func (n nipostSizes) sumUp() (units uint32, weight uint64, err error) {
 		return 0, 0, fmt.Errorf("total units overflow: %d", totalUnits)
 	}
 	return uint32(totalUnits), totalWeight, nil
+}
+
+func calcWeight(
+	numUnits, tickCount uint64,
+	rewardBonusEpoch, commitmentEpoch, publishEpoch types.EpochID,
+) (uint64, error) {
+	hi, weight := bits.Mul64(numUnits, tickCount)
+	if hi != 0 {
+		return 0, fmt.Errorf("weight overflow (%d * %d)", numUnits, tickCount)
+	}
+	if rewardBonusEpoch == 0 {
+		// no bonus epoch configured
+		return weight, nil
+	}
+	if commitmentEpoch < rewardBonusEpoch-2 {
+		// An identity selecting a commitment in epoch X will init in epoch X and create an initial post. Now there are
+		// two scenarios:
+		// 1. The identity has enough time to register at PoET during the cyclegap of epoch X, and the initial ATX will
+		// be published in epoch X+1.
+		// 2. The cyclegap already closed in epoch X and the identity will publish the initial ATX in epoch X+2.
+		//
+		// since 2) is the more common case (most ATXs that could be selected for commitment are published during the
+		// cyclegap) we allow a 2 epoch gap between the commitment and the reward bonus epoch.
+		return weight, nil
+	}
+	if publishEpoch < rewardBonusEpoch { // bonus hasn't started yet
+		return weight, nil
+	}
+	epochsSinceBonus := uint64(min(publishEpoch-rewardBonusEpoch+1, 10)) // we scale the bonus over 10 epochs ...
+	hi, bonusWeight := bits.Mul64(weight, epochsSinceBonus)
+	if hi != 0 {
+		return 0, fmt.Errorf("bonus weight overflow (%d * %d)", weight, epochsSinceBonus)
+	}
+	return weight + (bonusWeight / 10), nil // ... linearly to 100% extra weight
 }
 
 func (h *HandlerV2) verifyIncludedIDsUniqueness(atx *wire.ActivationTxV2) error {
@@ -602,7 +639,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		nipostSizes[i].ticks = leaves / h.tickSize
 	}
 
-	result.effectiveUnits, result.weight, err = nipostSizes.sumUp()
+	result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.rewardBonusEpoch, atx.PublishEpoch)
 	if err != nil {
 		return nil, err
 	}

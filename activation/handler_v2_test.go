@@ -64,19 +64,20 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 	mocks := newTestHandlerMocks(tb, golden)
 	return &v2TestHandler{
 		HandlerV2: &HandlerV2{
-			local:           "localID",
-			cdb:             cdb,
-			atxsdata:        atxsdata.New(),
-			edVerifier:      signing.NewEdVerifier(),
-			clock:           mocks.mClock,
-			tickSize:        tickSize,
-			goldenATXID:     golden,
-			nipostValidator: mocks.mValidator,
-			logger:          logger,
-			fetcher:         mocks.mockFetch,
-			beacon:          mocks.mBeacon,
-			tortoise:        mocks.mTortoise,
-			malPublisher:    mocks.mMalPublish,
+			local:            "localID",
+			cdb:              cdb,
+			atxsdata:         atxsdata.New(),
+			edVerifier:       signing.NewEdVerifier(),
+			clock:            mocks.mClock,
+			tickSize:         tickSize,
+			rewardBonusEpoch: 0,
+			goldenATXID:      golden,
+			nipostValidator:  mocks.mValidator,
+			logger:           logger,
+			fetcher:          mocks.mockFetch,
+			beacon:           mocks.mBeacon,
+			tortoise:         mocks.mTortoise,
+			malPublisher:     mocks.mMalPublish,
 		},
 		tb:           tb,
 		observedLogs: observedLogs,
@@ -2834,14 +2835,14 @@ func Test_CalculatingUnits(t *testing.T) {
 		t.Parallel()
 		ns := make(nipostSizes, 0)
 		ns = append(ns, &nipostSize{units: 11}, &nipostSize{units: math.MaxUint32 - 10})
-		_, _, err := ns.sumUp()
+		_, _, err := ns.sumUp(0, 0)
 		require.Error(t, err)
 	})
 	t.Run("units = sum of units on every nipost", func(t *testing.T) {
 		t.Parallel()
 		ns := make(nipostSizes, 0)
 		ns = append(ns, &nipostSize{units: 1}, &nipostSize{units: 10})
-		u, _, err := ns.sumUp()
+		u, _, err := ns.sumUp(0, 0)
 		require.NoError(t, err)
 		require.EqualValues(t, 1+10, u)
 	})
@@ -3256,14 +3257,14 @@ func Test_CalculatingWeight(t *testing.T) {
 		t.Parallel()
 		ns := make(nipostSizes, 0)
 		ns = append(ns, &nipostSize{units: 1, ticks: 100}, &nipostSize{units: 10, ticks: math.MaxUint64})
-		_, _, err := ns.sumUp()
+		_, _, err := ns.sumUp(0, 0)
 		require.Error(t, err)
 	})
 	t.Run("weight = sum of weight on every nipost", func(t *testing.T) {
 		t.Parallel()
 		ns := make(nipostSizes, 0)
 		ns = append(ns, &nipostSize{units: 1, ticks: 100}, &nipostSize{units: 10, ticks: 1000})
-		_, w, err := ns.sumUp()
+		_, w, err := ns.sumUp(0, 0)
 		require.NoError(t, err)
 		require.EqualValues(t, 1*100+10*1000, w)
 	})
