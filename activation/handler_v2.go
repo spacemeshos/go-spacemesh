@@ -544,30 +544,8 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	// validate previous ATXs
-	nipostSizes := make(nipostSizes, len(atx.NIPosts))
-	for i, niPosts := range atx.NIPosts {
-		nipostSizes[i] = new(nipostSize)
-		for _, post := range niPosts.Posts {
-			if post.MarriageIndex >= uint32(len(equivocationSet)) {
-				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
-				return nil, err
-			}
-
-			id := equivocationSet[post.MarriageIndex]
-			effectiveNumUnits := post.NumUnits
-			if atx.Initial == nil {
-				var err error
-				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
-				if err != nil {
-					return nil, fmt.Errorf("validating previous atx: %w", err)
-				}
-			}
-			nipostSizes[i].addUnits(effectiveNumUnits)
-		}
-	}
-
-	// validate poet membership proofs
-	for i, niPosts := range atx.NIPosts {
+	nipostSizes := make(nipostSizes, 0)
+	for _, niPosts := range atx.NIPosts {
 		// verify PoET memberships in a single go
 		indexedChallenges := make(map[uint64][]byte)
 
@@ -602,12 +580,47 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		if err != nil {
 			return nil, fmt.Errorf("validating poet membership: %w", err)
 		}
-		nipostSizes[i].ticks = leaves / h.tickSize
+
+		ticks := leaves / h.tickSize
+
+		for _, post := range niPosts.Posts {
+			if post.MarriageIndex >= uint32(len(equivocationSet)) {
+				err := fmt.Errorf("marriage index out of bounds: %d > %d", post.MarriageIndex, len(equivocationSet)-1)
+				return nil, err
+			}
+
+			id := equivocationSet[post.MarriageIndex]
+			effectiveNumUnits := post.NumUnits
+			if atx.Initial == nil {
+				var err error
+				effectiveNumUnits, err = h.validatePreviousAtx(id, &post, previousAtxs)
+				if err != nil {
+					return nil, fmt.Errorf("validating previous atx: %w", err)
+				}
+			}
+
+			_, commitmentEpoch, err := h.commitment(atx, id)
+			if err != nil {
+				return nil, fmt.Errorf("fetching commitment atx: %w", err)
+			}
+
+			size := &nipostSize{
+				units:           effectiveNumUnits,
+				ticks:           ticks,
+				commitmentEpoch: commitmentEpoch,
+			}
+			nipostSizes = append(nipostSizes, size)
+		}
+	}
+
+	result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.bonusWeightEpoch, atx.PublishEpoch)
+	if err != nil {
+		return nil, err
 	}
 
 	// validate all NIPoSTs
 	if atx.Initial != nil {
-		commitmentATX, commitmentEpoch, err := h.commitment(atx, atx.SmesherID)
+		commitmentATX := atx.Initial.CommitmentATX
 		if err != nil {
 			return nil, fmt.Errorf("fetching commitment atx: %w", err)
 		}
@@ -623,20 +636,14 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 			units:         post.NumUnits,
 		}
 		result.ticks = nipostSizes.minTicks()
-
-		nipostSizes[0].commitmentEpoch = commitmentEpoch
-		result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.bonusWeightEpoch, atx.PublishEpoch)
-		if err != nil {
-			return nil, err
-		}
 		return &result, nil
 	}
 
 	var smesherCommitment *types.ATXID
 	for idx, niPosts := range atx.NIPosts {
-		for i, post := range niPosts.Posts {
+		for _, post := range niPosts.Posts {
 			id := equivocationSet[post.MarriageIndex]
-			commitmentATX, commitmentEpoch, err := h.commitment(atx, id)
+			commitmentATX, _, err := h.commitment(atx, id)
 			if err != nil {
 				return nil, fmt.Errorf("commitment atx not found for ID %s: %w", id, err)
 			}
@@ -651,7 +658,6 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 				previousIndex: int(post.PrevATXIndex),
 				units:         post.NumUnits,
 			}
-			nipostSizes[i].commitmentEpoch = commitmentEpoch
 		}
 	}
 
@@ -664,10 +670,6 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	}
 
 	result.ticks = nipostSizes.minTicks()
-	result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.bonusWeightEpoch, atx.PublishEpoch)
-	if err != nil {
-		return nil, err
-	}
 	return &result, nil
 }
 
