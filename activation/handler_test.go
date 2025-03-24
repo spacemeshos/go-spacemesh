@@ -220,6 +220,7 @@ func newTestHandler(tb testing.TB, goldenATXID types.ATXID, opts ...HandlerOptio
 		edVerifier,
 		mocks.mClock,
 		mocks.mockFetch,
+		0,
 		goldenATXID,
 		mocks.mValidator,
 		mocks.mMalPublish,

@@ -264,6 +264,7 @@ func validateAndPreserveData(
 		signing.NewEdVerifier(),
 		mclock,
 		mFetch,
+		0,
 		goldenAtx,
 		mValidator,
 		mMalPublisher,
