@@ -44,7 +44,6 @@ func TestAddNodes(t *testing.T) {
 				"n", addedLater,
 				"layer", layer.Layer.Number,
 			)
-			// the new smeshers will use the old sync protocol
 			return false, cl.AddSmeshers(tctx, addedLater)
 		}
 		return true, nil
