@@ -155,7 +155,7 @@ func TestHandlerV1_SyntacticallyValidateAtx(t *testing.T) {
 		require.EqualValues(t, atx.VRFNonce, *prevAtx.VRFNonce)
 		require.Equal(t, watx.NumUnits, atx.NumUnits)
 		require.Equal(t, uint64(1234)/atxHdlr.tickSize, atx.TickCount)
-		require.Equal(t, uint64(float64(atx.NumUnits)*float64(atx.TickCount)*1.6), atx.Weight) // 50% bonus
+		require.Equal(t, uint64(float64(atx.NumUnits)*float64(atx.TickCount)*1.6), atx.Weight) // 60% bonus
 	})
 
 	t.Run("valid atx with new VRF nonce", func(t *testing.T) {
