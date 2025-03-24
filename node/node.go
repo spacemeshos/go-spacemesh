@@ -882,7 +882,6 @@ func (app *App) initServices(ctx context.Context) error {
 		app.edVerifier,
 		app.clock,
 		fetcher,
-		0,
 		goldenATXID,
 		validator,
 		atxMalHandler,
@@ -891,6 +890,7 @@ func (app *App) initServices(ctx context.Context) error {
 		trtl,
 		app.addLogger(ATXHandlerLogger, lg).Zap(),
 		activation.WithTickSize(app.Config.TickSize),
+		activation.WithBonusWeightEpoch(app.Config.BonusWeightEpoch),
 		activation.WithAtxVersions(app.Config.AtxVersions),
 	)
 

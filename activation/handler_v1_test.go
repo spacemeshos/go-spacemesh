@@ -48,7 +48,7 @@ func newV1TestHandler(tb testing.TB, goldenATXID types.ATXID) *v1TestHandler {
 			edVerifier:       signing.NewEdVerifier(),
 			clock:            mocks.mClock,
 			tickSize:         tickSize,
-			rewardBonusEpoch: 0,
+			bonusWeightEpoch: 0,
 			goldenATXID:      goldenATXID,
 			nipostValidator:  mocks.mValidator,
 			logger:           lg,

@@ -63,7 +63,7 @@ type HandlerV2 struct {
 	edVerifier       *signing.EdVerifier
 	clock            layerClock
 	tickSize         uint64
-	rewardBonusEpoch types.EpochID
+	bonusWeightEpoch types.EpochID
 	goldenATXID      types.ATXID
 	nipostValidator  nipostValidatorV2
 	beacon           atxReceiver
@@ -639,7 +639,7 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 		nipostSizes[i].ticks = leaves / h.tickSize
 	}
 
-	result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.rewardBonusEpoch, atx.PublishEpoch)
+	result.effectiveUnits, result.weight, err = nipostSizes.sumUp(h.bonusWeightEpoch, atx.PublishEpoch)
 	if err != nil {
 		return nil, err
 	}

@@ -70,7 +70,7 @@ func newV2TestHandler(tb testing.TB, golden types.ATXID) *v2TestHandler {
 			edVerifier:       signing.NewEdVerifier(),
 			clock:            mocks.mClock,
 			tickSize:         tickSize,
-			rewardBonusEpoch: 0,
+			bonusWeightEpoch: 0,
 			goldenATXID:      golden,
 			nipostValidator:  mocks.mValidator,
 			logger:           logger,
