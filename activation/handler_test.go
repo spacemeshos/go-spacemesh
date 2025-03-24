@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"testing"
@@ -955,4 +956,111 @@ func TestHandler_DecodeATX(t *testing.T) {
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
+}
+
+func TestCalcWeight_NoBonusEpoch(t *testing.T) {
+	t.Parallel()
+
+	tt := []struct {
+		name   string
+		units  uint32
+		ticks  uint64
+		weight uint64
+		error  error
+
+		rewardEpoch     types.EpochID
+		commitmentEpoch types.EpochID
+		publishEpoch    types.EpochID
+	}{
+		{
+			name:   "weight overflow",
+			units:  10,
+			ticks:  math.MaxUint64,
+			weight: 0, // overflow
+
+			publishEpoch: 11,
+		},
+		{
+			name:   "no bonus configured",
+			units:  2,
+			ticks:  3,
+			weight: 6,
+
+			publishEpoch: 15,
+		},
+		{
+			name:   "commitment too old for bonus",
+			units:  4,
+			ticks:  3,
+			weight: 12,
+
+			rewardEpoch:     10,
+			commitmentEpoch: 4,
+			publishEpoch:    15,
+		},
+		{
+			name:   "eligible but before bonus epoch",
+			units:  5,
+			ticks:  7,
+			weight: 35,
+
+			rewardEpoch:     10,
+			commitmentEpoch: 8,
+			publishEpoch:    9,
+		},
+		{
+			name:   "eligible for bonus in first reward epoch",
+			units:  10,
+			ticks:  14,
+			weight: 154, // 10% extra weight
+
+			rewardEpoch:     10,
+			commitmentEpoch: 8,
+			publishEpoch:    10,
+		},
+		{
+			name:   "eligible for bonus in second reward epoch",
+			units:  10,
+			ticks:  14,
+			weight: 168, // 20% extra weight
+
+			rewardEpoch:     10,
+			commitmentEpoch: 8,
+			publishEpoch:    11,
+		},
+		{
+			name:   "full bonus given",
+			units:  10,
+			ticks:  14,
+			weight: 280, // 100% extra weight
+
+			rewardEpoch:     10,
+			commitmentEpoch: 12,
+			publishEpoch:    20,
+		},
+		{
+			name:   "bonus overflow",
+			units:  10,
+			ticks:  math.MaxUint64 / 15,
+			weight: 0, // overflow
+
+			rewardEpoch:     10,
+			commitmentEpoch: 12,
+			publishEpoch:    20,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			weight, err := calcWeight(uint64(tc.units), tc.ticks, tc.rewardEpoch, tc.commitmentEpoch, tc.publishEpoch)
+			if tc.weight == 0 {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.weight, weight)
+		})
+	}
 }
