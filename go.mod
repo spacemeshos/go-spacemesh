@@ -34,7 +34,7 @@ require (
 	github.com/prometheus/client_golang v1.21.1
 	github.com/prometheus/client_model v0.6.1
 	github.com/prometheus/common v0.63.0
-	github.com/quic-go/quic-go v0.50.0
+	github.com/quic-go/quic-go v0.50.1
 	github.com/rqlite/sql v0.0.0-20241111133259-a4122fabb196
 	github.com/rs/cors v1.11.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
