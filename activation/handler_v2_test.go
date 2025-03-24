@@ -502,6 +502,50 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		err = atxHandler.processATX(t.Context(), atxHandler.local, atx, time.Now())
 		require.NoError(t, err)
 	})
+	t.Run("initial ATX bonus weight", func(t *testing.T) {
+		t.Parallel()
+		atxHandler := newV2TestHandler(t, golden)
+		atxHandler.tickSize = tickSize
+		atxHandler.bonusWeightEpoch = 10
+
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		commitmentAtx := newInitialATXv2(t, golden)
+		commitmentAtx.PublishEpoch = 8
+		commitmentAtx.Sign(otherSig)
+
+		atxHandler.expectInitialAtxV2(commitmentAtx)
+		err = atxHandler.processATX(t.Context(), atxHandler.local, commitmentAtx, time.Now())
+		require.NoError(t, err)
+
+		atx := newInitialATXv2(t, commitmentAtx.ID())
+		atx.PublishEpoch = 10
+		atx.Sign(sig)
+
+		atxHandler.expectInitialAtxV2(atx)
+		err = atxHandler.processATX(t.Context(), atxHandler.local, atx, time.Now())
+		require.NoError(t, err)
+
+		cAtxFromDb, err := atxs.Get(atxHandler.cdb, commitmentAtx.ID())
+		require.NoError(t, err)
+
+		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
+		require.NoError(t, err)
+
+		require.Equal(t, atx.ID(), atxFromDb.ID())
+		require.Equal(t, atx.Coinbase, atxFromDb.Coinbase)
+		require.EqualValues(t, poetLeaves/tickSize, atxFromDb.TickCount)
+		require.EqualValues(t, cAtxFromDb.TickCount+atxFromDb.TickCount, atxFromDb.TickHeight())
+		require.Equal(t, atx.NIPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
+
+		// 10% bonus weight
+		require.Equal(t, uint64(float64(atx.NIPosts[0].Posts[0].NumUnits*poetLeaves/tickSize)*1.1), atxFromDb.Weight)
+
+		// processing ATX for the second time should skip checks
+		err = atxHandler.processATX(t.Context(), atxHandler.local, atx, time.Now())
+		require.NoError(t, err)
+	})
 	t.Run("second ATX", func(t *testing.T) {
 		t.Parallel()
 		atxHandler := newV2TestHandler(t, golden)
@@ -524,6 +568,47 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 		require.EqualValues(t, prevAtx.TickHeight()+atxFromDb.TickCount, atxFromDb.TickHeight())
 		require.Equal(t, atx.NIPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
 		require.EqualValues(t, atx.NIPosts[0].Posts[0].NumUnits*poetLeaves/tickSize, atxFromDb.Weight)
+	})
+	t.Run("second ATX bonus weight", func(t *testing.T) {
+		t.Parallel()
+		atxHandler := newV2TestHandler(t, golden)
+		atxHandler.bonusWeightEpoch = 10
+
+		otherSig, err := signing.NewEdSigner()
+		require.NoError(t, err)
+
+		commitmentAtx := newInitialATXv2(t, golden)
+		commitmentAtx.PublishEpoch = 8
+		commitmentAtx.Sign(otherSig)
+
+		atxHandler.expectInitialAtxV2(commitmentAtx)
+		err = atxHandler.processATX(t.Context(), atxHandler.local, commitmentAtx, time.Now())
+		require.NoError(t, err)
+
+		prev := newInitialATXv2(t, commitmentAtx.ID())
+		prev.PublishEpoch = 10
+		prev.Sign(sig)
+		err = atxHandler.processInitial(prev)
+		require.NoError(t, err)
+
+		atx := newSoloATXv2(t, prev.PublishEpoch+1, prev.ID(), prev.ID())
+		atx.Sign(sig)
+
+		atxHandler.expectAtxV2(atx)
+		err = atxHandler.processATX(t.Context(), atxHandler.local, atx, time.Now())
+		require.NoError(t, err)
+
+		prevAtx, err := atxs.Get(atxHandler.cdb, prev.ID())
+		require.NoError(t, err)
+		atxFromDb, err := atxs.Get(atxHandler.cdb, atx.ID())
+		require.NoError(t, err)
+		require.EqualValues(t, poetLeaves/tickSize, atxFromDb.TickCount)
+		require.EqualValues(t, prevAtx.TickHeight(), atxFromDb.BaseTickHeight)
+		require.EqualValues(t, prevAtx.TickHeight()+atxFromDb.TickCount, atxFromDb.TickHeight())
+		require.Equal(t, atx.NIPosts[0].Posts[0].NumUnits, atxFromDb.NumUnits)
+
+		// 20% bonus weight
+		require.Equal(t, uint64(float64(atx.NIPosts[0].Posts[0].NumUnits*poetLeaves/tickSize)*1.2), atxFromDb.Weight)
 	})
 	t.Run("second ATX, previous checkpointed", func(t *testing.T) {
 		t.Parallel()
