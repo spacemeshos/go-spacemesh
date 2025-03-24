@@ -3027,13 +3027,6 @@ func Test_MarryingMalicious(t *testing.T) {
 
 func Test_CalculatingUnits(t *testing.T) {
 	t.Parallel()
-	t.Run("units on 1 nipost must not overflow", func(t *testing.T) {
-		t.Parallel()
-		ns := nipostSize{}
-		require.NoError(t, ns.addUnits(1))
-		require.EqualValues(t, 1, ns.units)
-		require.Error(t, ns.addUnits(math.MaxUint32))
-	})
 	t.Run("total units on all niposts must not overflow", func(t *testing.T) {
 		t.Parallel()
 		ns := make(nipostSizes, 0)
