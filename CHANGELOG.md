@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.8.2
+
+### Improvements
+
+* [#6800](https://github.com/spacemeshos/go-spacemesh/pull/6800) Improved performance of GRPC endpoint
+  `spacemesh.v2beta1.ActivationService.Highest`.
+
 ## v1.8.1
 
 ### Highlights
@@ -12,10 +19,10 @@ improvements are enabled automatically after upgrading to this version and no us
 
 ### Improvements
 
-* [6792](https://github.com/spacemeshos/go-spacemesh/pull/6792) Fixed race condition in `FPTree` implementation (sync v2).
+* [#6792](https://github.com/spacemeshos/go-spacemesh/pull/6792) Fixed race condition in `FPTree` implementation (sync v2).
 
-* [6794](https://github.com/spacemeshos/go-spacemesh/pull/6794) Increased database connection idle timeout,
-  which should reduce occurances of `SQLITE_BUSY` errors.
+* [#6794](https://github.com/spacemeshos/go-spacemesh/pull/6794) Increased database connection idle timeout,
+  which should reduce occurrences of `SQLITE_BUSY` errors.
 
 ## v1.8.0
 
