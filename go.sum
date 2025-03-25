@@ -616,8 +616,8 @@ github.com/spacemeshos/go-scale v1.3.0 h1:J3rbksTxInnM86T8GnMGqD3iZOQJja7YIrfjMs
 github.com/spacemeshos/go-scale v1.3.0/go.mod h1:cYK6xEozIptppvOybr3naxr9hrSVvXG/LInC/DrJofA=
 github.com/spacemeshos/merkle-tree v0.2.6 h1:PJ4LBx0vBbYVIHwApyjLy/yqUGEK35ggGTo05oiPhwg=
 github.com/spacemeshos/merkle-tree v0.2.6/go.mod h1:lxMuC/C2qhN6wdH6iSXW0HM8FS6fnKnyLWjCAKsCtr8=
-github.com/spacemeshos/poet v0.10.11 h1:GQ7XIKAn1RM4inLX0V7a25vNwEjqPp/EBtJ2QxSy9cY=
-github.com/spacemeshos/poet v0.10.11/go.mod h1:9Jt7Djro5NgjPtXlMzygeL3H7qCy+PPurobN6/f3+AE=
+github.com/spacemeshos/poet v0.10.12 h1:xlk0L+MyDpqGzpsFgLKVeNMmQtzZ3k53/yoHs8vUfZo=
+github.com/spacemeshos/poet v0.10.12/go.mod h1:M32hQhE0QBT80CMEb8P3aXz0lQVGK6V8EJqnl2f9cYE=
 github.com/spacemeshos/post v0.13.0 h1:DNlqc6ilYbFbev2CXCj9ukHJ7HhTW9GCSeKAE2nWGsA=
 github.com/spacemeshos/post v0.13.0/go.mod h1:3utSIJO9M7lhA5xm3BQ2hszVNjiLgiseq0Ty4vpS0BU=
 github.com/spacemeshos/sha256-simd v0.1.0 h1:G7Mfu5RYdQiuE+wu4ZyJ7I0TI74uqLhFnKblEnSpjYI=
@@ -912,8 +912,8 @@ google.golang.org/genproto v0.0.0-20190819201941-24fa4b261c55/go.mod h1:DMBHOl98
 google.golang.org/genproto v0.0.0-20200423170343-7949de9c1215/go.mod h1:55QSHmfGQM9UVYDPBsyGGes0y52j32PQ3BqQfXhyH3c=
 google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb h1:ITgPrl429bc6+2ZraNSzMDk3I95nmQln2fuPstKwFDE=
 google.golang.org/genproto v0.0.0-20250303144028-a0af3efb3deb/go.mod h1:sAo5UzpjUwgFBCzupwhcLcxHVDK7vG5IqI30YnwX2eE=
-google.golang.org/genproto/googleapis/api v0.0.0-20250303144028-a0af3efb3deb h1:p31xT4yrYrSM/G4Sn2+TNUkVhFCbG9y8itM2S6Th950=
-google.golang.org/genproto/googleapis/api v0.0.0-20250303144028-a0af3efb3deb/go.mod h1:jbe3Bkdp+Dh2IrslsFCklNhweNTBgSYanP1UXhJDhKg=
+google.golang.org/genproto/googleapis/api v0.0.0-20250313205543-e70fdf4c4cb4 h1:IFnXJq3UPB3oBREOodn1v1aGQeZYQclEmvWRMN0PSsY=
+google.golang.org/genproto/googleapis/api v0.0.0-20250313205543-e70fdf4c4cb4/go.mod h1:c8q6Z6OCqnfVIqUFJkCzKcrj8eCvUrz+K4KRzSTuANg=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250313205543-e70fdf4c4cb4 h1:iK2jbkWL86DXjEx0qiHcRE9dE4/Ahua5k6V8OWFb//c=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250313205543-e70fdf4c4cb4/go.mod h1:LuRYeWDFV6WOn90g357N17oMCaxpgCnbi/44qJvDn2I=
 google.golang.org/grpc v1.14.0/go.mod h1:yo6s7OP7yaDglbqo1J04qKzAhqBH6lvTonzMVmEdcZw=
