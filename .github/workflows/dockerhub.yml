@@ -26,7 +26,7 @@ jobs:
         include:
           - os: ubuntu-22.04
             outname_sufix: "linux-amd64"
-          - os: ubuntu-latest-arm-8-cores
+          - os: ubuntu-22.04-arm
             outname_sufix: "linux-arm64"
     steps:
     - name: checkout
