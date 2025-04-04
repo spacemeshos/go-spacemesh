@@ -124,13 +124,13 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - ubuntu-latest-arm-8-cores
+          - ubuntu-22.04-arm
           - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
           - windows-2022
     steps:
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: disable Windows Defender - Windows
         if: ${{ matrix.os == 'windows-2022' }}
@@ -219,7 +219,7 @@ jobs:
       matrix:
         os:
           - ubuntu-22.04
-          - ubuntu-latest-arm-8-cores
+          - ubuntu-22.04-arm
           # FIXME: reenable the macos runner
           # - macos-13
           - [self-hosted, macOS, ARM64, go-spacemesh]
@@ -269,7 +269,7 @@ jobs:
           go-version-file: "go.mod"
           cache: ${{ runner.arch != 'arm64' }}
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Add OpenCL support - Windows
         if: ${{ matrix.os == 'windows-2022' }}
