@@ -3477,7 +3477,11 @@ func Test_CalculatingWeight(t *testing.T) {
 		const bonusWeightEpoch = 10
 
 		ns := make(nipostSizes, 0)
-		ns = append(ns, &nipostSize{units: 1, ticks: 100, commitmentEpoch: 5}, &nipostSize{units: 10, ticks: 1000, commitmentEpoch: 5})
+		ns = append(
+			ns,
+			&nipostSize{units: 1, ticks: 100, commitmentEpoch: 5},
+			&nipostSize{units: 10, ticks: 1000, commitmentEpoch: 5},
+		)
 		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch)
 		require.NoError(t, err)
 		require.EqualValues(t, 1*100+10*1000, w)
@@ -3487,7 +3491,11 @@ func Test_CalculatingWeight(t *testing.T) {
 		const bonusWeightEpoch = 10
 
 		ns := make(nipostSizes, 0)
-		ns = append(ns, &nipostSize{units: 1, ticks: 100, commitmentEpoch: 5}, &nipostSize{units: 10, ticks: 1000, commitmentEpoch: 8})
+		ns = append(
+			ns,
+			&nipostSize{units: 1, ticks: 100, commitmentEpoch: 5},
+			&nipostSize{units: 10, ticks: 1000, commitmentEpoch: 8},
+		)
 		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch+1)
 		require.NoError(t, err)
 		require.EqualValues(t, 1*100+uint64(10*1000*1.2), w) // second identity gets 20% bonus
@@ -3497,7 +3505,11 @@ func Test_CalculatingWeight(t *testing.T) {
 		const bonusWeightEpoch = 10
 
 		ns := make(nipostSizes, 0)
-		ns = append(ns, &nipostSize{units: 1, ticks: 100, commitmentEpoch: 5}, &nipostSize{units: 10, ticks: 1000, commitmentEpoch: 8})
+		ns = append(
+			ns,
+			&nipostSize{units: 1, ticks: 100, commitmentEpoch: 5},
+			&nipostSize{units: 10, ticks: 1000, commitmentEpoch: 8},
+		)
 		_, w, err := ns.sumUp(bonusWeightEpoch, bonusWeightEpoch-1)
 		require.NoError(t, err)
 		require.EqualValues(t, 1*100+10*1000, w)
