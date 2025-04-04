@@ -611,9 +611,6 @@ func (h *HandlerV2) syntacticallyValidateDeps(
 	// validate all NIPoSTs
 	if atx.Initial != nil {
 		commitmentATX := atx.Initial.CommitmentATX
-		if err != nil {
-			return nil, fmt.Errorf("fetching commitment atx: %w", err)
-		}
 		nipostIdx := 0
 		challenge := atx.NIPosts[nipostIdx].Challenge
 		post := atx.NIPosts[nipostIdx].Posts[0]
@@ -668,7 +665,7 @@ func (h *HandlerV2) commitment(watx *wire.ActivationTxV2, nodeID types.NodeID) (
 	var id types.ATXID
 	switch {
 	case watx.Initial != nil: // initial ATX
-		id = *&watx.Initial.CommitmentATX
+		id = watx.Initial.CommitmentATX
 	default: // non-initial ATX
 		var err error
 		id, err = atxs.CommitmentATX(h.cdb, nodeID)
