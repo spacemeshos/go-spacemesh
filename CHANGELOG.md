@@ -2,6 +2,18 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## v1.8.3
+
+### Upgrade information
+
+This release changes weight calculation for identities that have been created after epoch 48 and use a commitment ATX
+from epoch 48 or later. Those identities will gradually receive more weight over 10 epochs until they reach 2x the
+weight of an identity with the same space commitment that was created before epoch 48.
+
+### Improvements
+
+* [#6817](https://github.com/spacemeshos/go-spacemesh/pull/6817) Updated weight calculation function for new identities.
+
 ## v1.8.2
 
 ### Improvements
