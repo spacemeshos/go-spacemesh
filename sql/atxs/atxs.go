@@ -485,8 +485,8 @@ func Add(db sql.Executor, atx *types.ActivationTx, blob types.AtxBlob) error {
 
 	_, err := db.Exec(`
 		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			 pubkey, received, base_tick_height, tick_count, sequence, coinbase,
-			 validity, weight, marriage_atx)
+			pubkey, received, base_tick_height, tick_count, sequence, coinbase,
+			validity, weight, marriage_atx)
 		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
@@ -589,6 +589,7 @@ type CheckpointAtx struct {
 	Coinbase       types.Address
 	// total effective units
 	NumUnits uint32
+	Weight   uint64
 	// actual units of each included smesher
 	Units map[types.NodeID]uint32
 }
@@ -614,18 +615,19 @@ func LatestN(db sql.Executor, n int) ([]CheckpointAtx, error) {
 			catx.MarriageATX = new(types.ATXID)
 			stmt.ColumnBytes(9, catx.MarriageATX[:])
 		}
+		catx.Weight = uint64(stmt.ColumnInt64(10))
 		rst = append(rst, catx)
 		return true
 	}
 
 	rows, err := db.Exec(`
-		select
-		id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce, marriage_atx
-		from (
-			select row_number() over (partition by pubkey order by epoch desc) RowNum,
+		SELECT id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce,
+			marriage_atx, weight
+		FROM (
+			SELECT row_number() over (partition by pubkey order by epoch desc) RowNum,
 			id, epoch, effective_num_units, base_tick_height, tick_count, pubkey, sequence, coinbase, nonce,
-			marriage_atx
-			from atxs
+			marriage_atx, weight
+			FROM atxs
 		)
 		where RowNum <= ?1 order by pubkey;`, enc, dec)
 	switch {
@@ -660,12 +662,13 @@ func AddCheckpointed(db sql.Executor, catx *CheckpointAtx) error {
 		if catx.MarriageATX != nil {
 			stmt.BindBytes(11, catx.MarriageATX.Bytes())
 		}
+		stmt.BindInt64(12, int64(catx.Weight))
 	}
 
 	_, err := db.Exec(`
-		insert into atxs (id, epoch, effective_num_units, commitment_atx, nonce,
-			base_tick_height, tick_count, sequence, pubkey, coinbase, marriage_atx, received)
-		values (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, 0)`, enc, nil)
+		INSERT INTO atxs (id, epoch, effective_num_units, commitment_atx, nonce,
+			base_tick_height, tick_count, sequence, pubkey, coinbase, marriage_atx, weight, received)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 0)`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert checkpoint ATX %v: %w", catx.ID, err)
 	}
@@ -731,27 +734,28 @@ func IterateAtxsData(
 		nonce types.VRFPostIndex,
 	) bool,
 ) error {
-	_, err := db.Exec(
-		`SELECT id, pubkey, epoch, coinbase, effective_num_units, base_tick_height, tick_count, nonce FROM atxs
-		WHERE epoch between ?1 and ?2`,
+	_, err := db.Exec(`
+		SELECT id, pubkey, epoch, coinbase, weight, base_tick_height, tick_count, nonce
+		FROM atxs
+		WHERE epoch BETWEEN ?1 AND ?2`,
 		// filtering in CODE is no longer effective on some machines in epoch 29
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(from.Uint32()))
 			stmt.BindInt64(2, int64(to.Uint32()))
 		},
 		func(stmt *sql.Statement) bool {
-			epoch := types.EpochID(uint32(stmt.ColumnInt64(2)))
 			var id types.ATXID
 			stmt.ColumnBytes(0, id[:])
 			var node types.NodeID
 			stmt.ColumnBytes(1, node[:])
+			epoch := types.EpochID(stmt.ColumnInt64(2))
 			var coinbase types.Address
 			stmt.ColumnBytes(3, coinbase[:])
-			effectiveUnits := uint64(stmt.ColumnInt64(4))
+			weight := uint64(stmt.ColumnInt64(4))
 			baseHeight := uint64(stmt.ColumnInt64(5))
 			ticks := uint64(stmt.ColumnInt64(6))
 			nonce := types.VRFPostIndex(stmt.ColumnInt64(7))
-			return fn(id, node, epoch, coinbase, effectiveUnits*ticks, baseHeight, baseHeight+ticks, nonce)
+			return fn(id, node, epoch, coinbase, weight, baseHeight, baseHeight+ticks, nonce)
 		},
 	)
 	if err != nil {
@@ -805,7 +809,7 @@ func IterateForGrading(
 	fn func(id types.ATXID, atxTime, proofTime int64, weight uint64) bool,
 ) error {
 	if _, err := db.Exec(`
-		SELECT atxs.id, atxs.received, effective_num_units, tick_count, identities.received, malfeasance.received
+		SELECT atxs.id, atxs.received, weight, identities.received, malfeasance.received
 		FROM atxs
 		LEFT JOIN identities ON atxs.pubkey = identities.pubkey
 		LEFT JOIN malfeasance ON atxs.pubkey = malfeasance.pubkey
@@ -816,22 +820,21 @@ func IterateForGrading(
 		id := types.ATXID{}
 		stmt.ColumnBytes(0, id[:])
 		atxTime := stmt.ColumnInt64(1)
-		units := uint64(stmt.ColumnInt64(2))
-		ticks := uint64(stmt.ColumnInt64(3))
+		weight := uint64(stmt.ColumnInt64(2))
 		switch {
-		case stmt.ColumnType(4) == sqlite.SQLITE_NULL && stmt.ColumnType(5) == sqlite.SQLITE_NULL:
+		case stmt.ColumnType(3) == sqlite.SQLITE_NULL && stmt.ColumnType(4) == sqlite.SQLITE_NULL:
 			// no malfeasance
-			return fn(id, atxTime, 0, units*ticks)
-		case stmt.ColumnType(4) != sqlite.SQLITE_NULL && stmt.ColumnType(5) == sqlite.SQLITE_NULL:
+			return fn(id, atxTime, 0, weight)
+		case stmt.ColumnType(3) != sqlite.SQLITE_NULL && stmt.ColumnType(4) == sqlite.SQLITE_NULL:
 			// legacy malfeasance
-			return fn(id, atxTime, stmt.ColumnInt64(4), units*ticks)
-		case stmt.ColumnType(4) == sqlite.SQLITE_NULL && stmt.ColumnType(5) != sqlite.SQLITE_NULL:
+			return fn(id, atxTime, stmt.ColumnInt64(3), weight)
+		case stmt.ColumnType(3) == sqlite.SQLITE_NULL && stmt.ColumnType(4) != sqlite.SQLITE_NULL:
 			// new malfeasance
-			return fn(id, atxTime, stmt.ColumnInt64(5), units*ticks)
+			return fn(id, atxTime, stmt.ColumnInt64(4), weight)
 		default:
 			// both legacy and new malfeasance, take oldest one
-			proofTime := min(stmt.ColumnInt64(4), stmt.ColumnInt64(5))
-			return fn(id, atxTime, proofTime, units*ticks)
+			proofTime := min(stmt.ColumnInt64(3), stmt.ColumnInt64(4))
+			return fn(id, atxTime, proofTime, weight)
 		}
 	}); err != nil {
 		return fmt.Errorf("iterate for grading: %w", err)

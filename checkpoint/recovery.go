@@ -371,6 +371,7 @@ func checkpointData(fs afero.Fs, file string, newGenesis types.LayerID) (*recove
 		cAtx.VRFNonce = types.VRFPostIndex(atx.VrfNonce)
 		cAtx.BaseTickHeight = atx.BaseTickHeight
 		cAtx.TickCount = atx.TickCount
+		cAtx.Weight = atx.Weight
 		cAtx.Sequence = atx.Sequence
 		copy(cAtx.Coinbase[:], atx.Coinbase)
 		cAtx.Units = atx.Units
