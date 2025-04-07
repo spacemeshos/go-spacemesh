@@ -31,38 +31,43 @@ func TestValidateSchema(t *testing.T) {
 			desc: "missing atx",
 			fail: true,
 			data: `
-{"version":"https://spacemesh.io/checkpoint.schema.json.1.0",
-"data":{
-  "id":"snapshot-15-restore-18",
-  "accounts":[{
-    "address":"00000000073af7bec018e8d2e379fa47df6a9fa07a6a8344",
-    "balance":100000000000000000,
-    "nonce":0,
-    "template":"",
-    "state":""
-  }]}
-`,
+{
+	"version":"https://spacemesh.io/checkpoint.schema.json.1.0",
+	"data":{
+  		"id":"snapshot-15-restore-18",
+  		"accounts":[{
+			"address":"00000000073af7bec018e8d2e379fa47df6a9fa07a6a8344",
+			"balance":100000000000000000,
+			"nonce":0,
+			"template":"",
+			"state":""
+		}]
+  	}
+}`,
 		},
 		{
 			desc: "missing accounts",
 			fail: true,
 			data: `
-{"version":"https://spacemesh.io/checkpoint.schema.json.1.0",
-"data":{
-  "id":"snapshot-15-restore-18",
-  "atxs":[{
-    "id":"d1ef13c8deb8970c19af780f6ce8bbdabfad368afe219ed052fde6766e121cbb",
-    "epoch":3,
-    "commitmentAtx":"c146f83c2b0f670c7e34e30699536a60b6d5eb13d8f0b63adb6084872c4f3b8d",
-    "vrfNonce":144,
-    "numUnits":2,
-    "baseTickHeight":12401,
-    "tickCount":6183,
-    "publicKey":"0655283aa44b67e7dcbde46be857334033f5b9af79ec269f45e8e57e7913ed21",
-    "sequence":2,
-    "coinbase":"000000003100000000000000000000000000000000000000"
-  }]}
-`,
+{
+	"version":"https://spacemesh.io/checkpoint.schema.json.1.0",
+	"data":{
+  		"id":"snapshot-15-restore-18",
+  		"atxs":[{
+    		"id":"d1ef13c8deb8970c19af780f6ce8bbdabfad368afe219ed052fde6766e121cbb",
+    		"epoch":3,
+    		"commitmentAtx":"c146f83c2b0f670c7e34e30699536a60b6d5eb13d8f0b63adb6084872c4f3b8d",
+    		"vrfNonce":144,
+    		"numUnits":2,
+    		"baseTickHeight":12401,
+    		"tickCount":6183,
+			"weight":12366,
+    		"publicKey":"0655283aa44b67e7dcbde46be857334033f5b9af79ec269f45e8e57e7913ed21",
+    		"sequence":2,
+    		"coinbase":"000000003100000000000000000000000000000000000000"
+  		}]
+	}
+}`,
 		},
 	}
 	for _, tc := range tcs {
