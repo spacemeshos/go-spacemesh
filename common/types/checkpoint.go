@@ -21,6 +21,7 @@ type AtxSnapshot struct {
 	VrfNonce       uint64 `json:"vrfNonce"`
 	BaseTickHeight uint64 `json:"baseTickHeight"`
 	TickCount      uint64 `json:"tickCount"`
+	Weight         uint64 `json:"weight"`
 	PublicKey      []byte `json:"publicKey"`
 	Sequence       uint64 `json:"sequence"`
 	Coinbase       []byte `json:"coinbase"`

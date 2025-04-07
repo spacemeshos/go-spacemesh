@@ -58,6 +58,7 @@ func atxEqual(
 	require.Equal(tb, sAtx.NumUnits, vAtx.NumUnits)
 	require.Equal(tb, sAtx.BaseTickHeight, vAtx.BaseTickHeight)
 	require.Equal(tb, sAtx.TickCount, vAtx.TickCount)
+	require.Equal(tb, sAtx.Weight, vAtx.Weight)
 	require.True(tb, bytes.Equal(sAtx.PublicKey, vAtx.SmesherID.Bytes()))
 	require.Equal(tb, sAtx.Sequence, vAtx.Sequence)
 	require.True(tb, bytes.Equal(sAtx.Coinbase, vAtx.Coinbase.Bytes()))
@@ -808,6 +809,7 @@ func TestRecover_OwnAtxNotInCheckpoint_Preserve_DepIsGolden(t *testing.T) {
 		CommitmentATX: *golden.CommitmentATXID,
 		VRFNonce:      types.VRFPostIndex(*golden.VRFNonce),
 		NumUnits:      golden.NumUnits,
+		Weight:        uint64(golden.NumUnits * 2),
 		SmesherID:     golden.SmesherID,
 		Sequence:      golden.Sequence,
 		Coinbase:      golden.Coinbase,

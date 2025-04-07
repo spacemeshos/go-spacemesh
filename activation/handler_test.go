@@ -115,6 +115,7 @@ func toAtx(tb testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 	atx.SetReceived(time.Now())
 	atx.BaseTickHeight = uint64(atx.PublishEpoch)
 	atx.TickCount = 1
+	atx.Weight = 10
 	return atx
 }
 

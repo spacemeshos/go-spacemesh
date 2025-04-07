@@ -400,9 +400,9 @@ func Test_IterateAtxForGrading(t *testing.T) {
 		require.NoError(t, err)
 
 		received := time.Now().Add(-time.Hour)
-		atx1 := newAtx(t, sig, withPublishEpoch(1), withTicks(100), withNumUnits(4), withReceived(received))
-		atx2 := newAtx(t, sig, withPublishEpoch(2), withTicks(100), withNumUnits(4), withReceived(received))
-		atx3 := newAtx(t, sig, withPublishEpoch(3), withTicks(100), withNumUnits(4), withReceived(received))
+		atx1 := newAtx(t, sig, withPublishEpoch(1), withWeight(400), withReceived(received))
+		atx2 := newAtx(t, sig, withPublishEpoch(2), withWeight(400), withReceived(received))
+		atx3 := newAtx(t, sig, withPublishEpoch(3), withWeight(400), withReceived(received))
 
 		for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
 			require.NoError(t, atxs.Add(db, atx, types.AtxBlob{}))
@@ -414,7 +414,7 @@ func Test_IterateAtxForGrading(t *testing.T) {
 				ids = append(ids, id)
 				require.Equal(t, atx1.Received().UnixNano(), atxTime)
 				require.Zero(t, proofTime)
-				require.Equal(t, uint64(atx1.NumUnits)*atx1.TickCount, weight)
+				require.Equal(t, atx1.Weight, weight)
 				return true
 			},
 		)
@@ -1075,9 +1075,10 @@ func TestCheckpointATX(t *testing.T) {
 		VRFNonce:       types.VRFPostIndex(119),
 		NumUnits:       atx.NumUnits,
 		BaseTickHeight: 1000,
-		TickCount:      atx.TickCount + 1,
+		TickCount:      atx.TickCount,
+		Weight:         atx.Weight,
 		SmesherID:      sig.NodeID(),
-		Sequence:       atx.Sequence + 1,
+		Sequence:       atx.Sequence,
 		Coinbase:       types.Address{3, 2, 1},
 	}
 	require.NoError(t, atxs.AddCheckpointed(db, catx))
@@ -1088,6 +1089,7 @@ func TestCheckpointATX(t *testing.T) {
 	require.Equal(t, catx.NumUnits, got.NumUnits)
 	require.Equal(t, catx.BaseTickHeight, got.BaseTickHeight)
 	require.Equal(t, catx.TickCount, got.TickCount)
+	require.Equal(t, catx.Weight, got.Weight)
 	require.Equal(t, catx.SmesherID, got.SmesherID)
 	require.Equal(t, catx.Sequence, got.Sequence)
 	require.Equal(t, catx.Coinbase, got.Coinbase)
@@ -1165,6 +1167,12 @@ func withNumUnits(units uint32) createAtxOpt {
 	}
 }
 
+func withWeight(weight uint64) createAtxOpt {
+	return func(atx *types.ActivationTx) {
+		atx.Weight = weight
+	}
+}
+
 func withReceived(received time.Time) createAtxOpt {
 	return func(atx *types.ActivationTx) {
 		atx.SetReceived(received)
@@ -1176,6 +1184,7 @@ func newAtx(tb testing.TB, signer *signing.EdSigner, opts ...createAtxOpt) *type
 	atx := &types.ActivationTx{
 		NumUnits:  2,
 		TickCount: 1,
+		Weight:    2,
 		VRFNonce:  types.VRFPostIndex(123),
 		SmesherID: signer.NodeID(),
 	}

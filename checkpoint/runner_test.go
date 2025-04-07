@@ -276,6 +276,7 @@ func asAtxSnapshot(v *types.ActivationTx, cmt *types.ATXID) types.AtxSnapshot {
 		NumUnits:       v.NumUnits,
 		BaseTickHeight: v.BaseTickHeight,
 		TickCount:      v.TickCount,
+		Weight:         v.Weight,
 		PublicKey:      v.SmesherID.Bytes(),
 		Sequence:       v.Sequence,
 		Coinbase:       v.Coinbase.Bytes(),

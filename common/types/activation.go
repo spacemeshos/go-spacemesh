@@ -183,7 +183,7 @@ type ActivationTx struct {
 	VRFNonce       VRFPostIndex
 	SmesherID      NodeID
 	// Weight of the ATX. The total weight of the epoch is expected to fit in a uint64.
-	// The total ATX weight is sum(NumUnits * TickCount) for identity it holds.
+	// The total ATX weight is sum(NumUnits * TickCount) for old identities and 2x as much for newer identities.
 	// Space Units sizes are chosen such that NumUnits for all ATXs in an epoch is expected to be < 10^6.
 	// PoETs should produce ~10k ticks at genesis, but are expected due to technological advances
 	// to produce more over time. A uint64 should be large enough to hold the total weight of an epoch,
