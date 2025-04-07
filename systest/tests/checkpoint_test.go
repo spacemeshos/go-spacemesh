@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -97,8 +98,9 @@ func TestCheckpoint(t *testing.T) {
 		if !bytes.Equal(checkpoints[0], checkpoints[i]) {
 			diffs = append(diffs, cl.Client(i).Name)
 			tctx.Log.Errorw("diff checkpoint data",
-				fmt.Sprintf("reference %v", cl.Client(0).Name), string(checkpoints[0]),
-				fmt.Sprintf("client %v", cl.Client(i).Name), string(checkpoints[i]),
+				"reference", cl.Client(0).Name,
+				"client", cl.Client(i).Name,
+				"diff", cmp.Diff(checkpoints[0], checkpoints[i]),
 			)
 		}
 	}
