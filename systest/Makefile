@@ -10,7 +10,7 @@ poet_image ?= $(org)/poet:v0.10.12
 post_service_image ?= $(org)/post-service:v0.8.5
 post_init_image ?= $(org)/postcli:v0.13.1
 smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
-old_smesher_image ?= $(org)/go-spacemesh-dev:f67a4b4 # update to newest release
+old_smesher_image ?= $(org)/go-spacemesh-dev:8036d86 # update to newest release
 bs_image ?= $(org)/go-spacemesh-dev-bs:$(version_info)
 
 test_id ?= systest-$(version_info)
