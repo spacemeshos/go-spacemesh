@@ -597,7 +597,6 @@ func NoDefaultPoets() DeploymentOpt {
 	}
 }
 
-// AddSmeshers ...
 func (c *Cluster) AddSmeshers(tctx *testcontext.Context, n int, opts ...DeploymentOpt) error {
 	if err := c.resourceControl(tctx, n); err != nil {
 		return err

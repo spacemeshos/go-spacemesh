@@ -33,6 +33,8 @@ func fastnet() config.Config {
 		types.EpochID(2): types.AtxV2,
 	}
 
+	conf.BaseConfig.BonusWeightEpoch = 3
+
 	// node will select atxs that were received at least 4 seconds before start of the epoch
 	// for activeset.
 	// if some atxs weren't received on time it will skew eligibility distribution

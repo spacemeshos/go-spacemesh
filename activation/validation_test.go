@@ -678,6 +678,7 @@ func TestVerifyChainDepsAfterCheckpoint(t *testing.T) {
 		NumUnits:       vCheckpointedAtx.NumUnits,
 		BaseTickHeight: vCheckpointedAtx.BaseTickHeight,
 		TickCount:      vCheckpointedAtx.TickCount,
+		Weight:         vCheckpointedAtx.Weight,
 		SmesherID:      vCheckpointedAtx.SmesherID,
 		Sequence:       vCheckpointedAtx.Sequence,
 		Coinbase:       vCheckpointedAtx.Coinbase,
