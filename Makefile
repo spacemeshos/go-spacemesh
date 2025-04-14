@@ -5,7 +5,7 @@ BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD)
 GOLANGCI_LINT_VERSION := v1.64.6
 GOTESTSUM_VERSION := v1.12.0
 GOSCALE_VERSION := v1.3.0
-MOCKGEN_VERSION := v0.5.0
+MOCKGEN_VERSION := v0.5.1
 
 TAG_SUFIX ?= ""
 

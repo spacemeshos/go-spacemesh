@@ -361,17 +361,17 @@ func (c *MockPairwiseSyncerProbeCall) DoAndReturn(f func(context.Context, p2p.Pe
 }
 
 // Serve mocks base method.
-func (m *MockPairwiseSyncer) Serve(context context.Context, stream io.ReadWriter, os rangesync.OrderedSet) error {
+func (m *MockPairwiseSyncer) Serve(ctx context.Context, stream io.ReadWriter, os rangesync.OrderedSet) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Serve", context, stream, os)
+	ret := m.ctrl.Call(m, "Serve", ctx, stream, os)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Serve indicates an expected call of Serve.
-func (mr *MockPairwiseSyncerMockRecorder) Serve(context, stream, os any) *MockPairwiseSyncerServeCall {
+func (mr *MockPairwiseSyncerMockRecorder) Serve(ctx, stream, os any) *MockPairwiseSyncerServeCall {
 	mr.mock.ctrl.T.Helper()
-	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serve", reflect.TypeOf((*MockPairwiseSyncer)(nil).Serve), context, stream, os)
+	call := mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Serve", reflect.TypeOf((*MockPairwiseSyncer)(nil).Serve), ctx, stream, os)
 	return &MockPairwiseSyncerServeCall{Call: call}
 }
 

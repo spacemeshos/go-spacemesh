@@ -57,7 +57,7 @@ type PairwiseSyncer interface {
 		x, y rangesync.KeyBytes,
 	) error
 	// Serve serves an incoming synchronization request.
-	Serve(context context.Context, stream io.ReadWriter, os rangesync.OrderedSet) error
+	Serve(ctx context.Context, stream io.ReadWriter, os rangesync.OrderedSet) error
 }
 
 type syncRunner interface {
