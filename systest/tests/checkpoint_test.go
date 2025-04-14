@@ -100,7 +100,7 @@ func TestCheckpoint(t *testing.T) {
 			tctx.Log.Errorw("diff checkpoint data",
 				"reference", cl.Client(0).Name,
 				"client", cl.Client(i).Name,
-				"diff", cmp.Diff(checkpoints[0], checkpoints[i]),
+				"diff", cmp.Diff(string(checkpoints[0]), string(checkpoints[i])),
 			)
 		}
 	}
