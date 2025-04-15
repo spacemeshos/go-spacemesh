@@ -499,7 +499,7 @@ func TestHandlerV2_ProcessSoloATX(t *testing.T) {
 
 		// processing ATX for the second time should skip checks
 		err = atxHandler.processATX(t.Context(), atxHandler.local, atx, time.Now())
-		require.NoError(t, err)
+		require.ErrorIs(t, err, errKnownAtx)
 	})
 	t.Run("second ATX", func(t *testing.T) {
 		t.Parallel()
