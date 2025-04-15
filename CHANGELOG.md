@@ -2,6 +2,13 @@
 
 See [RELEASE](./RELEASE.md) for workflow instructions.
 
+## UNRELEASED
+
+### Improvements
+
+* [#6823](https://github.com/spacemeshos/go-spacemesh/pull/6823) Fixed an issue where the node would repeatably
+  broadcast ATXs it already has seen, causing unnecessary network traffic.
+
 ## v1.8.2
 
 ### Improvements
