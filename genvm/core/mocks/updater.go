@@ -12,7 +12,7 @@ package mocks
 import (
 	reflect "reflect"
 
-	types "github.com/spacemeshos/go-spacemesh/common/types"
+	core "github.com/spacemeshos/go-spacemesh/genvm/core"
 	gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,7 +41,7 @@ func (m *MockAccountUpdater) EXPECT() *MockAccountUpdaterMockRecorder {
 }
 
 // Update mocks base method.
-func (m *MockAccountUpdater) Update(arg0 types.Account) error {
+func (m *MockAccountUpdater) Update(arg0 core.Account) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Update", arg0)
 	ret0, _ := ret[0].(error)
@@ -67,13 +67,13 @@ func (c *MockAccountUpdaterUpdateCall) Return(arg0 error) *MockAccountUpdaterUpd
 }
 
 // Do rewrite *gomock.Call.Do
-func (c *MockAccountUpdaterUpdateCall) Do(f func(types.Account) error) *MockAccountUpdaterUpdateCall {
+func (c *MockAccountUpdaterUpdateCall) Do(f func(core.Account) error) *MockAccountUpdaterUpdateCall {
 	c.Call = c.Call.Do(f)
 	return c
 }
 
 // DoAndReturn rewrite *gomock.Call.DoAndReturn
-func (c *MockAccountUpdaterUpdateCall) DoAndReturn(f func(types.Account) error) *MockAccountUpdaterUpdateCall {
+func (c *MockAccountUpdaterUpdateCall) DoAndReturn(f func(core.Account) error) *MockAccountUpdaterUpdateCall {
 	c.Call = c.Call.DoAndReturn(f)
 	return c
 }
