@@ -14,7 +14,7 @@ jobs:
         include:
           - os: ubuntu-22.04
             outname_sufix: "linux-amd64"
-          - os: ubuntu-latest-arm-8-cores
+          - os: ubuntu-22.04-arm
             outname_sufix: "linux-arm64"
           - os: macos-13
             outname_sufix: "mac-amd64"
@@ -29,7 +29,7 @@ jobs:
       - shell: bash
         run: echo "OUTNAME=go-spacemesh-${{ github.ref_name }}-${{ matrix.outname_sufix }}" >> $GITHUB_ENV
       - name: Add OpenCL support - Ubuntu
-        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest-arm-8-cores' }}
+        if: ${{ matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-22.04-arm' }}
         run: sudo apt-get update -q && sudo apt-get install -qy ocl-icd-opencl-dev libpocl2
       - name: Install dependencies in windows
         if: ${{ matrix.os == 'windows-2022' }}
@@ -107,7 +107,7 @@ jobs:
           unzip awscliv2.zip
           sudo ./aws/install --update
       - name: Install aws-cli on linux-arm
-        if: ${{ matrix.os == 'ubuntu-latest-arm-8-cores' }}
+        if: ${{ matrix.os == 'ubuntu-22.04-arm' }}
         run: |
           curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64-2.2.35.zip" -o "awscliv2.zip"
           unzip awscliv2.zip

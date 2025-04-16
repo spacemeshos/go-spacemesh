@@ -152,7 +152,7 @@ type Publisher interface {
 // Eventually most of the functionality will be moved to the PoSTClient.
 type postSetupProvider interface {
 	PrepareInitializer(ctx context.Context, opts PostSetupOpts, id types.NodeID) error
-	StartSession(context context.Context, id types.NodeID) error
+	StartSession(ctx context.Context, id types.NodeID) error
 	Status() *PostSetupStatus
 	Reset() error
 }

@@ -16,6 +16,13 @@ pointing to the running `node` service.
 
 * [#6625](https://github.com/spacemeshos/go-spacemesh/pull/6625) Add command for starting services
 
+## v1.8.3
+
+### Improvements
+
+* [#6823](https://github.com/spacemeshos/go-spacemesh/pull/6823) Fixed an issue where the node would repeatably
+  broadcast ATXs it already has seen, causing unnecessary network traffic.
+
 ## v1.8.2
 
 ### Improvements

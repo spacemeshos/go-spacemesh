@@ -83,7 +83,7 @@ func (h *HandlerV2) processATX(
 		return fmt.Errorf("failed to check if atx exists: %w", err)
 	}
 	if exists {
-		return nil
+		return fmt.Errorf("%w: %s", errKnownAtx, watx.ID())
 	}
 
 	h.logger.Debug(
