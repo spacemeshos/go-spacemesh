@@ -60,7 +60,7 @@ func TestDeadlineAdjuster(t *testing.T) {
 			return len(chunk), nil
 		}))
 	}
-	for i := 0; i < 2; i++ {
+	for range 2 {
 		writeCalls = append(writeCalls, s.EXPECT().
 			Write(gomock.Any()).
 			DoAndReturn(func(b []byte) (int, error) {

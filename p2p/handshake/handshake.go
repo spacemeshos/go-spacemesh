@@ -114,7 +114,7 @@ func (tr *transportWrapper) Dial(ctx context.Context, raddr ma.Multiaddr, p peer
 		return nil, err
 	}
 
-	for i := 0; i < tr.attempts; i++ {
+	for i := range tr.attempts {
 		var retry bool
 		retry, err = tr.handshake(ctx, c)
 		switch {
@@ -203,7 +203,7 @@ func (l *listenerWrapper) Accept() (transport.CapableConn, error) {
 		if err != nil {
 			return nil, err
 		}
-		for i := 0; i < l.attempts; i++ {
+		for i := range l.attempts {
 			retry, err := l.handshake(c)
 			switch {
 			case err == nil:
