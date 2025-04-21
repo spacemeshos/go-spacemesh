@@ -275,7 +275,7 @@ func Test_Queued(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 
 	var reqEq errgroup.Group
-	for i := 0; i < queueSize; i++ { // fill the queue with requests
+	for range queueSize { // fill the queue with requests
 		reqEq.Go(func() error {
 			resp, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
 			require.NoError(t, err)
@@ -285,7 +285,7 @@ func Test_Queued(t *testing.T) {
 	}
 	wg.Wait()
 
-	for i := 0; i < queueSize; i++ { // queue is full, requests fail
+	for range queueSize { // queue is full, requests fail
 		_, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
 		require.Error(t, err)
 	}
@@ -327,7 +327,7 @@ func Test_RequestInterval(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 
 	start := time.Now()
-	for i := 0; i < maxReq; i++ { // fill the interval with requests (bursts up to maxReq are allowed)
+	for range maxReq { // fill the interval with requests (bursts up to maxReq are allowed)
 		resp, err := client.Request(ctx, mesh.Hosts()[1].ID(), []byte("ping"))
 		require.NoError(t, err)
 		require.Equal(t, []byte("ping"), resp)

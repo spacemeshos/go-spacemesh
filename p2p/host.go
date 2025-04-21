@@ -342,8 +342,7 @@ func New(
 					if err != nil {
 						return nil, err
 					}
-					return handshake.MaybeWrapTransport(tr, quicNetCookie,
-						handshake.WithLog(logger)), nil
+					return handshake.MaybeWrapTransport(tr, quicNetCookie, handshake.WithLog(logger)), nil
 				}),
 		)
 	}
