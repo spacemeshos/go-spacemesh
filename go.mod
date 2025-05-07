@@ -19,7 +19,7 @@ require (
 	github.com/hashicorp/go-retryablehttp v0.7.7
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/ipfs/go-ds-leveldb v0.5.2
-	github.com/ipfs/go-log/v2 v2.5.1
+	github.com/ipfs/go-log/v2 v2.6.0
 	github.com/jonboulle/clockwork v0.5.0
 	github.com/libp2p/go-libp2p v0.41.0
 	github.com/libp2p/go-libp2p-kad-dht v0.30.2
@@ -236,7 +236,7 @@ require (
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/oauth2 v0.29.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/text v0.24.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
