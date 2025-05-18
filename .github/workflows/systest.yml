@@ -40,7 +40,7 @@ concurrency:
 
 jobs:
   filter-changes:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       nondocchanges: ${{ steps.filter.outputs.nondoc || github.event_name == 'pull_request' }}
     steps:
@@ -55,7 +55,7 @@ jobs:
               - '!.github/CODEOWNERS'
 
   build-docker-images:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
@@ -119,7 +119,7 @@ jobs:
         run: make -C systest push
 
   provision-cluster:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
@@ -171,7 +171,7 @@ jobs:
           echo "Node pool created: $NODE_POOL_NAME"
 
   systest-gke:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     needs:
       - filter-changes
@@ -260,7 +260,7 @@ jobs:
         run: make -C systest clean
 
   delete-pool:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     if: ${{ always() && needs.provision-cluster.result == 'success' }}
     needs:
       - filter-changes
@@ -303,7 +303,7 @@ jobs:
     needs:
       - filter-changes
       - systest-gke
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       # short-circuit success if no non-doc files were modified
       status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest-gke.result == 'success') && 'success' || 'failure' }}
