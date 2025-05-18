@@ -28,7 +28,7 @@ RUN --mount=type=cache,id=build,target=/root/.cache/go-build go build -o ./build
 ENV GOBIN=/bin
 RUN --mount=type=cache,id=build,target=/root/.cache/go-build go install gotest.tools/gotestsum@v1.12.0
 
-FROM ubuntu:22.04 AS runtime
+FROM ubuntu:24.04 AS runtime
 RUN set -ex \
     && apt-get update --fix-missing \
     && apt-get install -qy --no-install-recommends \

@@ -12,7 +12,7 @@ on:
 
 jobs:
   check-version:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       go-sm-api-version: ${{ steps.go-sm-api-version.outputs.GO_SM_API_VERSION }}
     steps:
@@ -32,7 +32,7 @@ jobs:
         echo "GO_SM_API_VERSION=$version" > $GITHUB_OUTPUT
 
   deploy:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: check-version
     steps:
     - uses: actions/checkout@v4
