@@ -113,6 +113,14 @@ type BaseConfig struct {
 	OptFilterThreshold int    `mapstructure:"optimistic-filtering-threshold"`
 	TickSize           uint64 `mapstructure:"tick-size"`
 
+	// BonusWeightEpoch is the epoch at which the bonus weight added for newly created identities.
+	// The bonus applies from this epoch, if the commitment ATX that was used to create the identity
+	// isn't older than `BonusWeightEpoch-2`.
+	//
+	// Example: if the bonus weight epoch is 10, any identity created with a commitment ATX that was created
+	// in epoch 8 or later will receive the bonus weight.
+	BonusWeightEpoch types.EpochID `mapstructure:"bonus-weight-epoch"`
+
 	DatabaseConnections          int                     `mapstructure:"db-connections"`
 	DatabaseLatencyMetering      bool                    `mapstructure:"db-latency-metering"`
 	DatabaseSizeMeteringInterval time.Duration           `mapstructure:"db-size-metering-interval"`

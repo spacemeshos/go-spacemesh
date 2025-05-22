@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sort"
 	"testing"
@@ -114,6 +115,7 @@ func toAtx(tb testing.TB, watx *wire.ActivationTxV1) *types.ActivationTx {
 	atx.SetReceived(time.Now())
 	atx.BaseTickHeight = uint64(atx.PublishEpoch)
 	atx.TickCount = 1
+	atx.Weight = 10
 	return atx
 }
 
@@ -152,9 +154,13 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	}
 	h.mClock.EXPECT().CurrentLayer().Return(atx.PublishEpoch.FirstLayer())
 
+	cAtx := h.goldenATXID
+	if atx.CommitmentATXID != nil {
+		cAtx = *atx.CommitmentATXID
+	}
+
 	if atx.VRFNonce != nil {
-		h.mValidator.EXPECT().
-			VRFNonce(nodeId, h.goldenATXID, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
+		h.mValidator.EXPECT().VRFNonce(nodeId, cAtx, *atx.VRFNonce, atx.NIPost.PostMetadata.LabelsPerUnit, atx.NumUnits)
 	}
 	h.mockFetch.EXPECT().RegisterPeerHashes(gomock.Any(), gomock.Any())
 	h.mockFetch.EXPECT().GetPoetProof(gomock.Any(), types.BytesToHash(atx.NIPost.PostMetadata.Challenge))
@@ -162,7 +168,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	if atx.PrevATXID == types.EmptyATXID {
 		h.mValidator.EXPECT().InitialNIPostChallengeV1(gomock.Any(), gomock.Any(), h.goldenATXID)
 		h.mValidator.EXPECT().
-			Post(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
+			Post(gomock.Any(), nodeId, cAtx, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 			DoAndReturn(func(
 				_ context.Context, _ types.NodeID, _ types.ATXID, _ *types.Post,
 				_ *types.PostMetadata, _ uint32, _ ...validatorOption,
@@ -183,7 +189,7 @@ func (h *handlerMocks) expectAtxV1(atx *wire.ActivationTxV1, nodeId types.NodeID
 	}
 	h.mValidator.EXPECT().PositioningAtx(atx.PositioningATXID, gomock.Any(), h.goldenATXID, atx.PublishEpoch)
 	h.mValidator.EXPECT().
-		NIPost(gomock.Any(), nodeId, h.goldenATXID, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
+		NIPost(gomock.Any(), nodeId, cAtx, gomock.Any(), gomock.Any(), atx.NumUnits, gomock.Any()).
 		Return(settings.poetLeaves, nil)
 	h.mValidator.EXPECT().IsVerifyingFullPost().Return(!settings.distributedPost)
 	h.mBeacon.EXPECT().OnAtx(gomock.Any())
@@ -955,4 +961,111 @@ func TestHandler_DecodeATX(t *testing.T) {
 		require.ErrorIs(t, err, errMalformedData)
 		require.ErrorIs(t, err, pubsub.ErrValidationReject)
 	})
+}
+
+func TestCalcWeight_NoBonusEpoch(t *testing.T) {
+	t.Parallel()
+
+	tt := []struct {
+		name   string
+		units  uint32
+		ticks  uint64
+		weight uint64
+		error  error
+
+		rewardEpoch     types.EpochID
+		commitmentEpoch types.EpochID
+		publishEpoch    types.EpochID
+	}{
+		{
+			name:   "weight overflow",
+			units:  10,
+			ticks:  math.MaxUint64,
+			weight: 0, // overflow
+
+			publishEpoch: 11,
+		},
+		{
+			name:   "no bonus configured",
+			units:  2,
+			ticks:  3,
+			weight: 6,
+
+			publishEpoch: 15,
+		},
+		{
+			name:   "commitment too old for bonus",
+			units:  4,
+			ticks:  3,
+			weight: 12,
+
+			rewardEpoch:     10,
+			commitmentEpoch: 4,
+			publishEpoch:    15,
+		},
+		{
+			name:   "eligible but before bonus epoch",
+			units:  5,
+			ticks:  7,
+			weight: 35,
+
+			rewardEpoch:     10,
+			commitmentEpoch: 8,
+			publishEpoch:    9,
+		},
+		{
+			name:   "eligible for bonus in first reward epoch",
+			units:  10,
+			ticks:  14,
+			weight: 154, // 10% extra weight
+
+			rewardEpoch:     10,
+			commitmentEpoch: 8,
+			publishEpoch:    10,
+		},
+		{
+			name:   "eligible for bonus in second reward epoch",
+			units:  10,
+			ticks:  14,
+			weight: 168, // 20% extra weight
+
+			rewardEpoch:     10,
+			commitmentEpoch: 8,
+			publishEpoch:    11,
+		},
+		{
+			name:   "full bonus given",
+			units:  10,
+			ticks:  14,
+			weight: 280, // 100% extra weight
+
+			rewardEpoch:     10,
+			commitmentEpoch: 12,
+			publishEpoch:    20,
+		},
+		{
+			name:   "bonus overflow",
+			units:  10,
+			ticks:  math.MaxUint64 / 15,
+			weight: 0, // overflow
+
+			rewardEpoch:     10,
+			commitmentEpoch: 12,
+			publishEpoch:    20,
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			weight, err := calcWeight(uint64(tc.units), tc.ticks, tc.rewardEpoch, tc.commitmentEpoch, tc.publishEpoch)
+			if tc.weight == 0 {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.weight, weight)
+		})
+	}
 }

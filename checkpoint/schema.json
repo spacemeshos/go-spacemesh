@@ -55,6 +55,9 @@
               "tickCount": {
                 "type": "integer"
               },
+              "weight": {
+                "type": "integer"
+              },
               "publicKey": {
                 "type": "string"
               },
@@ -74,7 +77,7 @@
                 }
               }
             },
-            "required": ["id", "epoch", "commitmentAtx", "vrfNonce", "baseTickHeight", "tickCount", "publicKey", "sequence", "coinbase", "numUnits", "units"]
+            "required": ["id", "epoch", "commitmentAtx", "vrfNonce", "baseTickHeight", "tickCount", "weight", "publicKey", "sequence", "coinbase", "numUnits", "units"]
           },
           "accounts": {
             "description": "accounts snapshot",

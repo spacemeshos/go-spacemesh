@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/bits"
 	"slices"
 	"time"
 
@@ -91,6 +92,13 @@ func WithTickSize(tickSize uint64) HandlerOption {
 	}
 }
 
+func WithBonusWeightEpoch(epoch types.EpochID) HandlerOption {
+	return func(h *Handler) {
+		h.v1.bonusWeightEpoch = epoch
+		h.v2.bonusWeightEpoch = epoch
+	}
+}
+
 // NewHandler returns a data handler for ATX.
 func NewHandler(
 	local p2p.Peer,
@@ -114,36 +122,38 @@ func NewHandler(
 		versions: []atxVersion{{0, types.AtxV1}},
 
 		v1: &HandlerV1{
-			local:           local,
-			cdb:             cdb,
-			atxsdata:        atxsdata,
-			edVerifier:      edVerifier,
-			clock:           c,
-			tickSize:        1,
-			goldenATXID:     goldenATXID,
-			nipostValidator: nipostValidator,
-			logger:          lg,
-			fetcher:         fetcher,
-			beacon:          beacon,
-			tortoise:        tortoise,
-			malPublisher:    legacyMalPublisher,
-			malPublisher2:   malPublisher,
+			local:            local,
+			cdb:              cdb,
+			atxsdata:         atxsdata,
+			edVerifier:       edVerifier,
+			clock:            c,
+			tickSize:         1,
+			bonusWeightEpoch: 0,
+			goldenATXID:      goldenATXID,
+			nipostValidator:  nipostValidator,
+			logger:           lg,
+			fetcher:          fetcher,
+			beacon:           beacon,
+			tortoise:         tortoise,
+			malPublisher:     legacyMalPublisher,
+			malPublisher2:    malPublisher,
 		},
 
 		v2: &HandlerV2{
-			local:           local,
-			cdb:             cdb,
-			atxsdata:        atxsdata,
-			edVerifier:      edVerifier,
-			clock:           c,
-			tickSize:        1,
-			goldenATXID:     goldenATXID,
-			nipostValidator: nipostValidator,
-			logger:          lg,
-			fetcher:         fetcher,
-			beacon:          beacon,
-			tortoise:        tortoise,
-			malPublisher:    malPublisher,
+			local:            local,
+			cdb:              cdb,
+			atxsdata:         atxsdata,
+			edVerifier:       edVerifier,
+			clock:            c,
+			tickSize:         1,
+			bonusWeightEpoch: 0,
+			goldenATXID:      goldenATXID,
+			nipostValidator:  nipostValidator,
+			logger:           lg,
+			fetcher:          fetcher,
+			beacon:           beacon,
+			tortoise:         tortoise,
+			malPublisher:     malPublisher,
 		},
 	}
 
@@ -157,8 +167,8 @@ func NewHandler(
 				enc.AppendString(fmt.Sprintf("v%v from epoch %d", v.AtxVersion, v.publish))
 			}
 			return nil
-		})))
-
+		})),
+	)
 	return h
 }
 
@@ -285,4 +295,38 @@ func (h *Handler) handleAtx(ctx context.Context, expHash types.Hash32, peer p2p.
 	})
 	h.inProgress.Forget(key)
 	return err
+}
+
+func calcWeight(
+	numUnits, tickCount uint64,
+	bonusWeightEpoch, commitmentEpoch, publishEpoch types.EpochID,
+) (uint64, error) {
+	hi, weight := bits.Mul64(numUnits, tickCount)
+	if hi != 0 {
+		return 0, fmt.Errorf("weight overflow (%d * %d)", numUnits, tickCount)
+	}
+	if bonusWeightEpoch == 0 {
+		// no bonus epoch configured
+		return weight, nil
+	}
+	if commitmentEpoch < bonusWeightEpoch-2 {
+		// An identity selecting a commitment in epoch X will init in epoch X and create an initial post. Now there are
+		// two scenarios:
+		// 1. The identity has enough time to register at PoET during the cyclegap of epoch X, and the initial ATX will
+		// be published in epoch X+1.
+		// 2. The cyclegap already closed in epoch X and the identity will publish the initial ATX in epoch X+2.
+		//
+		// since 2) is the more common case (most ATXs that could be selected for commitment are published during the
+		// cyclegap) we allow a 2 epoch gap between the commitment and the reward bonus epoch.
+		return weight, nil
+	}
+	if publishEpoch < bonusWeightEpoch { // bonus hasn't started yet
+		return weight, nil
+	}
+	epochsSinceBonus := uint64(min(publishEpoch-bonusWeightEpoch+1, 10)) // we scale the bonus over 10 epochs ...
+	hi, bonusWeight := bits.Mul64(weight, epochsSinceBonus)
+	if hi != 0 {
+		return 0, fmt.Errorf("bonus weight overflow (%d * %d)", weight, epochsSinceBonus)
+	}
+	return weight + (bonusWeight / 10), nil // ... linearly to 100% extra weight
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/bits"
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -64,20 +63,21 @@ type nipostValidatorV1 interface {
 
 // HandlerV1 processes ATXs version 1.
 type HandlerV1 struct {
-	local           p2p.Peer
-	cdb             *datastore.CachedDB
-	atxsdata        *atxsdata.Data
-	edVerifier      *signing.EdVerifier
-	clock           layerClock
-	tickSize        uint64
-	goldenATXID     types.ATXID
-	nipostValidator nipostValidatorV1
-	beacon          atxReceiver
-	tortoise        system.Tortoise
-	logger          *zap.Logger
-	fetcher         system.Fetcher
-	malPublisher    legacyMalfeasancePublisher
-	malPublisher2   atxMalfeasancePublisher
+	local            p2p.Peer
+	cdb              *datastore.CachedDB
+	atxsdata         *atxsdata.Data
+	edVerifier       *signing.EdVerifier
+	clock            layerClock
+	tickSize         uint64
+	bonusWeightEpoch types.EpochID
+	goldenATXID      types.ATXID
+	nipostValidator  nipostValidatorV1
+	beacon           atxReceiver
+	tortoise         system.Tortoise
+	logger           *zap.Logger
+	fetcher          system.Fetcher
+	malPublisher     legacyMalfeasancePublisher
+	malPublisher2    atxMalfeasancePublisher
 }
 
 func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.ActivationTxV1) error {
@@ -145,11 +145,26 @@ func (h *HandlerV1) syntacticallyValidate(ctx context.Context, atx *wire.Activat
 }
 
 // Obtain the commitment ATX ID for the given ATX.
-func (h *HandlerV1) commitment(atx *wire.ActivationTxV1) (types.ATXID, error) {
-	if atx.PrevATXID == types.EmptyATXID {
-		return *atx.CommitmentATXID, nil
+func (h *HandlerV1) commitment(watx *wire.ActivationTxV1) (types.ATXID, types.EpochID, error) {
+	var id types.ATXID
+	switch {
+	case watx.PrevATXID == types.EmptyATXID: // initial ATX
+		id = *watx.CommitmentATXID
+	default: // non-initial ATX
+		var err error
+		id, err = atxs.CommitmentATX(h.cdb, watx.SmesherID)
+		if err != nil {
+			return types.EmptyATXID, 0, fmt.Errorf("fetching commitment atx ID: %w", err)
+		}
 	}
-	return atxs.CommitmentATX(h.cdb, atx.SmesherID)
+	if id == h.goldenATXID {
+		return id, 0, nil
+	}
+	atx, err := atxs.Get(h.cdb, id)
+	if err != nil {
+		return types.EmptyATXID, 0, fmt.Errorf("fetching commitment atx %s: %w", id, err)
+	}
+	return id, atx.PublishEpoch, nil
 }
 
 func (h *HandlerV1) syntacticallyValidateDeps(
@@ -157,7 +172,7 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	watx *wire.ActivationTxV1,
 	received time.Time,
 ) (*types.ActivationTx, error) {
-	commitmentATX, err := h.commitment(watx)
+	commitmentATX, commitmentEpoch, err := h.commitment(watx)
 	if err != nil {
 		return nil, fmt.Errorf("commitment atx for %s not found: %w", watx.SmesherID, err)
 	}
@@ -266,9 +281,15 @@ func (h *HandlerV1) syntacticallyValidateDeps(
 	atx.NumUnits = effectiveNumUnits
 	atx.BaseTickHeight = baseTickHeight
 	atx.TickCount = leaves / h.tickSize
-	hi, weight := bits.Mul64(uint64(atx.NumUnits), atx.TickCount)
-	if hi != 0 {
-		return nil, errors.New("atx weight would overflow uint64")
+	weight, err := calcWeight(
+		uint64(atx.NumUnits),
+		atx.TickCount,
+		h.bonusWeightEpoch,
+		commitmentEpoch,
+		atx.PublishEpoch,
+	)
+	if err != nil {
+		return nil, err
 	}
 	atx.Weight = weight
 	return atx, nil
