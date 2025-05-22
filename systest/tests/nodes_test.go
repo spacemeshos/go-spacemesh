@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
@@ -38,11 +39,11 @@ func TestAddNodes(t *testing.T) {
 	tctx.Log.Info("cluster size changed to ", tctx.ClusterSize)
 
 	var eg errgroup.Group
-	watchLayers(tctx, &eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
-		if layer.Layer.Number.Number >= beforeAdding {
+	watchLayers(tctx, &eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb2.Layer) (bool, error) {
+		if layer.Number >= beforeAdding {
 			tctx.Log.Debugw("adding new smeshers",
 				"n", addedLater,
-				"layer", layer.Layer.Number,
+				"layer", layer.Number,
 			)
 			// the new smeshers will use the old sync protocol
 			return false, cl.AddSmeshers(tctx, addedLater)
@@ -136,22 +137,22 @@ func TestFailedNodes(t *testing.T) {
 	}
 	for i := range cl.Total() - failed {
 		client := cl.Client(i)
-		watchLayers(ctx, eg, client, tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
-			if layer.Layer.Status == pb.Layer_LAYER_STATUS_APPLIED {
+		watchLayers(ctx, eg, client, tctx.Log.Desugar(), func(layer *pb2.Layer) (bool, error) {
+			if layer.Status == pb2.Layer_LAYER_STATUS_VERIFIED {
 				tctx.Log.Debugw(
 					"layer applied",
 					"client",
 					client.Name,
 					"layer",
-					layer.Layer.Number.Number,
+					layer.Number,
 					"hash",
-					prettyHex(layer.Layer.Hash),
+					prettyHex(layer.StateHash),
 				)
-				if layer.Layer.Number.Number == stopLayer {
-					return false, nil
+				if layer.Number <= lastLayer {
+					hashes[i][layer.Number] = prettyHex(layer.StateHash)
 				}
-				if layer.Layer.Number.Number <= lastLayer {
-					hashes[i][layer.Layer.Number.Number] = prettyHex(layer.Layer.Hash)
+				if layer.Number >= stopLayer {
+					return false, nil
 				}
 			}
 			return true, nil

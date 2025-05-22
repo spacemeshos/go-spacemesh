@@ -69,7 +69,14 @@ func TestCheckpoint(t *testing.T) {
 	ctx, cancel := context.WithDeadline(tctx, deadline)
 	defer cancel()
 	require.NoError(t, sendTransactions(ctx, tctx.Log.Desugar(), cl, first, stop, receiver, 1, 100))
-	require.NoError(t, waitLayer(tctx, cl.Client(0), snapshotLayer))
+
+	layerTime := cl.Genesis().Add(time.Duration(snapshotLayer) * layerDuration)
+	tctx.Log.Debugw("waiting for layer", "layer", snapshotLayer, "layer time", layerTime)
+	select {
+	case <-tctx.Done():
+		require.FailNow(t, "test context is done")
+	case <-time.After(time.Until(layerTime)):
+	}
 
 	tctx.Log.Debugw("getting account balances")
 	before, err := getBalance(tctx, cl, snapshotLayer)

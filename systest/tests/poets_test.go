@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -71,25 +72,27 @@ func TestPoetsFailures(t *testing.T) {
 		})
 	}
 
-	watchLayers(ctx, eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, cl.Client(0), tctx.Log.Desugar(), func(layer *pb2.Layer) (bool, error) {
 		// Will kill a poet from time to time
-		if layer.Layer.Number.Number > last {
+		if layer.Number < first {
+			return true, nil
+		}
+		if layer.Number > last {
 			tctx.Log.Debug("Poet killer is done")
 			return false, nil
 		}
-		if layer.Layer.GetStatus() != pb.Layer_LAYER_STATUS_APPLIED {
+		if layer.Status != pb2.Layer_LAYER_STATUS_VERIFIED {
 			return true, nil
 		}
 		// don't kill a poet if this is not ~middle of epoch
-		if ((layer.Layer.GetNumber().GetNumber() + layersPerEpoch/2) % layersPerEpoch) != 0 {
+		if ((layer.Number + layersPerEpoch/2) % layersPerEpoch) != 0 {
 			return true, nil
 		}
 
 		poetToDelete := cl.Poet(0)
-		tctx.Log.Debugw("deleting poet pod", "poet", poetToDelete.Name, "layer", layer.Layer.GetNumber().GetNumber())
+		tctx.Log.Debugw("deleting poet pod", "poet", poetToDelete.Name, "layer", layer.Number)
 		require.NoError(t, cl.DeletePoet(tctx, 0))
 		require.NoError(t, cl.AddPoet(tctx))
-
 		return true, nil
 	})
 

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
@@ -84,31 +84,29 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 	numLayers := stop - types.GetEffectiveGenesis().Uint32()
 	// assuming each client can update state for the same layer up to 10 times
 	stateCh := make(chan *stateUpdate, uint32(cl.Total())*numLayers*10)
-	tctx.Log.Debug("listening to state hashes...")
+	tctx.Log.Debug("listening to layers for state hashes...")
 	for i := range cl.Total() {
 		node := cl.Client(i)
 
 		eg.Go(func() error {
-			err := stateHashStream(ctx, node, tctx.Log.Desugar(),
-				func(state *pb.GlobalStateStreamResponse) (bool, error) {
-					data := state.Datum.Datum
-					require.IsType(tb, &pb.GlobalStateData_GlobalState{}, data)
-
-					resp := data.(*pb.GlobalStateData_GlobalState)
-					layer := resp.GlobalState.Layer.Number
-					if layer > stop {
+			err := layersStream(ctx, node, tctx.Log.Desugar(),
+				func(layer *pb.Layer) (bool, error) {
+					if layer.Number < first {
+						return true, nil
+					}
+					if layer.Number > stop {
 						return false, nil
 					}
 
-					stateHash := types.BytesToHash(resp.GlobalState.RootHash)
+					stateHash := types.BytesToHash(layer.StateHash)
 					tctx.Log.Debugw("state hash collected",
 						"client", node.Name,
-						"layer", layer,
+						"layer", layer.Number,
 						"state", stateHash.ShortString(),
 					)
 					select {
 					case stateCh <- &stateUpdate{
-						layer:  layer,
+						layer:  layer.Number,
 						hash:   stateHash,
 						client: node.Name,
 					}: // continue
@@ -126,7 +124,7 @@ func testPartition(tb testing.TB, tctx *testcontext.Context, cl *cluster.Cluster
 				},
 			)
 			if err != nil {
-				return fmt.Errorf("state hash stream error for %s: %w", node.Name, err)
+				return fmt.Errorf("layer stream error for %s: %w", node.Name, err)
 			}
 			return nil
 		})

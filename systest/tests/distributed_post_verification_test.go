@@ -12,8 +12,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	pb2 "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v2beta1"
 	"github.com/spacemeshos/go-scale"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/verifying"
@@ -365,7 +364,7 @@ func testPostMalfeasance(
 
 	var (
 		atx            builtAtx
-		expectedDomain pb2.MalfeasanceProof_MalfeasanceDomain
+		expectedDomain pb.MalfeasanceProof_MalfeasanceDomain
 		expectedType   uint32
 	)
 	expectedProperties := make(map[string]string)
@@ -382,7 +381,7 @@ func testPostMalfeasance(
 		}
 		watx.Sign(signer)
 		atx = watx
-		expectedDomain = pb2.MalfeasanceProof_DOMAIN_UNSPECIFIED
+		expectedDomain = pb.MalfeasanceProof_DOMAIN_UNSPECIFIED
 		expectedType = 4
 		expectedProperties["atx"] = atx.ID().String()
 	case types.AtxV2:
@@ -413,7 +412,7 @@ func testPostMalfeasance(
 		}
 		watx.Sign(signer)
 		atx = watx
-		expectedDomain = pb2.MalfeasanceProof_DOMAIN_ACTIVATION
+		expectedDomain = pb.MalfeasanceProof_DOMAIN_ACTIVATION
 		expectedType = 0
 		expectedProperties["type"] = "InvalidPoSTProof"
 		expectedProperties["atx"] = atx.ID().String()
@@ -428,9 +427,9 @@ func testPostMalfeasance(
 		zap.Uint32("epoch", publishEpoch.Uint32()),
 		zap.Uint32("layer", publishEpoch.FirstLayer().Uint32()),
 	)
-	err = layersStream(ctx, cl.Client(0), logger, func(resp *pb.LayerStreamResponse) (bool, error) {
-		logger.Info("new layer", zap.Uint32("layer", resp.Layer.Number.Number))
-		return resp.Layer.Number.Number < publishEpoch.FirstLayer().Uint32(), nil
+	err = layersStream(ctx, cl.Client(0), logger, func(resp *pb.Layer) (bool, error) {
+		logger.Info("new layer", zap.Uint32("layer", resp.Number))
+		return resp.Number < publishEpoch.FirstLayer().Uint32(), nil
 	})
 	require.NoError(t, err)
 
@@ -458,7 +457,7 @@ func testPostMalfeasance(
 	// 5. Wait for POST malfeasance proof
 	receivedProof := false
 	logger.Info("waiting for malfeasance proof", zap.Duration("timeout", timeout))
-	err = malfeasanceStream(publishCtx, cl.Client(0), logger, func(proof *pb2.MalfeasanceProof) (bool, error) {
+	err = malfeasanceStream(publishCtx, cl.Client(0), logger, func(proof *pb.MalfeasanceProof) (bool, error) {
 		if !bytes.Equal(proof.GetSmesher(), signer.NodeID().Bytes()) {
 			return true, nil
 		}

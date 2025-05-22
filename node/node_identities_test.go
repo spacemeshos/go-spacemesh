@@ -29,7 +29,6 @@ func setupAppWithKeys(tb testing.TB, data ...[]byte) (*App, *observer.ObservedLo
 	)))
 	cfg := getTestConfig(tb)
 	app := New(WithLog(log.NewFromLog(logger)), WithConfig(&cfg))
-	app.Config.DataDirParent = tb.TempDir()
 	if len(data) == 0 {
 		return app, observedLogs
 	}
