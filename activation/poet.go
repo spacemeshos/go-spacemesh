@@ -104,8 +104,10 @@ func (r retryableHttpLogger) Warn(format string, args ...any) {
 	r.inner.Sugar().Warnw(format, args...)
 }
 
+// Debug seems to be the only logging level used by retryablehttp. Since it logs when it retries a request,
+// and we want users to see what is happening we change the level to Info.
 func (r retryableHttpLogger) Debug(format string, args ...any) {
-	r.inner.Sugar().Debugw(format, args...)
+	r.inner.Sugar().Infow(format, args...)
 }
 
 type PoetClientOpts func(*HTTPPoetClient)
@@ -121,7 +123,7 @@ func WithLogger(logger *zap.Logger) PoetClientOpts {
 		c.logger = logger
 		c.client.Logger = &retryableHttpLogger{inner: logger}
 		c.client.ResponseLogHook = func(logger retryablehttp.Logger, resp *http.Response) {
-			c.logger.Debug(
+			c.logger.Info(
 				"response received",
 				zap.Stringer("url", resp.Request.URL),
 				zap.Int("status", resp.StatusCode),
