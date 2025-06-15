@@ -134,7 +134,7 @@ func (st *SyncedTable) genRecentCount() expr.Statement {
 		Get()
 }
 
-// genRecentCount generates a SELECT statement that returns the rows in the table added
+// genSelectRecent generates a SELECT statement that returns the rows in the table added
 // starting with the specified timestamp, taking into account the filter expression and
 // the rowid cutoff.
 func (st *SyncedTable) genSelectRecent() expr.Statement {
