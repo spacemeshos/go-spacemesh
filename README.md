@@ -1,4 +1,4 @@
-# [Spacemesh: A Programmable Cryptocurrency](https://spacemesh.io)
+fcont# [Spacemesh: A Programmable Cryptocurrency](https://spacemesh.io)
 
 [![license](https://img.shields.io/packagist/l/doctrine/orm.svg)](https://github.com/spacemeshos/go-spacemesh/blob/master/LICENSE)
 [![release](https://img.shields.io/github/v/release/spacemeshos/go-spacemesh?include_prereleases)](https://github.com/spacemeshos/go-spacemesh/releases)
@@ -82,7 +82,7 @@ Please read the Spacemesh [full FAQ](https://github.com/spacemeshos/go-spacemesh
 
 ### go-spacemesh Architecture
 
-![Architecture](https://raw.githubusercontent.com/spacemeshos/product/master/resources/go-spacemesh-architecture.png)
+![Architecture](https://raw.githubusercontent.com/spacemeshos/product/master/resources/go-spacemesh-architecture.png).
 
 ### Getting
 
