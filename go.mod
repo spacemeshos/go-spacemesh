@@ -8,7 +8,7 @@ require (
 	github.com/chaos-mesh/chaos-mesh/api v0.0.0-20250317072445-daeb701d70cc
 	github.com/cosmos/btcutil v1.0.5
 	github.com/go-llsqlite/crawshaw v0.5.5
-	github.com/go-viper/mapstructure/v2 v2.2.1
+	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/go-cmp v0.7.0
 	github.com/google/gofuzz v1.2.0
