@@ -30,7 +30,7 @@ jobs:
             outname_sufix: "linux-arm64"
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
 
@@ -86,7 +86,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
     - name: checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
 

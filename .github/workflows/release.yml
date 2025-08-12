@@ -45,7 +45,7 @@ jobs:
           git config --global core.compression 0
           git config --global http.postBuffer 1024M
       - name: Check out Git repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           lfs: true
           ssh-key: ${{ secrets.GH_ACTION_PRIVATE_KEY }}
