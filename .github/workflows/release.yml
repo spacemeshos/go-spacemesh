@@ -80,7 +80,7 @@ jobs:
           rm -f $OUTNAME/post.h
           zip -r $OUTNAME.zip $OUTNAME
       - name: Setup gcloud authentication
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
@@ -182,7 +182,7 @@ jobs:
           echo "mac-arm64: $(cat sha256-mac-arm64/sha256-mac-arm64.txt)" >> sha256sum.yaml
 
       - name: Setup gcloud authentication
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           project_id: ${{ secrets.GCP_WI_PROJECT_ID }}
           workload_identity_provider: ${{ secrets.GCP_WI_PROVIDER_SA }}
