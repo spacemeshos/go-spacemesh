@@ -65,8 +65,10 @@ jobs:
 
     - name: Push docker images to dockerhub
       if: inputs.custom_image_tag
+      env:
+        CUSTOM_IMAGE_TAG: ${{ inputs.custom_image_tag }}
       run: |
-        export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}" TAG_SUFIX=$SUFIX
+        export DOCKER_IMAGE_VERSION="$CUSTOM_IMAGE_TAG" TAG_SUFIX=$SUFIX
         make dockerpush-only
         make dockerpush-bs-only
 
@@ -104,8 +106,10 @@ jobs:
 
     - name: Push docker manifest to dockerhub
       if: inputs.custom_image_tag
+      env:
+        CUSTOM_IMAGE_TAG: ${{ inputs.custom_image_tag }}
       run: |
-        export DOCKER_IMAGE_VERSION="${{ inputs.custom_image_tag }}"
+        export DOCKER_IMAGE_VERSION="$CUSTOM_IMAGE_TAG"
         make dockerpush-go-manifest
         make dockerpush-bs-manifest
         
